@@ -23,8 +23,8 @@ enum Role {
 }
 
 model User {
-  id                  String    @id @default(uuid())
-  email               String    @unique
+  id                  String     @id @default(uuid())
+  email               String     @unique
   name                String
   password            String
   role                Role      @default(BRIGADISTA)
@@ -36,14 +36,13 @@ model User {
   ultimoAcceso        DateTime?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
-
+  auditLogs           AuditLog[]
   usuarioGRD          UsuarioGRD?
   modulos             CredencialModulo[]
   rolesCredencial     CredencialRol[]
   sesiones            Sesion[]
   intentosLogin       IntentoLogin[]
   recuperaciones      RecuperacionContrasena[]
-
   @@map("users")
 }
 
@@ -952,3 +951,14 @@ model CertificacionCurso {
 
   @@map("certificacion_curso")
 }
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  detail    Json?
+  createdAt DateTime @default(now())
+
+  @@map("audit_logs")
+}
+

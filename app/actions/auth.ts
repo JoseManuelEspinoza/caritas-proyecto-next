@@ -5,7 +5,10 @@ import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
 import { prisma } from '@/app/lib/prisma'
 import { createSession, deleteSession } from '@/app/lib/session'
+import { getSession } from '@/app/lib/dal'
 import { sendPasswordResetEmail } from '@/app/lib/email'
+import { logger } from '@/app/lib/logger'
+import { logAudit } from '@/app/lib/audit'
 import {
   LoginSchema,
   SignupSchema,
@@ -25,14 +28,25 @@ export async function login(state: FormState, formData: FormData): Promise<FormS
   }
 
   const { email, password } = validated.data
+  let userId: string | undefined
 
-  const user = await prisma.user.findUnique({ where: { email } })
+  try {
+    const user = await prisma.user.findUnique({ where: { email } })
 
-  if (!user || !(await bcrypt.compare(password, user.password))) {
-    return { message: 'Email o contraseña incorrectos.' }
+    if (!user || !(await bcrypt.compare(password, user.password))) {
+      await logAudit({ action: 'LOGIN_FAILED', detail: { email } })
+      return { message: 'Email o contraseña incorrectos.' }
+    }
+
+    await createSession(user.id, user.role)
+    await logAudit({ userId: user.id, action: 'LOGIN' })
+    userId = user.id
+  } catch (err) {
+    logger.error({ err }, 'Error en login')
+    return { message: 'Ocurrió un error. Intenta de nuevo.' }
   }
 
-  await createSession(user.id, user.role)
+  logger.info({ userId }, 'Login exitoso')
   redirect('/dashboard')
 }
 
@@ -48,23 +62,39 @@ export async function signup(state: FormState, formData: FormData): Promise<Form
   }
 
   const { name, email, password } = validated.data
+  let userId: string | undefined
 
-  const existing = await prisma.user.findUnique({ where: { email } })
-  if (existing) {
-    return { errors: { email: ['Este email ya está registrado.'] } }
+  try {
+    const existing = await prisma.user.findUnique({ where: { email } })
+    if (existing) {
+      return { errors: { email: ['Este email ya está registrado.'] } }
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 12)
+    const user = await prisma.user.create({
+      data: { name, email, password: hashedPassword },
+    })
+
+    await createSession(user.id, user.role)
+    await logAudit({ userId: user.id, action: 'SIGNUP' })
+    userId = user.id
+  } catch (err) {
+    logger.error({ err }, 'Error en signup')
+    return { message: 'Ocurrió un error. Intenta de nuevo.' }
   }
 
-  const hashedPassword = await bcrypt.hash(password, 12)
-
-  const user = await prisma.user.create({
-    data: { name, email, password: hashedPassword },
-  })
-
-  await createSession(user.id, user.role)
+  logger.info({ userId }, 'Registro exitoso')
   redirect('/dashboard')
 }
 
 export async function logout() {
+  const session = await getSession()
+
+  if (session?.userId) {
+    await logAudit({ userId: session.userId, action: 'LOGOUT' })
+    logger.info({ userId: session.userId }, 'Logout')
+  }
+
   await deleteSession()
   redirect('/login')
 }
@@ -83,7 +113,7 @@ export async function forgotPassword(state: FormState, formData: FormData): Prom
 
   if (user) {
     const token = crypto.randomBytes(32).toString('hex')
-    const expiry = new Date(Date.now() + 60 * 60 * 1000) // 1 hora
+    const expiry = new Date(Date.now() + 60 * 60 * 1000)
 
     await prisma.user.update({
       where: { id: user.id },
@@ -92,8 +122,9 @@ export async function forgotPassword(state: FormState, formData: FormData): Prom
 
     try {
       await sendPasswordResetEmail(email, token)
+      await logAudit({ userId: user.id, action: 'FORGOT_PASSWORD' })
     } catch (err) {
-      console.error('[Email] Error al enviar el correo de recuperación:', err)
+      logger.error({ err }, 'Error al enviar correo de recuperación')
       return { message: 'No se pudo enviar el correo. Verifica la configuración de email.' }
     }
   }
@@ -140,5 +171,7 @@ export async function resetPassword(
     },
   })
 
+  await logAudit({ userId: user.id, action: 'RESET_PASSWORD' })
+  logger.info({ userId: user.id }, 'Contraseña restablecida')
   redirect('/login?reset=ok')
 }
