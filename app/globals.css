@@ -3,6 +3,14 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --caritas-green: #009850;
+  --caritas-lime: #91D723;
+  --caritas-orange: #FF823C;
+  --caritas-cyan: #00C8B4;
+  --caritas-yellow: #FFC300;
+  --caritas-text: #49494A;
+  --caritas-border: #DDDDDD;
+  --caritas-bg-light: #F5F5F5;
 }
 
 @theme inline {
