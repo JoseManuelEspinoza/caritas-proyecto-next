@@ -20,6 +20,7 @@ enum Role {
   ESPECIALISTAGRD
   BRIGADISTA
   COMITEDONACIONES
+  JEFAOGP
 }
 
 model User {
