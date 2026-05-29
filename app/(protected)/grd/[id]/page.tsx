@@ -9,6 +9,30 @@ export default async function IncidentePage({ params }: { params: Promise<{ id: 
   const session = await verifySession()
   const role = toFrontendRole(session.role)
 
+  // Identificar si el usuario actual ES un brigadista asignado a este incidente
+  let currentUserBrigadistaId: string | null = null
+  let currentUserName = ''
+
+  const currentUser = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { name: true },
+  })
+  currentUserName = currentUser?.name ?? 'Usuario'
+
+  if (role === 'brigadista') {
+    const ugu = await prisma.usuarioGRD.findUnique({
+      where: { idCredencial: session.userId },
+      select: { idUsuarioGRD: true },
+    })
+    if (ugu) {
+      const brig = await prisma.brigadistaParroquial.findFirst({
+        where: { idUsuarioGRD: ugu.idUsuarioGRD },
+        select: { idBrigadistaParroquial: true },
+      })
+      currentUserBrigadistaId = brig?.idBrigadistaParroquial ?? null
+    }
+  }
+
   const inc = await prisma.incidencia.findUnique({
     where: { idIncidencia: id, deletedAt: null },
     include: {
@@ -31,60 +55,75 @@ export default async function IncidentePage({ params }: { params: Promise<{ id: 
         },
       },
       gruposFamiliares: {
-        include: { personas: true },
+        include: {
+          personas: {
+            select: {
+              idPersonaAfectada:  true,
+              nombres:            true,
+              apellidos:          true,
+              fechaNacimiento:    true,
+              sexo:               true,
+              tipoDocumento:      true,
+              numeroDocumento:    true,
+              parentesco:         true,
+              condicionEspecial:  true,
+              telefono:           true,
+            },
+          },
+        },
       },
       informes: {
         orderBy: { fechaElaboracion: 'desc' },
         select: {
-          idInforme: true,
-          tituloInforme: true,
-          tipoInforme: true,
-          resumen: true,
-          contenido: true,
-          estadoInforme: true,
+          idInforme:        true,
+          tituloInforme:    true,
+          tipoInforme:      true,
+          resumen:          true,
+          contenido:        true,
+          estadoInforme:    true,
           fechaElaboracion: true,
         },
       },
       seguimientos: {
         orderBy: { fechaSeguimiento: 'desc' },
         select: {
-          idSeguimiento: true,
-          situacion: true,
-          descripcion: true,
+          idSeguimiento:        true,
+          situacion:            true,
+          descripcion:          true,
           necesidadesPendientes: true,
-          recomendaciones: true,
-          fechaSeguimiento: true,
+          recomendaciones:      true,
+          fechaSeguimiento:     true,
         },
       },
       entregasAyuda: {
         orderBy: { fechaEntrega: 'desc' },
         select: {
-          idEntrega: true,
-          tipoAyuda: true,
+          idEntrega:       true,
+          tipoAyuda:       true,
           descripcionAyuda: true,
-          lugarEntrega: true,
-          fechaEntrega: true,
-          observaciones: true,
+          lugarEntrega:    true,
+          fechaEntrega:    true,
+          observaciones:   true,
         },
       },
       historialEstados: {
         orderBy: { fechaCambio: 'desc' },
         select: {
           estadoAnterior: true,
-          estadoNuevo: true,
-          motivoCambio: true,
-          observaciones: true,
-          fechaCambio: true,
+          estadoNuevo:    true,
+          motivoCambio:   true,
+          observaciones:  true,
+          fechaCambio:    true,
         },
       },
       solicitudesAyuda: {
         orderBy: { fechaSolicitud: 'desc' },
         take: 1,
         select: {
-          estadoSolicitud: true,
+          estadoSolicitud:     true,
           resultadoEvaluacion: true,
-          observaciones: true,
-          fechaEvaluacion: true,
+          observaciones:       true,
+          fechaEvaluacion:     true,
         },
       },
     },
@@ -92,100 +131,142 @@ export default async function IncidentePage({ params }: { params: Promise<{ id: 
 
   if (!inc) notFound()
 
-  // Brigadistas disponibles para asignación
+  // ¿Este brigadista está asignado a este incidente?
+  const isBrigadistaAsignado = currentUserBrigadistaId
+    ? inc.asignaciones.some((a) => a.brigadista.idBrigadistaParroquial === currentUserBrigadistaId)
+    : false
+
+  // Brigadistas disponibles para asignación (no incluir los ya asignados)
+  const asignadosIds = inc.asignaciones.map((a) => a.brigadista.idBrigadistaParroquial)
   const brigadistasDisp = await prisma.brigadistaParroquial.findMany({
-    where: { estado: 'ACTIVO', disponibilidad: 'DISPONIBLE' },
+    where: {
+      estado:        'ACTIVO',
+      disponibilidad: 'DISPONIBLE',
+      idBrigadistaParroquial: { notIn: asignadosIds.length ? asignadosIds : ['__none__'] },
+    },
     select: {
       idBrigadistaParroquial: true,
-      nombres: true,
+      nombres:   true,
       apellidos: true,
-      celular: true,
+      celular:   true,
       parroquia: { select: { nombre: true } },
     },
-    take: 30,
+    orderBy: { nombres: 'asc' },
+    take: 50,
   })
 
-  // Serializar para el cliente
   const data = {
-    idIncidencia: inc.idIncidencia,
-    codigoCaso: inc.codigoCaso,
-    tituloIncidencia: inc.tituloIncidencia,
-    tipoEvento: inc.tipoEvento,
-    estadoActual: inc.estadoActual,
-    direccionEvento: inc.direccionEvento,
+    idIncidencia:      inc.idIncidencia,
+    codigoCaso:        inc.codigoCaso,
+    tituloIncidencia:  inc.tituloIncidencia,
+    tipoEvento:        inc.tipoEvento,
+    estadoActual:      inc.estadoActual,
+    direccionEvento:   inc.direccionEvento,
     descripcionEvento: inc.descripcionEvento,
-    gravedad: inc.gravedad,
-    fechaRegistro: inc.fechaRegistro.toISOString(),
-    parroquia: inc.parroquia?.nombre ?? null,
+    gravedad:          inc.gravedad,
+    fechaRegistro:     inc.fechaRegistro.toISOString(),
+    parroquia:         inc.parroquia?.nombre ?? null,
+
     aviso: inc.aviso
       ? {
-          nombreInformante: inc.aviso.nombreInformante,
+          nombreInformante:   inc.aviso.nombreInformante,
           telefonoInformante: inc.aviso.telefonoInformante,
-          descripcion: inc.aviso.descripcion,
+          descripcion:        inc.aviso.descripcion,
         }
       : null,
+
     asignaciones: inc.asignaciones.map((a) => ({
-      brigadistaId: a.brigadista.idBrigadistaParroquial,
-      nombres: a.brigadista.nombres,
-      apellidos: a.brigadista.apellidos,
-      celular: a.brigadista.celular,
-      parroquia: a.brigadista.parroquia?.nombre ?? null,
+      brigadistaId:    a.brigadista.idBrigadistaParroquial,
+      nombres:         a.brigadista.nombres,
+      apellidos:       a.brigadista.apellidos,
+      celular:         a.brigadista.celular,
+      parroquia:       a.brigadista.parroquia?.nombre ?? null,
       fechaAsignacion: a.fechaAsignacion.toISOString(),
     })),
+
     gruposFamiliares: inc.gruposFamiliares.map((g) => ({
-      id: g.idGrupoFamiliar,
+      id:               g.idGrupoFamiliar,
       nombreReferencia: g.nombreReferencia,
-      totalPersonas: g.personas.length,
+      totalPersonas:    g.personas.length,
+      personas:         g.personas.map((p) => {
+        // Calcular edad aproximada desde fechaNacimiento
+        const edad = p.fechaNacimiento
+          ? String(new Date().getFullYear() - new Date(p.fechaNacimiento).getFullYear())
+          : null
+        return {
+          id:               p.idPersonaAfectada,
+          nombres:          p.nombres,
+          apellidos:        p.apellidos,
+          edad,
+          sexo:             p.sexo,
+          tipoDocumento:    p.tipoDocumento,
+          numeroDocumento:  p.numeroDocumento,
+          parentesco:       p.parentesco,
+          condicionEspecial: p.condicionEspecial,
+          telefono:         p.telefono,
+        }
+      }),
     })),
+
     informes: inc.informes.map((i) => ({
-      id: i.idInforme,
-      titulo: i.tituloInforme,
-      tipo: i.tipoInforme,
+      id:      i.idInforme,
+      titulo:  i.tituloInforme,
+      tipo:    i.tipoInforme,
       resumen: i.resumen,
       contenido: i.contenido,
-      estado: i.estadoInforme,
-      fecha: i.fechaElaboracion.toISOString(),
+      estado:  i.estadoInforme,
+      fecha:   i.fechaElaboracion.toISOString(),
     })),
+
     seguimientos: inc.seguimientos.map((s) => ({
-      id: s.idSeguimiento,
-      situacion: s.situacion,
-      descripcion: s.descripcion,
+      id:                    s.idSeguimiento,
+      situacion:             s.situacion,
+      descripcion:           s.descripcion,
       necesidadesPendientes: s.necesidadesPendientes,
-      recomendaciones: s.recomendaciones,
-      fecha: s.fechaSeguimiento.toISOString(),
+      recomendaciones:       s.recomendaciones,
+      fecha:                 s.fechaSeguimiento.toISOString(),
     })),
+
     entregas: inc.entregasAyuda.map((e) => ({
-      id: e.idEntrega,
-      tipoAyuda: e.tipoAyuda,
+      id:              e.idEntrega,
+      tipoAyuda:       e.tipoAyuda,
       descripcionAyuda: e.descripcionAyuda,
-      lugarEntrega: e.lugarEntrega,
-      fecha: e.fechaEntrega?.toISOString() ?? null,
-      observaciones: e.observaciones,
+      lugarEntrega:    e.lugarEntrega,
+      fecha:           e.fechaEntrega?.toISOString() ?? null,
+      observaciones:   e.observaciones,
     })),
+
     historial: inc.historialEstados.map((h) => ({
       estadoAnterior: h.estadoAnterior,
-      estadoNuevo: h.estadoNuevo,
-      motivoCambio: h.motivoCambio,
-      observaciones: h.observaciones,
-      fecha: h.fechaCambio.toISOString(),
+      estadoNuevo:    h.estadoNuevo,
+      motivoCambio:   h.motivoCambio,
+      observaciones:  h.observaciones,
+      fecha:          h.fechaCambio.toISOString(),
     })),
+
     solicitudComite: inc.solicitudesAyuda[0]
       ? {
-          estado: inc.solicitudesAyuda[0].estadoSolicitud,
-          resultado: inc.solicitudesAyuda[0].resultadoEvaluacion,
+          estado:       inc.solicitudesAyuda[0].estadoSolicitud,
+          resultado:    inc.solicitudesAyuda[0].resultadoEvaluacion,
           observaciones: inc.solicitudesAyuda[0].observaciones,
-          fecha: inc.solicitudesAyuda[0].fechaEvaluacion?.toISOString() ?? null,
+          fecha:        inc.solicitudesAyuda[0].fechaEvaluacion?.toISOString() ?? null,
         }
       : null,
+
     brigadistasDisponibles: brigadistasDisp.map((b) => ({
-      id: b.idBrigadistaParroquial,
-      nombres: b.nombres,
+      id:        b.idBrigadistaParroquial,
+      nombres:   b.nombres,
       apellidos: b.apellidos,
-      celular: b.celular,
+      celular:   b.celular,
       parroquia: b.parroquia?.nombre ?? null,
     })),
+
+    // Contexto del usuario actual
     role,
-    userId: session.userId,
+    userId:                  session.userId,
+    currentUserName,
+    currentUserBrigadistaId,
+    isBrigadistaAsignado,
   }
 
   return <IncidentDetail data={data} />

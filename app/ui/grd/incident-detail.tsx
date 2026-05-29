@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   ArrowLeft, Edit, MapPin, FileText, Users, Camera, CheckCircle,
@@ -19,6 +20,12 @@ import type { FrontendRole } from '@/app/lib/roles'
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
+type Persona = {
+  id: string; nombres: string; apellidos: string | null; edad: string | null
+  sexo: string | null; tipoDocumento: string | null; numeroDocumento: string | null
+  parentesco: string | null; condicionEspecial: string | null; telefono: string | null
+}
+
 type IncidentData = {
   idIncidencia: string
   codigoCaso: string | null
@@ -32,7 +39,7 @@ type IncidentData = {
   parroquia: string | null
   aviso: { nombreInformante: string | null; telefonoInformante: string | null; descripcion: string | null } | null
   asignaciones: { brigadistaId: string; nombres: string; apellidos: string | null; celular: string | null; parroquia: string | null; fechaAsignacion: string }[]
-  gruposFamiliares: { id: string; nombreReferencia: string | null; totalPersonas: number }[]
+  gruposFamiliares: { id: string; nombreReferencia: string | null; totalPersonas: number; personas: Persona[] }[]
   informes: { id: string; titulo: string; tipo: string | null; resumen: string | null; contenido: string | null; estado: string; fecha: string }[]
   seguimientos: { id: string; situacion: string | null; descripcion: string | null; necesidadesPendientes: string | null; recomendaciones: string | null; fecha: string }[]
   entregas: { id: string; tipoAyuda: string | null; descripcionAyuda: string | null; lugarEntrega: string | null; fecha: string | null; observaciones: string | null }[]
@@ -41,6 +48,9 @@ type IncidentData = {
   brigadistasDisponibles: { id: string; nombres: string; apellidos: string | null; celular: string | null; parroquia: string | null }[]
   role: FrontendRole
   userId: string
+  currentUserName: string
+  currentUserBrigadistaId: string | null
+  isBrigadistaAsignado: boolean
 }
 
 // ─── Config visual ────────────────────────────────────────────────────────────
@@ -129,6 +139,40 @@ function PanelRegistrar({ data }: { data: IncidentData }) {
             {data.aviso.telefonoInformante && (
               <span className="flex items-center gap-1 text-blue-700"><Phone className="w-3.5 h-3.5" />{data.aviso.telefonoInformante}</span>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Familias y personas empadronadas */}
+      {data.gruposFamiliares.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-gray-500 mb-2">
+            Personas empadronadas — {data.gruposFamiliares.length} grupo(s) · {data.gruposFamiliares.reduce((s, g) => s + g.totalPersonas, 0)} persona(s)
+          </p>
+          <div className="space-y-2">
+            {data.gruposFamiliares.map((g) => (
+              <div key={g.id} className="border border-blue-200 rounded-lg bg-blue-50 overflow-hidden">
+                <div className="bg-blue-100 px-3 py-1.5 flex items-center gap-2">
+                  <Users className="w-3.5 h-3.5 text-blue-600" />
+                  <span className="text-xs font-semibold text-blue-900">{g.nombreReferencia ?? 'Grupo familiar'}</span>
+                  <span className="text-xs text-blue-600">({g.totalPersonas} integrantes)</span>
+                </div>
+                {g.personas.length > 0 && (
+                  <div className="p-2 space-y-1">
+                    {g.personas.map((p) => (
+                      <div key={p.id} className="bg-white rounded px-3 py-1.5 text-xs flex items-center gap-3">
+                        <span className="font-medium text-gray-800">{p.nombres} {p.apellidos ?? ''}</span>
+                        {p.edad && <span className="text-gray-500">{p.edad} años</span>}
+                        {p.numeroDocumento && <span className="text-gray-400">DNI: {p.numeroDocumento}</span>}
+                        {p.condicionEspecial && (
+                          <span className="px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded font-medium">{p.condicionEspecial}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -240,7 +284,9 @@ function PanelAsignar({ data, onDone }: { data: IncidentData; onDone: () => void
 
 function PanelCampo({ data, onDone }: { data: IncidentData; onDone: () => void }) {
   const [isPending, startTransition] = useTransition()
-  const canAct = data.role === 'admin' || data.role === 'especialistaGRD' || data.role === 'brigadista'
+  // Brigadista solo puede llenar si está asignado a ESTE incidente
+  const canAct = data.role === 'admin' || data.role === 'especialistaGRD'
+    || (data.role === 'brigadista' && data.isBrigadistaAsignado)
   const done = data.estadoActual !== 'ASIGNADO'
   const informeCampo = data.informes.find((i) => i.tipo === 'CAMPO')
 
@@ -358,7 +404,12 @@ function PanelCampo({ data, onDone }: { data: IncidentData; onDone: () => void }
 
 function PanelRevisar({ data, onDone }: { data: IncidentData; onDone: () => void }) {
   const [isPending, startTransition] = useTransition()
-  const [view, setView] = useState<'evaluar' | 'decidir'>('evaluar')
+  // El comité ve "Decidir" por defecto cuando el estado ya está en evaluación
+  const defaultView: 'evaluar' | 'decidir' =
+    (data.role === 'comite' || data.role === 'jefaOGP') && data.estadoActual === 'EN EVALUACION'
+      ? 'decidir'
+      : 'evaluar'
+  const [view, setView] = useState<'evaluar' | 'decidir'>(defaultView)
   const [obsText, setObsText] = useState('')
   const [evalForm, setEvalForm] = useState({ analisis: '', hallazgos: '', conclusiones: '', urgencia: 'Alta', intervencion: 'Donación en especie', recomendacion: '' })
   const setE = (k: string, v: string) => setEvalForm((p) => ({ ...p, [k]: v }))
@@ -785,6 +836,7 @@ function InfoField({ label, value }: { label: string; value: React.ReactNode }) 
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 export function IncidentDetail({ data }: { data: IncidentData }) {
+  const router = useRouter()
   const [activeStep, setActiveStep] = useState(() => getStepIndex(data.estadoActual))
   const [showHistory, setShowHistory] = useState(false)
 
@@ -792,7 +844,7 @@ export function IncidentDetail({ data }: { data: IncidentData }) {
   const currentStepIdx = getStepIndex(data.estadoActual)
 
   function handleDone() {
-    window.location.reload()
+    router.refresh()
   }
 
   const CatIcon = (data.tipoEvento && CAT_ICONS[data.tipoEvento]) ? CAT_ICONS[data.tipoEvento] : MapPin

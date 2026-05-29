@@ -241,22 +241,37 @@ export async function createIncidente(data: CreateIncidenteData) {
 export async function assignBrigadista(incidenciaId: string, brigadistaId: string) {
   await verifySession()
 
-  // Verifica si ya hay asignación activa
-  const existing = await prisma.asignacionBrigadistaIncidencia.findFirst({
-    where: { idIncidencia: incidenciaId, estadoAsignacion: 'ASIGNADA' },
+  // Evitar asignación duplicada del mismo brigadista
+  const duplicate = await prisma.asignacionBrigadistaIncidencia.findFirst({
+    where: { idIncidencia: incidenciaId, idBrigadistaParroquial: brigadistaId },
   })
-  if (!existing) {
+  if (!duplicate) {
     await prisma.asignacionBrigadistaIncidencia.create({
       data: {
-        idIncidencia: incidenciaId,
+        idIncidencia:           incidenciaId,
         idBrigadistaParroquial: brigadistaId,
-        estadoAsignacion: 'ASIGNADA',
-        origenAsignacion: 'MANUAL',
+        estadoAsignacion:       'ASIGNADA',
+        origenAsignacion:       'MANUAL',
+        fechaAsignacion:        new Date(),
       },
+    })
+    // Marcar brigadista como ocupado
+    await prisma.brigadistaParroquial.update({
+      where: { idBrigadistaParroquial: brigadistaId },
+      data:  { disponibilidad: 'EN CAMPO' },
     })
   }
 
-  await transicionEstado(incidenciaId, 'ASIGNADO', 'Brigadista asignado')
+  // Transicionar a ASIGNADO solo si viene de ABIERTO
+  const inc = await prisma.incidencia.findUnique({
+    where:  { idIncidencia: incidenciaId },
+    select: { estadoActual: true },
+  })
+  if (inc?.estadoActual === 'ABIERTO') {
+    await transicionEstado(incidenciaId, 'ASIGNADO', 'Brigadista asignado al incidente')
+  }
+
+  revalidatePath('/grd')
   revalidatePath(`/grd/${incidenciaId}`)
 }
 
@@ -272,20 +287,29 @@ export async function saveInfoCampo(incidenciaId: string, data: {
   observaciones?: string
   condHabitabilidad: Record<string, boolean>
 }) {
-  await verifySession()
+  const session = await verifySession()
+
+  // Nombre del usuario que llena el campo
+  const user = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { name: true },
+  })
+
+  const dataConResponsable = { ...data, responsable: user?.name ?? data.responsable }
 
   await prisma.informe.create({
     data: {
-      idIncidencia: incidenciaId,
+      idIncidencia:  incidenciaId,
       tituloInforme: 'Levantamiento de campo',
-      tipoInforme: 'CAMPO',
-      resumen: data.recomendacion,
-      contenido: JSON.stringify(data),
+      tipoInforme:   'CAMPO',
+      resumen:       data.recomendacion,
+      contenido:     JSON.stringify(dataConResponsable),
       estadoInforme: 'APROBADO',
     },
   })
 
   await transicionEstado(incidenciaId, 'DATA RECOPILADA', 'Levantamiento de campo completado')
+  revalidatePath('/grd')
   revalidatePath(`/grd/${incidenciaId}`)
 }
 
@@ -299,31 +323,46 @@ export async function saveInformeEvaluacion(incidenciaId: string, data: {
   tipoIntervencion: string
   recomendacionComite: string
 }) {
-  await verifySession()
+  const session = await verifySession()
+  const user = await prisma.user.findUnique({
+    where:  { id: session.userId },
+    select: { name: true },
+  })
 
   await prisma.informe.create({
     data: {
-      idIncidencia: incidenciaId,
+      idIncidencia:  incidenciaId,
       tituloInforme: 'Informe de Evaluación Social',
-      tipoInforme: 'EVALUACION',
-      resumen: data.analisisSituacion,
-      contenido: JSON.stringify(data),
+      tipoInforme:   'EVALUACION',
+      resumen:       data.analisisSituacion,
+      contenido:     JSON.stringify({ ...data, elaboradoPor: user?.name }),
       estadoInforme: 'BORRADOR',
     },
   })
 
-  // Crear solicitud de ayuda humanitaria
-  await prisma.solicitudAyudaHumanitaria.create({
-    data: {
-      idIncidencia: incidenciaId,
-      motivoSolicitud: data.analisisSituacion,
-      descripcionNecesidad: data.hallazgosTexto,
-      tipoAyudaSolicitada: data.tipoIntervencion,
-      estadoSolicitud: 'EN_EVALUACION',
-    },
+  // Crear (o actualizar) la solicitud de ayuda humanitaria
+  const solicitudExistente = await prisma.solicitudAyudaHumanitaria.findFirst({
+    where: { idIncidencia: incidenciaId, estadoSolicitud: { not: 'RECHAZADA' } },
   })
+  if (!solicitudExistente) {
+    await prisma.solicitudAyudaHumanitaria.create({
+      data: {
+        idIncidencia:         incidenciaId,
+        motivoSolicitud:      data.analisisSituacion,
+        descripcionNecesidad: data.hallazgosTexto,
+        tipoAyudaSolicitada:  data.tipoIntervencion,
+        estadoSolicitud:      'EN_EVALUACION',
+      },
+    })
+  } else {
+    await prisma.solicitudAyudaHumanitaria.update({
+      where: { idSolicitud: solicitudExistente.idSolicitud },
+      data:  { estadoSolicitud: 'EN_EVALUACION', motivoSolicitud: data.analisisSituacion },
+    })
+  }
 
   await transicionEstado(incidenciaId, 'EN EVALUACION', 'Informe de evaluación enviado al Comité')
+  revalidatePath('/grd')
   revalidatePath(`/grd/${incidenciaId}`)
 }
 
@@ -331,71 +370,65 @@ export async function saveInformeEvaluacion(incidenciaId: string, data: {
 
 export async function aprobarCaso(incidenciaId: string, observaciones?: string) {
   await verifySession()
-
-  // Actualizar solicitud
   await prisma.solicitudAyudaHumanitaria.updateMany({
     where: { idIncidencia: incidenciaId, estadoSolicitud: 'EN_EVALUACION' },
-    data: { estadoSolicitud: 'APROBADA', resultadoEvaluacion: 'APROBADO', fechaEvaluacion: new Date() },
+    data:  { estadoSolicitud: 'APROBADA', resultadoEvaluacion: 'APROBADO', fechaEvaluacion: new Date() },
   })
-
   await transicionEstado(incidenciaId, 'APROBADO', 'Caso aprobado por el Comité', observaciones)
+  revalidatePath('/grd')
   revalidatePath(`/grd/${incidenciaId}`)
 }
 
 export async function observarCaso(incidenciaId: string, observaciones: string) {
   await verifySession()
-
   await prisma.solicitudAyudaHumanitaria.updateMany({
     where: { idIncidencia: incidenciaId, estadoSolicitud: 'EN_EVALUACION' },
-    data: { estadoSolicitud: 'EN_EVALUACION', observaciones },
+    data:  { estadoSolicitud: 'EN_EVALUACION', observaciones },
   })
-
   await transicionEstado(incidenciaId, 'OBSERVADO', 'Caso devuelto con observaciones', observaciones)
+  revalidatePath('/grd')
   revalidatePath(`/grd/${incidenciaId}`)
 }
 
 export async function rechazarCaso(incidenciaId: string, observaciones: string) {
   await verifySession()
-
   await prisma.solicitudAyudaHumanitaria.updateMany({
     where: { idIncidencia: incidenciaId, estadoSolicitud: 'EN_EVALUACION' },
-    data: { estadoSolicitud: 'RECHAZADA', resultadoEvaluacion: 'RECHAZADO', observaciones },
+    data:  { estadoSolicitud: 'RECHAZADA', resultadoEvaluacion: 'RECHAZADO', observaciones },
   })
-
   await transicionEstado(incidenciaId, 'RECHAZADO', 'Caso rechazado por el Comité', observaciones)
+  revalidatePath('/grd')
   revalidatePath(`/grd/${incidenciaId}`)
 }
 
-// Corregir informe y reenviar al Comité
 export async function corregirYReenviar(incidenciaId: string, data: {
   analisisSituacion: string
   hallazgosTexto: string
   conclusiones: string
   recomendacionComite: string
 }) {
-  await verifySession()
-
+  const session = await verifySession()
+  const user = await prisma.user.findUnique({ where: { id: session.userId }, select: { name: true } })
   await prisma.informe.create({
     data: {
-      idIncidencia: incidenciaId,
+      idIncidencia:  incidenciaId,
       tituloInforme: 'Informe de Evaluación Social (corregido)',
-      tipoInforme: 'EVALUACION',
-      resumen: data.analisisSituacion,
-      contenido: JSON.stringify(data),
+      tipoInforme:   'EVALUACION',
+      resumen:       data.analisisSituacion,
+      contenido:     JSON.stringify({ ...data, elaboradoPor: user?.name }),
       estadoInforme: 'BORRADOR',
     },
   })
-
   await prisma.solicitudAyudaHumanitaria.updateMany({
-    where: { idIncidencia: incidenciaId, estadoSolicitud: 'EN_EVALUACION' },
-    data: { estadoSolicitud: 'EN_EVALUACION' },
+    where: { idIncidencia: incidenciaId, estadoSolicitud: { not: 'RECHAZADA' } },
+    data:  { estadoSolicitud: 'EN_EVALUACION' },
   })
-
   await transicionEstado(incidenciaId, 'EN EVALUACION', 'Informe corregido y reenviado al Comité')
+  revalidatePath('/grd')
   revalidatePath(`/grd/${incidenciaId}`)
 }
 
-// ─── Registrar atención (entrega) ─────────────────────────────────────────────
+// ─── Registrar atención ───────────────────────────────────────────────────────
 
 export async function registrarAtencion(incidenciaId: string, data: {
   tipoAyuda: string
@@ -404,21 +437,20 @@ export async function registrarAtencion(incidenciaId: string, data: {
   observaciones?: string
 }) {
   await verifySession()
-
   await prisma.entregaAyudaHumanitaria.create({
     data: {
-      idIncidencia: incidenciaId,
-      tipoAyuda: data.tipoAyuda,
-      descripcionAyuda: data.descripcionAyuda,
-      lugarEntrega: data.lugarEntrega,
-      fechaEntrega: new Date(),
-      observaciones: data.observaciones,
-      entregaParcial: false,
+      idIncidencia:         incidenciaId,
+      tipoAyuda:            data.tipoAyuda,
+      descripcionAyuda:     data.descripcionAyuda,
+      lugarEntrega:         data.lugarEntrega,
+      fechaEntrega:         new Date(),
+      observaciones:        data.observaciones ?? null,
+      entregaParcial:       false,
       conformidadRecepcion: true,
     },
   })
-
   await transicionEstado(incidenciaId, 'ATENDIDO', 'Ayuda humanitaria entregada')
+  revalidatePath('/grd')
   revalidatePath(`/grd/${incidenciaId}`)
 }
 
@@ -431,36 +463,24 @@ export async function addSeguimiento(incidenciaId: string, data: {
   recomendaciones?: string
 }) {
   await verifySession()
-
   await prisma.seguimientoIncidencia.create({
     data: {
-      idIncidencia: incidenciaId,
-      situacion: data.situacion,
-      descripcion: data.descripcion,
+      idIncidencia:          incidenciaId,
+      situacion:             data.situacion,
+      descripcion:           data.descripcion,
       necesidadesPendientes: data.necesidadesPendientes || null,
-      recomendaciones: data.recomendaciones || null,
-      estado: 'ACTIVO',
+      recomendaciones:       data.recomendaciones || null,
+      estado:                'ACTIVO',
     },
   })
-
-  // Transicionar a SEGUIMIENTO ABIERTO si venía de ATENDIDO
   const inc = await prisma.incidencia.findUnique({
-    where: { idIncidencia: incidenciaId },
+    where:  { idIncidencia: incidenciaId },
     select: { estadoActual: true },
   })
   if (inc?.estadoActual === 'ATENDIDO') {
     await transicionEstado(incidenciaId, 'SEGUIMIENTO ABIERTO', 'Inicio de seguimiento post-atención')
-  } else {
-    await prisma.historialEstadoIncidencia.create({
-      data: {
-        idIncidencia: incidenciaId,
-        estadoAnterior: inc?.estadoActual,
-        estadoNuevo: inc?.estadoActual ?? 'SEGUIMIENTO ABIERTO',
-        motivoCambio: 'Seguimiento agregado',
-      },
-    })
   }
-
+  revalidatePath('/grd')
   revalidatePath(`/grd/${incidenciaId}`)
 }
 
@@ -468,6 +488,24 @@ export async function addSeguimiento(incidenciaId: string, data: {
 
 export async function cerrarCaso(incidenciaId: string) {
   await verifySession()
+  // Liberar brigadistas y cerrar asignaciones
+  const asignaciones = await prisma.asignacionBrigadistaIncidencia.findMany({
+    where:  { idIncidencia: incidenciaId, estadoAsignacion: 'ASIGNADA' },
+    select: { idBrigadistaParroquial: true, idAsignacionBrigadista: true },
+  })
+  for (const a of asignaciones) {
+    await prisma.brigadistaParroquial.update({
+      where: { idBrigadistaParroquial: a.idBrigadistaParroquial },
+      data:  { disponibilidad: 'DISPONIBLE' },
+    })
+  }
+  if (asignaciones.length) {
+    await prisma.asignacionBrigadistaIncidencia.updateMany({
+      where: { idIncidencia: incidenciaId, estadoAsignacion: 'ASIGNADA' },
+      data:  { estadoAsignacion: 'CERRADA', fechaCierreCampo: new Date() },
+    })
+  }
   await transicionEstado(incidenciaId, 'CERRADO', 'Caso cerrado')
+  revalidatePath('/grd')
   revalidatePath(`/grd/${incidenciaId}`)
 }
