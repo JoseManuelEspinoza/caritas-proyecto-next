@@ -119,10 +119,10 @@ export async function createIncidente(data: CreateIncidenteData) {
   const codigo = await generateCode()
 
   // Alias autogenerado
-  const catShort = data.categoria
-  const distShort = data.distrito
   const parrShort = data.parroquia ? data.parroquia.split(' ').slice(-2).join(' ') : ''
-  const alias = parrShort ? `${catShort}-${distShort}-${parrShort}` : `${catShort}-${distShort}`
+  const alias = parrShort
+    ? `${data.categoria}-${data.distrito}-${parrShort}`
+    : `${data.categoria}-${data.distrito}`
 
   // Necesidades combinadas
   const todasNecesidades = [
@@ -132,40 +132,52 @@ export async function createIncidente(data: CreateIncidenteData) {
 
   // Contexto (ubicación y necesidades)
   const contexto = JSON.stringify({
-    pais: data.pais,
-    region: data.region,
-    distrito: data.distrito,
-    parroquia: data.parroquia,
-    referencia: data.referencia,
-    causa: data.causa,
-    necesidades: todasNecesidades,
+    pais:          data.pais,
+    region:        data.region,
+    distrito:      data.distrito,
+    parroquia:     data.parroquia,
+    referencia:    data.referencia,
+    causa:         data.causa,
+    necesidades:   todasNecesidades,
     necesidadesObs: data.necesidadesObs,
   })
+
+  // Buscar Parroquia en BD por nombre para guardar el FK
+  let idParroquiaDb: string | null = null
+  if (data.parroquia) {
+    const parroquiaRec = await prisma.parroquia.findFirst({
+      where:  { nombre: data.parroquia },
+      select: { idParroquia: true },
+    })
+    idParroquiaDb = parroquiaRec?.idParroquia ?? null
+  }
 
   // 1. Crear AvisoEmergencia
   const aviso = await prisma.avisoEmergencia.create({
     data: {
-      nombreInformante: data.reportaNombre.trim(),
-      telefonoInformante: data.reportaTel.trim() || null,
-      descripcion: data.descripcion || null,
+      nombreInformante:    data.reportaNombre.trim(),
+      telefonoInformante:  data.reportaTel.trim() || null,
+      descripcion:         data.descripcion || null,
       direccionPreliminar: data.direccion.trim(),
-      estadoAviso: 'RECIBIDO',
-      medioAviso: data.reportaRol || null,
+      estadoAviso:         'RECIBIDO',
+      medioAviso:          data.reportaRol || null,
+      ...(idParroquiaDb ? { idParroquia: idParroquiaDb } : {}),
     },
   })
 
-  // 2. Crear Incidencia
+  // 2. Crear Incidencia con parroquia vinculada
   const incidencia = await prisma.incidencia.create({
     data: {
-      idAviso: aviso.idAviso,
-      codigoCaso: codigo,
-      tituloIncidencia: alias,
-      tipoEvento: data.categoria,
-      estadoActual: 'ABIERTO',
-      direccionEvento: data.direccion.trim(),
+      idAviso:           aviso.idAviso,
+      codigoCaso:        codigo,
+      tituloIncidencia:  alias,
+      tipoEvento:        data.categoria,
+      estadoActual:      'ABIERTO',
+      direccionEvento:   data.direccion.trim(),
       descripcionEvento: data.descripcion || null,
-      contextoCaso: contexto,
-      gravedad: data.nivelAfectacion || null,
+      contextoCaso:      contexto,
+      gravedad:          data.nivelAfectacion || null,
+      ...(idParroquiaDb ? { idParroquia: idParroquiaDb } : {}),
     },
   })
 
@@ -234,6 +246,164 @@ export async function createIncidente(data: CreateIncidenteData) {
   })
 
   redirect(`/grd/${incidencia.idIncidencia}`)
+}
+
+// ─── Actualizar incidente ─────────────────────────────────────────────────────
+
+export async function updateIncidente(incidenciaId: string, data: CreateIncidenteData) {
+  await verifySession()
+
+  if (!data.categoria)         return { message: 'Selecciona la categoría del evento.' }
+  if (!data.distrito)          return { message: 'Selecciona el distrito.' }
+  if (!data.direccion?.trim()) return { message: 'Ingresa la dirección del evento.' }
+
+  const inc = await prisma.incidencia.findUnique({
+    where:  { idIncidencia: incidenciaId },
+    select: { idAviso: true, estadoActual: true },
+  })
+  if (!inc) return { message: 'Incidencia no encontrada.' }
+  if (inc.estadoActual !== 'ABIERTO') return { message: 'Solo se pueden editar incidentes en estado ABIERTO.' }
+
+  // Alias y contexto
+  const parrShort = data.parroquia ? data.parroquia.split(' ').slice(-2).join(' ') : ''
+  const alias     = parrShort ? `${data.categoria}-${data.distrito}-${parrShort}` : `${data.categoria}-${data.distrito}`
+
+  const todasNecesidades = [
+    ...data.necesidades.filter((n) => n !== 'Otros'),
+    ...(data.necesidadOtra.trim() ? [data.necesidadOtra.trim()] : []),
+  ]
+  const contexto = JSON.stringify({
+    pais: data.pais, region: data.region, distrito: data.distrito,
+    parroquia: data.parroquia, referencia: data.referencia,
+    causa: data.causa, necesidades: todasNecesidades, necesidadesObs: data.necesidadesObs,
+  })
+
+  // Buscar Parroquia en BD por nombre
+  let idParroquiaDb: string | null = null
+  if (data.parroquia) {
+    const parroquiaRec = await prisma.parroquia.findFirst({
+      where:  { nombre: data.parroquia },
+      select: { idParroquia: true },
+    })
+    idParroquiaDb = parroquiaRec?.idParroquia ?? null
+  }
+
+  // 1. Actualizar Incidencia con parroquia vinculada
+  await prisma.incidencia.update({
+    where: { idIncidencia: incidenciaId },
+    data: {
+      tituloIncidencia:  alias,
+      tipoEvento:        data.categoria,
+      direccionEvento:   data.direccion.trim(),
+      descripcionEvento: data.descripcion || null,
+      contextoCaso:      contexto,
+      gravedad:          data.nivelAfectacion || null,
+      idParroquia:       idParroquiaDb,
+    },
+  })
+
+  // 2. Actualizar o crear AvisoEmergencia (informante)
+  if (inc.idAviso) {
+    await prisma.avisoEmergencia.update({
+      where: { idAviso: inc.idAviso },
+      data: {
+        nombreInformante:    data.reportaNombre.trim() || null,
+        telefonoInformante:  data.reportaTel.trim() || null,
+        medioAviso:          data.reportaRol || null,
+        descripcion:         data.descripcion || null,
+        direccionPreliminar: data.direccion.trim(),
+      },
+    })
+  } else if (data.reportaNombre.trim()) {
+    const aviso = await prisma.avisoEmergencia.create({
+      data: {
+        nombreInformante:    data.reportaNombre.trim(),
+        telefonoInformante:  data.reportaTel.trim() || null,
+        descripcion:         data.descripcion || null,
+        direccionPreliminar: data.direccion.trim(),
+        estadoAviso:         'RECIBIDO',
+        medioAviso:          data.reportaRol || null,
+      },
+    })
+    await prisma.incidencia.update({
+      where: { idIncidencia: incidenciaId },
+      data:  { idAviso: aviso.idAviso },
+    })
+  }
+
+  // 3. Borrar personas y grupos existentes (respetando FK: personas primero)
+  const gruposExistentes = await prisma.grupoFamiliarAfectado.findMany({
+    where:  { idIncidencia: incidenciaId },
+    select: { idGrupoFamiliar: true },
+  })
+  const grupoIds = gruposExistentes.map((g) => g.idGrupoFamiliar)
+  if (grupoIds.length > 0) {
+    await prisma.personaAfectada.deleteMany({ where: { idGrupoFamiliar: { in: grupoIds } } })
+    await prisma.grupoFamiliarAfectado.deleteMany({ where: { idGrupoFamiliar: { in: grupoIds } } })
+  }
+
+  // 4. Recrear grupos familiares
+  const familiaIdMap: Record<string, string> = {}
+  for (const familia of data.familias) {
+    const grupoDb = await prisma.grupoFamiliarAfectado.create({
+      data: {
+        idIncidencia:     incidenciaId,
+        nombreReferencia: familia.nombre,
+        observaciones:    familia.observaciones || null,
+      },
+    })
+    familiaIdMap[familia.id] = grupoDb.idGrupoFamiliar
+  }
+
+  const personasSinFamilia = data.personas.filter((p) => !p.familiaId)
+  if (personasSinFamilia.length > 0) {
+    const grupoInd = await prisma.grupoFamiliarAfectado.create({
+      data: { idIncidencia: incidenciaId, nombreReferencia: 'Personas individuales' },
+    })
+    for (const p of personasSinFamilia) {
+      familiaIdMap[`ind_${p.id}`] = grupoInd.idGrupoFamiliar
+    }
+  }
+
+  // 5. Recrear PersonaAfectada
+  for (const persona of data.personas) {
+    const idGrupo = persona.familiaId
+      ? (familiaIdMap[persona.familiaId] ?? Object.values(familiaIdMap)[0])
+      : (familiaIdMap[`ind_${persona.id}`] ?? Object.values(familiaIdMap)[0])
+    if (!idGrupo) continue
+
+    await prisma.personaAfectada.create({
+      data: {
+        idGrupoFamiliar:   idGrupo,
+        tipoDocumento:     persona.tipoDoc || null,
+        numeroDocumento:   persona.dni || null,
+        nombres:           persona.nombre,
+        apellidos:         [persona.apellidoPaterno, persona.apellidoMaterno].filter(Boolean).join(' ') || null,
+        sexo:              persona.genero || null,
+        parentesco:        persona.parentesco || null,
+        condicionEspecial: persona.situacionActual || null,
+        esVulnerable:      Boolean(persona.situacionActual),
+        telefono:          persona.celular || null,
+        fechaNacimiento:   persona.edad
+          ? new Date(new Date().getFullYear() - parseInt(persona.edad), 0, 1)
+          : null,
+      },
+    })
+  }
+
+  // 6. Registrar en historial
+  await prisma.historialEstadoIncidencia.create({
+    data: {
+      idIncidencia:   incidenciaId,
+      estadoAnterior: inc.estadoActual,
+      estadoNuevo:    inc.estadoActual,
+      motivoCambio:   'Datos del incidente actualizados',
+    },
+  })
+
+  revalidatePath('/grd')
+  revalidatePath(`/grd/${incidenciaId}`)
+  redirect(`/grd/${incidenciaId}`)
 }
 
 // ─── Asignar brigadista ───────────────────────────────────────────────────────
