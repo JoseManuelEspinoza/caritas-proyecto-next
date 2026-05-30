@@ -7,7 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "seed": "npx tsx prisma/seed.ts"
+    "seed": "npx tsx prisma/seed.ts",
+    "megaseed": "npx tsx prisma/megaseed.ts",
+    "verify:grd": "npx tsx prisma/verify-grd.ts",
+    "verify:all": "npx tsx prisma/verify-all.ts"
   },
   "prisma": {
     "seed": "npx tsx prisma/seed.ts"
