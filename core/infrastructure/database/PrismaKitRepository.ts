@@ -1,6 +1,6 @@
 import { prisma } from '@/app/lib/prisma'
 import { KitEmergencia } from '../../domain/entities/kit/KitEmergencia'
-import { IKitRepository, MovimientoData } from '../../domain/repositories/IKitRepository'
+import { IKitRepository, MovimientoData, KitMovimientoRead } from '../../domain/repositories/IKitRepository'
 import { KitMapper } from '../mappers/KitMapper'
 
 export class PrismaKitRepository implements IKitRepository {
@@ -36,5 +36,22 @@ export class PrismaKitRepository implements IKitRepository {
         },
       }),
     ])
+  }
+
+  async findMovimientos(idKit: string): Promise<KitMovimientoRead[]> {
+    const rows = await prisma.movimientoKit.findMany({
+      where: { idKitEmergencia: idKit },
+      orderBy: { fechaMovimiento: 'desc' },
+      include: { usuarioResponsable: { select: { nombres: true, apellidos: true } } },
+    })
+    return rows.map((m) => ({
+      id: m.idMovimientoKit,
+      tipo: m.tipoMovimiento,
+      cantidad: m.cantidad,
+      fecha: m.fechaMovimiento.toISOString(),
+      responsable: m.usuarioResponsable ? `${m.usuarioResponsable.nombres} ${m.usuarioResponsable.apellidos}`.trim() : null,
+      motivoMovimiento: m.motivoMovimiento,
+      observaciones: m.observaciones,
+    }))
   }
 }

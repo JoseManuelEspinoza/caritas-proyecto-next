@@ -2,6 +2,7 @@ import { PrismaKitRepository } from '../database/PrismaKitRepository'
 import {
   CrearKitUseCase,
   ListarKitsUseCase,
+  ListarMovimientosKitUseCase,
   RegistrarMovimientoKitUseCase,
 } from '../../application/use-cases/kits/GestionarKits.usecase'
 
@@ -11,6 +12,7 @@ export function makeKitUseCases() {
   return {
     crear: new CrearKitUseCase(repo),
     listar: new ListarKitsUseCase(repo),
+    listarMovimientos: new ListarMovimientosKitUseCase(repo),
     registrarMovimiento: new RegistrarMovimientoKitUseCase(repo),
   }
 }

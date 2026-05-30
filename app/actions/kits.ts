@@ -15,6 +15,11 @@ function fail(err: unknown, fallback: string) {
   return { message: fallback }
 }
 
+export async function listarMovimientosKit(idKit: string) {
+  await verifySession()
+  return makeKitUseCases().listarMovimientos.execute(idKit)
+}
+
 export async function crearKit(input: { tipoKit: string; descripcion?: string; stockInicial?: number; codigoAlmacen?: string; ubicacionAlmacen?: string }) {
   await verifySession()
   try {

@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto'
 import { KitEmergencia, TipoMovimiento } from '../../../domain/entities/kit/KitEmergencia'
-import { IKitRepository } from '../../../domain/repositories/IKitRepository'
+import { IKitRepository, KitMovimientoRead } from '../../../domain/repositories/IKitRepository'
 import { NotFoundError } from '../../../domain/errors/DomainError'
 
 export interface KitOutput {
@@ -40,6 +40,14 @@ export class ListarKitsUseCase {
   constructor(private readonly repo: IKitRepository) {}
   async execute(): Promise<KitOutput[]> {
     return (await this.repo.findAll()).map(toOutput)
+  }
+}
+
+/** Devuelve el historial de movimientos de un kit. */
+export class ListarMovimientosKitUseCase {
+  constructor(private readonly repo: IKitRepository) {}
+  async execute(idKit: string): Promise<KitMovimientoRead[]> {
+    return this.repo.findMovimientos(idKit)
   }
 }
 
