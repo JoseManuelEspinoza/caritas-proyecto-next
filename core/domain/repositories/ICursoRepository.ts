@@ -11,8 +11,19 @@ export interface ParticipanteData {
   rolPastoralComunitario?: string | null
 }
 
+/** Proyección de lectura de una inscripción para la vista del curso. */
+export interface InscripcionRead {
+  idInscripcion: string
+  participante: string
+  estadoInscripcion: string
+  ultimaNota: number | null
+  resultado: string | null
+  certificado: boolean
+}
+
 export interface ICursoRepository {
   nextCodigo(): Promise<string>
+  findInscripciones(idCurso: string): Promise<InscripcionRead[]>
   crearCurso(curso: Curso): Promise<void>
   actualizarCurso(curso: Curso): Promise<void>
   findCursoById(id: string): Promise<Curso | null>

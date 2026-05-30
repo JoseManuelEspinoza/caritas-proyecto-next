@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto'
 import { Curso, resultadoPorNota } from '../../../domain/entities/curso/Curso'
-import { ICursoRepository, ParticipanteData } from '../../../domain/repositories/ICursoRepository'
+import { ICursoRepository, ParticipanteData, InscripcionRead } from '../../../domain/repositories/ICursoRepository'
 import { NotFoundError, BusinessRuleError, ValidationError } from '../../../domain/errors/DomainError'
 
 export interface CursoOutput {
@@ -45,6 +45,14 @@ export class ListarCursosUseCase {
   constructor(private readonly repo: ICursoRepository) {}
   async execute(): Promise<CursoOutput[]> {
     return (await this.repo.findAllCursos()).map(toOutput)
+  }
+}
+
+/** Lista las inscripciones de un curso (vista de participantes). */
+export class ListarInscripcionesUseCase {
+  constructor(private readonly repo: ICursoRepository) {}
+  async execute(idCurso: string): Promise<InscripcionRead[]> {
+    return this.repo.findInscripciones(idCurso)
   }
 }
 

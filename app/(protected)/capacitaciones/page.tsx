@@ -1,8 +1,15 @@
-export default function CapacitacionesPage() {
-  return (
-    <div className="p-4 md:p-6">
-      <h1 className="text-xl font-semibold text-gray-900 mb-1">Capacitaciones</h1>
-      <p className="text-sm text-gray-500">Módulo en desarrollo.</p>
-    </div>
-  )
+import { verifySession } from '@/app/lib/dal'
+import { toFrontendRole } from '@/app/lib/roles'
+import { redirect } from 'next/navigation'
+import { makeCursoUseCases } from '@/core/infrastructure/factories/makeCursoUseCases'
+import { CapacitacionesModule } from '@/app/ui/capacitaciones/capacitaciones-module'
+
+export default async function CapacitacionesPage() {
+  const session = await verifySession()
+  const role = toFrontendRole(session.role)
+  if (!['admin', 'especialistaGRD', 'brigadista'].includes(role)) redirect('/dashboard')
+
+  const cursos = await makeCursoUseCases().listar.execute()
+
+  return <CapacitacionesModule cursos={cursos} />
 }

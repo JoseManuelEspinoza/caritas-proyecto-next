@@ -1,6 +1,6 @@
 import { prisma } from '@/app/lib/prisma'
 import { Curso } from '../../domain/entities/curso/Curso'
-import { ICursoRepository, ParticipanteData } from '../../domain/repositories/ICursoRepository'
+import { ICursoRepository, ParticipanteData, InscripcionRead } from '../../domain/repositories/ICursoRepository'
 import { CursoMapper } from '../mappers/CursoMapper'
 
 export class PrismaCursoRepository implements ICursoRepository {
@@ -9,6 +9,26 @@ export class PrismaCursoRepository implements ICursoRepository {
     const prefix = `CAP-${year}-`
     const count = await prisma.cursoCapacitacion.count({ where: { codigoCurso: { startsWith: prefix } } })
     return `${prefix}${String(count + 1).padStart(4, '0')}`
+  }
+
+  async findInscripciones(idCurso: string): Promise<InscripcionRead[]> {
+    const rows = await prisma.inscripcionCurso.findMany({
+      where: { idCursoCapacitacion: idCurso },
+      orderBy: { fechaInscripcion: 'asc' },
+      include: {
+        participante: { select: { nombres: true, apellidos: true } },
+        evaluaciones: { orderBy: { fechaEvaluacion: 'desc' }, take: 1 },
+        certificacion: { select: { idCertificacionCurso: true } },
+      },
+    })
+    return rows.map((r) => ({
+      idInscripcion: r.idInscripcionCurso,
+      participante: `${r.participante.nombres} ${r.participante.apellidos ?? ''}`.trim(),
+      estadoInscripcion: r.estadoInscripcion,
+      ultimaNota: r.evaluaciones[0]?.nota != null ? Number(r.evaluaciones[0].nota) : null,
+      resultado: r.evaluaciones[0]?.resultado ?? null,
+      certificado: r.certificacion !== null,
+    }))
   }
 
   async crearCurso(curso: Curso): Promise<void> {

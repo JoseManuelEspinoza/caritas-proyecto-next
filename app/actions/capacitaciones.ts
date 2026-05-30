@@ -15,6 +15,11 @@ function fail(err: unknown, fallback: string) {
   return { message: fallback }
 }
 
+export async function listarInscripciones(idCurso: string) {
+  await verifySession()
+  return makeCursoUseCases().listarInscripciones.execute(idCurso)
+}
+
 export async function crearCurso(input: { nombreCurso: string; descripcion?: string; idInstitucionAliada?: string; duracionEstimadaHoras?: number }) {
   await verifySession()
   const idUsuarioResponsableGRD = await getUsuarioGRDId()
