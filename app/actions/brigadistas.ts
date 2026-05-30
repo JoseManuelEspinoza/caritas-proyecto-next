@@ -1,8 +1,9 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { prisma } from '@/app/lib/prisma'
 import { verifySession } from '@/app/lib/dal'
+import { makeBrigadistaUseCases } from '@/core/infrastructure/factories/makeBrigadistaUseCases'
+import { DomainError } from '@/core/domain/errors/DomainError'
 
 export type BrigadistaFormData = {
   nombres: string
@@ -14,90 +15,57 @@ export type BrigadistaFormData = {
   disponibilidad: string
 }
 
-// ─── Crear brigadista ─────────────────────────────────────────────────────────
+/**
+ * Capa de presentación (delgada). Conserva las MISMAS firmas que ya usa la UI;
+ * la lógica vive ahora en los casos de uso de core/. Los errores de dominio se
+ * traducen al mismo formato `{ message }` que la UI ya entiende.
+ */
+function fail(err: unknown, fallback: string) {
+  if (err instanceof DomainError) return { message: err.message }
+  console.error('[Brigadistas] Error inesperado:', err)
+  return { message: fallback }
+}
 
 export async function createBrigadista(data: BrigadistaFormData) {
   await verifySession()
-
-  if (!data.nombres.trim())    return { message: 'El nombre es obligatorio.' }
-  if (!data.idParroquia)       return { message: 'Selecciona una parroquia.' }
-
-  // Verificar DNI único si se ingresó
-  if (data.dni.trim()) {
-    const existing = await prisma.brigadistaParroquial.findFirst({
-      where: { dni: data.dni.trim() },
-    })
-    if (existing) return { message: 'Ya existe un brigadista con ese DNI.' }
+  try {
+    await makeBrigadistaUseCases().crear.execute(data)
+  } catch (err) {
+    return fail(err, 'No se pudo crear el brigadista.')
   }
-
-  await prisma.brigadistaParroquial.create({
-    data: {
-      idParroquia:    data.idParroquia,
-      nombres:        data.nombres.trim(),
-      apellidos:      data.apellidos.trim() || null,
-      dni:            data.dni.trim() || null,
-      celular:        data.celular.trim() || null,
-      correo:         data.correo.trim() || null,
-      disponibilidad: data.disponibilidad || 'DISPONIBLE',
-      estado:         'ACTIVO',
-    },
-  })
-
   revalidatePath('/brigadistas')
 }
-
-// ─── Actualizar brigadista ────────────────────────────────────────────────────
 
 export async function updateBrigadista(id: string, data: BrigadistaFormData) {
   await verifySession()
-
-  if (!data.nombres.trim()) return { message: 'El nombre es obligatorio.' }
-  if (!data.idParroquia)    return { message: 'Selecciona una parroquia.' }
-
-  // Verificar DNI único (excluyendo el propio)
-  if (data.dni.trim()) {
-    const existing = await prisma.brigadistaParroquial.findFirst({
-      where: { dni: data.dni.trim(), idBrigadistaParroquial: { not: id } },
-    })
-    if (existing) return { message: 'Ya existe otro brigadista con ese DNI.' }
+  try {
+    await makeBrigadistaUseCases().actualizar.execute(id, data)
+  } catch (err) {
+    return fail(err, 'No se pudo actualizar el brigadista.')
   }
-
-  await prisma.brigadistaParroquial.update({
-    where: { idBrigadistaParroquial: id },
-    data: {
-      idParroquia:    data.idParroquia,
-      nombres:        data.nombres.trim(),
-      apellidos:      data.apellidos.trim() || null,
-      dni:            data.dni.trim() || null,
-      celular:        data.celular.trim() || null,
-      correo:         data.correo.trim() || null,
-      disponibilidad: data.disponibilidad || 'DISPONIBLE',
-    },
-  })
-
   revalidatePath('/brigadistas')
 }
 
-// ─── Cambiar estado (ACTIVO / INACTIVO) ──────────────────────────────────────
-
-export async function toggleEstadoBrigadista(id: string, estadoActual: string) {
+// El 2º parámetro se conserva por compatibilidad con la UI; el estado real se lee en el caso de uso.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function toggleEstadoBrigadista(id: string, _estadoActual: string) {
   await verifySession()
-  const nuevoEstado = estadoActual === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO'
-  await prisma.brigadistaParroquial.update({
-    where: { idBrigadistaParroquial: id },
-    data:  { estado: nuevoEstado },
-  })
+  try {
+    await makeBrigadistaUseCases().toggleEstado.execute(id)
+  } catch (err) {
+    return fail(err, 'No se pudo cambiar el estado.')
+  }
   revalidatePath('/brigadistas')
 }
 
-// ─── Cambiar disponibilidad ───────────────────────────────────────────────────
-
-export async function toggleDisponibilidadBrigadista(id: string, dispActual: string) {
+// El 2º parámetro se conserva por compatibilidad con la UI; la disponibilidad real se lee en el caso de uso.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function toggleDisponibilidadBrigadista(id: string, _dispActual: string) {
   await verifySession()
-  const nuevaDisp = dispActual === 'DISPONIBLE' ? 'NO DISPONIBLE' : 'DISPONIBLE'
-  await prisma.brigadistaParroquial.update({
-    where: { idBrigadistaParroquial: id },
-    data:  { disponibilidad: nuevaDisp },
-  })
+  try {
+    await makeBrigadistaUseCases().toggleDisponibilidad.execute(id)
+  } catch (err) {
+    return fail(err, 'No se pudo cambiar la disponibilidad.')
+  }
   revalidatePath('/brigadistas')
 }

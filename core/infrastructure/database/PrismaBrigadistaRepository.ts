@@ -1,47 +1,34 @@
 import { prisma } from '@/app/lib/prisma'
-import { Brigadista } from '../../domain/entities/Brigadista'
+import { BrigadistaParroquial } from '../../domain/entities/brigadista/BrigadistaParroquial'
 import { IBrigadistaRepository } from '../../domain/repositories/IBrigadistaRepository'
 import { BrigadistaMapper } from '../mappers/BrigadistaMapper'
 
-const INCLUDE = { certificaciones: true }
-
-/** Implementación Prisma del repositorio del padrón de brigadistas. */
+/** Repositorio Prisma del padrón de brigadistas parroquiales. */
 export class PrismaBrigadistaRepository implements IBrigadistaRepository {
-  async save(brigadista: Brigadista): Promise<void> {
-    await prisma.brigadista.create({
-      data: {
-        ...BrigadistaMapper.toScalarData(brigadista),
-        certificaciones: { create: BrigadistaMapper.certsToPersistence(brigadista) },
-      },
-    })
+  async save(brigadista: BrigadistaParroquial): Promise<void> {
+    await prisma.brigadistaParroquial.create({ data: BrigadistaMapper.toPersistence(brigadista) })
   }
 
-  async update(brigadista: Brigadista): Promise<void> {
-    const { id, ...scalar } = BrigadistaMapper.toScalarData(brigadista)
-    await prisma.$transaction([
-      prisma.certificacionBrigadista.deleteMany({ where: { brigadistaId: id } }),
-      prisma.brigadista.update({
-        where: { id },
-        data: {
-          ...scalar,
-          certificaciones: { create: BrigadistaMapper.certsToPersistence(brigadista) },
-        },
-      }),
-    ])
+  async update(brigadista: BrigadistaParroquial): Promise<void> {
+    const { idBrigadistaParroquial, ...data } = BrigadistaMapper.toPersistence(brigadista)
+    await prisma.brigadistaParroquial.update({ where: { idBrigadistaParroquial }, data })
   }
 
-  async findById(id: string): Promise<Brigadista | null> {
-    const row = await prisma.brigadista.findUnique({ where: { id }, include: INCLUDE })
+  async findById(id: string): Promise<BrigadistaParroquial | null> {
+    const row = await prisma.brigadistaParroquial.findUnique({ where: { idBrigadistaParroquial: id } })
     return row ? BrigadistaMapper.toDomain(row) : null
   }
 
-  async findByDni(dni: string): Promise<Brigadista | null> {
-    const row = await prisma.brigadista.findUnique({ where: { dni }, include: INCLUDE })
-    return row ? BrigadistaMapper.toDomain(row) : null
-  }
-
-  async findAll(): Promise<Brigadista[]> {
-    const rows = await prisma.brigadista.findMany({ include: INCLUDE, orderBy: { fechaIngreso: 'desc' } })
+  async findAll(): Promise<BrigadistaParroquial[]> {
+    const rows = await prisma.brigadistaParroquial.findMany({ orderBy: { fechaRegistro: 'desc' } })
     return rows.map(BrigadistaMapper.toDomain)
+  }
+
+  async findIdByDni(dni: string): Promise<string | null> {
+    const row = await prisma.brigadistaParroquial.findFirst({
+      where: { dni },
+      select: { idBrigadistaParroquial: true },
+    })
+    return row?.idBrigadistaParroquial ?? null
   }
 }

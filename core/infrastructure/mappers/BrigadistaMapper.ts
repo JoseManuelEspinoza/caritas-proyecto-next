@@ -1,70 +1,41 @@
 import { Prisma } from '@prisma/client'
-import type { Brigadista as BrigadistaRow, CertificacionBrigadista as CertRow } from '@prisma/client'
-import { Brigadista, RolPastoral } from '../../domain/entities/Brigadista'
-import { Dni } from '../../domain/value-objects/Dni'
+import type { BrigadistaParroquial as BrigadistaRow } from '@prisma/client'
+import { BrigadistaParroquial } from '../../domain/entities/brigadista/BrigadistaParroquial'
 
-type BrigadistaRowFull = BrigadistaRow & { certificaciones: CertRow[] }
-
-/** Traduce entre la fila de Prisma (con certificaciones) y la entidad de dominio. */
+/** Traduce entre la fila Prisma `BrigadistaParroquial` y la entidad de dominio. */
 export const BrigadistaMapper = {
-  toDomain(row: BrigadistaRowFull): Brigadista {
-    return Brigadista.desdePersistencia({
-      id: row.id,
-      dni: new Dni(row.dni),
+  toDomain(row: BrigadistaRow): BrigadistaParroquial {
+    return BrigadistaParroquial.desdePersistencia({
+      id: row.idBrigadistaParroquial,
+      idParroquia: row.idParroquia,
+      idUsuarioGRD: row.idUsuarioGRD,
+      idCertificacionCurso: row.idCertificacionCurso,
+      dni: row.dni,
       nombres: row.nombres,
-      apellidoPaterno: row.apellidoPaterno,
-      apellidoMaterno: row.apellidoMaterno,
+      apellidos: row.apellidos,
       celular: row.celular,
-      email: row.email ?? undefined,
-      parroquia: row.parroquia,
-      rolPastoral: row.rolPastoral as RolPastoral,
-      fechaIngreso: row.fechaIngreso,
-      disponible: row.disponible,
-      activo: row.activo,
-      certificado: row.certificado,
-      horasFormacion: row.horasFormacion,
-      cursosEnProceso: row.cursosEnProceso,
-      notas: row.notas ?? undefined,
-      certificaciones: row.certificaciones.map((c) => ({
-        id: c.id,
-        cursoCodigo: c.cursoCodigo,
-        cursoNombre: c.cursoNombre,
-        fechaEmision: c.fechaEmision.toISOString(),
-        estado: c.estado as 'VIGENTE' | 'POR_VENCER' | 'VENCIDA',
-        notaFinal: c.notaFinal ?? undefined,
-      })),
+      correo: row.correo,
+      disponibilidad: row.disponibilidad ?? 'DISPONIBLE',
+      estado: row.estado,
+      fechaRegistro: row.fechaRegistro,
     })
   },
 
-  toScalarData(b: Brigadista): Prisma.BrigadistaUncheckedCreateInput {
+  toPersistence(b: BrigadistaParroquial): Prisma.BrigadistaParroquialUncheckedCreateInput {
     const s = b.snapshot
     return {
-      id: s.id,
-      dni: s.dni.toString(),
+      idBrigadistaParroquial: s.id,
+      idParroquia: s.idParroquia,
+      idUsuarioGRD: s.idUsuarioGRD ?? undefined,
+      idCertificacionCurso: s.idCertificacionCurso ?? undefined,
+      dni: s.dni ?? undefined,
       nombres: s.nombres,
-      apellidoPaterno: s.apellidoPaterno,
-      apellidoMaterno: s.apellidoMaterno,
-      celular: s.celular,
-      email: s.email,
-      parroquia: s.parroquia,
-      rolPastoral: s.rolPastoral,
-      fechaIngreso: s.fechaIngreso,
-      disponible: s.disponible,
-      activo: s.activo,
-      certificado: s.certificado,
-      horasFormacion: s.horasFormacion,
-      cursosEnProceso: s.cursosEnProceso,
-      notas: s.notas,
+      apellidos: s.apellidos ?? undefined,
+      celular: s.celular ?? undefined,
+      correo: s.correo ?? undefined,
+      disponibilidad: s.disponibilidad,
+      estado: s.estado,
+      fechaRegistro: s.fechaRegistro,
     }
-  },
-
-  certsToPersistence(b: Brigadista): Prisma.CertificacionBrigadistaCreateWithoutBrigadistaInput[] {
-    return b.snapshot.certificaciones.map((c) => ({
-      cursoCodigo: c.cursoCodigo,
-      cursoNombre: c.cursoNombre,
-      fechaEmision: new Date(c.fechaEmision),
-      estado: c.estado,
-      notaFinal: c.notaFinal,
-    }))
   },
 }
