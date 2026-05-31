@@ -13,29 +13,43 @@ import { prisma } from './prisma'
  * devolver la MISMA forma `{ isAuth, userId, role }` que ya consume todo el GRD
  * (incluido `getUsuarioGRDId`). Así la lógica de negocio no cambia.
  */
-async function resolverUsuarioApp(): Promise<{ id: string; role: string } | null> {
+// El User.id es estable por email → se cachea en memoria para no consultar la
+// BD en cada navegación (gran parte de la lentitud al cambiar de pestaña).
+const userIdCache = new Map<string, string>()
+
+async function getAppUserId(email: string, name: string, role: string): Promise<string> {
+  const cached = userIdCache.get(email)
+  if (cached) return cached
+
+  let user = await prisma.user.findUnique({ where: { email }, select: { id: true } })
+  if (!user) {
+    // Fallback de provisión por si el evento signIn no corrió.
+    user = await prisma.user.create({ data: { email, name, role: role as Role }, select: { id: true } })
+  }
+  userIdCache.set(email, user.id)
+  return user.id
+}
+
+type AppSession = { isAuth: true; userId: string; role: string; name: string; email: string }
+
+const resolver = cache(async (): Promise<AppSession | null> => {
   const session = await auth()
   const email = session?.user?.email
   if (!email) return null
+  // rol/nombre salen del token (sin BD); solo el id consulta (cacheado).
+  const name = session.user?.name ?? email
+  const role = session.user?.role ?? 'BRIGADISTA'
+  const userId = await getAppUserId(email, name, role)
+  return { isAuth: true, userId, role, name, email }
+})
 
-  let user = await prisma.user.findUnique({ where: { email }, select: { id: true, role: true } })
-  if (!user) {
-    // Fallback de provisión por si el evento signIn no corrió.
-    user = await prisma.user.create({
-      data: { email, name: session.user?.name ?? email, role: (session.user?.role ?? 'BRIGADISTA') as Role },
-      select: { id: true, role: true },
-    })
-  }
-  return { id: user.id, role: user.role as string }
-}
-
-export const verifySession = cache(async () => {
-  const u = await resolverUsuarioApp()
-  if (!u) redirect('/login')
-  return { isAuth: true, userId: u.id, role: u.role }
+export const verifySession = cache(async (): Promise<AppSession> => {
+  const s = await resolver()
+  if (!s) redirect('/login')
+  return s
 })
 
 export const getSession = cache(async () => {
-  const u = await resolverUsuarioApp()
-  return u ? { userId: u.id, role: u.role } : null
+  const s = await resolver()
+  return s ? { userId: s.userId, role: s.role } : null
 })
