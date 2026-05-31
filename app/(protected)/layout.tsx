@@ -1,24 +1,17 @@
 import { verifySession } from '@/app/lib/dal'
-import { prisma } from '@/app/lib/prisma'
 import { DashboardShell } from '@/app/ui/dashboard/shell'
 import { toFrontendRole } from '@/app/lib/roles'
 
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
+  // nombre/email/rol vienen del token (sin consulta extra a la BD por navegación)
   const session = await verifySession()
-
-  const user = await prisma.user.findUnique({
-    where: { id: session.userId },
-    select: { name: true, email: true, role: true },
-  })
-
-  const frontendRole = toFrontendRole(session.role)
 
   return (
     <DashboardShell
-      userName={user?.name ?? 'Usuario'}
-      userEmail={user?.email ?? ''}
+      userName={session.name}
+      userEmail={session.email}
       userRole={session.role}
-      frontendRole={frontendRole}
+      frontendRole={toFrontendRole(session.role)}
     >
       {children}
     </DashboardShell>

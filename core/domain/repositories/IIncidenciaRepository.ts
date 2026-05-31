@@ -25,7 +25,10 @@ export interface IIncidenciaRepository {
   guardarTransicion(incidencia: Incidencia, motivo?: string, observaciones?: string): Promise<void>
 
   /** Crea la asignación de un brigadista (si no existe) y lo marca EN CAMPO. */
-  registrarAsignacion(idIncidencia: string, idBrigadista: string): Promise<void>
+  registrarAsignacion(idIncidencia: string, idBrigadista: string, instrucciones?: string): Promise<void>
+
+  /** Autoasignación: define al UsuarioGRD como responsable de campo de la incidencia. */
+  asignarResponsable(idIncidencia: string, idUsuarioGRD: string): Promise<void>
 
   /** Inserta un informe (CAMPO / EVALUACION) con contenido JSON. */
   guardarInforme(idIncidencia: string, informe: {
