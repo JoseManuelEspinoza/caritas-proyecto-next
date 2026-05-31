@@ -2,9 +2,7 @@
 
 :root {
   --background: #ffffff;
-  --foreground: #49494A;
-
-  /* Colores Corporativos Cáritas Lima */
+  --foreground: #171717;
   --caritas-green: #009850;
   --caritas-lime: #91D723;
   --caritas-orange: #FF823C;
@@ -13,8 +11,6 @@
   --caritas-text: #49494A;
   --caritas-border: #DDDDDD;
   --caritas-bg-light: #F5F5F5;
-
-  --radius: 0.75rem;
 }
 
 @theme inline {
