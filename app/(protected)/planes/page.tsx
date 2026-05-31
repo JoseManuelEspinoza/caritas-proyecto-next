@@ -1,8 +1,25 @@
-export default function PlanesPage() {
+import { verifySession } from '@/app/lib/dal'
+import { toFrontendRole } from '@/app/lib/roles'
+import { redirect } from 'next/navigation'
+import { prisma } from '@/app/lib/prisma'
+import { makePlanUseCases } from '@/core/infrastructure/factories/makePlanUseCases'
+import { PlanesModule } from '@/app/ui/planes/planes-module'
+
+export default async function PlanesPage() {
+  const session = await verifySession()
+  if (toFrontendRole(session.role) !== 'admin') redirect('/dashboard')
+
+  const [planes, parroquias] = await Promise.all([
+    makePlanUseCases().listar.execute(),
+    prisma.parroquia.findMany({ where: { estado: 'ACTIVO' }, orderBy: { nombre: 'asc' }, select: { idParroquia: true, nombre: true } }),
+  ])
+
+  const parroquiaNombre = new Map(parroquias.map((p) => [p.idParroquia, p.nombre]))
+
   return (
-    <div className="p-4 md:p-6">
-      <h1 className="text-xl font-semibold text-gray-900 mb-1">Planes GRD</h1>
-      <p className="text-sm text-gray-500">Módulo en desarrollo.</p>
-    </div>
+    <PlanesModule
+      planes={planes.map((p) => ({ ...p, parroquiaNombre: parroquiaNombre.get(p.idParroquia) ?? '—' }))}
+      parroquias={parroquias.map((p) => ({ id: p.idParroquia, nombre: p.nombre }))}
+    />
   )
 }

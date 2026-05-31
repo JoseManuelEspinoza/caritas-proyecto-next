@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { LoginForm } from '@/app/ui/auth/login-form'
+import ClientLogin from './client-login'
 
 export const metadata: Metadata = {
   title: 'Iniciar sesión — Cáritas Lima',
@@ -14,7 +14,7 @@ export default function LoginPage() {
       >
         Iniciar Sesión
       </h2>
-      <LoginForm />
+      <ClientLogin />
     </>
   )
 }

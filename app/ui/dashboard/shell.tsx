@@ -5,7 +5,7 @@ import Image from 'next/image'
 import {
   LayoutDashboard, AlertTriangle, Users, FileText, Bell,
   Menu, X, LogOut, User, GraduationCap, ClipboardList,
-  Map, Package, History as HistoryIcon, Database, ChevronDown,
+  Map, Package, History as HistoryIcon, Database, ChevronDown, HandHeart,
 } from 'lucide-react'
 import { NavLink } from './nav-link'
 import { logout } from '@/app/actions/auth'
@@ -15,6 +15,7 @@ import { Toaster } from 'sonner'
 const ALL_NAV = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard',           exact: true,  roles: ['admin', 'especialistaGRD', 'comite', 'jefaOGP'] },
   { href: '/grd',       icon: AlertTriangle,   label: 'Incidencias GRD',     exact: false, roles: ['admin', 'especialistaGRD', 'brigadista', 'comite', 'jefaOGP'] },
+  { href: '/donaciones', icon: HandHeart,      label: 'Donaciones',          exact: false, roles: ['admin', 'comite', 'jefaOGP', 'especialistaGRD'] },
   { href: '/capacitaciones', icon: GraduationCap, label: 'Capacitaciones',   exact: false, roles: ['admin', 'especialistaGRD', 'brigadista'] },
   { href: '/brigadistas',    icon: Users,         label: 'Brigadistas',       exact: false, roles: ['admin'] },
   { href: '/planes',         icon: ClipboardList, label: 'Planes GRD',        exact: false, roles: ['admin'] },
