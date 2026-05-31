@@ -438,7 +438,7 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
               <label className="text-xs font-semibold text-gray-600 mb-1.5 block">Fecha y hora del reporte</label>
               <div className="flex items-center gap-2 text-sm text-gray-700">
                 <Calendar className="w-4 h-4 text-gray-400" />
-                <span>{new Date(fechaReporte).toLocaleString('es-PE')}</span>
+                <span suppressHydrationWarning>{new Date(fechaReporte).toLocaleString('es-PE')}</span>
               </div>
             </div>
 
