@@ -1,6 +1,7 @@
 {
   "realm": "caritas",
   "enabled": true,
+  "sslRequired": "none",
   "displayName": "Cáritas GRD",
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,

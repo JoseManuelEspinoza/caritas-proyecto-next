@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { verifySession } from '@/app/lib/dal'
 import { makeBrigadistaUseCases } from '@/core/infrastructure/factories/makeBrigadistaUseCases'
 import { DomainError } from '@/core/domain/errors/DomainError'
+import { logGRDAction } from '@/app/lib/audit'
 
 export type BrigadistaFormData = {
   nombres: string
@@ -27,22 +28,40 @@ function fail(err: unknown, fallback: string) {
 }
 
 export async function createBrigadista(data: BrigadistaFormData) {
-  await verifySession()
+  const session = await verifySession()
+  let brigadistaId: string = data.dni
   try {
-    await makeBrigadistaUseCases().crear.execute(data)
+    const result = await makeBrigadistaUseCases().crear.execute(data)
+    brigadistaId = result.id
   } catch (err) {
     return fail(err, 'No se pudo crear el brigadista.')
   }
+  await logGRDAction({
+    userId: session.userId,
+    action: 'CREAR',
+    entity: 'Brigadista',
+    entityId: brigadistaId,
+    entityName: `${data.nombres} ${data.apellidos}`,
+    module: 'Brigadistas',
+  })
   revalidatePath('/brigadistas')
 }
 
 export async function updateBrigadista(id: string, data: BrigadistaFormData) {
-  await verifySession()
+  const session = await verifySession()
   try {
     await makeBrigadistaUseCases().actualizar.execute(id, data)
   } catch (err) {
     return fail(err, 'No se pudo actualizar el brigadista.')
   }
+  await logGRDAction({
+    userId: session.userId,
+    action: 'EDITAR',
+    entity: 'Brigadista',
+    entityId: id,
+    entityName: `${data.nombres} ${data.apellidos}`,
+    module: 'Brigadistas',
+  })
   revalidatePath('/brigadistas')
 }
 

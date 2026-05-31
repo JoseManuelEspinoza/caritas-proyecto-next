@@ -1,6 +1,7 @@
 'use server'
 
 import { prisma } from '@/app/lib/prisma'
+import { GRD_ACTIONS } from '@/app/lib/audit'
 
 export type AuditEntry = {
   id: string
@@ -79,20 +80,49 @@ export async function getAuditEntries(): Promise<AuditEntry[]> {
     source: 'estado',
   }))
 
-  const entriesAuth: AuditEntry[] = authLogs.map((h) => ({
-    id: h.id,
-    timestamp: h.createdAt.toISOString(),
-    user: h.user?.name ?? h.user?.email ?? 'Desconocido',
-    userRole: h.user?.role ?? undefined,
-    action: h.action.toLowerCase().replace('_', ' '),
-    entity: 'Autenticación',
-    entityId: h.userId ?? '',
-    entityName: 'Sistema',
-    notes: h.detail ? JSON.stringify(h.detail) : undefined,
-    source: 'auth',
-  }))
+  const ACTION_LABEL: Record<string, string> = {
+    CREAR: 'creación',
+    EDITAR: 'edición',
+    ASIGNAR: 'asignación',
+  }
 
-  const all = [...entriesGRD, ...entriesEstado, ...entriesAuth]
+  const entriesAuth: AuditEntry[] = authLogs
+    .filter((h) => !GRD_ACTIONS.has(h.action))
+    .map((h) => ({
+      id: h.id,
+      timestamp: h.createdAt.toISOString(),
+      user: h.user?.name ?? h.user?.email ?? 'Desconocido',
+      userRole: h.user?.role ?? undefined,
+      action: h.action.toLowerCase().replace(/_/g, ' '),
+      entity: 'Autenticación',
+      entityId: h.userId ?? '',
+      entityName: 'Sistema',
+      notes: h.detail ? JSON.stringify(h.detail) : undefined,
+      source: 'auth',
+    }))
+
+  const entriesCRUD: AuditEntry[] = authLogs
+    .filter((h) => GRD_ACTIONS.has(h.action))
+    .map((h) => {
+      const d = (h.detail ?? {}) as Record<string, string>
+      return {
+        id: h.id,
+        timestamp: h.createdAt.toISOString(),
+        user: h.user?.name ?? h.user?.email ?? 'Sistema',
+        userRole: h.user?.role ?? undefined,
+        action: ACTION_LABEL[h.action] ?? h.action.toLowerCase(),
+        entity: d.entity ?? 'Registro',
+        entityId: d.entityId ?? '',
+        entityName: d.entityName ?? '',
+        field: d.field ?? undefined,
+        prevValue: d.prevValue ?? undefined,
+        newValue: d.newValue ?? undefined,
+        notes: d.module ?? undefined,
+        source: 'grd',
+      }
+    })
+
+  const all = [...entriesGRD, ...entriesEstado, ...entriesAuth, ...entriesCRUD]
   all.sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1))
   return all
 }
