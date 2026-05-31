@@ -15,18 +15,20 @@ import { prisma } from './prisma'
  */
 // El User.id es estable por email → se cachea en memoria para no consultar la
 // BD en cada navegación (gran parte de la lentitud al cambiar de pestaña).
-const userIdCache = new Map<string, string>()
+// Con un TTL corto el cache se auto-refresca (evita cualquier inconsistencia).
+const USER_ID_TTL_MS = 10 * 60 * 1000 // 10 minutos
+const userIdCache = new Map<string, { id: string; exp: number }>()
 
 async function getAppUserId(email: string, name: string, role: string): Promise<string> {
   const cached = userIdCache.get(email)
-  if (cached) return cached
+  if (cached && cached.exp > Date.now()) return cached.id
 
   let user = await prisma.user.findUnique({ where: { email }, select: { id: true } })
   if (!user) {
     // Fallback de provisión por si el evento signIn no corrió.
     user = await prisma.user.create({ data: { email, name, role: role as Role }, select: { id: true } })
   }
-  userIdCache.set(email, user.id)
+  userIdCache.set(email, { id: user.id, exp: Date.now() + USER_ID_TTL_MS })
   return user.id
 }
 
