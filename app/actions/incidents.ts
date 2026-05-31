@@ -7,6 +7,7 @@ import { verifySession } from '@/app/lib/dal'
 import { getUsuarioGRDId } from '@/app/lib/usuario-grd'
 import { makeIncidenciaUseCases } from '@/core/infrastructure/factories/makeIncidenciaUseCases'
 import { DomainError } from '@/core/domain/errors/DomainError'
+import { logGRDAction } from '@/app/lib/audit'
 import type {
   CreateIncidenteData,
   InfoCampoData,
@@ -43,23 +44,39 @@ async function nombreUsuario(): Promise<string | undefined> {
 // ─── Registro / edición ────────────────────────────────────────────────────
 
 export async function createIncidente(data: CreateIncidenteData) {
-  await verifySession()
+  const session = await verifySession()
   let id: string
   try {
     id = await makeIncidenciaUseCases().registrar.execute(data)
   } catch (err) {
     return asMessage(err)
   }
+  await logGRDAction({
+    userId: session.userId,
+    action: 'CREAR',
+    entity: 'Incidencia',
+    entityId: id,
+    entityName: `${data.categoria} en ${data.distrito}`,
+    module: 'GRD',
+  })
   redirect(`/grd/${id}`)
 }
 
 export async function updateIncidente(incidenciaId: string, data: CreateIncidenteData) {
-  await verifySession()
+  const session = await verifySession()
   try {
     await makeIncidenciaUseCases().actualizar.execute(incidenciaId, data)
   } catch (err) {
     return asMessage(err)
   }
+  await logGRDAction({
+    userId: session.userId,
+    action: 'EDITAR',
+    entity: 'Incidencia',
+    entityId: incidenciaId,
+    entityName: `${data.categoria} en ${data.distrito}`,
+    module: 'GRD',
+  })
   revalidar(incidenciaId)
   redirect(`/grd/${incidenciaId}`)
 }

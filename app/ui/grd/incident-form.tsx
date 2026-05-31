@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useRef, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import {
   ArrowLeft, Save, FileText, X, MessageSquare, Users,
-  ChevronDown, UserCircle, Upload, Trash2, Plus, Edit3, Calendar,
+  ChevronDown, UserCircle, Info, Upload, Trash2, Plus, Edit3, Calendar, Search,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
@@ -48,6 +48,129 @@ const PARROQUIAS_LIMA = [
 const NECESIDADES_CHIPS = ['Alimentos', 'Ropa', 'Atención médica', 'Materiales de construcción', 'Otros']
 const SITUACIONES_ESPECIALES = ['Gestante', 'Discapacitado', 'Con Lactancia', 'Enfermo', 'Herido', 'Enfermo crónico', 'Adulto mayor']
 const PARENTESCOS = ['Jefe(a) de Hogar', 'Padre', 'Madre', 'Hijo(a)', 'Nieto(a)', 'Abuelo(a)', 'Tío(a)', 'Cónyuge', 'Otro']
+
+// ─── SearchableSelect ─────────────────────────────────────────────────────────
+
+function SearchableSelect({
+  value, onChange, options, placeholder = 'Seleccionar', className = '',
+}: {
+  value: string
+  onChange: (v: string) => void
+  options: string[]
+  placeholder?: string
+  className?: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const [cursor, setCursor] = useState(-1)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const listRef = useRef<HTMLUListElement>(null)
+
+  const filtered = query.trim()
+    ? options.filter((o) => o.toLowerCase().includes(query.toLowerCase()))
+    : options
+
+  const select = useCallback((opt: string) => {
+    onChange(opt)
+    setQuery('')
+    setOpen(false)
+    setCursor(-1)
+  }, [onChange])
+
+  const clear = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+    onChange('')
+    setQuery('')
+    setCursor(-1)
+    inputRef.current?.focus()
+  }, [onChange])
+
+  // Close on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false)
+        setQuery('')
+        setCursor(-1)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  // Scroll highlighted item into view
+  useEffect(() => {
+    if (cursor >= 0 && listRef.current) {
+      const item = listRef.current.children[cursor] as HTMLElement | undefined
+      item?.scrollIntoView({ block: 'nearest' })
+    }
+  }, [cursor])
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'ArrowDown') { e.preventDefault(); setOpen(true); setCursor((c) => Math.min(c + 1, filtered.length - 1)) }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setCursor((c) => Math.max(c - 1, 0)) }
+    else if (e.key === 'Enter') { e.preventDefault(); if (cursor >= 0 && filtered[cursor]) select(filtered[cursor]) }
+    else if (e.key === 'Escape') { setOpen(false); setQuery(''); setCursor(-1) }
+    else if (e.key === 'Tab') { setOpen(false); setQuery(''); setCursor(-1) }
+  }
+
+  const displayValue = !open && value ? value : undefined
+
+  return (
+    <div ref={containerRef} className={`relative ${className}`}>
+      <div
+        className="w-full flex items-center px-3 py-2.5 bg-white border border-[#DDDDDD] rounded-lg text-sm focus-within:ring-2 focus-within:ring-[#009850]/20 focus-within:border-[#009850] transition-colors cursor-text"
+        onClick={() => { setOpen(true); inputRef.current?.focus() }}
+      >
+        <Search className="w-3.5 h-3.5 text-gray-400 flex-shrink-0 mr-2" />
+        {displayValue
+          ? <span className="flex-1 text-gray-800 truncate">{displayValue}</span>
+          : (
+            <input
+              ref={inputRef}
+              type="text"
+              value={query}
+              placeholder={open ? 'Escribe para filtrar…' : placeholder}
+              onChange={(e) => { setQuery(e.target.value); setCursor(-1); setOpen(true) }}
+              onFocus={() => setOpen(true)}
+              onKeyDown={handleKeyDown}
+              className="flex-1 outline-none bg-transparent placeholder:text-gray-400 min-w-0"
+              autoComplete="off"
+            />
+          )
+        }
+        {value
+          ? <button type="button" onClick={clear} className="ml-1 text-gray-400 hover:text-gray-600 flex-shrink-0"><X className="w-3.5 h-3.5" /></button>
+          : <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0 ml-1 pointer-events-none" />
+        }
+      </div>
+
+      {open && (
+        <ul
+          ref={listRef}
+          className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-52 overflow-auto text-sm"
+        >
+          {filtered.length === 0
+            ? <li className="px-4 py-3 text-gray-400 text-center">Sin resultados</li>
+            : filtered.map((opt, i) => (
+              <li
+                key={opt}
+                onMouseDown={(e) => { e.preventDefault(); select(opt) }}
+                onMouseEnter={() => setCursor(i)}
+                className={`px-4 py-2.5 cursor-pointer border-b border-gray-50 last:border-0 ${
+                  i === cursor ? 'bg-[#009850]/10 text-[#009850] font-medium' : 'hover:bg-gray-50'
+                } ${opt === value ? 'font-semibold' : ''}`}
+              >
+                {opt}
+              </li>
+            ))
+          }
+        </ul>
+      )}
+    </div>
+  )
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
