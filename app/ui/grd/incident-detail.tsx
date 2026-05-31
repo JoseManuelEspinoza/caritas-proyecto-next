@@ -8,11 +8,11 @@ import {
   XCircle, FileCheck, Flame, Waves, Mountain, Zap, TrendingDown,
   UserCheck, ClipboardList, BarChart3, Package, ShieldCheck,
   Phone, Calendar, AlertTriangle, Clock, ChevronDown, ChevronUp,
-  Plus, Loader2, HandHeart,
+  Plus, Loader2, HandHeart, Search, UserPlus, Star,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
-  assignBrigadista, saveInfoCampo, saveInformeEvaluacion,
+  assignBrigadista, assignEquipo, autoasignarme, saveInfoCampo, saveInformeEvaluacion,
   aprobarCaso, observarCaso, rechazarCaso, corregirYReenviar,
   registrarAtencion, addSeguimiento, cerrarCaso,
 } from '@/app/actions/incidents'
@@ -182,32 +182,107 @@ function PanelRegistrar({ data }: { data: IncidentData }) {
 
 // ─── Panel: Asignar Equipo ────────────────────────────────────────────────────
 
+// Paleta de colores estable por brigadista (avatar).
+const AVATAR_COLORS = [
+  'bg-emerald-500', 'bg-blue-500', 'bg-violet-500', 'bg-amber-500',
+  'bg-rose-500', 'bg-cyan-500', 'bg-indigo-500', 'bg-teal-500', 'bg-fuchsia-500',
+]
+function avatarColor(seed: string): string {
+  let h = 0
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0
+  return AVATAR_COLORS[h % AVATAR_COLORS.length]
+}
+function iniciales(nombres: string, apellidos: string | null): string {
+  return `${nombres?.[0] ?? ''}${apellidos?.[0] ?? ''}`.toUpperCase()
+}
+
 function PanelAsignar({ data, onDone }: { data: IncidentData; onDone: () => void }) {
-  const [selected, setSelected] = useState('')
+  const [tab, setTab] = useState<'equipo' | 'auto'>('equipo')
+  const [selected, setSelected] = useState<string[]>([])
+  const [query, setQuery] = useState('')
+  const [instrucciones, setInstrucciones] = useState('')
   const [isPending, startTransition] = useTransition()
   const canAct = data.role === 'admin' || data.role === 'especialistaGRD'
-  const hasAssignment = data.asignaciones.length > 0
 
-  function handleAssign() {
-    if (!selected) return
+  const yaAsignados = new Set(data.asignaciones.map((a) => a.brigadistaId))
+
+  // Recomendado = misma parroquia que la incidencia.
+  const esRecomendado = (parroquia: string | null) =>
+    !!data.parroquia && !!parroquia && parroquia.trim().toLowerCase() === data.parroquia.trim().toLowerCase()
+
+  const disponibles = data.brigadistasDisponibles
+    .filter((b) => !yaAsignados.has(b.id))
+    .filter((b) => {
+      const q = query.trim().toLowerCase()
+      if (!q) return true
+      return (
+        `${b.nombres} ${b.apellidos ?? ''}`.toLowerCase().includes(q) ||
+        (b.parroquia ?? '').toLowerCase().includes(q)
+      )
+    })
+    // Recomendados primero.
+    .sort((a, b) => Number(esRecomendado(b.parroquia)) - Number(esRecomendado(a.parroquia)))
+
+  function toggle(id: string) {
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+  }
+
+  function handleAsignarEquipo() {
+    if (selected.length === 0) return
     startTransition(async () => {
-      await assignBrigadista(data.idIncidencia, selected)
-      toast.success('Brigadista asignado correctamente')
+      const res = await assignEquipo(data.idIncidencia, selected, instrucciones)
+      if (res && 'message' in res) { toast.error(res.message); return }
+      toast.success(selected.length === 1 ? 'Brigadista asignado correctamente' : `${selected.length} brigadistas asignados`)
+      setSelected([])
+      setInstrucciones('')
       onDone()
     })
   }
 
+  function handleAutoasignarme() {
+    startTransition(async () => {
+      const res = await autoasignarme(data.idIncidencia)
+      if (res && 'message' in res) { toast.error(res.message); return }
+      toast.success('Te autoasignaste como responsable del caso')
+      onDone()
+    })
+  }
+
+  if (!canAct) {
+    return <p className="text-sm text-gray-500 text-center py-4">Solo el Especialista GRD puede gestionar la asignación del equipo.</p>
+  }
+
   return (
     <div className="space-y-4">
+      {/* Tabs */}
+      <div className="flex gap-1 p-1 bg-gray-100 rounded-xl">
+        <button
+          onClick={() => setTab('equipo')}
+          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors ${
+            tab === 'equipo' ? 'bg-white text-[var(--caritas-green)] shadow-sm' : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Users className="w-4 h-4" /> Asignar Equipo
+        </button>
+        <button
+          onClick={() => setTab('auto')}
+          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors ${
+            tab === 'auto' ? 'bg-white text-[var(--caritas-green)] shadow-sm' : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <UserPlus className="w-4 h-4" /> Autoasignarme
+        </button>
+      </div>
+
       {/* Asignados actuales */}
       {data.asignaciones.length > 0 && (
         <div>
-          <p className="text-xs font-semibold text-gray-500 mb-2">Brigadistas asignados</p>
+          <p className="text-xs font-semibold text-gray-500 mb-2">Equipo asignado</p>
           <div className="space-y-2">
             {data.asignaciones.map((a) => (
               <div key={a.brigadistaId} className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-                <div className="w-9 h-9 rounded-full bg-[#009850] flex items-center justify-center flex-shrink-0">
-                  <span className="text-white text-xs font-bold">{a.nombres[0]}{a.apellidos?.[0] ?? ''}</span>
+                <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${avatarColor(a.brigadistaId)}`}>
+                  <span className="text-white text-xs font-bold">{iniciales(a.nombres, a.apellidos)}</span>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-900">{a.nombres} {a.apellidos ?? ''}</p>
@@ -220,62 +295,112 @@ function PanelAsignar({ data, onDone }: { data: IncidentData; onDone: () => void
         </div>
       )}
 
-      {/* Formulario de asignación */}
-      {canAct && (data.estadoActual === 'ABIERTO' || data.estadoActual === 'ASIGNADO') && (
-        <div>
-          <p className="text-xs font-semibold text-gray-500 mb-2">
-            {hasAssignment ? 'Agregar otro brigadista' : 'Seleccionar brigadista disponible'}
-          </p>
-          {data.brigadistasDisponibles.length === 0 ? (
+      {tab === 'equipo' && (data.estadoActual === 'ABIERTO' || data.estadoActual === 'ASIGNADO') && (
+        <>
+          {/* Búsqueda */}
+          <div className="relative">
+            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar brigadista por nombre o parroquia..."
+              className="w-full pl-9 pr-3 py-2 text-sm border border-[#DDDDDD] rounded-lg focus:outline-none focus:border-[var(--caritas-green)]"
+            />
+          </div>
+
+          {/* Lista de disponibles */}
+          {disponibles.length === 0 ? (
             <div className="text-center py-6 text-sm text-gray-400 bg-gray-50 rounded-lg">
-              No hay brigadistas disponibles en este momento
+              {query ? 'Ningún brigadista coincide con la búsqueda' : 'No hay brigadistas disponibles en este momento'}
             </div>
           ) : (
-            <div className="space-y-2 max-h-64 overflow-y-auto">
-              {data.brigadistasDisponibles.map((b) => (
-                <label
-                  key={b.id}
-                  className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
-                    selected === b.id ? 'border-[#009850] bg-[#009850]/5' : 'border-[#DDDDDD] hover:border-[#009850]/40'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="brigadista"
-                    value={b.id}
-                    checked={selected === b.id}
-                    onChange={() => setSelected(b.id)}
-                    className="accent-[#009850]"
-                  />
-                  <div className="w-8 h-8 rounded-full bg-[#009850]/10 flex items-center justify-center flex-shrink-0">
-                    <span className="text-[#009850] text-xs font-bold">{b.nombres[0]}{b.apellidos?.[0] ?? ''}</span>
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-800">{b.nombres} {b.apellidos ?? ''}</p>
-                    <p className="text-xs text-gray-500">{b.parroquia ?? '—'}</p>
-                  </div>
-                  {b.celular && <span className="text-xs text-gray-400 flex items-center gap-1"><Phone className="w-3 h-3" />{b.celular}</span>}
-                </label>
-              ))}
+            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+              {disponibles.map((b) => {
+                const isSel = selected.includes(b.id)
+                const rec = esRecomendado(b.parroquia)
+                return (
+                  <button
+                    type="button"
+                    key={b.id}
+                    onClick={() => toggle(b.id)}
+                    className={`w-full flex items-center gap-3 p-3 border rounded-lg text-left transition-colors ${
+                      isSel ? 'border-[#009850] bg-[#009850]/5' : 'border-[#DDDDDD] hover:border-[#009850]/40'
+                    }`}
+                  >
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${avatarColor(b.id)}`}>
+                      <span className="text-white text-xs font-bold">{iniciales(b.nombres, b.apellidos)}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-gray-800 truncate">{b.nombres} {b.apellidos ?? ''}</p>
+                        {rec && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700">
+                            <Star className="w-3 h-3 fill-amber-500 text-amber-500" /> RECOMENDADO
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500 flex items-center gap-2">
+                        <span>{b.parroquia ?? '—'}</span>
+                        {b.celular && <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{b.celular}</span>}
+                      </p>
+                    </div>
+                    <div className={`w-5 h-5 rounded-md border flex items-center justify-center flex-shrink-0 ${
+                      isSel ? 'bg-[#009850] border-[#009850]' : 'border-gray-300'
+                    }`}>
+                      {isSel && <CheckCircle className="w-4 h-4 text-white" />}
+                    </div>
+                  </button>
+                )
+              })}
             </div>
           )}
 
-          {selected && (
-            <div className="mt-3 flex justify-end">
-              <button
-                onClick={handleAssign}
-                disabled={isPending}
-                className={btnPrimary}
-                style={{ background: 'var(--caritas-green)' }}
-              >
-                {isPending ? <><Loader2 className="w-4 h-4 animate-spin inline mr-1" />Asignando...</> : 'Confirmar asignación'}
-              </button>
-            </div>
-          )}
-        </div>
+          {/* Instrucciones */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1">Instrucciones para el equipo</label>
+            <textarea
+              value={instrucciones}
+              onChange={(e) => setInstrucciones(e.target.value)}
+              rows={3}
+              placeholder="Indicaciones, punto de encuentro, materiales necesarios..."
+              className="w-full px-3 py-2 text-sm border border-[#DDDDDD] rounded-lg focus:outline-none focus:border-[var(--caritas-green)] resize-none"
+            />
+          </div>
+
+          <button
+            onClick={handleAsignarEquipo}
+            disabled={isPending || selected.length === 0}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-white font-semibold disabled:opacity-50 transition-opacity"
+            style={{ background: 'var(--caritas-green)' }}
+          >
+            {isPending
+              ? <><Loader2 className="w-4 h-4 animate-spin" />Asignando...</>
+              : <><UserCheck className="w-4 h-4" />Asignar Equipo{selected.length > 0 ? ` (${selected.length})` : ''}</>}
+          </button>
+        </>
       )}
 
-      {!canAct && <p className="text-sm text-gray-500 text-center py-4">Solo el Especialista GRD puede asignar brigadistas.</p>}
+      {tab === 'auto' && (
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <UserPlus className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-blue-800">
+              Te registrarás como <strong>responsable GRD</strong> de este caso. Si la incidencia está abierta,
+              pasará automáticamente al estado <strong>Asignado</strong>.
+            </p>
+          </div>
+          <button
+            onClick={handleAutoasignarme}
+            disabled={isPending}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-white font-semibold disabled:opacity-50 transition-opacity"
+            style={{ background: 'var(--caritas-green)' }}
+          >
+            {isPending
+              ? <><Loader2 className="w-4 h-4 animate-spin" />Procesando...</>
+              : <><UserPlus className="w-4 h-4" />Autoasignarme como responsable</>}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

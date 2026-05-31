@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/app/lib/prisma'
 import { verifySession } from '@/app/lib/dal'
+import { getUsuarioGRDId } from '@/app/lib/usuario-grd'
 import { makeIncidenciaUseCases } from '@/core/infrastructure/factories/makeIncidenciaUseCases'
 import { DomainError } from '@/core/domain/errors/DomainError'
 import type {
@@ -65,10 +66,53 @@ export async function updateIncidente(incidenciaId: string, data: CreateIncident
 
 // ─── Flujo de campo y evaluación ────────────────────────────────────────────
 
-export async function assignBrigadista(incidenciaId: string, brigadistaId: string) {
+export async function assignBrigadista(
+  incidenciaId: string,
+  brigadistaId: string,
+  instrucciones?: string,
+) {
   await verifySession()
   try {
-    await makeIncidenciaUseCases().asignar.execute(incidenciaId, brigadistaId)
+    await makeIncidenciaUseCases().asignar.execute(incidenciaId, brigadistaId, instrucciones)
+  } catch (err) {
+    return asMessage(err)
+  }
+  revalidar(incidenciaId)
+}
+
+/**
+ * Asigna varios brigadistas a la vez, compartiendo las mismas instrucciones.
+ * Devuelve un mensaje de error si alguna asignación falla.
+ */
+export async function assignEquipo(
+  incidenciaId: string,
+  brigadistaIds: string[],
+  instrucciones?: string,
+) {
+  await verifySession()
+  try {
+    const uc = makeIncidenciaUseCases().asignar
+    for (const id of brigadistaIds) {
+      await uc.execute(incidenciaId, id, instrucciones)
+    }
+  } catch (err) {
+    return asMessage(err)
+  }
+  revalidar(incidenciaId)
+}
+
+/**
+ * Autoasignación del especialista GRD: se registra como responsable de campo de
+ * la incidencia (y la transiciona a ASIGNADO si estaba ABIERTA).
+ */
+export async function autoasignarme(incidenciaId: string) {
+  await verifySession()
+  const idUsuarioGRD = await getUsuarioGRDId()
+  if (!idUsuarioGRD) {
+    return { message: 'No se encontró tu perfil GRD para autoasignarte.' }
+  }
+  try {
+    await makeIncidenciaUseCases().autoasignarme.execute(incidenciaId, idUsuarioGRD)
   } catch (err) {
     return asMessage(err)
   }

@@ -174,11 +174,20 @@ export class PrismaIncidenciaRepository implements IIncidenciaRepository {
     ])
   }
 
-  async registrarAsignacion(idIncidencia: string, idBrigadista: string): Promise<void> {
+  async registrarAsignacion(idIncidencia: string, idBrigadista: string, instrucciones?: string): Promise<void> {
     const dup = await prisma.asignacionBrigadistaIncidencia.findFirst({
       where: { idIncidencia, idBrigadistaParroquial: idBrigadista },
     })
-    if (dup) return
+    if (dup) {
+      // Si ya existe, solo actualiza las instrucciones si vinieron.
+      if (instrucciones?.trim()) {
+        await prisma.asignacionBrigadistaIncidencia.update({
+          where: { idAsignacionBrigadista: dup.idAsignacionBrigadista },
+          data: { observaciones: instrucciones.trim() },
+        })
+      }
+      return
+    }
     await prisma.asignacionBrigadistaIncidencia.create({
       data: {
         idIncidencia,
@@ -186,11 +195,19 @@ export class PrismaIncidenciaRepository implements IIncidenciaRepository {
         estadoAsignacion: 'ASIGNADA',
         origenAsignacion: 'MANUAL',
         fechaAsignacion: new Date(),
+        observaciones: instrucciones?.trim() || null,
       },
     })
     await prisma.brigadistaParroquial.update({
       where: { idBrigadistaParroquial: idBrigadista },
       data: { disponibilidad: 'EN CAMPO' },
+    })
+  }
+
+  async asignarResponsable(idIncidencia: string, idUsuarioGRD: string): Promise<void> {
+    await prisma.incidencia.update({
+      where: { idIncidencia },
+      data: { idUsuarioResponsableGRD: idUsuarioGRD },
     })
   }
 
