@@ -43,6 +43,7 @@ export const authConfig: NextAuthConfig = {
         token.roles = roles
         token.role = pickAppRole(roles)
       }
+      if (account?.id_token) token.idToken = account.id_token
       return token
     },
     async session({ session, token }) {
@@ -50,6 +51,7 @@ export const authConfig: NextAuthConfig = {
         session.user.roles = (token.roles as string[] | undefined) ?? []
         session.user.role = (token.role as string | undefined) ?? 'BRIGADISTA'
       }
+      session.idToken = token.idToken as string | undefined
       return session
     },
   },
