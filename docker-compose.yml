@@ -11,6 +11,8 @@ services:
       - APP_URL=http://localhost:3000
       - NODE_ENV=development
       - WATCHPACK_POLLING=true
+      - CHOKIDAR_USEPOLLING=true
+      - CHOKIDAR_INTERVAL=300
       # SMTP — se lee desde el archivo .env del proyecto
       - SMTP_HOST=${SMTP_HOST:-mailhog}
       - SMTP_PORT=${SMTP_PORT:-1025}
@@ -23,7 +25,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    command: sh -c "npx prisma generate && npx prisma db push && npm run dev"
+    command: sh -c "npm install && npx prisma generate && npx prisma db push && npm run dev"
 
   db:
     image: postgres:15-alpine

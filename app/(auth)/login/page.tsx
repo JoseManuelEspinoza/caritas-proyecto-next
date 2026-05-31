@@ -8,7 +8,12 @@ export const metadata: Metadata = {
 export default function LoginPage() {
   return (
     <>
-      <h2 className="text-xl font-semibold text-gray-900 mb-6">Iniciar sesión</h2>
+      <h2
+        className="text-lg md:text-xl mb-5 md:mb-6 text-center"
+        style={{ color: 'var(--caritas-text)' }}
+      >
+        Iniciar Sesión
+      </h2>
       <LoginForm />
     </>
   )
