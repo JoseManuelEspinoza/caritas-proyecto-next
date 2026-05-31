@@ -557,7 +557,12 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
                 {/* Ubicación: GPS (RF07) + manual (RF08) + mapa real */}
                 <div>
                   <label className="text-xs text-gray-500 mb-1.5 block">Ubicación en el mapa (GPS o manual)</label>
-                  <LocationPicker lat={lat} lng={lng} onChange={(la, lo) => { setLat(la); setLng(lo) }} />
+                  <LocationPicker
+                    lat={lat}
+                    lng={lng}
+                    onChange={(la, lo) => { setLat(la); setLng(lo) }}
+                    onAddressResolved={(addr) => { setDireccion(addr); setMapSugerencias([]) }}
+                  />
                 </div>
 
                 <div>

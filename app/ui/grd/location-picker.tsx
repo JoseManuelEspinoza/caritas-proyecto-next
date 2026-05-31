@@ -22,6 +22,8 @@ interface Props {
   lat: number | null
   lng: number | null
   onChange: (lat: number | null, lng: number | null) => void
+  /** Se llama con la dirección resuelta (reverse geocoding) al elegir un punto en el mapa o por GPS. */
+  onAddressResolved?: (address: string) => void
 }
 
 /**
@@ -32,12 +34,41 @@ interface Props {
  * - Mapa interactivo (OpenStreetMap + Leaflet): click o arrastra el pin para fijar
  *   la ubicación. GRATIS, sin API key ni facturación.
  */
-export function LocationPicker({ lat, lng, onChange }: Props) {
+export function LocationPicker({ lat, lng, onChange, onAddressResolved }: Props) {
   const [loading, setLoading] = useState(false)
+  const [geocoding, setGeocoding] = useState(false)
 
   const hasPoint = lat != null && lng != null
   const viewLat = lat ?? LIMA.lat
   const viewLng = lng ?? LIMA.lng
+
+  /** Reverse geocoding gratis vía Nominatim (OpenStreetMap). Autocompleta la dirección. */
+  const resolveAddress = async (la: number, lo: number) => {
+    if (!onAddressResolved) return
+    try {
+      setGeocoding(true)
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${la}&lon=${lo}&accept-language=es`,
+        { headers: { Accept: 'application/json' } },
+      )
+      if (!res.ok) throw new Error('geocode')
+      const data = await res.json()
+      if (data?.display_name) {
+        onAddressResolved(data.display_name as string)
+        toast.success('Dirección autocompletada desde el mapa.')
+      }
+    } catch {
+      toast.error('No se pudo obtener la dirección automáticamente.')
+    } finally {
+      setGeocoding(false)
+    }
+  }
+
+  /** Fija el punto y, si viene de una selección en el mapa/GPS, resuelve la dirección. */
+  const elegirPunto = (la: number, lo: number) => {
+    onChange(la, lo)
+    resolveAddress(la, lo)
+  }
 
   const usarGPS = () => {
     if (!('geolocation' in navigator)) { toast.error('Tu navegador no soporta geolocalización.'); return }
@@ -45,8 +76,8 @@ export function LocationPicker({ lat, lng, onChange }: Props) {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setLoading(false)
-        onChange(Number(pos.coords.latitude.toFixed(7)), Number(pos.coords.longitude.toFixed(7)))
         toast.success('Ubicación obtenida por GPS.')
+        elegirPunto(Number(pos.coords.latitude.toFixed(7)), Number(pos.coords.longitude.toFixed(7)))
       },
       (err) => {
         setLoading(false)
@@ -85,6 +116,7 @@ export function LocationPicker({ lat, lng, onChange }: Props) {
           </a>
         )}
         <span className="text-[11px] text-gray-400">Haz click en el mapa o arrastra el pin para fijar la ubicación.</span>
+        {geocoding && <span className="flex items-center gap-1 text-[11px] text-[#009850]"><Loader2 className="w-3 h-3 animate-spin" /> Buscando dirección…</span>}
       </div>
 
       <div className="grid grid-cols-2 gap-3">
@@ -107,7 +139,7 @@ export function LocationPicker({ lat, lng, onChange }: Props) {
       </div>
 
       <div className="border border-gray-200 rounded-lg overflow-hidden">
-        <LocationMap lat={viewLat} lng={viewLng} onChange={(la, lo) => onChange(la, lo)} />
+        <LocationMap lat={viewLat} lng={viewLng} onChange={elegirPunto} />
         <div className="bg-gray-50 px-3 py-2 border-t border-gray-200 flex items-center gap-2">
           <MapPin className={`w-4 h-4 ${hasPoint ? 'text-red-500' : 'text-gray-400'}`} />
           <p className="text-xs text-gray-600">
