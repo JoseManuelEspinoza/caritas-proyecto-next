@@ -22,8 +22,8 @@ interface Props {
   lat: number | null
   lng: number | null
   onChange: (lat: number | null, lng: number | null) => void
-  /** Se llama con la dirección resuelta (reverse geocoding) al elegir un punto en el mapa o por GPS. */
-  onAddressResolved?: (address: string) => void
+  /** Se llama con la dirección y candidatos de distrito (reverse geocoding) al elegir un punto. */
+  onAddressResolved?: (info: { direccion: string; candidatosDistrito: string[] }) => void
 }
 
 /**
@@ -48,14 +48,20 @@ export function LocationPicker({ lat, lng, onChange, onAddressResolved }: Props)
     try {
       setGeocoding(true)
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${la}&lon=${lo}&accept-language=es`,
+        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&lat=${la}&lon=${lo}&accept-language=es`,
         { headers: { Accept: 'application/json' } },
       )
       if (!res.ok) throw new Error('geocode')
       const data = await res.json()
-      if (data?.display_name) {
-        onAddressResolved(data.display_name as string)
-        toast.success('Dirección autocompletada desde el mapa.')
+      const a = data?.address ?? {}
+      // Dirección concisa: calle + número; si no hay, el nombre completo.
+      const direccion = [a.road, a.house_number].filter(Boolean).join(' ') || (data.display_name as string) || ''
+      // Candidatos de distrito (en Lima el distrito aparece en distintos campos según la zona).
+      const candidatosDistrito = [a.city_district, a.suburb, a.town, a.quarter, a.borough, a.municipality, a.city]
+        .filter((x): x is string => Boolean(x))
+      if (direccion) {
+        onAddressResolved({ direccion, candidatosDistrito })
+        toast.success('Ubicación autocompletada desde el mapa.')
       }
     } catch {
       toast.error('No se pudo obtener la dirección automáticamente.')

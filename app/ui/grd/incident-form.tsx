@@ -561,7 +561,15 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
                     lat={lat}
                     lng={lng}
                     onChange={(la, lo) => { setLat(la); setLng(lo) }}
-                    onAddressResolved={(addr) => { setDireccion(addr); setMapSugerencias([]) }}
+                    onAddressResolved={({ direccion: dir, candidatosDistrito }) => {
+                      setDireccion(dir)
+                      setMapSugerencias([])
+                      // Autocompletar distrito si alguno de los candidatos coincide con la lista
+                      const match = DISTRITOS_LIMA.find((d) =>
+                        candidatosDistrito.some((c) => c.toLowerCase() === d.toLowerCase()),
+                      )
+                      if (match) setDistrito(match)
+                    }}
                   />
                 </div>
 
