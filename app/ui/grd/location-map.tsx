@@ -31,12 +31,13 @@ interface Props {
   lat: number
   lng: number
   onChange: (lat: number, lng: number) => void
+  className?: string
 }
 
 /** Mapa interactivo (OpenStreetMap, sin API key): click y arrastra para fijar el pin. */
-export default function LocationMap({ lat, lng, onChange }: Props) {
+export default function LocationMap({ lat, lng, onChange, className = 'h-56 w-full' }: Props) {
   return (
-    <MapContainer center={[lat, lng]} zoom={16} scrollWheelZoom className="h-56 w-full">
+    <MapContainer center={[lat, lng]} zoom={16} scrollWheelZoom className={className}>
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
