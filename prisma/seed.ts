@@ -102,6 +102,40 @@ async function main() {
     }
   }
 
+  // 3. Catálogos + detalles
+  console.log('\n🗂️  Catálogos...')
+  const CATALOGOS = [
+    { nombre: 'Tipos de Evento', items: ['Incendio', 'Inundación', 'Sismo', 'Derrumbe', 'Deslizamiento', 'Vendaval'] },
+    { nombre: 'Niveles de Afectación', items: ['Leve', 'Moderado', 'Severo'] },
+    { nombre: 'Necesidades', items: ['Alimentación', 'Agua potable', 'Refugio temporal', 'Abrigo / Ropa', 'Salud / Medicamentos', 'Materiales de construcción'] },
+    { nombre: 'Fuentes de Alerta', items: ['Brigadista parroquial', 'Defensa Civil', 'Bomberos', 'Comunidad / Vecinos'] },
+    { nombre: 'Grupos Vulnerables', items: ['Niños (0–12 años)', 'Adultos mayores (60+)', 'Gestantes / Madres lactantes', 'Personas con discapacidad'] },
+  ]
+  const slug = (v: string) => v.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 30)
+  for (const c of CATALOGOS) {
+    let cat = await prisma.catalogoGRD.findUnique({ where: { nombreCatalogo: c.nombre } })
+    if (!cat) cat = await prisma.catalogoGRD.create({ data: { nombreCatalogo: c.nombre } })
+    for (const v of c.items) {
+      const codigo = slug(v)
+      const exists = await prisma.catalogoDetalleGRD.findUnique({ where: { idCatalogoGRD_codigo: { idCatalogoGRD: cat.idCatalogoGRD, codigo } } })
+      if (!exists) await prisma.catalogoDetalleGRD.create({ data: { idCatalogoGRD: cat.idCatalogoGRD, codigo, valor: v } })
+    }
+    console.log(`   ✓  ${c.nombre} (${c.items.length} ítems)`)
+  }
+
+  // 4. Kits de emergencia
+  console.log('\n📦 Kits...')
+  const KITS = [
+    { tipoKit: 'Kit de Víveres', descripcion: 'Arroz 5kg, aceite 1L, atún, leche evaporada, fideos, azúcar', stockActual: 40 },
+    { tipoKit: 'Kit de Higiene', descripcion: 'Jabón, papel higiénico, pasta y cepillo dental, toallas', stockActual: 25 },
+    { tipoKit: 'Mochila de Emergencia Familiar', descripcion: 'Linterna, radio, botiquín, agua 3L, manta térmica, silbato', stockActual: 12 },
+  ]
+  for (const k of KITS) {
+    const exists = await prisma.kitEmergencia.findFirst({ where: { tipoKit: k.tipoKit } })
+    if (!exists) await prisma.kitEmergencia.create({ data: { ...k, estadoKit: 'ACTIVO', ubicacionAlmacen: 'Almacén Central' } })
+    console.log(`   ✓  ${k.tipoKit} (stock ${k.stockActual})`)
+  }
+
   console.log(`\n✅ Seed completado. Contraseña de todos los usuarios: ${PASSWORD}\n`)
   console.log('   Email                       Rol')
   console.log('   ──────────────────────────────────────────────────')

@@ -1,8 +1,23 @@
-export default function KitsPage() {
+import { verifySession } from '@/app/lib/dal'
+import { toFrontendRole } from '@/app/lib/roles'
+import { redirect } from 'next/navigation'
+import { prisma } from '@/app/lib/prisma'
+import { makeKitUseCases } from '@/core/infrastructure/factories/makeKitUseCases'
+import { KitsModule } from '@/app/ui/kits/kits-module'
+
+export default async function KitsPage() {
+  const session = await verifySession()
+  if (toFrontendRole(session.role) !== 'admin') redirect('/dashboard')
+
+  const [kits, parroquias] = await Promise.all([
+    makeKitUseCases().listar.execute(),
+    prisma.parroquia.findMany({ where: { estado: 'ACTIVO' }, orderBy: { nombre: 'asc' }, select: { idParroquia: true, nombre: true } }),
+  ])
+
   return (
-    <div className="p-4 md:p-6">
-      <h1 className="text-xl font-semibold text-gray-900 mb-1">Kits de Emergencia</h1>
-      <p className="text-sm text-gray-500">Módulo en desarrollo.</p>
-    </div>
+    <KitsModule
+      kits={kits.map((k) => ({ id: k.id, tipoKit: k.tipoKit, descripcion: k.descripcion, stockActual: k.stockActual, estadoKit: k.estadoKit }))}
+      parroquias={parroquias.map((p) => ({ id: p.idParroquia, nombre: p.nombre }))}
+    />
   )
 }

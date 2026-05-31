@@ -1,4 +1,5 @@
 import 'server-only'
+import { Prisma } from '@prisma/client'
 import { prisma } from './prisma'
 import { logger } from './logger'
 
@@ -21,7 +22,7 @@ export async function logAudit({
 }) {
   try {
     await prisma.auditLog.create({
-      data: { userId: userId ?? null, action, detail: detail ?? null },
+      data: { userId: userId ?? null, action, detail: (detail ?? undefined) as Prisma.InputJsonValue | undefined },
     })
   } catch (err) {
     logger.error({ err }, 'Error al guardar audit log')

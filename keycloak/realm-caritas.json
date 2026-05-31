@@ -1,0 +1,88 @@
+{
+  "realm": "caritas",
+  "enabled": true,
+  "displayName": "Cáritas GRD",
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "registrationAllowed": false,
+  "resetPasswordAllowed": true,
+  "roles": {
+    "realm": [
+      { "name": "ADMINISTRADOR", "description": "Administrador del sistema" },
+      { "name": "ESPECIALISTAGRD", "description": "Especialista GRD" },
+      { "name": "BRIGADISTA", "description": "Brigadista" },
+      { "name": "COMITEDONACIONES", "description": "Comité de Donaciones" },
+      { "name": "JEFAOGP", "description": "Jefa de OGP" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "caritas-app",
+      "name": "Cáritas GRD App",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "caritas-app-secret-dev",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["http://localhost:3000/*"],
+      "webOrigins": ["http://localhost:3000"],
+      "attributes": {
+        "post.logout.redirect.uris": "http://localhost:3000/*"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "admin@caritas.pe",
+      "email": "admin@caritas.pe",
+      "firstName": "Administrador",
+      "lastName": "del Sistema",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "Caritas2026!", "temporary": false }],
+      "realmRoles": ["ADMINISTRADOR"]
+    },
+    {
+      "username": "especialista@caritas.pe",
+      "email": "especialista@caritas.pe",
+      "firstName": "Carlos",
+      "lastName": "Méndez Paredes",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "Caritas2026!", "temporary": false }],
+      "realmRoles": ["ESPECIALISTAGRD"]
+    },
+    {
+      "username": "brigadista@caritas.pe",
+      "email": "brigadista@caritas.pe",
+      "firstName": "Ana",
+      "lastName": "Torres Quispe",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "Caritas2026!", "temporary": false }],
+      "realmRoles": ["BRIGADISTA"]
+    },
+    {
+      "username": "comite@caritas.pe",
+      "email": "comite@caritas.pe",
+      "firstName": "Comité",
+      "lastName": "de Donaciones",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "Caritas2026!", "temporary": false }],
+      "realmRoles": ["COMITEDONACIONES"]
+    },
+    {
+      "username": "jefaogp@caritas.pe",
+      "email": "jefaogp@caritas.pe",
+      "firstName": "Jefa",
+      "lastName": "de OGP",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "Caritas2026!", "temporary": false }],
+      "realmRoles": ["JEFAOGP"]
+    }
+  ]
+}

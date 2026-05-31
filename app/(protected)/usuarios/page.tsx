@@ -1,8 +1,17 @@
-export default function UsuariosPage() {
-  return (
-    <div className="p-4 md:p-6">
-      <h1 className="text-xl font-semibold text-gray-900 mb-1">Gestión de Usuarios</h1>
-      <p className="text-sm text-gray-500">Módulo en desarrollo.</p>
-    </div>
-  )
+import { verifySession } from '@/app/lib/dal'
+import { toFrontendRole } from '@/app/lib/roles'
+import { redirect } from 'next/navigation'
+import { prisma } from '@/app/lib/prisma'
+import { UsuariosModule } from '@/app/ui/usuarios/usuarios-module'
+
+export default async function UsuariosPage() {
+  const session = await verifySession()
+  if (toFrontendRole(session.role) !== 'admin') redirect('/dashboard')
+
+  const usuarios = await prisma.user.findMany({
+    orderBy: { createdAt: 'asc' },
+    select: { id: true, email: true, name: true, role: true, estado: true },
+  })
+
+  return <UsuariosModule usuarios={usuarios} />
 }

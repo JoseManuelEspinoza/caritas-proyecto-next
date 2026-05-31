@@ -3,13 +3,20 @@
 import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import {
-  ArrowLeft, Save, MapPin, FileText, X, MessageSquare, Users,
+  ArrowLeft, Save, FileText, X, MessageSquare, Users,
   ChevronDown, UserCircle, Info, Upload, Trash2, Plus, Edit3, Calendar,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { CategorySelector } from './category-selector'
-import { createIncidente, type PersonaForm, type FamiliaForm } from '@/app/actions/incidents'
+import { LocationPicker } from './location-picker'
+import {
+  createIncidente,
+  updateIncidente,
+  type PersonaForm,
+  type FamiliaForm,
+  type CreateIncidenteData,
+} from '@/app/actions/incidents'
 
 // ─── Catálogos ────────────────────────────────────────────────────────────────
 
@@ -230,54 +237,70 @@ function ObsFamiliaModal({ familia, onSave, onClose }: {
   )
 }
 
+// ─── Props ────────────────────────────────────────────────────────────────────
+
+interface IncidentFormProps {
+  /** Datos iniciales cuando se edita un incidente existente */
+  initialData?: CreateIncidenteData
+  /** ID del incidente a editar (ausente = modo creación) */
+  incidenciaId?: string
+  /** Código de caso para mostrar en el header */
+  codigoCaso?: string
+}
+
 // ─── Formulario principal ─────────────────────────────────────────────────────
 
-export function IncidentForm() {
+export function IncidentForm({ initialData, incidenciaId, codigoCaso }: IncidentFormProps = {}) {
+  const isEdit = Boolean(incidenciaId)
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
   // Sección 1
-  const [fechaReporte]   = useState(nowLocal())
-  const [reportaDni,     setReportaDni]     = useState('')
-  const [reportaNombre,  setReportaNombre]  = useState('')
-  const [reportaTel,     setReportaTel]     = useState('')
-  const [reportaRol,     setReportaRol]     = useState('')
+  const [fechaReporte]   = useState(initialData?.fechaReporte ?? nowLocal())
+  const [reportaDni,     setReportaDni]     = useState(initialData?.reportaDni     ?? '')
+  const [reportaNombre,  setReportaNombre]  = useState(initialData?.reportaNombre  ?? '')
+  const [reportaTel,     setReportaTel]     = useState(initialData?.reportaTel     ?? '')
+  const [reportaRol,     setReportaRol]     = useState(initialData?.reportaRol     ?? '')
 
   // Sección 2
-  const [fechaSuceso,    setFechaSuceso]    = useState('')
-  const [horaSuceso,     setHoraSuceso]     = useState('')
-  const [categoria,      setCategoria]      = useState('')
-  const [pais]                              = useState('Perú')
-  const [region]                            = useState('Lima Metropolitana')
-  const [distrito,       setDistrito]       = useState('')
-  const [parroquia,      setParroquia]      = useState('')
-  const [direccion,      setDireccion]      = useState('')
-  const [referencia,     setReferencia]     = useState('')
+  const [fechaSuceso,    setFechaSuceso]    = useState(initialData?.fechaSuceso    ?? '')
+  const [horaSuceso,     setHoraSuceso]     = useState(initialData?.horaSuceso     ?? '')
+  const [categoria,      setCategoria]      = useState(initialData?.categoria      ?? '')
+  const [pais]                              = useState(initialData?.pais            ?? 'Perú')
+  const [region]                            = useState(initialData?.region          ?? 'Lima Metropolitana')
+  const [distrito,       setDistrito]       = useState(initialData?.distrito        ?? '')
+  const [parroquia,      setParroquia]      = useState(initialData?.parroquia       ?? '')
+  const [direccion,      setDireccion]      = useState(initialData?.direccion       ?? '')
+  const [referencia,     setReferencia]     = useState(initialData?.referencia      ?? '')
   const [mapSugerencias, setMapSugerencias] = useState<{ desc: string; main: string }[]>([])
-  const [mapSeleccionado,setMapSeleccionado]= useState('')
+  const [, setMapSeleccionado]              = useState(initialData?.direccion       ?? '')
+  const [lat,            setLat]            = useState<number | null>(initialData?.lat ?? null)
+  const [lng,            setLng]            = useState<number | null>(initialData?.lng ?? null)
 
   // Sección 3
-  const [descripcion,    setDescripcion]    = useState('')
-  const [causa,          setCausa]          = useState('')
+  const [descripcion,    setDescripcion]    = useState(initialData?.descripcion     ?? '')
+  const [causa,          setCausa]          = useState(initialData?.causa           ?? '')
 
   // Sección 4
-  const [familias,       setFamilias]       = useState<FamiliaForm[]>([])
-  const [personas,       setPersonas]       = useState<PersonaForm[]>([])
+  const [familias,       setFamilias]       = useState<FamiliaForm[]>(initialData?.familias  ?? [])
+  const [personas,       setPersonas]       = useState<PersonaForm[]>(initialData?.personas  ?? [])
   const [showPersonaModal, setShowPersonaModal] = useState(false)
   const [editingPersona, setEditingPersona] = useState<PersonaForm | undefined>()
   const [activeFamiliaId, setActiveFamiliaId] = useState<string | undefined>()
   const [editingFamiliaObs, setEditingFamiliaObs] = useState<FamiliaForm | null>(null)
 
   // Sección 5
-  const [necesidades,    setNecesidades]    = useState<string[]>([])
-  const [necesidadOtra,  setNecesidadOtra]  = useState('')
-  const [necesidadesObs, setNecesidadesObs] = useState('')
+  const [necesidades,    setNecesidades]    = useState<string[]>(initialData?.necesidades   ?? [])
+  const [necesidadOtra,  setNecesidadOtra]  = useState(initialData?.necesidadOtra  ?? '')
+  const [necesidadesObs, setNecesidadesObs] = useState(initialData?.necesidadesObs ?? '')
 
   // Sección 6
   const [fuentesEvidencia, setFuentesEvidencia] = useState<{ id: string; fuente: string; archivos: File[] }[]>([])
 
   // Sección 7
-  const [nivelAfectacion, setNivelAfectacion] = useState<'Leve' | 'Moderado' | 'Severo'>('Moderado')
+  const [nivelAfectacion, setNivelAfectacion] = useState<'Leve' | 'Moderado' | 'Severo'>(
+    (initialData?.nivelAfectacion as 'Leve' | 'Moderado' | 'Severo') ?? 'Moderado'
+  )
 
   // Alias autogenerado
   const parrShort = parroquia ? parroquia.split(' ').slice(-2).join(' ') : ''
@@ -297,15 +320,34 @@ export function IncidentForm() {
     return { ninos, adolescentes, adultos, mayores, total: personas.length, numFamilias, situaciones }
   })()
 
-  // Autocompletado dirección (mock)
   function handleDireccionChange(val: string) {
     setDireccion(val)
     setMapSeleccionado('')
-    if (val.length < 3) { setMapSugerencias([]); return }
-    setMapSugerencias([
-      { desc: `${val}, Lima Metropolitana, Perú`, main: val },
-      { desc: `${val}, ${distrito || 'Lima'}, Lima Metropolitana, Perú`, main: val },
-    ])
+    setMapSugerencias([])
+  }
+
+  /**
+   * Forward geocoding (dirección → mapa): al terminar de escribir la dirección,
+   * busca sus coordenadas en Nominatim (OpenStreetMap, gratis) y mueve el pin.
+   */
+  async function ubicarDireccionEnMapa() {
+    if (!direccion.trim()) return
+    const q = [direccion, distrito, 'Lima', 'Perú'].filter(Boolean).join(', ')
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=pe&accept-language=es&q=${encodeURIComponent(q)}`,
+      )
+      const data = await res.json()
+      if (Array.isArray(data) && data[0]) {
+        setLat(Number(Number(data[0].lat).toFixed(7)))
+        setLng(Number(Number(data[0].lon).toFixed(7)))
+        toast.success('Ubicación encontrada en el mapa.')
+      } else {
+        toast.error('No se encontró la dirección en el mapa.')
+      }
+    } catch {
+      toast.error('No se pudo ubicar la dirección.')
+    }
   }
 
   // Familia
@@ -343,21 +385,25 @@ export function IncidentForm() {
     ))
   }
 
-  // ─── Guardar ───────────────────────────────────────────────────────────────
+  // ─── Guardar (crear o actualizar) ─────────────────────────────────────────
 
   function handleSave() {
+    const payload: CreateIncidenteData = {
+      reportaDni, reportaNombre, reportaTel, reportaRol, fechaReporte,
+      fechaSuceso, horaSuceso, categoria, pais, region, distrito,
+      parroquia, direccion, referencia, descripcion, causa,
+      familias, personas,
+      necesidades, necesidadOtra, necesidadesObs,
+      nivelAfectacion,
+      lat, lng,
+    }
+
     startTransition(async () => {
-      const result = await createIncidente({
-        reportaDni, reportaNombre, reportaTel, reportaRol, fechaReporte,
-        fechaSuceso, horaSuceso, categoria, pais, region, distrito,
-        parroquia, direccion, referencia, descripcion, causa,
-        familias, personas,
-        necesidades, necesidadOtra, necesidadesObs,
-        nivelAfectacion,
-      })
-      if (result?.message) {
-        toast.error(result.message)
-      }
+      const result = isEdit && incidenciaId
+        ? await updateIncidente(incidenciaId, payload)
+        : await createIncidente(payload)
+
+      if (result?.message) toast.error(result.message)
     })
   }
 
@@ -367,26 +413,35 @@ export function IncidentForm() {
       {/* Header sticky */}
       <div className="bg-white border-b border-[#DDDDDD] sticky top-0 z-10 shadow-sm">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
-          <Link href="/grd" className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0">
+          <Link
+            href={isEdit && incidenciaId ? `/grd/${incidenciaId}` : '/grd'}
+            className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
+          >
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div className="flex-1 min-w-0">
-            <h1 className="text-base font-bold text-[#49494A]">Registrar Nuevo Evento</h1>
-            <p className="text-xs text-gray-500">Completa los datos del evento reportado</p>
+            <h1 className="text-base font-bold text-[#49494A]">
+              {isEdit ? `Editar Evento — ${codigoCaso}` : 'Registrar Nuevo Evento'}
+            </h1>
+            <p className="text-xs text-gray-500">
+              {isEdit ? 'Actualiza los datos del evento' : 'Completa los datos del evento reportado'}
+            </p>
           </div>
           <span className="flex-shrink-0 text-[10px] font-bold text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full">
-            ETAPA 1 — REGISTRO
+            {isEdit ? 'EDICIÓN' : 'ETAPA 1 — REGISTRO'}
           </span>
         </div>
       </div>
 
-      {/* Alias autogenerado */}
+      {/* Alias autogenerado / código actual */}
       {alias && (
         <div className="max-w-5xl mx-auto px-4 pt-4">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-start gap-2">
             <Info className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="text-xs font-semibold text-blue-900">Alias del evento (autogenerado)</p>
+              <p className="text-xs font-semibold text-blue-900">
+                {isEdit ? 'Alias del evento' : 'Alias del evento (autogenerado)'}
+              </p>
               <p className="text-sm font-bold text-blue-700 mt-0.5">{alias}</p>
             </div>
           </div>
@@ -402,7 +457,7 @@ export function IncidentForm() {
               <label className="text-xs font-semibold text-gray-600 mb-1.5 block">Fecha y hora del reporte</label>
               <div className="flex items-center gap-2 text-sm text-gray-700">
                 <Calendar className="w-4 h-4 text-gray-400" />
-                <span>{new Date(fechaReporte).toLocaleString('es-PE')}</span>
+                <span suppressHydrationWarning>{new Date(fechaReporte).toLocaleString('es-PE')}</span>
               </div>
             </div>
 
@@ -502,6 +557,8 @@ export function IncidentForm() {
                   <div className="relative">
                     <input type="text" placeholder="Av. Los Jardines 456, Urb. Las Flores"
                       value={direccion} onChange={(e) => handleDireccionChange(e.target.value)}
+                      onBlur={ubicarDireccionEnMapa}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); ubicarDireccionEnMapa() } }}
                       autoComplete="off" className={inputCls} />
                     {mapSugerencias.length > 0 && (
                       <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-auto">
@@ -518,37 +575,6 @@ export function IncidentForm() {
                   </div>
                 </div>
 
-                {/* Mapa simulado */}
-                {mapSeleccionado && (
-                  <div className="border border-gray-200 rounded-lg overflow-hidden">
-                    <div className="relative h-48 bg-gradient-to-br from-green-50 via-blue-50 to-gray-50">
-                      <div className="absolute inset-0 opacity-10">
-                        <svg width="100%" height="100%">
-                          <defs><pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="gray" strokeWidth="0.5" /></pattern></defs>
-                          <rect width="100%" height="100%" fill="url(#grid)" />
-                        </svg>
-                      </div>
-                      <svg className="absolute inset-0 w-full h-full opacity-30">
-                        <path d="M 50 0 L 50 192" stroke="#4a5568" strokeWidth="2" />
-                        <path d="M 150 0 L 150 192" stroke="#4a5568" strokeWidth="3" />
-                        <path d="M 0 64 L 400 64" stroke="#4a5568" strokeWidth="2" />
-                        <path d="M 0 128 L 400 128" stroke="#4a5568" strokeWidth="3" />
-                      </svg>
-                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-full">
-                        <MapPin className="w-8 h-8 text-red-500 fill-red-500 drop-shadow-lg" />
-                        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-3 h-3 bg-red-500 rounded-full opacity-30 animate-ping" />
-                      </div>
-                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 border-4 border-[#009850] rounded-full opacity-20" />
-                      <div className="absolute bottom-2 left-2 bg-black/70 text-white text-[10px] font-mono px-2 py-1 rounded">-12.0464, -77.0428</div>
-                      <div className="absolute top-2 right-2 bg-white px-2 py-1 rounded shadow-sm text-[10px] font-semibold text-gray-600">Maps</div>
-                    </div>
-                    <div className="bg-gray-50 px-4 py-2 border-t border-gray-200">
-                      <p className="text-xs font-semibold text-gray-800">Ubicación seleccionada</p>
-                      <p className="text-xs text-gray-500">{mapSeleccionado}</p>
-                    </div>
-                  </div>
-                )}
-
                 <div>
                   <label className="text-xs text-gray-500 mb-1.5 block">Referencia / Indicaciones</label>
                   <textarea rows={2} placeholder="Al costado del mercado central, frente al colegio..."
@@ -558,21 +584,42 @@ export function IncidentForm() {
               </div>
             </FormSection>
 
-            {/* SECCIÓN 3 */}
-            <FormSection num={3} title="Descripción del Evento">
+            {/* COLUMNA DERECHA: Descripción (Sección 3) + Mapa al costado */}
+            <div className="space-y-6">
+              <FormSection num={3} title="Descripción del Evento">
+                <div>
+                  <label className="text-xs font-semibold text-gray-600 mb-1.5 block">Descripción breve del evento</label>
+                  <textarea rows={5} placeholder="Describe lo que se reportó: tipo de afectación, magnitud aproximada, situación actual..."
+                    value={descripcion} onChange={(e) => setDescripcion(e.target.value)}
+                    className={`${inputCls} resize-none`} />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-600 mb-1.5 block">Causa o posible causa del suceso</label>
+                  <textarea rows={4} placeholder="¿Qué originó el evento según la información disponible?"
+                    value={causa} onChange={(e) => setCausa(e.target.value)}
+                    className={`${inputCls} resize-none`} />
+                </div>
+              </FormSection>
+
+              {/* Mapa de ubicación (GPS / manual) al costado */}
               <div>
-                <label className="text-xs font-semibold text-gray-600 mb-1.5 block">Descripción breve del evento</label>
-                <textarea rows={5} placeholder="Describe lo que se reportó: tipo de afectación, magnitud aproximada, situación actual..."
-                  value={descripcion} onChange={(e) => setDescripcion(e.target.value)}
-                  className={`${inputCls} resize-none`} />
+                <p className="text-xs font-semibold text-gray-600 mb-2">Ubicación en el mapa</p>
+                <LocationPicker
+                  lat={lat}
+                  lng={lng}
+                  onChange={(la, lo) => { setLat(la); setLng(lo) }}
+                  onAddressResolved={({ direccion: dir, candidatosDistrito }) => {
+                    setDireccion(dir)
+                    setMapSugerencias([])
+                    // Autocompletar distrito si alguno de los candidatos coincide con la lista
+                    const match = DISTRITOS_LIMA.find((d) =>
+                      candidatosDistrito.some((c) => c.toLowerCase() === d.toLowerCase()),
+                    )
+                    if (match) setDistrito(match)
+                  }}
+                />
               </div>
-              <div>
-                <label className="text-xs font-semibold text-gray-600 mb-1.5 block">Causa o posible causa del suceso</label>
-                <textarea rows={4} placeholder="¿Qué originó el evento según la información disponible?"
-                  value={causa} onChange={(e) => setCausa(e.target.value)}
-                  className={`${inputCls} resize-none`} />
-              </div>
-            </FormSection>
+            </div>
           </div>
 
           {/* ── SECCIÓN 4: Personas Afectadas ───────────────────────────────── */}
@@ -820,13 +867,18 @@ export function IncidentForm() {
       {/* Footer sticky - botón guardar */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-[#DDDDDD] p-4 shadow-lg z-10">
         <div className="max-w-5xl mx-auto flex items-center gap-3">
-          <Link href="/grd" className="px-4 py-3 border border-[#DDDDDD] rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+          <Link
+            href={isEdit && incidenciaId ? `/grd/${incidenciaId}` : '/grd'}
+            className="px-4 py-3 border border-[#DDDDDD] rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+          >
             Cancelar
           </Link>
           <button type="button" onClick={handleSave} disabled={isPending}
             className="flex-1 flex items-center justify-center gap-2 py-3 bg-[#009850] text-white rounded-xl hover:opacity-90 transition-all font-bold text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
             <Save className="w-4 h-4" />
-            {isPending ? 'Registrando...' : 'Registrar Evento'}
+            {isPending
+              ? (isEdit ? 'Guardando...' : 'Registrando...')
+              : (isEdit ? 'Guardar Cambios' : 'Registrar Evento')}
           </button>
         </div>
       </div>
