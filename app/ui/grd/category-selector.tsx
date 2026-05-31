@@ -26,35 +26,26 @@ export function CategorySelector({ value, onChange, disabled }: Props) {
   const [showCustom, setShowCustom] = useState(false)
   const isOtros = value && !CATEGORIES.includes(value)
 
-  const handleChip = (cat: string) => {
+  const handleChange = (v: string) => {
     if (disabled) return
-    if (cat === 'Otros') { setShowCustom(true); onChange('') }
-    else { setShowCustom(false); onChange(cat) }
+    if (v === 'Otros') { setShowCustom(true); onChange('') }
+    else { setShowCustom(false); onChange(v) }
   }
-
-  const isSelected = (cat: string) =>
-    cat === 'Otros' ? isOtros || showCustom : value === cat
-
-  const base = 'px-3 py-1.5 text-xs rounded-full border-2 font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed'
 
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap gap-2">
-        {CATEGORIES.map((cat) => (
-          <button
-            key={cat}
-            type="button"
-            onClick={() => handleChip(cat)}
-            disabled={disabled}
-            className={`${base} ${
-              isSelected(cat)
-                ? 'bg-[#009850] text-white border-[#009850]'
-                : 'bg-white text-gray-600 border-gray-200 hover:border-[#009850]/50'
-            }`}
-          >
-            {cat}
-          </button>
-        ))}
+      <div>
+        <select
+          value={isOtros ? 'Otros' : value}
+          onChange={(e) => handleChange(e.target.value)}
+          disabled={disabled}
+          className="w-full px-3 py-2 bg-white border border-[#DDDDDD] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#009850]/20 focus:border-[#009850]"
+        >
+          <option value="">Seleccionar categoría...</option>
+          {CATEGORIES.map((cat) => (
+            <option key={cat} value={cat}>{cat}</option>
+          ))}
+        </select>
       </div>
       {(showCustom || isOtros) && (
         <input
