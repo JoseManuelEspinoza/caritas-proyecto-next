@@ -582,7 +582,7 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
 
               {/* Mapa de ubicación (GPS / manual) al costado */}
               <div>
-                <p className="text-xs font-semibold text-gray-600 mb-2">Ubicación en el mapa (GPS o manual)</p>
+                <p className="text-xs font-semibold text-gray-600 mb-2">Ubicación en el mapa</p>
                 <LocationPicker
                   lat={lat}
                   lng={lng}
