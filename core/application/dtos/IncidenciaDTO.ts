@@ -54,6 +54,9 @@ export type CreateIncidenteData = {
   necesidadesObs: string
   // Sección 7 - Estimación
   nivelAfectacion: string
+  // Ubicación geográfica (RF07 GPS / RF08 manual)
+  lat?: number | null
+  lng?: number | null
 }
 
 export type InfoCampoData = {

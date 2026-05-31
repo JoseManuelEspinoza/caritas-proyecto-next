@@ -4,6 +4,11 @@ import { IIncidenciaRepository } from '../../domain/repositories/IIncidenciaRepo
 import { CreateIncidenteData } from '../../application/dtos/IncidenciaDTO'
 import { IncidenciaMapper } from '../mappers/IncidenciaMapper'
 
+/** Coordenadas para Prisma (Decimal) solo si vienen ambas (RF07/RF08). */
+function coords(data: CreateIncidenteData): { latitud?: number; longitud?: number } {
+  return data.lat != null && data.lng != null ? { latitud: data.lat, longitud: data.lng } : {}
+}
+
 const SELECT_ESTADO = {
   idIncidencia: true,
   codigoCaso: true,
@@ -49,6 +54,7 @@ export class PrismaIncidenciaRepository implements IIncidenciaRepository {
         estadoAviso: 'RECIBIDO',
         medioAviso: data.reportaRol || null,
         ...(idParroquiaDb ? { idParroquia: idParroquiaDb } : {}),
+        ...coords(data),
       },
     })
 
@@ -64,6 +70,7 @@ export class PrismaIncidenciaRepository implements IIncidenciaRepository {
         contextoCaso: contexto,
         gravedad: data.nivelAfectacion || null,
         ...(idParroquiaDb ? { idParroquia: idParroquiaDb } : {}),
+        ...coords(data),
       },
     })
 
@@ -101,6 +108,7 @@ export class PrismaIncidenciaRepository implements IIncidenciaRepository {
         contextoCaso: this.contexto(data),
         gravedad: data.nivelAfectacion || null,
         idParroquia: idParroquiaDb,
+        ...coords(data),
       },
     })
 

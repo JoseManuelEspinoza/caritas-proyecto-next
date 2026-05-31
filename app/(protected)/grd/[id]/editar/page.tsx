@@ -113,6 +113,8 @@ export default async function EditarIncidentePage({ params }: { params: Promise<
     necesidadOtra,
     necesidadesObs: ctx.necesidadesObs ?? '',
     nivelAfectacion: inc.gravedad ?? 'Moderado',
+    lat: inc.latitud != null ? Number(inc.latitud) : null,
+    lng: inc.longitud != null ? Number(inc.longitud) : null,
   }
 
   return (

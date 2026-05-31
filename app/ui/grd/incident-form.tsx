@@ -3,12 +3,13 @@
 import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import {
-  ArrowLeft, Save, MapPin, FileText, X, MessageSquare, Users,
+  ArrowLeft, Save, FileText, X, MessageSquare, Users,
   ChevronDown, UserCircle, Info, Upload, Trash2, Plus, Edit3, Calendar,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { CategorySelector } from './category-selector'
+import { LocationPicker } from './location-picker'
 import {
   createIncidente,
   updateIncidente,
@@ -272,7 +273,9 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
   const [direccion,      setDireccion]      = useState(initialData?.direccion       ?? '')
   const [referencia,     setReferencia]     = useState(initialData?.referencia      ?? '')
   const [mapSugerencias, setMapSugerencias] = useState<{ desc: string; main: string }[]>([])
-  const [mapSeleccionado,setMapSeleccionado]= useState(initialData?.direccion       ?? '')
+  const [, setMapSeleccionado]              = useState(initialData?.direccion       ?? '')
+  const [lat,            setLat]            = useState<number | null>(initialData?.lat ?? null)
+  const [lng,            setLng]            = useState<number | null>(initialData?.lng ?? null)
 
   // Sección 3
   const [descripcion,    setDescripcion]    = useState(initialData?.descripcion     ?? '')
@@ -373,6 +376,7 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
       familias, personas,
       necesidades, necesidadOtra, necesidadesObs,
       nivelAfectacion,
+      lat, lng,
     }
 
     startTransition(async () => {
@@ -550,36 +554,11 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
                   </div>
                 </div>
 
-                {/* Mapa simulado */}
-                {mapSeleccionado && (
-                  <div className="border border-gray-200 rounded-lg overflow-hidden">
-                    <div className="relative h-48 bg-gradient-to-br from-green-50 via-blue-50 to-gray-50">
-                      <div className="absolute inset-0 opacity-10">
-                        <svg width="100%" height="100%">
-                          <defs><pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="gray" strokeWidth="0.5" /></pattern></defs>
-                          <rect width="100%" height="100%" fill="url(#grid)" />
-                        </svg>
-                      </div>
-                      <svg className="absolute inset-0 w-full h-full opacity-30">
-                        <path d="M 50 0 L 50 192" stroke="#4a5568" strokeWidth="2" />
-                        <path d="M 150 0 L 150 192" stroke="#4a5568" strokeWidth="3" />
-                        <path d="M 0 64 L 400 64" stroke="#4a5568" strokeWidth="2" />
-                        <path d="M 0 128 L 400 128" stroke="#4a5568" strokeWidth="3" />
-                      </svg>
-                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-full">
-                        <MapPin className="w-8 h-8 text-red-500 fill-red-500 drop-shadow-lg" />
-                        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-3 h-3 bg-red-500 rounded-full opacity-30 animate-ping" />
-                      </div>
-                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 border-4 border-[#009850] rounded-full opacity-20" />
-                      <div className="absolute bottom-2 left-2 bg-black/70 text-white text-[10px] font-mono px-2 py-1 rounded">-12.0464, -77.0428</div>
-                      <div className="absolute top-2 right-2 bg-white px-2 py-1 rounded shadow-sm text-[10px] font-semibold text-gray-600">Maps</div>
-                    </div>
-                    <div className="bg-gray-50 px-4 py-2 border-t border-gray-200">
-                      <p className="text-xs font-semibold text-gray-800">Ubicación seleccionada</p>
-                      <p className="text-xs text-gray-500">{mapSeleccionado}</p>
-                    </div>
-                  </div>
-                )}
+                {/* Ubicación: GPS (RF07) + manual (RF08) + mapa real */}
+                <div>
+                  <label className="text-xs text-gray-500 mb-1.5 block">Ubicación en el mapa (GPS o manual)</label>
+                  <LocationPicker lat={lat} lng={lng} onChange={(la, lo) => { setLat(la); setLng(lo) }} />
+                </div>
 
                 <div>
                   <label className="text-xs text-gray-500 mb-1.5 block">Referencia / Indicaciones</label>
