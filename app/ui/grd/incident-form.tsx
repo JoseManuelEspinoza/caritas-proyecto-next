@@ -554,25 +554,6 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
                   </div>
                 </div>
 
-                {/* Ubicación: GPS (RF07) + manual (RF08) + mapa real */}
-                <div>
-                  <label className="text-xs text-gray-500 mb-1.5 block">Ubicación en el mapa (GPS o manual)</label>
-                  <LocationPicker
-                    lat={lat}
-                    lng={lng}
-                    onChange={(la, lo) => { setLat(la); setLng(lo) }}
-                    onAddressResolved={({ direccion: dir, candidatosDistrito }) => {
-                      setDireccion(dir)
-                      setMapSugerencias([])
-                      // Autocompletar distrito si alguno de los candidatos coincide con la lista
-                      const match = DISTRITOS_LIMA.find((d) =>
-                        candidatosDistrito.some((c) => c.toLowerCase() === d.toLowerCase()),
-                      )
-                      if (match) setDistrito(match)
-                    }}
-                  />
-                </div>
-
                 <div>
                   <label className="text-xs text-gray-500 mb-1.5 block">Referencia / Indicaciones</label>
                   <textarea rows={2} placeholder="Al costado del mercado central, frente al colegio..."
@@ -582,21 +563,42 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
               </div>
             </FormSection>
 
-            {/* SECCIÓN 3 */}
-            <FormSection num={3} title="Descripción del Evento">
+            {/* COLUMNA DERECHA: Descripción (Sección 3) + Mapa al costado */}
+            <div className="space-y-6">
+              <FormSection num={3} title="Descripción del Evento">
+                <div>
+                  <label className="text-xs font-semibold text-gray-600 mb-1.5 block">Descripción breve del evento</label>
+                  <textarea rows={5} placeholder="Describe lo que se reportó: tipo de afectación, magnitud aproximada, situación actual..."
+                    value={descripcion} onChange={(e) => setDescripcion(e.target.value)}
+                    className={`${inputCls} resize-none`} />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-600 mb-1.5 block">Causa o posible causa del suceso</label>
+                  <textarea rows={4} placeholder="¿Qué originó el evento según la información disponible?"
+                    value={causa} onChange={(e) => setCausa(e.target.value)}
+                    className={`${inputCls} resize-none`} />
+                </div>
+              </FormSection>
+
+              {/* Mapa de ubicación (GPS / manual) al costado */}
               <div>
-                <label className="text-xs font-semibold text-gray-600 mb-1.5 block">Descripción breve del evento</label>
-                <textarea rows={5} placeholder="Describe lo que se reportó: tipo de afectación, magnitud aproximada, situación actual..."
-                  value={descripcion} onChange={(e) => setDescripcion(e.target.value)}
-                  className={`${inputCls} resize-none`} />
+                <p className="text-xs font-semibold text-gray-600 mb-2">Ubicación en el mapa (GPS o manual)</p>
+                <LocationPicker
+                  lat={lat}
+                  lng={lng}
+                  onChange={(la, lo) => { setLat(la); setLng(lo) }}
+                  onAddressResolved={({ direccion: dir, candidatosDistrito }) => {
+                    setDireccion(dir)
+                    setMapSugerencias([])
+                    // Autocompletar distrito si alguno de los candidatos coincide con la lista
+                    const match = DISTRITOS_LIMA.find((d) =>
+                      candidatosDistrito.some((c) => c.toLowerCase() === d.toLowerCase()),
+                    )
+                    if (match) setDistrito(match)
+                  }}
+                />
               </div>
-              <div>
-                <label className="text-xs font-semibold text-gray-600 mb-1.5 block">Causa o posible causa del suceso</label>
-                <textarea rows={4} placeholder="¿Qué originó el evento según la información disponible?"
-                  value={causa} onChange={(e) => setCausa(e.target.value)}
-                  className={`${inputCls} resize-none`} />
-              </div>
-            </FormSection>
+            </div>
           </div>
 
           {/* ── SECCIÓN 4: Personas Afectadas ───────────────────────────────── */}
