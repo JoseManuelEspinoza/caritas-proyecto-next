@@ -1,11 +1,22 @@
 'use client'
 
 import { useState } from 'react'
+import dynamic from 'next/dynamic'
 import { MapPin, LocateFixed, ExternalLink, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 // Centro de Lima por defecto (para que el mapa siempre se vea aunque no haya punto).
 const LIMA = { lat: -12.0464, lng: -77.0428 }
+
+// Leaflet solo funciona en el navegador → carga dinámica sin SSR.
+const LocationMap = dynamic(() => import('./location-map'), {
+  ssr: false,
+  loading: () => (
+    <div className="h-56 w-full bg-gray-100 flex items-center justify-center text-xs text-gray-400">
+      <Loader2 className="w-4 h-4 animate-spin mr-2" /> Cargando mapa…
+    </div>
+  ),
+})
 
 interface Props {
   lat: number | null
@@ -16,10 +27,10 @@ interface Props {
 /**
  * Ingreso de ubicación (RF07 GPS / RF08 manual).
  *
- * - GPS: usa la geolocalización del navegador.
- * - Manual: campos de latitud/longitud editables.
- * - Mapa: se incrusta vía el embed de Google Maps (NO requiere API key ni
- *   facturación), por lo que el mapita siempre se ve.
+ * - GPS: geolocalización del navegador.
+ * - Manual: campos de latitud/longitud.
+ * - Mapa interactivo (OpenStreetMap + Leaflet): click o arrastra el pin para fijar
+ *   la ubicación. GRATIS, sin API key ni facturación.
  */
 export function LocationPicker({ lat, lng, onChange }: Props) {
   const [loading, setLoading] = useState(false)
@@ -27,7 +38,6 @@ export function LocationPicker({ lat, lng, onChange }: Props) {
   const hasPoint = lat != null && lng != null
   const viewLat = lat ?? LIMA.lat
   const viewLng = lng ?? LIMA.lng
-  const mapSrc = `https://www.google.com/maps?q=${viewLat},${viewLng}&z=16&output=embed`
 
   const usarGPS = () => {
     if (!('geolocation' in navigator)) { toast.error('Tu navegador no soporta geolocalización.'); return }
@@ -74,6 +84,7 @@ export function LocationPicker({ lat, lng, onChange }: Props) {
             <ExternalLink className="w-3.5 h-3.5" /> Abrir en Google Maps
           </a>
         )}
+        <span className="text-[11px] text-gray-400">Haz click en el mapa o arrastra el pin para fijar la ubicación.</span>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
@@ -96,19 +107,13 @@ export function LocationPicker({ lat, lng, onChange }: Props) {
       </div>
 
       <div className="border border-gray-200 rounded-lg overflow-hidden">
-        <iframe
-          title="Mapa de ubicación"
-          src={mapSrc}
-          className="w-full h-56 border-0"
-          loading="lazy"
-          referrerPolicy="no-referrer-when-downgrade"
-        />
+        <LocationMap lat={viewLat} lng={viewLng} onChange={(la, lo) => onChange(la, lo)} />
         <div className="bg-gray-50 px-3 py-2 border-t border-gray-200 flex items-center gap-2">
           <MapPin className={`w-4 h-4 ${hasPoint ? 'text-red-500' : 'text-gray-400'}`} />
           <p className="text-xs text-gray-600">
             {hasPoint
               ? <>Ubicación: <span className="font-mono font-semibold">{lat}, {lng}</span></>
-              : 'Sin ubicación marcada — usa el GPS o ingresa las coordenadas (se muestra Lima por defecto).'}
+              : 'Sin ubicación marcada — usa el GPS, escribe las coordenadas o haz click en el mapa (se muestra Lima por defecto).'}
           </p>
         </div>
       </div>
