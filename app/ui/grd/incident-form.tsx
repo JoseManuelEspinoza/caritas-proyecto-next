@@ -320,15 +320,34 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
     return { ninos, adolescentes, adultos, mayores, total: personas.length, numFamilias, situaciones }
   })()
 
-  // Autocompletado dirección (mock)
   function handleDireccionChange(val: string) {
     setDireccion(val)
     setMapSeleccionado('')
-    if (val.length < 3) { setMapSugerencias([]); return }
-    setMapSugerencias([
-      { desc: `${val}, Lima Metropolitana, Perú`, main: val },
-      { desc: `${val}, ${distrito || 'Lima'}, Lima Metropolitana, Perú`, main: val },
-    ])
+    setMapSugerencias([])
+  }
+
+  /**
+   * Forward geocoding (dirección → mapa): al terminar de escribir la dirección,
+   * busca sus coordenadas en Nominatim (OpenStreetMap, gratis) y mueve el pin.
+   */
+  async function ubicarDireccionEnMapa() {
+    if (!direccion.trim()) return
+    const q = [direccion, distrito, 'Lima', 'Perú'].filter(Boolean).join(', ')
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=pe&accept-language=es&q=${encodeURIComponent(q)}`,
+      )
+      const data = await res.json()
+      if (Array.isArray(data) && data[0]) {
+        setLat(Number(Number(data[0].lat).toFixed(7)))
+        setLng(Number(Number(data[0].lon).toFixed(7)))
+        toast.success('Ubicación encontrada en el mapa.')
+      } else {
+        toast.error('No se encontró la dirección en el mapa.')
+      }
+    } catch {
+      toast.error('No se pudo ubicar la dirección.')
+    }
   }
 
   // Familia
@@ -538,6 +557,8 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
                   <div className="relative">
                     <input type="text" placeholder="Av. Los Jardines 456, Urb. Las Flores"
                       value={direccion} onChange={(e) => handleDireccionChange(e.target.value)}
+                      onBlur={ubicarDireccionEnMapa}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); ubicarDireccionEnMapa() } }}
                       autoComplete="off" className={inputCls} />
                     {mapSugerencias.length > 0 && (
                       <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-auto">
