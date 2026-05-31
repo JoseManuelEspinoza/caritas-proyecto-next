@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useTransition, useEffect, useRef } from 'react'
+import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import {
   ArrowLeft, Save, FileText, X, MessageSquare, Users,
-  ChevronDown, UserCircle, Info, Upload, Trash2, Plus, Edit3, Calendar, CheckCircle2,
+  ChevronDown, UserCircle, Info, Upload, Trash2, Plus, Edit3, Calendar,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
@@ -65,40 +65,21 @@ const inputCls = 'w-full px-4 py-2.5 bg-white border border-[#DDDDDD] rounded-lg
 
 // ─── Sección numerada ─────────────────────────────────────────────────────────
 
-function FormSection({ num, title, subtitle, completed, children }: {
-  num: number; title: string; subtitle?: string; completed?: boolean; children: React.ReactNode
+function FormSection({ num, title, subtitle, children }: {
+  num: number; title: string; subtitle?: string; children: React.ReactNode
 }) {
-  const [open, setOpen] = useState(true)
-  const prevCompleted = useRef(false)
-
-  // Auto-colapsa SOLO en el momento en que la sección pasa a "completada".
-  useEffect(() => {
-    if (completed && !prevCompleted.current) setOpen(false)
-    prevCompleted.current = !!completed
-  }, [completed])
-
   return (
     <section className="space-y-4">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center gap-3 pb-2 border-b-2 border-[#009850]/20 text-left"
-      >
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${completed ? 'bg-green-600' : 'bg-[#009850]'}`}>
-          {completed ? <CheckCircle2 className="w-4 h-4 text-white" /> : <span className="text-white font-bold text-sm">{num}</span>}
-        </div>
-        <div className="flex-1 min-w-0">
+      <div className="pb-2 border-b-2 border-[#009850]/20">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-[#009850] rounded-lg flex items-center justify-center flex-shrink-0">
+            <span className="text-white font-bold text-sm">{num}</span>
+          </div>
           <h2 className="text-sm font-bold text-[#49494A] uppercase tracking-wide">{title}</h2>
-          {subtitle && <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>}
         </div>
-        {completed && (
-          <span className="flex items-center gap-1 text-[10px] font-bold text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full whitespace-nowrap">
-            <CheckCircle2 className="w-3 h-3" /> Completado
-          </span>
-        )}
-        <ChevronDown className={`w-5 h-5 text-gray-400 flex-shrink-0 transition-transform ${open ? '' : '-rotate-90'}`} />
-      </button>
-      {open && children}
+        {subtitle && <p className="text-xs text-gray-500 mt-1 ml-11">{subtitle}</p>}
+      </div>
+      {children}
     </section>
   )
 }
@@ -452,7 +433,7 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
         <div className="bg-white border border-[#DDDDDD] rounded-xl p-5 md:p-6 space-y-8">
 
           {/* ── SECCIÓN 1: Datos Generales ─────────────────────────────────── */}
-          <FormSection num={1} title="Datos Generales" completed={Boolean(reportaDni && reportaNombre && reportaTel && reportaRol)}>
+          <FormSection num={1} title="Datos Generales">
             <div>
               <label className="text-xs font-semibold text-gray-600 mb-1.5 block">Fecha y hora del reporte</label>
               <div className="flex items-center gap-2 text-sm text-gray-700">
@@ -502,7 +483,7 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
             {/* SECCIÓN 2 */}
-            <FormSection num={2} title="Datos del Evento" completed={Boolean(fechaSuceso && categoria && distrito && direccion.trim())}>
+            <FormSection num={2} title="Datos del Evento">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-semibold text-gray-600 mb-1.5 block">Fecha del suceso <span className="text-red-500">*</span></label>
@@ -620,7 +601,6 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
 
           {/* ── SECCIÓN 4: Personas Afectadas ───────────────────────────────── */}
           <FormSection num={4} title="Personas Afectadas"
-            completed={personas.length > 0 || familias.length > 0}
             subtitle={`${familias.length} Grupo${familias.length !== 1 ? 's' : ''} Familiar${familias.length !== 1 ? 'es' : ''} · ${personas.length} Persona${personas.length !== 1 ? 's' : ''}`}>
 
             <div className="flex gap-2">
