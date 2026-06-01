@@ -14,14 +14,14 @@ services:
       - CHOKIDAR_USEPOLLING=true
       - CHOKIDAR_INTERVAL=300
       # ─── Auth.js v5 + Keycloak (OIDC) ──────────────────────────────────────
-      # host.docker.internal hace que el issuer coincida entre el navegador y el
-      # contenedor (ambos resuelven Keycloak en el mismo URL).
+      # ISSUER = URL pública (navegador). INTERNAL = red Docker (callback/token).
       - AUTH_SECRET=dev-auth-secret-cambiar-en-produccion-min-32-chars
       - AUTH_TRUST_HOST=true
       - AUTH_URL=http://localhost:3000
       - AUTH_KEYCLOAK_ID=caritas-app
       - AUTH_KEYCLOAK_SECRET=caritas-app-secret-dev
-      - AUTH_KEYCLOAK_ISSUER=http://host.docker.internal:8080/realms/caritas
+      - AUTH_KEYCLOAK_ISSUER=http://localhost:8080/realms/caritas
+      - AUTH_KEYCLOAK_INTERNAL_URL=http://keycloak:8080/realms/caritas
       # SMTP — se lee desde el archivo .env del proyecto
       - SMTP_HOST=${SMTP_HOST:-mailhog}
       - SMTP_PORT=${SMTP_PORT:-1025}
@@ -85,6 +85,8 @@ services:
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
       # HTTP local (sin TLS en dev) + health
       KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME: localhost
+      KC_HOSTNAME_PORT: "8080"
       KC_HOSTNAME_STRICT: "false"
       KC_HEALTH_ENABLED: "true"
     ports:

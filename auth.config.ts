@@ -28,12 +28,40 @@ export function pickAppRole(roles: string[]): string {
 }
 
 /**
+ * OIDC con URLs separadas: el navegador usa localhost; el callback (servidor en
+ * Docker) intercambia el code contra el servicio `keycloak` en la red interna.
+ */
+function keycloakProvider({
+  clientId,
+  clientSecret,
+  issuer,
+}: {
+  clientId?: string
+  clientSecret?: string
+  issuer?: string
+} = {}) {
+  if (!issuer) return Keycloak({ clientId, clientSecret })
+
+  const publicBase = issuer.replace(/\/$/, '')
+  const internalBase = (process.env.AUTH_KEYCLOAK_INTERNAL_URL ?? publicBase).replace(/\/$/, '')
+
+  return Keycloak({
+    clientId,
+    clientSecret,
+    issuer: publicBase,
+    authorization: `${publicBase}/protocol/openid-connect/auth`,
+    token: `${internalBase}/protocol/openid-connect/token`,
+    userinfo: `${internalBase}/protocol/openid-connect/userinfo`,
+  })
+}
+
+/**
  * Configuración EDGE-SAFE de Auth.js (sin Prisma ni dependencias de Node).
  * La usa el proxy (middleware) para leer la sesión y los roles del token.
  */
 export const authConfig: NextAuthConfig = {
   trustHost: true,
-  providers: [Keycloak], // lee AUTH_KEYCLOAK_ID / _SECRET / _ISSUER del entorno
+  providers: [keycloakProvider],
   pages: { signIn: '/login' },
   callbacks: {
     async jwt({ token, account }) {
