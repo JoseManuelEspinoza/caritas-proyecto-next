@@ -64,19 +64,42 @@ export async function createIncidente(data: CreateIncidenteData) {
 
 export async function updateIncidente(incidenciaId: string, data: CreateIncidenteData) {
   const session = await verifySession()
+
+  const anterior = await prisma.incidencia.findUnique({
+    where: { idIncidencia: incidenciaId },
+    select: { tipoEvento: true, direccionEvento: true, descripcionEvento: true, gravedad: true },
+  })
+
   try {
     await makeIncidenciaUseCases().actualizar.execute(incidenciaId, data)
   } catch (err) {
     return asMessage(err)
   }
-  await logGRDAction({
-    userId: session.userId,
-    action: 'EDITAR',
-    entity: 'Incidencia',
-    entityId: incidenciaId,
-    entityName: `${data.categoria} en ${data.distrito}`,
-    module: 'GRD',
-  })
+
+  const entityName = `${data.categoria} en ${data.distrito}`
+  const campos = [
+    { field: 'Categoría',          prev: anterior?.tipoEvento,        next: data.categoria },
+    { field: 'Dirección',          prev: anterior?.direccionEvento,    next: data.direccion },
+    { field: 'Descripción',        prev: anterior?.descripcionEvento,  next: data.descripcion },
+    { field: 'Nivel de afectación',prev: anterior?.gravedad,           next: data.nivelAfectacion },
+  ]
+
+  for (const c of campos) {
+    if (c.prev !== c.next) {
+      await logGRDAction({
+        userId: session.userId,
+        action: 'EDITAR',
+        entity: 'Incidencia',
+        entityId: incidenciaId,
+        entityName,
+        module: 'GRD',
+        field: c.field,
+        prevValue: c.prev ?? undefined,
+        newValue: c.next ?? undefined,
+      })
+    }
+  }
+
   revalidar(incidenciaId)
   redirect(`/grd/${incidenciaId}`)
 }
