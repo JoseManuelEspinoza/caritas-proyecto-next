@@ -19,7 +19,10 @@ export default async function SimulacrosPage() {
 
   return (
     <SimulacrosModule
-      actividades={actividades.map((a) => ({ ...a, parroquiaNombre: parroquiaNombre.get(a.idParroquia) ?? '—' }))}
+      actividades={actividades.map((a) => ({
+        ...a,
+        parroquiaNombre: parroquiaNombre.get(a.idParroquia) ?? '—',
+      }))}
       parroquias={parroquias.map((p) => ({ id: p.idParroquia, nombre: p.nombre }))}
     />
   )

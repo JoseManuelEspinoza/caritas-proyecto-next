@@ -59,7 +59,7 @@ function StatCard({ label, value, sub, icon: Icon, color, to }: {
   icon: any; color: string; to?: string
 }) {
   const inner = (
-    <div className={`bg-white border border-[#DDDDDD] rounded-xl p-4 hover:shadow-md transition-shadow flex items-start gap-3 ${to ? 'cursor-pointer' : ''}`}>
+    <div className={`bg-white border border-[#DDDDDD] rounded-xl p-4 hover:shadow-md transition-shadow flex items-start gap-3 h-full ${to ? 'cursor-pointer' : ''}`}>
       <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${color}`}>
         <Icon className="w-5 h-5 text-white" />
       </div>
@@ -71,7 +71,7 @@ function StatCard({ label, value, sub, icon: Icon, color, to }: {
       {to && <ArrowRight className="w-4 h-4 text-gray-300 self-center flex-shrink-0" />}
     </div>
   )
-  return to ? <Link href={to}>{inner}</Link> : inner
+  return to ? <Link href={to} className="h-full">{inner}</Link> : inner
 }
 
 function IncidentRow({ inc }: { inc: IncidenteResumen }) {
