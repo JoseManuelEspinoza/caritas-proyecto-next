@@ -124,7 +124,7 @@ export function AuditoriaTable({ entries }: { entries: AuditEntry[] }) {
                   <ActionBadge action={e.action} />
                 </td>
                 <td className="px-4 py-3">
-                  <div className="text-xs text-gray-400">{SOURCE_LABELS[e.source] ?? e.entity}</div>
+                  <div className="text-xs text-gray-400">{e.entity !== 'GRD' ? e.entity : (SOURCE_LABELS[e.source] ?? e.entity)}</div>
                   <div className="text-gray-800 max-w-[200px] truncate" title={e.entityName}>
                     {e.entityName}
                   </div>
