@@ -2,6 +2,7 @@ import { PrismaIncidenciaRepository } from '../database/PrismaIncidenciaReposito
 import { RegistrarIncidenciaUseCase, ActualizarIncidenciaUseCase } from '../../application/use-cases/incidencias/RegistrarYActualizar.usecase'
 import {
   AsignarBrigadistaUseCase,
+  AutoasignarmeUseCase,
   RegistrarLevantamientoUseCase,
   GenerarInformeEvaluacionUseCase,
   CorregirYReenviarUseCase,
@@ -20,6 +21,7 @@ export function makeIncidenciaUseCases() {
     registrar: new RegistrarIncidenciaUseCase(repo),
     actualizar: new ActualizarIncidenciaUseCase(repo),
     asignar: new AsignarBrigadistaUseCase(repo),
+    autoasignarme: new AutoasignarmeUseCase(repo),
     registrarCampo: new RegistrarLevantamientoUseCase(repo),
     generarInforme: new GenerarInformeEvaluacionUseCase(repo),
     corregir: new CorregirYReenviarUseCase(repo),

@@ -1,9 +1,11 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { prisma } from '@/app/lib/prisma'
 import { verifySession } from '@/app/lib/dal'
 import { makeBrigadistaUseCases } from '@/core/infrastructure/factories/makeBrigadistaUseCases'
 import { DomainError } from '@/core/domain/errors/DomainError'
+import { logGRDAction } from '@/app/lib/audit'
 
 export type BrigadistaFormData = {
   nombres: string
@@ -27,22 +29,64 @@ function fail(err: unknown, fallback: string) {
 }
 
 export async function createBrigadista(data: BrigadistaFormData) {
-  await verifySession()
+  const session = await verifySession()
+  let brigadistaId: string = data.dni
   try {
-    await makeBrigadistaUseCases().crear.execute(data)
+    const result = await makeBrigadistaUseCases().crear.execute(data)
+    brigadistaId = result.id
   } catch (err) {
     return fail(err, 'No se pudo crear el brigadista.')
   }
+  await logGRDAction({
+    userId: session.userId,
+    action: 'CREAR',
+    entity: 'Brigadista',
+    entityId: brigadistaId,
+    entityName: `${data.nombres} ${data.apellidos}`,
+    module: 'Brigadistas',
+  })
   revalidatePath('/brigadistas')
 }
 
 export async function updateBrigadista(id: string, data: BrigadistaFormData) {
-  await verifySession()
+  const session = await verifySession()
+
+  const anterior = await prisma.brigadistaParroquial.findUnique({
+    where: { idBrigadistaParroquial: id },
+    select: { nombres: true, apellidos: true, celular: true, correo: true, disponibilidad: true },
+  })
+
   try {
     await makeBrigadistaUseCases().actualizar.execute(id, data)
   } catch (err) {
     return fail(err, 'No se pudo actualizar el brigadista.')
   }
+
+  const entityName = `${data.nombres} ${data.apellidos}`
+  const campos = [
+    { field: 'Nombres',       prev: anterior?.nombres,       next: data.nombres },
+    { field: 'Apellidos',     prev: anterior?.apellidos,     next: data.apellidos },
+    { field: 'Celular',       prev: anterior?.celular,       next: data.celular },
+    { field: 'Correo',        prev: anterior?.correo,        next: data.correo },
+    { field: 'Disponibilidad',prev: anterior?.disponibilidad,next: data.disponibilidad },
+  ]
+
+  for (const c of campos) {
+    if (c.prev !== c.next) {
+      await logGRDAction({
+        userId: session.userId,
+        action: 'EDITAR',
+        entity: 'Brigadista',
+        entityId: id,
+        entityName,
+        module: 'Brigadistas',
+        field: c.field,
+        prevValue: c.prev ?? undefined,
+        newValue: c.next ?? undefined,
+      })
+    }
+  }
+
   revalidatePath('/brigadistas')
 }
 

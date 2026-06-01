@@ -1,30 +1,29 @@
+import { History } from 'lucide-react'
 import { verifySession } from '@/app/lib/dal'
 import { toFrontendRole } from '@/app/lib/roles'
 import { redirect } from 'next/navigation'
-import { prisma } from '@/app/lib/prisma'
-import { AuditoriaModule, type AuditEntry } from '@/app/ui/auditoria/auditoria-module'
+import { getAuditEntries } from '@/app/actions/auditoria'
+import { AuditoriaTable } from '@/app/ui/auditoria/auditoria-table'
 
 export default async function AuditoriaPage() {
   const session = await verifySession()
   if (toFrontendRole(session.role) !== 'admin') redirect('/dashboard')
 
-  // Reporte read-only: historial de cambios de estado de las incidencias.
-  const rows = await prisma.historialEstadoIncidencia.findMany({
-    orderBy: { fechaCambio: 'desc' },
-    take: 200,
-    include: { incidencia: { select: { codigoCaso: true, tituloIncidencia: true } } },
-  })
+  const entries = await getAuditEntries()
 
-  const entries: AuditEntry[] = rows.map((r) => ({
-    id: r.idHistorial,
-    fecha: r.fechaCambio.toISOString(),
-    usuario: r.idUsuarioGRD ?? 'sistema',
-    estadoAnterior: r.estadoAnterior,
-    estadoNuevo: r.estadoNuevo,
-    motivo: r.motivoCambio,
-    casoCodigo: r.incidencia?.codigoCaso ?? null,
-    casoTitulo: r.incidencia?.tituloIncidencia ?? null,
-  }))
+  return (
+    <div className="p-4 md:p-6 max-w-7xl mx-auto">
+      <div className="flex items-center gap-3 mb-6">
+        <div className="w-10 h-10 bg-[#009850]/10 rounded-lg flex items-center justify-center">
+          <History className="w-5 h-5 text-[#009850]" />
+        </div>
+        <div>
+          <h1 className="text-xl font-semibold text-gray-900">Auditoría / Trazabilidad</h1>
+          <p className="text-sm text-gray-500">Historial completo de acciones del sistema</p>
+        </div>
+      </div>
 
-  return <AuditoriaModule entries={entries} />
+      <AuditoriaTable entries={entries} />
+    </div>
+  )
 }

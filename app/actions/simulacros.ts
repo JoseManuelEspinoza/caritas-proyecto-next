@@ -5,6 +5,7 @@ import { verifySession } from '@/app/lib/dal'
 import { getUsuarioGRDId } from '@/app/lib/usuario-grd'
 import { makeActividadUseCases } from '@/core/infrastructure/factories/makeActividadUseCases'
 import { DomainError } from '@/core/domain/errors/DomainError'
+import { logGRDAction } from '@/app/lib/audit'
 
 const REVALIDATE = '/simulacros'
 
@@ -25,7 +26,7 @@ export async function programarSimulacro(input: {
   numeroParticipantesEstimado?: number
   descripcionActividad?: string
 }) {
-  await verifySession()
+  const session = await verifySession()
   const idUsuarioRegistroGRD = await getUsuarioGRDId()
   if (!idUsuarioRegistroGRD) return { message: 'Tu usuario no tiene perfil GRD asociado.' }
   try {
@@ -33,25 +34,28 @@ export async function programarSimulacro(input: {
   } catch (err) {
     return fail(err, 'No se pudo programar el simulacro.')
   }
+  await logGRDAction({ userId: session.userId, action: 'CREAR', entity: 'Simulacro', entityId: idUsuarioRegistroGRD, entityName: input.nombreActividad, module: 'Simulacros' })
   revalidatePath(REVALIDATE)
 }
 
 export async function ejecutarSimulacro(id: string, datos: { resultadoGeneral: string; numeroParticipantesReal?: number; recomendaciones?: string }) {
-  await verifySession()
+  const session = await verifySession()
   try {
     await makeActividadUseCases().ejecutar.execute(id, datos)
   } catch (err) {
     return fail(err, 'No se pudo registrar la ejecución.')
   }
+  await logGRDAction({ userId: session.userId, action: 'EDITAR', entity: 'Simulacro', entityId: id, entityName: id, module: 'Simulacros', field: 'Estado', newValue: 'EJECUTADO' })
   revalidatePath(REVALIDATE)
 }
 
 export async function cancelarSimulacro(id: string, motivo: string) {
-  await verifySession()
+  const session = await verifySession()
   try {
     await makeActividadUseCases().cancelar.execute(id, motivo)
   } catch (err) {
     return fail(err, 'No se pudo cancelar el simulacro.')
   }
+  await logGRDAction({ userId: session.userId, action: 'EDITAR', entity: 'Simulacro', entityId: id, entityName: id, module: 'Simulacros', field: 'Estado', newValue: 'CANCELADO', notes: motivo })
   revalidatePath(REVALIDATE)
 }

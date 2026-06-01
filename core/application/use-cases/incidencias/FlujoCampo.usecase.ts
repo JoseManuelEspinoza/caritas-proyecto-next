@@ -12,12 +12,28 @@ async function cargar(repo: IIncidenciaRepository, id: string): Promise<Incidenc
 /** Asigna un brigadista; transiciona ABIERTO → ASIGNADO solo si está ABIERTO. */
 export class AsignarBrigadistaUseCase {
   constructor(private readonly repo: IIncidenciaRepository) {}
-  async execute(idIncidencia: string, idBrigadista: string): Promise<void> {
+  async execute(idIncidencia: string, idBrigadista: string, instrucciones?: string): Promise<void> {
     const inc = await cargar(this.repo, idIncidencia)
-    await this.repo.registrarAsignacion(idIncidencia, idBrigadista)
+    await this.repo.registrarAsignacion(idIncidencia, idBrigadista, instrucciones)
     if (inc.estadoActual === 'ABIERTO') {
       inc.asignar()
       await this.repo.guardarTransicion(inc, 'Brigadista asignado al incidente')
+    }
+  }
+}
+
+/**
+ * Autoasignación del especialista GRD: se define como responsable de campo de la
+ * incidencia y, si está ABIERTA, la transiciona a ASIGNADO.
+ */
+export class AutoasignarmeUseCase {
+  constructor(private readonly repo: IIncidenciaRepository) {}
+  async execute(idIncidencia: string, idUsuarioGRD: string): Promise<void> {
+    const inc = await cargar(this.repo, idIncidencia)
+    await this.repo.asignarResponsable(idIncidencia, idUsuarioGRD)
+    if (inc.estadoActual === 'ABIERTO') {
+      inc.asignar()
+      await this.repo.guardarTransicion(inc, 'Especialista GRD se autoasignó como responsable')
     }
   }
 }
