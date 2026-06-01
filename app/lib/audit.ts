@@ -43,6 +43,7 @@ export async function logGRDAction({
   field,
   prevValue,
   newValue,
+  notes,
 }: {
   userId?: string
   action: GRDAction
@@ -53,13 +54,14 @@ export async function logGRDAction({
   field?: string
   prevValue?: string
   newValue?: string
+  notes?: string
 }) {
   try {
     await prisma.auditLog.create({
       data: {
         userId: userId ?? null,
         action,
-        detail: { entity, entityId, entityName, module, field, prevValue, newValue } as Prisma.InputJsonValue,
+        detail: { entity, entityId, entityName, module, field, prevValue, newValue, notes } as Prisma.InputJsonValue,
       },
     })
   } catch (err) {

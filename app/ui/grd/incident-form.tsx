@@ -121,7 +121,7 @@ function SearchableSelect({
     <div ref={containerRef} className={`relative ${className}`}>
       <div
         className="w-full flex items-center px-3 py-2.5 bg-white border border-[#DDDDDD] rounded-lg text-sm focus-within:ring-2 focus-within:ring-[#009850]/20 focus-within:border-[#009850] transition-colors cursor-text"
-        onClick={() => { setOpen(true); inputRef.current?.focus() }}
+        onClick={() => { setOpen((o) => !o); if (!open) inputRef.current?.focus() }}
       >
         <Search className="w-3.5 h-3.5 text-gray-400 flex-shrink-0 mr-2" />
         {displayValue
@@ -142,7 +142,7 @@ function SearchableSelect({
         }
         {value
           ? <button type="button" onClick={clear} className="ml-1 text-gray-400 hover:text-gray-600 flex-shrink-0"><X className="w-3.5 h-3.5" /></button>
-          : <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0 ml-1 pointer-events-none" />
+          : <ChevronDown className={`w-4 h-4 text-gray-400 flex-shrink-0 ml-1 transition-transform ${open ? 'rotate-180' : ''}`} />
         }
       </div>
 
@@ -688,13 +688,12 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
                   </div>
                   <div>
                     <label className="text-xs text-gray-500 mb-1.5 block">Distrito <span className="text-red-500">*</span></label>
-                    <div className="relative">
-                      <select value={distrito} onChange={(e) => setDistrito(e.target.value)} className={`${inputCls} appearance-none pr-8`}>
-                        <option value="">Selecciona el distrito</option>
-                        {DISTRITOS_LIMA.map((d) => <option key={d}>{d}</option>)}
-                      </select>
-                      <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                    </div>
+                    <SearchableSelect
+                      value={distrito}
+                      onChange={setDistrito}
+                      options={DISTRITOS_LIMA}
+                      placeholder="Buscar distrito…"
+                    />
                   </div>
                   <div>
                     <label className="text-xs text-gray-500 mb-1.5 block">Parroquia de referencia</label>

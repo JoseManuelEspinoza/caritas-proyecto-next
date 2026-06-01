@@ -111,13 +111,13 @@ export async function getAuditEntries(): Promise<AuditEntry[]> {
         user: h.user?.name ?? h.user?.email ?? 'Sistema',
         userRole: h.user?.role ?? undefined,
         action: ACTION_LABEL[h.action] ?? h.action.toLowerCase(),
-        entity: d.entity ?? 'Registro',
+        entity: d.module ?? d.entity ?? 'GRD',
         entityId: d.entityId ?? '',
         entityName: d.entityName ?? '',
         field: d.field ?? undefined,
         prevValue: d.prevValue ?? undefined,
         newValue: d.newValue ?? undefined,
-        notes: d.module ?? undefined,
+        notes: d.notes ?? undefined,
         source: 'grd',
       }
     })

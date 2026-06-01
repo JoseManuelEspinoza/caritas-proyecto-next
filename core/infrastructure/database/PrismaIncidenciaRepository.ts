@@ -146,14 +146,7 @@ export class PrismaIncidenciaRepository implements IIncidenciaRepository {
     }
     await this.recrearGruposYPersonas(id, data)
 
-    await prisma.historialEstadoIncidencia.create({
-      data: {
-        idIncidencia: id,
-        estadoAnterior: inc.estadoActual,
-        estadoNuevo: inc.estadoActual,
-        motivoCambio: 'Datos del incidente actualizados',
-      },
-    })
+    // Solo registrar historial si el estado realmente cambió
   }
 
   async guardarTransicion(incidencia: Incidencia, motivo?: string, observaciones?: string): Promise<void> {
