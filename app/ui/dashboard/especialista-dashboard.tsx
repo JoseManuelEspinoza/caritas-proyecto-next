@@ -116,7 +116,7 @@ export function EspecialistaDashboard({
       <div>
         <h1 className="text-xl font-semibold text-gray-900">Hola, {primerNombre} 👋</h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          Panel del Especialista GRD — {new Date().toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long' })}
+          Panel del Especialista GRD — {new Date().toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Lima' })}
         </p>
       </div>
 
