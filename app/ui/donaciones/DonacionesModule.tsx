@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useTransition } from "react";
 import {
   HandHeart,
   CheckCircle,
@@ -16,6 +16,10 @@ import {
   MapPin,
   Phone,
   AlertTriangle,
+  Search,
+  Filter,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import type {
   Incident,
@@ -63,25 +67,92 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
   const [notes, setNotes] = useState("");
 
   const queue = useMemo(
-    () =>
-      incidents.filter((i) =>
-        ["EN EVALUACION", "OBSERVADO"].includes(i.status),
-      ),
+    () => incidents.filter((i) => ["EN EVALUACION", "OBSERVADO"].includes(i.status)),
     [incidents],
-  );
+  )
   const closed = useMemo(
-    () =>
-      incidents.filter((i) =>
-        [
-          "APROBADO",
-          "ATENDIDO",
-          "SEGUIMIENTO ABIERTO",
-          "RECHAZADO",
-          "CERRADO",
-        ].includes(i.status),
-      ),
+    () => incidents.filter((i) => ["APROBADO", "ATENDIDO", "SEGUIMIENTO ABIERTO", "RECHAZADO", "CERRADO"].includes(i.status)),
     [incidents],
-  );
+  )
+  
+  const [search, setSearch] = useState("")
+  const [statusFilter, setStatusFilter] = useState("all")
+  const [categoryFilter, setCategoryFilter] = useState("all")
+  const [parroquiaFilter, setParroquiaFilter] = useState("all")
+  const [queuePage, setQueuePage] = useState(1)
+  const [historyPage, setHistoryPage] = useState(1)
+
+  const queueAll = useMemo(
+    () => incidents.filter((i) => ["EN EVALUACION", "OBSERVADO"].includes(i.status)),
+    [incidents],
+  )
+  const closedAll = useMemo(
+    () => incidents.filter((i) => !["EN EVALUACION", "OBSERVADO"].includes(i.status)),
+    [incidents],
+  )
+
+  const filteredIncidents = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return incidents.filter((i) => {
+      if (statusFilter !== "all" && i.status !== statusFilter) return false
+      if (categoryFilter !== "all" && i.categoria !== categoryFilter) return false
+      if (parroquiaFilter !== "all" && (i.parroquia ?? "") !== parroquiaFilter) return false
+      if (!q) return true
+      return [
+        i.codigo,
+        i.titulo,
+        i.estado,
+        i.categoria,
+        i.gravedad,
+        i.parroquia,
+        i.direccion,
+        i.descripcion,
+        i.solicitudTipo,
+        i.solicitudNecesidad,
+        i.informe?.analisisSituacion,
+        i.informe?.hallazgosTexto,
+        i.informe?.conclusiones,
+        i.informe?.nivelUrgencia,
+        i.informe?.tipoIntervencion,
+        i.informe?.recomendacionComite,
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(q))
+    })
+  }, [incidents, search, statusFilter, categoryFilter, parroquiaFilter])
+
+  const queue = useMemo(
+    () => filteredIncidents.filter((i) => ["EN EVALUACION", "OBSERVADO"].includes(i.status)),
+    [filteredIncidents],
+  )
+  const closed = useMemo(
+    () => filteredIncidents.filter((i) => !["EN EVALUACION", "OBSERVADO"].includes(i.status)),
+    [filteredIncidents],
+  )
+
+  const queueTotalPages = Math.max(1, Math.ceil(queue.length / 10))
+  const historyTotalPages = Math.max(1, Math.ceil(closed.length / 10))
+  const safeQueuePage = Math.min(queuePage, queueTotalPages)
+  const safeHistoryPage = Math.min(historyPage, historyTotalPages)
+  const queueSlice = queue.slice((safeQueuePage - 1) * 10, safeQueuePage * 10)
+  const historySlice = closed.slice((safeHistoryPage - 1) * 10, safeHistoryPage * 10)
+  const queueFrom = queue.length === 0 ? 0 : (safeQueuePage - 1) * 10 + 1
+  const queueTo = Math.min(queue.length, safeQueuePage * 10)
+  const historyFrom = closed.length === 0 ? 0 : (safeHistoryPage - 1) * 10 + 1
+  const historyTo = Math.min(closed.length, safeHistoryPage * 10)
+
+  useEffect(() => {
+    setQueuePage(1)
+    setHistoryPage(1)
+  }, [search, statusFilter, categoryFilter, parroquiaFilter])
+
+  useEffect(() => {
+    if (queuePage > queueTotalPages) setQueuePage(queueTotalPages)
+  }, [queuePage, queueTotalPages])
+
+  useEffect(() => {
+    if (historyPage > historyTotalPages) setHistoryPage(historyTotalPages)
+  }, [historyPage, historyTotalPages])
 
   const current = selected
     ? (incidents.find((i) => i.id === selected) ?? null)
@@ -227,7 +298,7 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
-          <p className="text-2xl font-bold text-purple-900">{queue.length}</p>
+          <p className="text-2xl font-bold text-purple-900">{queueAll.length}</p>
           <p className="text-xs text-purple-700">Pendientes de evaluación</p>
         </div>
         <div className="bg-green-50 border border-green-200 rounded-xl p-4">
@@ -254,6 +325,84 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
         </div>
       </div>
 
+      <div className="bg-white border border-[var(--caritas-border)] rounded-xl p-4 mb-5 space-y-3">
+        <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+          <div className="relative flex-1 lg:max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar por código, nombre, parroquia o descripción..."
+              className="w-full pl-9 pr-4 py-2.5 text-sm border border-[var(--caritas-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--caritas-green)]/20 focus:border-[var(--caritas-green)]"
+            />
+          </div>
+
+          <div className="flex flex-1 flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-full pl-9 pr-3 py-2.5 text-sm border border-[var(--caritas-border)] rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[var(--caritas-green)]/20 focus:border-[var(--caritas-green)]"
+              >
+                {STATUS_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="relative flex-1">
+              <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="w-full pl-9 pr-3 py-2.5 text-sm border border-[var(--caritas-border)] rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[var(--caritas-green)]/20 focus:border-[var(--caritas-green)]"
+              >
+                <option value="all">Todas las categorías</option>
+                {[...new Set(incidents.map((i) => i.categoria).filter(Boolean))].map((cat) => (
+                  <option key={cat as string} value={cat as string}>{cat}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="relative flex-1">
+              <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <select
+                value={parroquiaFilter}
+                onChange={(e) => setParroquiaFilter(e.target.value)}
+                className="w-full pl-9 pr-3 py-2.5 text-sm border border-[var(--caritas-border)] rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[var(--caritas-green)]/20 focus:border-[var(--caritas-green)]"
+              >
+                <option value="all">Todas las parroquias</option>
+                {[...new Set(incidents.map((i) => i.parroquia).filter(Boolean))].map((p) => (
+                  <option key={p as string} value={p as string}>{p}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <p className="text-xs text-gray-500">
+            {filteredIncidents.length} caso{filteredIncidents.length !== 1 ? "s" : ""} filtrado{filteredIncidents.length !== 1 ? "s" : ""}
+          </p>
+          {(search || statusFilter !== "all" || categoryFilter !== "all" || parroquiaFilter !== "all") && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearch("")
+                setStatusFilter("all")
+                setCategoryFilter("all")
+                setParroquiaFilter("all")
+              }}
+              className="text-xs font-medium text-[var(--caritas-green)] hover:underline self-start sm:self-auto"
+            >
+              Limpiar filtros
+            </button>
+          )}
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
         {/* Cola de evaluación */}
         <div
@@ -275,7 +424,7 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
             </div>
           ) : (
             <div className="divide-y divide-gray-100">
-              {queue.map((inc) => (
+              {queueSlice.map((inc) => (
                 <button
                   key={inc.id}
                   onClick={() => setSelected(inc.id)}
@@ -300,13 +449,38 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
                     </span>
                   </div>
                   {inc.informeEvaluacion && (
+
+                {queue.length > 0 && (
+                  <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 bg-gray-50">
+                    <p className="text-xs text-gray-500">Mostrando {queueFrom}-{queueTo} de {queue.length}</p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setQueuePage((p) => Math.max(1, p - 1))}
+                        disabled={safeQueuePage === 1}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-[var(--caritas-border)] rounded-lg bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" /> Anterior
+                      </button>
+                      <span className="text-xs text-gray-500 font-medium">{safeQueuePage} / {queueTotalPages}</span>
+                      <button
+                        type="button"
+                        onClick={() => setQueuePage((p) => Math.min(queueTotalPages, p + 1))}
+                        disabled={safeQueuePage === queueTotalPages}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-[var(--caritas-border)] rounded-lg bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Siguiente <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
                     <div className="mt-1.5 flex gap-2">
                       <span
                         className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
                           inc.informeEvaluacion.nivelUrgencia === "Inmediata"
                             ? "bg-red-100 text-red-700"
                             : inc.informeEvaluacion.nivelUrgencia === "Alta"
-                              ? "bg-orange-100 text-orange-700"
+                      {historySlice.map((inc) => (
                               : inc.informeEvaluacion.nivelUrgencia === "Media"
                                 ? "bg-yellow-100 text-yellow-700"
                                 : "bg-gray-100 text-gray-700"
@@ -353,6 +527,28 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
                     </div>
                   </button>
                 ))}
+              </div>
+              <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 bg-gray-50">
+                <p className="text-xs text-gray-500">Mostrando {historyFrom}-{historyTo} de {closed.length}</p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
+                    disabled={safeHistoryPage === 1}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-[var(--caritas-border)] rounded-lg bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" /> Anterior
+                  </button>
+                  <span className="text-xs text-gray-500 font-medium">{safeHistoryPage} / {historyTotalPages}</span>
+                  <button
+                    type="button"
+                    onClick={() => setHistoryPage((p) => Math.min(historyTotalPages, p + 1))}
+                    disabled={safeHistoryPage === historyTotalPages}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-[var(--caritas-border)] rounded-lg bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Siguiente <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             </>
           )}

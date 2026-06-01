@@ -145,8 +145,8 @@ export function LocationPicker({ lat, lng, onChange, onAddressResolved }: Props)
         </div>
       </div>
 
-      <div className="border border-gray-200 rounded-lg overflow-hidden">
-        <div className="relative">
+      <div className="mt-3 relative isolate border border-gray-200 rounded-lg overflow-hidden">
+        <div className="relative z-0">
           <LocationMap lat={viewLat} lng={viewLng} onChange={elegirPunto} />
           {/* Botón ampliar */}
           <button
@@ -182,7 +182,7 @@ export function LocationPicker({ lat, lng, onChange, onAddressResolved }: Props)
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="flex-1 min-h-0">
+            <div className="flex-1 min-h-0 relative z-0">
               <LocationMap lat={viewLat} lng={viewLng} onChange={elegirPunto} className="h-full w-full" />
             </div>
             <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-gray-200 bg-gray-50">

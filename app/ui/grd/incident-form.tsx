@@ -227,9 +227,35 @@ function PersonaModal({ onSave, onClose, editing, familias, activeFamiliaId }: {
     setForm((p) => ({ ...p, [key]: value }))
   }
 
+  function validateDocumento(tipo: string, valor: string): string | null {
+    const v = (valor ?? '').trim()
+    if (tipo === 'DNI') {
+      const digits = v.replace(/\D/g, '')
+      if (digits.length < 8) return 'El DNI debe tener al menos 8 dígitos.'
+      if (digits.length > 9) return 'El DNI no debe exceder 9 dígitos (8 + dígito verificador).'
+      return null
+    }
+    if (tipo === 'CE') {
+      const digits = v.replace(/\D/g, '')
+      if (digits.length < 9) return 'El Carnet de Extranjería debe tener al menos 9 dígitos.'
+      if (digits.length > 12) return 'El Carnet de Extranjería no debe exceder 12 dígitos.'
+      return null
+    }
+    if (tipo === 'Pasaporte') {
+      const alnum = v.replace(/[^A-Za-z0-9]/g, '')
+      if (alnum.length < 6) return 'El pasaporte debe tener al menos 6 caracteres alfanuméricos.'
+      if (alnum.length > 12) return 'El pasaporte no debe exceder 12 caracteres.'
+      return null
+    }
+    return null
+  }
+
   function handleSubmit() {
     if (!form.nombre.trim()) { toast.error('Ingresa el nombre de la persona'); return }
     if (!form.edad)          { toast.error('Ingresa la edad'); return }
+    // Validación del documento según tipo
+    const docErr = validateDocumento(form.tipoDoc, form.dni)
+    if (docErr) { toast.error(docErr); return }
     onSave({ ...form, id: editing?.id || `PER-${Date.now()}` })
     onClose()
   }
@@ -266,7 +292,30 @@ function PersonaModal({ onSave, onClose, editing, familias, activeFamiliaId }: {
             </div>
             <div className="col-span-2">
               <label className="text-xs font-semibold text-gray-600 block mb-1">N° Documento</label>
-              <input type="text" value={form.dni} onChange={(e) => set('dni', e.target.value)} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg" placeholder="12345678" maxLength={15} />
+              <input
+                type="text"
+                value={form.dni}
+                onChange={(e) => {
+                  const val = e.target.value
+                  if (form.tipoDoc === 'DNI' || form.tipoDoc === 'CE') {
+                    const digits = val.replace(/\D/g, '')
+                    // limit to 12 digits for safety
+                    set('dni', digits.slice(0, 12))
+                  } else {
+                    // pasaporte / otro → alfanumérico, mayúsculas
+                    const a = val.toUpperCase().replace(/[^A-Z0-9]/g, '')
+                    set('dni', a.slice(0, 12))
+                  }
+                }}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
+                placeholder={form.tipoDoc === 'DNI' ? '12345678' : form.tipoDoc === 'CE' ? '123456789' : 'A12345678'}
+                maxLength={12}
+              />
+              <p className="text-[11px] text-gray-400 mt-1">
+                {form.tipoDoc === 'DNI' && 'DNI: 8 dígitos (opcionalmente seguido de dígito verificador).'}
+                {form.tipoDoc === 'Pasaporte' && 'Pasaporte: código alfanumérico (usualmente 9 caracteres, hasta 12).'}
+                {form.tipoDoc === 'CE' && 'Carnet de Extranjería: 9 a 12 dígitos numéricos.'}
+              </p>
             </div>
           </div>
 
@@ -758,17 +807,19 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
             {/* COLUMNA DERECHA: Descripción (Sección 3) + Mapa al costado */}
             <div className="space-y-6">
               <FormSection num={3} title="Descripción del Evento">
-                <div>
-                  <label className="text-xs font-semibold text-gray-600 mb-1.5 block">Descripción breve del evento</label>
-                  <textarea rows={5} placeholder="Describe lo que se reportó: tipo de afectación, magnitud aproximada, situación actual..."
-                    value={descripcion} onChange={(e) => setDescripcion(e.target.value)}
-                    className={`${inputCls} resize-none`} />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-gray-600 mb-1.5 block">Causa o posible causa del suceso</label>
-                  <textarea rows={4} placeholder="¿Qué originó el evento según la información disponible?"
-                    value={causa} onChange={(e) => setCausa(e.target.value)}
-                    className={`${inputCls} resize-none`} />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                  <div>
+                    <label className="text-xs font-semibold text-gray-600 mb-1.5 block">Descripción breve del evento</label>
+                    <textarea rows={5} placeholder="Describe lo que se reportó: tipo de afectación, magnitud aproximada, situación actual..."
+                      value={descripcion} onChange={(e) => setDescripcion(e.target.value)}
+                      className={`${inputCls} resize-none`} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-gray-600 mb-1.5 block">Causa o posible causa del suceso</label>
+                    <textarea rows={5} placeholder="¿Qué originó el evento según la información disponible?"
+                      value={causa} onChange={(e) => setCausa(e.target.value)}
+                      className={`${inputCls} resize-none`} />
+                  </div>
                 </div>
               </FormSection>
 

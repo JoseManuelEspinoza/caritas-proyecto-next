@@ -7,6 +7,7 @@ export interface ActividadOutput {
   id: string
   codigoActividad: string | null
   idParroquia: string
+  idTipoActividadPreventiva: string
   nombreActividad: string
   estadoActividad: string
   fechaProgramada: string | null
@@ -20,6 +21,7 @@ function toOutput(a: ActividadPreventiva): ActividadOutput {
     id: s.id,
     codigoActividad: s.codigoActividad ?? null,
     idParroquia: s.idParroquia,
+    idTipoActividadPreventiva: s.idTipoActividadPreventiva,
     nombreActividad: s.nombreActividad,
     estadoActividad: s.estadoActividad,
     fechaProgramada: s.fechaProgramada ?? null,

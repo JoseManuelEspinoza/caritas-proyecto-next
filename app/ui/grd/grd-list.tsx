@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
   Plus, Filter, Search, Download, MapPin, Users, Calendar,
@@ -70,8 +70,10 @@ export function GrdList({ items, role }: GrdListProps) {
   const [statusFilter, setStatusFilter] = useState('all')
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [search, setSearch] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
 
   const canCreate = role === 'admin' || role === 'especialistaGRD'
+  const rowsPerPage = 10
 
   // Filtros
   const filtered = items.filter((i) => {
@@ -85,6 +87,19 @@ export function GrdList({ items, role }: GrdListProps) {
     }
     return true
   })
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / rowsPerPage))
+  const safePage = Math.min(currentPage, totalPages)
+  const startIndex = (safePage - 1) * rowsPerPage
+  const paginated = filtered.slice(startIndex, startIndex + rowsPerPage)
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [statusFilter, categoryFilter, search])
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages)
+  }, [currentPage, totalPages])
 
   // Conteos por estado
   const counts: Record<string, number> = {}
@@ -190,7 +205,7 @@ export function GrdList({ items, role }: GrdListProps) {
       <div className="block lg:hidden space-y-3">
         {filtered.length === 0 ? (
           <div className="text-center py-12 text-gray-400 text-sm">Sin incidentes que mostrar</div>
-        ) : filtered.map((item) => {
+        ) : paginated.map((item) => {
           const cfg = STATUS[item.estadoActual] ?? STATUS['ABIERTO']
           return (
             <Link
@@ -244,7 +259,7 @@ export function GrdList({ items, role }: GrdListProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#DDDDDD]">
-                {filtered.map((item) => {
+                {paginated.map((item) => {
                   const cfg = STATUS[item.estadoActual] ?? STATUS['ABIERTO']
                   return (
                     <tr
@@ -296,6 +311,35 @@ export function GrdList({ items, role }: GrdListProps) {
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {filtered.length > 0 && (
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 border-t border-[#DDDDDD] bg-[#F5F5F5]">
+            <p className="text-xs text-gray-500">
+              Mostrando {startIndex + 1}-{Math.min(startIndex + rowsPerPage, filtered.length)} de {filtered.length}
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={safePage === 1}
+                className="px-3 py-1.5 text-xs font-medium rounded-lg border border-[#DDDDDD] bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Anterior
+              </button>
+              <span className="text-xs text-gray-600 font-medium">
+                Página {safePage} de {totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={safePage === totalPages}
+                className="px-3 py-1.5 text-xs font-medium rounded-lg border border-[#DDDDDD] bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Siguiente
+              </button>
+            </div>
           </div>
         )}
       </div>
