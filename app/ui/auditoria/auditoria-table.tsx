@@ -112,6 +112,7 @@ export function AuditoriaTable({ entries }: { entries: AuditEntry[] }) {
                   {new Date(e.timestamp).toLocaleString('es-PE', {
                     day: '2-digit', month: '2-digit', year: 'numeric',
                     hour: '2-digit', minute: '2-digit',
+                    timeZone: 'America/Lima',
                   })}
                 </td>
                 <td className="px-4 py-3">
