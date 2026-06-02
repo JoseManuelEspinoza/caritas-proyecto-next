@@ -32,10 +32,13 @@ function ActionBadge({ action }: { action: string }) {
   )
 }
 
+const PAGE_SIZE = 25
+
 export function AuditoriaTable({ entries }: { entries: AuditEntry[] }) {
   const [query, setQuery] = useState('')
   const [actionFilter, setActionFilter] = useState('')
   const [sourceFilter, setSourceFilter] = useState('')
+  const [page, setPage] = useState(1)
 
   const actions = useMemo(
     () => Array.from(new Set(entries.map((e) => e.action))).sort(),
@@ -54,6 +57,10 @@ export function AuditoriaTable({ entries }: { entries: AuditEntry[] }) {
     })
   }, [entries, query, actionFilter, sourceFilter])
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const currentPage = Math.min(page, totalPages)
+  const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+
   return (
     <div className="bg-white border border-[#DDDDDD] rounded-xl">
       {/* Filtros */}
@@ -62,14 +69,14 @@ export function AuditoriaTable({ entries }: { entries: AuditEntry[] }) {
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => { setQuery(e.target.value); setPage(1) }}
             placeholder="Buscar por registro, usuario o nota…"
             className="pl-9 pr-3 py-2 w-full border border-[#DDDDDD] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#009850]/30"
           />
         </div>
         <select
           value={actionFilter}
-          onChange={(e) => setActionFilter(e.target.value)}
+          onChange={(e) => { setActionFilter(e.target.value); setPage(1) }}
           className="px-3 py-2 border border-[#DDDDDD] rounded-lg text-sm bg-white focus:outline-none"
         >
           <option value="">Todas las acciones</option>
@@ -79,7 +86,7 @@ export function AuditoriaTable({ entries }: { entries: AuditEntry[] }) {
         </select>
         <select
           value={sourceFilter}
-          onChange={(e) => setSourceFilter(e.target.value)}
+          onChange={(e) => { setSourceFilter(e.target.value); setPage(1) }}
           className="px-3 py-2 border border-[#DDDDDD] rounded-lg text-sm bg-white focus:outline-none"
         >
           <option value="">Todos los módulos</option>
@@ -106,7 +113,7 @@ export function AuditoriaTable({ entries }: { entries: AuditEntry[] }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-[#DDDDDD]">
-            {filtered.map((e) => (
+            {paginated.map((e) => (
               <tr key={`${e.source}-${e.id}`} className="hover:bg-gray-50 transition-colors">
                 <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
                   {new Date(e.timestamp).toLocaleString('es-PE', {
@@ -152,7 +159,7 @@ export function AuditoriaTable({ entries }: { entries: AuditEntry[] }) {
                 </td>
               </tr>
             ))}
-            {filtered.length === 0 && (
+            {paginated.length === 0 && (
               <tr>
                 <td colSpan={6} className="text-center py-12 text-gray-400">
                   Sin entradas de auditoría.
@@ -162,6 +169,48 @@ export function AuditoriaTable({ entries }: { entries: AuditEntry[] }) {
           </tbody>
         </table>
       </div>
+
+      {/* Paginación */}
+      {totalPages > 1 && (
+        <div className="px-4 py-3 border-t border-[#DDDDDD] flex items-center justify-between text-sm text-gray-500">
+          <span>
+            {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filtered.length)} de {filtered.length} registros
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPage(1)}
+              disabled={currentPage === 1}
+              className="px-2 py-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              «
+            </button>
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="px-2 py-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              ‹
+            </button>
+            <span className="px-3 py-1 font-medium text-gray-700">
+              {currentPage} / {totalPages}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className="px-2 py-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              ›
+            </button>
+            <button
+              onClick={() => setPage(totalPages)}
+              disabled={currentPage === totalPages}
+              className="px-2 py-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              »
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
