@@ -27,6 +27,16 @@ function Recenter({ lat, lng }: { lat: number; lng: number }) {
   return null
 }
 
+/** Recalcula el tamaño del mapa al montarse (contenedores flex/resize → evita tiles grises). */
+function ResizeFix() {
+  const map = useMap()
+  useEffect(() => {
+    const t = setTimeout(() => map.invalidateSize(), 120)
+    return () => clearTimeout(t)
+  }, [map])
+  return null
+}
+
 interface Props {
   lat: number
   lng: number
@@ -54,6 +64,7 @@ export default function LocationMap({ lat, lng, onChange, className = 'h-56 w-fu
         }}
       />
       <Recenter lat={lat} lng={lng} />
+      <ResizeFix />
     </MapContainer>
   )
 }

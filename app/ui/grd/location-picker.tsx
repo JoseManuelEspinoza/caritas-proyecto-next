@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import dynamic from 'next/dynamic'
-import { MapPin, LocateFixed, ExternalLink, Loader2, Maximize2, X } from 'lucide-react'
+import { MapPin, ExternalLink, Loader2, Maximize2, X } from 'lucide-react'
 import { toast } from 'sonner'
 
 // Centro de Lima por defecto (para que el mapa siempre se vea aunque no haya punto).
@@ -35,7 +35,6 @@ interface Props {
  *   la ubicación. GRATIS, sin API key ni facturación.
  */
 export function LocationPicker({ lat, lng, onChange, onAddressResolved }: Props) {
-  const [loading, setLoading] = useState(false)
   const [geocoding, setGeocoding] = useState(false)
   const [expanded, setExpanded] = useState(false)
 
@@ -49,14 +48,16 @@ export function LocationPicker({ lat, lng, onChange, onAddressResolved }: Props)
     try {
       setGeocoding(true)
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&lat=${la}&lon=${lo}&accept-language=es`,
+        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&zoom=18&lat=${la}&lon=${lo}&accept-language=es`,
         { headers: { Accept: 'application/json' } },
       )
       if (!res.ok) throw new Error('geocode')
       const data = await res.json()
       const a = data?.address ?? {}
-      // Dirección concisa: calle + número; si no hay, el nombre completo.
-      const direccion = [a.road, a.house_number].filter(Boolean).join(' ') || (data.display_name as string) || ''
+      // Dirección lo más exacta posible: calle + número (+ urbanización/barrio si existe).
+      const calleNumero = [a.road, a.house_number].filter(Boolean).join(' ')
+      const zona = a.neighbourhood || a.suburb || a.residential || a.quarter || ''
+      const direccion = [calleNumero, zona].filter(Boolean).join(', ') || (data.display_name as string) || ''
       // Candidatos de distrito (en Lima el distrito aparece en distintos campos según la zona).
       const candidatosDistrito = [a.city_district, a.suburb, a.town, a.quarter, a.borough, a.municipality, a.city]
         .filter((x): x is string => Boolean(x))
@@ -77,41 +78,9 @@ export function LocationPicker({ lat, lng, onChange, onAddressResolved }: Props)
     resolveAddress(la, lo)
   }
 
-  const usarGPS = () => {
-    if (!('geolocation' in navigator)) { toast.error('Tu navegador no soporta geolocalización.'); return }
-    setLoading(true)
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLoading(false)
-        toast.success('Ubicación obtenida por GPS.')
-        elegirPunto(Number(pos.coords.latitude.toFixed(7)), Number(pos.coords.longitude.toFixed(7)))
-      },
-      (err) => {
-        setLoading(false)
-        toast.error(err.code === err.PERMISSION_DENIED ? 'Permiso de ubicación denegado.' : 'No se pudo obtener la ubicación.')
-      },
-      { enableHighAccuracy: true, timeout: 10000 },
-    )
-  }
-
-  const setManual = (campo: 'lat' | 'lng', valor: string) => {
-    const n = valor === '' ? null : Number(valor)
-    if (campo === 'lat') onChange(n, lng)
-    else onChange(lat, n)
-  }
-
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={usarGPS}
-          disabled={loading}
-          className="flex items-center gap-2 px-3 py-2 bg-[#009850] text-white rounded-lg text-xs font-semibold hover:opacity-90 disabled:opacity-50"
-        >
-          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <LocateFixed className="w-4 h-4" />}
-          Usar mi ubicación (GPS)
-        </button>
+    <div className="flex flex-col h-full">
+      <div className="flex flex-wrap items-center gap-2 mb-2 flex-shrink-0">
         {hasPoint && (
           <a
             href={`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`}
@@ -126,28 +95,9 @@ export function LocationPicker({ lat, lng, onChange, onAddressResolved }: Props)
         {geocoding && <span className="flex items-center gap-1 text-[11px] text-[#009850]"><Loader2 className="w-3 h-3 animate-spin" /> Buscando dirección…</span>}
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="text-xs text-gray-500 mb-1 block">Latitud</label>
-          <input
-            type="number" step="any" placeholder="-12.0464"
-            value={lat ?? ''} onChange={(e) => setManual('lat', e.target.value)}
-            className="w-full px-3 py-2 border border-[#DDDDDD] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#009850]/20"
-          />
-        </div>
-        <div>
-          <label className="text-xs text-gray-500 mb-1 block">Longitud</label>
-          <input
-            type="number" step="any" placeholder="-77.0428"
-            value={lng ?? ''} onChange={(e) => setManual('lng', e.target.value)}
-            className="w-full px-3 py-2 border border-[#DDDDDD] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#009850]/20"
-          />
-        </div>
-      </div>
-
-      <div className="mt-3 relative isolate border border-gray-200 rounded-lg overflow-hidden">
-        <div className="relative z-0">
-          <LocationMap lat={viewLat} lng={viewLng} onChange={elegirPunto} />
+      <div className="flex-1 min-h-0 relative isolate border border-gray-200 rounded-lg overflow-hidden flex flex-col">
+        <div className="relative z-0 flex-1 min-h-0">
+          <LocationMap lat={viewLat} lng={viewLng} onChange={elegirPunto} className="h-full w-full" />
           {/* Botón ampliar */}
           <button
             type="button"
@@ -158,7 +108,7 @@ export function LocationPicker({ lat, lng, onChange, onAddressResolved }: Props)
             <Maximize2 className="w-3.5 h-3.5" /> Ampliar
           </button>
         </div>
-        <div className="bg-gray-50 px-3 py-2 border-t border-gray-200 flex items-center gap-2">
+        <div className="bg-gray-50 px-3 py-2 border-t border-gray-200 flex items-center gap-2 flex-shrink-0">
           <MapPin className={`w-4 h-4 ${hasPoint ? 'text-red-500' : 'text-gray-400'}`} />
           <p className="text-xs text-gray-600">
             {hasPoint
