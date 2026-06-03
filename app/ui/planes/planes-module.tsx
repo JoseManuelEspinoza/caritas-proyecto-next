@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { ClipboardList, Plus, Calendar, Send, CheckCircle2, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { crearPlan, cambiarAprobacionPlan } from '@/app/actions/planes'
+import { PaginationControls } from '@/app/ui/shared/pagination-controls'
 
 type Plan = {
   id: string
@@ -27,10 +28,13 @@ const ESTADO_BADGE: Record<string, string> = {
   OBSERVADO: 'bg-orange-50 text-orange-700',
 }
 
+const PAGE_SIZE = 6
+
 export function PlanesModule({ planes, parroquias }: { planes: Plan[]; parroquias: Parroquia[] }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [showForm, setShowForm] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
   const [form, setForm] = useState({
     idParroquia: parroquias[0]?.id ?? '',
     nombrePlan: '',
@@ -46,6 +50,17 @@ export function PlanesModule({ planes, parroquias }: { planes: Plan[]; parroquia
       if (res?.message && /no se pudo|obligatori|no tiene|no permitida|al menos/i.test(res.message)) toast.error(res.message)
       else { toast.success(ok); router.refresh() }
     })
+
+  const totalPages = Math.max(1, Math.ceil(planes.length / PAGE_SIZE))
+  const safePage = Math.min(currentPage, totalPages)
+  const startIndex = (safePage - 1) * PAGE_SIZE
+  const paginated = planes.slice(startIndex, startIndex + PAGE_SIZE)
+  const visibleFrom = planes.length === 0 ? 0 : startIndex + 1
+  const visibleTo = Math.min(startIndex + PAGE_SIZE, planes.length)
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages)
+  }, [currentPage, totalPages])
 
   const submit = () => {
     if (!form.nombrePlan.trim() || !form.idParroquia) { toast.error('Completa parroquia y título.'); return }
@@ -111,7 +126,7 @@ export function PlanesModule({ planes, parroquias }: { planes: Plan[]; parroquia
 
       <div className="space-y-4">
         {planes.length === 0 && <p className="text-sm text-gray-500">No hay planes registrados.</p>}
-        {planes.map((p) => (
+        {paginated.map((p) => (
           <div key={p.id} className="bg-white border border-[var(--caritas-border)] rounded-xl p-5">
             <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
               <div>
@@ -156,6 +171,17 @@ export function PlanesModule({ planes, parroquias }: { planes: Plan[]; parroquia
           </div>
         ))}
       </div>
+
+      <PaginationControls
+        total={planes.length}
+        start={visibleFrom}
+        end={visibleTo}
+        page={safePage}
+        totalPages={totalPages}
+        onPrevious={() => setCurrentPage((page) => Math.max(1, page - 1))}
+        onNext={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+        className="mt-6"
+      />
     </div>
   )
 }
