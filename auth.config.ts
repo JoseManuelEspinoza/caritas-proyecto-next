@@ -1,6 +1,23 @@
 import type { NextAuthConfig } from 'next-auth'
 import Keycloak from 'next-auth/providers/keycloak'
 
+const keycloakIssuer = process.env.AUTH_KEYCLOAK_ISSUER
+const keycloakInternal = process.env.AUTH_KEYCLOAK_INTERNAL_URL ?? keycloakIssuer
+
+function keycloakProvider() {
+  if (!keycloakIssuer) return Keycloak
+  return Keycloak({
+    clientId: process.env.AUTH_KEYCLOAK_ID,
+    clientSecret: process.env.AUTH_KEYCLOAK_SECRET,
+    issuer: keycloakIssuer,
+    wellKnown: `${keycloakInternal}/.well-known/openid-configuration`,
+    authorization: `${keycloakIssuer}/protocol/openid-connect/auth`,
+    token: `${keycloakInternal}/protocol/openid-connect/token`,
+    userinfo: `${keycloakInternal}/protocol/openid-connect/userinfo`,
+    jwks_endpoint: `${keycloakInternal}/protocol/openid-connect/certs`,
+  })
+}
+
 /** Roles conocidos de la app, en orden de prioridad (el "principal" se elige así). */
 const KNOWN_ROLES = ['ADMINISTRADOR', 'ESPECIALISTAGRD', 'COMITEDONACIONES', 'JEFAOGP', 'BRIGADISTA']
 
@@ -33,7 +50,7 @@ export function pickAppRole(roles: string[]): string {
  */
 export const authConfig: NextAuthConfig = {
   trustHost: true,
-  providers: [Keycloak], // lee AUTH_KEYCLOAK_ID / _SECRET / _ISSUER del entorno
+  providers: [keycloakProvider()],
   pages: { signIn: '/login' },
   callbacks: {
     async jwt({ token, account }) {
