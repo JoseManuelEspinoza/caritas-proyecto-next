@@ -169,10 +169,9 @@ export class PrismaIncidenciaRepository implements IIncidenciaRepository {
 
   async registrarAsignacion(idIncidencia: string, idBrigadista: string, instrucciones?: string): Promise<void> {
     const dup = await prisma.asignacionBrigadistaIncidencia.findFirst({
-      where: { idIncidencia, idBrigadistaParroquial: idBrigadista },
+      where: { idIncidencia, idBrigadistaParroquial: idBrigadista, estadoAsignacion: 'ASIGNADA' },
     })
     if (dup) {
-      // Si ya existe, solo actualiza las instrucciones si vinieron.
       if (instrucciones?.trim()) {
         await prisma.asignacionBrigadistaIncidencia.update({
           where: { idAsignacionBrigadista: dup.idAsignacionBrigadista },
@@ -197,10 +196,87 @@ export class PrismaIncidenciaRepository implements IIncidenciaRepository {
     })
   }
 
-  async asignarResponsable(idIncidencia: string, idUsuarioGRD: string): Promise<void> {
+  async asignarEquipo(
+    idIncidencia: string,
+    data: {
+      idResponsableBrigadista: string
+      idsEquipo: string[]
+      instrucciones?: string
+      idUsuarioAsignador?: string
+    },
+  ): Promise<void> {
+    const equipoSinResp = data.idsEquipo.filter((id) => id !== data.idResponsableBrigadista)
+    const idsObjetivo = [data.idResponsableBrigadista, ...equipoSinResp]
+    const notas = data.instrucciones?.trim() || null
+
+    const actuales = await prisma.asignacionBrigadistaIncidencia.findMany({
+      where: { idIncidencia, estadoAsignacion: 'ASIGNADA' },
+      select: { idAsignacionBrigadista: true, idBrigadistaParroquial: true },
+    })
+
+    const idsObjetivoSet = new Set(idsObjetivo)
+
+    for (const a of actuales) {
+      if (!idsObjetivoSet.has(a.idBrigadistaParroquial)) {
+        await prisma.brigadistaParroquial.update({
+          where: { idBrigadistaParroquial: a.idBrigadistaParroquial },
+          data: { disponibilidad: 'DISPONIBLE' },
+        })
+        await prisma.asignacionBrigadistaIncidencia.update({
+          where: { idAsignacionBrigadista: a.idAsignacionBrigadista },
+          data: { estadoAsignacion: 'CERRADA', fechaCierreCampo: new Date(), esResponsableEquipo: false },
+        })
+      }
+    }
+
     await prisma.incidencia.update({
       where: { idIncidencia },
-      data: { idUsuarioResponsableGRD: idUsuarioGRD },
+      data: { idUsuarioResponsableGRD: null },
+    })
+
+    for (const idBrig of idsObjetivo) {
+      const esResp = idBrig === data.idResponsableBrigadista
+      const existente = actuales.find((a) => a.idBrigadistaParroquial === idBrig)
+      if (existente) {
+        await prisma.asignacionBrigadistaIncidencia.update({
+          where: { idAsignacionBrigadista: existente.idAsignacionBrigadista },
+          data: {
+            esResponsableEquipo: esResp,
+            rolEnEquipo: esResp ? 'RESPONSABLE' : 'INTEGRANTE',
+            observaciones: notas,
+            idUsuarioAsignadorGRD: data.idUsuarioAsignador ?? undefined,
+          },
+        })
+      } else {
+        await prisma.asignacionBrigadistaIncidencia.create({
+          data: {
+            idIncidencia,
+            idBrigadistaParroquial: idBrig,
+            idUsuarioAsignadorGRD: data.idUsuarioAsignador ?? null,
+            estadoAsignacion: 'ASIGNADA',
+            origenAsignacion: 'MANUAL',
+            esResponsableEquipo: esResp,
+            rolEnEquipo: esResp ? 'RESPONSABLE' : 'INTEGRANTE',
+            fechaAsignacion: new Date(),
+            observaciones: notas,
+          },
+        })
+      }
+      await prisma.brigadistaParroquial.update({
+        where: { idBrigadistaParroquial: idBrig },
+        data: { disponibilidad: 'EN CAMPO' },
+      })
+    }
+  }
+
+  async asignarResponsable(idIncidencia: string, idUsuarioGRD: string, instrucciones?: string): Promise<void> {
+    await this.liberarBrigadistas(idIncidencia)
+    await prisma.incidencia.update({
+      where: { idIncidencia },
+      data: {
+        idUsuarioResponsableGRD: idUsuarioGRD,
+        ...(instrucciones?.trim() ? { observacionesGenerales: instrucciones.trim() } : {}),
+      },
     })
   }
 

@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import { verifySession } from '@/app/lib/dal'
+import { getUsuarioGRDId } from '@/app/lib/usuario-grd'
 import { prisma } from '@/app/lib/prisma'
 import { toFrontendRole } from '@/app/lib/roles'
 import { IncidentDetail } from '@/app/ui/grd/incident-detail'
@@ -8,6 +9,7 @@ export default async function IncidentePage({ params }: { params: Promise<{ id: 
   const { id } = await params
   const session = await verifySession()
   const role = toFrontendRole(session.role)
+  const idUsuarioGRDActual = await getUsuarioGRDId()
 
   // Identificar si el usuario actual ES un brigadista asignado a este incidente
   let currentUserBrigadistaId: string | null = null
@@ -39,6 +41,9 @@ export default async function IncidentePage({ params }: { params: Promise<{ id: 
       parroquia: { select: { nombre: true } },
       aviso: {
         select: { nombreInformante: true, telefonoInformante: true, descripcion: true },
+      },
+      usuarioResponsable: {
+        select: { idUsuarioGRD: true, nombres: true, apellidos: true, correoReferencia: true },
       },
       asignaciones: {
         where: { estadoAsignacion: 'ASIGNADA' },
@@ -136,13 +141,14 @@ export default async function IncidentePage({ params }: { params: Promise<{ id: 
     ? inc.asignaciones.some((a) => a.brigadista.idBrigadistaParroquial === currentUserBrigadistaId)
     : false
 
-  // Brigadistas disponibles para asignación (no incluir los ya asignados)
   const asignadosIds = inc.asignaciones.map((a) => a.brigadista.idBrigadistaParroquial)
   const brigadistasDisp = await prisma.brigadistaParroquial.findMany({
     where: {
-      estado:        'ACTIVO',
-      disponibilidad: 'DISPONIBLE',
-      idBrigadistaParroquial: { notIn: asignadosIds.length ? asignadosIds : ['__none__'] },
+      estado: 'ACTIVO',
+      OR: [
+        { disponibilidad: 'DISPONIBLE' },
+        ...(asignadosIds.length ? [{ idBrigadistaParroquial: { in: asignadosIds } }] : []),
+      ],
     },
     select: {
       idBrigadistaParroquial: true,
@@ -182,7 +188,22 @@ export default async function IncidentePage({ params }: { params: Promise<{ id: 
       celular:         a.brigadista.celular,
       parroquia:       a.brigadista.parroquia?.nombre ?? null,
       fechaAsignacion: a.fechaAsignacion.toISOString(),
+      esResponsable:   a.esResponsableEquipo,
+      observaciones:   a.observaciones,
     })),
+
+    responsableGRD: inc.usuarioResponsable
+      ? {
+          id:     inc.usuarioResponsable.idUsuarioGRD,
+          nombre: `${inc.usuarioResponsable.nombres} ${inc.usuarioResponsable.apellidos ?? ''}`.trim(),
+          correo: inc.usuarioResponsable.correoReferencia,
+        }
+      : null,
+
+    instruccionesAsignacion:
+      inc.asignaciones.find((a) => a.observaciones)?.observaciones ??
+      inc.observacionesGenerales ??
+      null,
 
     gruposFamiliares: inc.gruposFamiliares.map((g) => ({
       id:               g.idGrupoFamiliar,
@@ -264,9 +285,13 @@ export default async function IncidentePage({ params }: { params: Promise<{ id: 
     // Contexto del usuario actual
     role,
     userId:                  session.userId,
+    idUsuarioGRDActual,
     currentUserName,
     currentUserBrigadistaId,
     isBrigadistaAsignado,
+    isResponsableGRD:
+      Boolean(idUsuarioGRDActual) &&
+      inc.usuarioResponsable?.idUsuarioGRD === idUsuarioGRDActual,
   }
 
   return <IncidentDetail data={data} />

@@ -121,20 +121,25 @@ export async function assignBrigadista(
 }
 
 /**
- * Asigna varios brigadistas a la vez, compartiendo las mismas instrucciones.
- * Devuelve un mensaje de error si alguna asignación falla.
+ * Asigna equipo de brigadistas: un responsable y opcionales integrantes.
+ * Transiciona ABIERTO → ASIGNADO en el primer guardado.
  */
 export async function assignEquipo(
   incidenciaId: string,
-  brigadistaIds: string[],
+  responsableId: string,
+  equipoIds: string[],
   instrucciones?: string,
 ) {
   await verifySession()
+  const idUsuarioAsignador = await getUsuarioGRDId()
   try {
-    const uc = makeIncidenciaUseCases().asignar
-    for (const id of brigadistaIds) {
-      await uc.execute(incidenciaId, id, instrucciones)
-    }
+    await makeIncidenciaUseCases().asignarEquipo.execute(
+      incidenciaId,
+      responsableId,
+      equipoIds,
+      instrucciones,
+      idUsuarioAsignador ?? undefined,
+    )
   } catch (err) {
     return asMessage(err)
   }
@@ -142,17 +147,17 @@ export async function assignEquipo(
 }
 
 /**
- * Autoasignación del especialista GRD: se registra como responsable de campo de
- * la incidencia (y la transiciona a ASIGNADO si estaba ABIERTA).
+ * Autoasignación del especialista GRD: único responsable de campo.
+ * Transiciona ABIERTO → ASIGNADO.
  */
-export async function autoasignarme(incidenciaId: string) {
+export async function autoasignarme(incidenciaId: string, instrucciones?: string) {
   await verifySession()
   const idUsuarioGRD = await getUsuarioGRDId()
   if (!idUsuarioGRD) {
     return { message: 'No se encontró tu perfil GRD para autoasignarte.' }
   }
   try {
-    await makeIncidenciaUseCases().autoasignarme.execute(incidenciaId, idUsuarioGRD)
+    await makeIncidenciaUseCases().autoasignarme.execute(incidenciaId, idUsuarioGRD, instrucciones)
   } catch (err) {
     return asMessage(err)
   }
