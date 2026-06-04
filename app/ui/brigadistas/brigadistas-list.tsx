@@ -144,9 +144,15 @@ function BrigadistaModal({
     setForm((p) => ({ ...p, [k]: v }));
   }
 
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
   function handleSubmit() {
     if (!editing && !form.correo?.trim()) {
       toast.error("El correo es obligatorio para crear la cuenta de acceso");
+      return;
+    }
+    if (form.correo?.trim() && !EMAIL_RE.test(form.correo.trim())) {
+      toast.error("El correo no tiene un formato válido");
       return;
     }
     startTransition(async () => {
