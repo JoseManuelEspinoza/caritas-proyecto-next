@@ -1300,6 +1300,7 @@ export function IncidentDetail({ data }: { data: IncidentData }) {
               <button
                 key={step.key}
                 onClick={() => setActiveStep(idx)}
+                disabled={idx > currentStepIdx + 1}
                 className={`flex flex-col items-center gap-1 px-3 md:px-4 py-3 text-xs font-medium transition-colors border-b-2 flex-shrink-0 min-w-[70px] ${
                   active
                     ? 'border-[#009850] text-[#009850] bg-[#009850]/5'
@@ -1307,7 +1308,9 @@ export function IncidentDetail({ data }: { data: IncidentData }) {
                     ? 'border-transparent text-gray-400 hover:text-gray-600 hover:bg-gray-50'
                     : current
                     ? 'border-[#009850]/40 text-gray-700 hover:bg-gray-50'
-                    : 'border-transparent text-gray-300 cursor-default'
+                    : idx === currentStepIdx + 1
+                    ? 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                    : 'border-transparent text-gray-300 cursor-not-allowed'
                 }`}
               >
                 <div className={`w-6 h-6 rounded-full flex items-center justify-center ${

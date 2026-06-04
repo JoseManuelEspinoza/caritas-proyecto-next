@@ -13,7 +13,7 @@ import {
 } from '@/app/lib/import-personas'
 import { extraerTextoPdf } from '@/app/lib/pdf-text'
 import { consultarDni } from '@/app/actions/reniec'
-import * as XLSX from 'xlsx'
+// xlsx se carga de forma dinámica para no aumentar el bundle inicial.
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { CategorySelector } from './category-selector'
@@ -798,6 +798,7 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
       if (ext === 'txt') {
         parsed = parsePersonasTxt(await file.text()).personas
       } else if (ext === 'xlsx' || ext === 'xls' || ext === 'csv') {
+        const XLSX = await import('xlsx')
         const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' })
         const sheet = wb.Sheets[wb.SheetNames[0]]
         if (!sheet) { toast.error('El archivo no tiene ninguna hoja.'); return }
