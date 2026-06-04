@@ -17,7 +17,7 @@ import "dotenv/config";
 const inc = makeIncidenciaUseCases();
 const plan = makePlanUseCases();
 const act = makeActividadUseCases();
-const curso = makeCursoUseCases();
+const curso = makeCursoUseCases(); 
 const TARGETS = {
   parroquias: 8,
   brigadistas: 160,

@@ -14,7 +14,7 @@
     "seed": "tsx -r dotenv/config prisma/seed.ts",
     "megaseed": "tsx -r dotenv/config prisma/megaseed.ts",
     "verify:grd": "npx tsx prisma/verify-grd.ts",
-    "verify:all": "npx tsx prisma/verify-all.ts",
+    "verify:all": "npx tsx prisma/verify-all.ts", 
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui"
