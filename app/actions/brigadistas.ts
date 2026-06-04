@@ -6,6 +6,12 @@ import { verifySession } from "@/app/lib/dal";
 import { makeBrigadistaUseCases } from "@/core/infrastructure/factories/makeBrigadistaUseCases";
 import { DomainError } from "@/core/domain/errors/DomainError";
 import { logGRDAction } from "@/app/lib/audit";
+import {
+  provisionKeycloakUser,
+  deleteKeycloakUser,
+  generateTempPassword,
+} from "@/app/lib/keycloak-admin";
+import { sendBrigadistaWelcomeEmail } from "@/app/lib/email";
 
 export type BrigadistaFormData = {
   nombres: string;
@@ -29,14 +35,40 @@ function fail(err: unknown, fallback: string) {
 }
 
 export async function createBrigadista(data: BrigadistaFormData) {
+  if (!data.correo?.trim()) return { message: "El correo es obligatorio para crear la cuenta." };
+
   const session = await verifySession();
+  const tempPassword = generateTempPassword();
+
+  // 1. Crear cuenta en Keycloak. Si falla → abortar sin tocar la BD.
+  let kcUserId: string;
+  try {
+    kcUserId = await provisionKeycloakUser({
+      email: data.correo,
+      firstName: data.nombres,
+      lastName: data.apellidos ?? "",
+      tempPassword,
+      role: "BRIGADISTA",
+    });
+  } catch (err) {
+    return { message: err instanceof Error ? err.message : "No se pudo crear la cuenta de acceso." };
+  }
+
+  // 2. Guardar en BD. Si falla → compensar eliminando el usuario de Keycloak.
   let brigadistaId: string = data.dni;
   try {
     const result = await makeBrigadistaUseCases().crear.execute(data);
     brigadistaId = result.id;
   } catch (err) {
+    await deleteKeycloakUser(kcUserId);
     return fail(err, "No se pudo crear el brigadista.");
   }
+
+  // 3. Enviar email de bienvenida (no bloquea ni revierte si falla).
+  sendBrigadistaWelcomeEmail(data.correo, data.nombres, tempPassword).catch((e) =>
+    console.error("[Brigadistas] Error enviando email de bienvenida:", e)
+  );
+
   await logGRDAction({
     userId: session.userId,
     action: "CREAR",

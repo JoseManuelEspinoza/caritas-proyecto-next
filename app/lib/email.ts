@@ -19,6 +19,43 @@ function createTransporter() {
   });
 }
 
+export async function sendBrigadistaWelcomeEmail(
+  to: string,
+  nombres: string,
+  tempPassword: string
+) {
+  const loginUrl = `${process.env.AUTH_URL ?? "http://localhost:3000"}/login`;
+  const transporter = createTransporter();
+
+  await transporter.sendMail({
+    from: process.env.SMTP_FROM ?? "no-reply@caritas-lima.pe",
+    to,
+    subject: "Bienvenido al sistema — Cáritas Lima",
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px">
+        <h2 style="color:#009850;margin-bottom:4px">Cáritas Lima</h2>
+        <p style="color:#6b7280;margin-top:0">Sistema de Gestión de Riesgo de Desastres</p>
+        <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0"/>
+        <p>Hola <strong>${nombres}</strong>,</p>
+        <p>Tu cuenta de acceso al sistema ha sido creada. Usa las siguientes credenciales para ingresar:</p>
+        <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin:16px 0">
+          <p style="margin:0 0 8px"><strong>Usuario:</strong> ${to}</p>
+          <p style="margin:0"><strong>Contraseña temporal:</strong> <code style="background:#e5e7eb;padding:2px 6px;border-radius:4px">${tempPassword}</code></p>
+        </div>
+        <p style="color:#374151">Al ingresar por primera vez, el sistema te pedirá cambiar tu contraseña.</p>
+        <a href="${loginUrl}"
+           style="display:inline-block;background:#009850;color:#fff;padding:12px 28px;
+                  text-decoration:none;border-radius:6px;font-weight:600;margin:16px 0">
+          Ingresar al sistema
+        </a>
+        <p style="color:#9ca3af;font-size:12px;margin-top:24px">
+          Si no esperabas este correo, comunícate con el administrador del sistema.
+        </p>
+      </div>
+    `,
+  });
+}
+
 export async function sendPasswordResetEmail(to: string, token: string) {
   const resetUrl = `${process.env.APP_URL}/recuperar/${token}`;
   const transporter = createTransporter();

@@ -1,5 +1,50 @@
 @import "tailwindcss";
 
+/* ─── react-phone-number-input: tema Cáritas ─────────────────────────────── */
+/* Replica exactamente inputCls: px-3 py-2 text-sm bg-[#F5F5F5] border border-[#DDDDDD] rounded-lg */
+.phone-input-caritas {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  background: #f5f5f5;
+  border: 1px solid #dddddd;
+  border-radius: 0.5rem;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+.phone-input-caritas:focus-within {
+  border-color: #009850;
+  box-shadow: 0 0 0 2px rgb(0 152 80 / 0.2);
+}
+.phone-input-caritas .PhoneInputCountry {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-right: 0.5rem;
+}
+/* Oculta la flecha del selector (país fijo = Perú) */
+.phone-input-caritas .PhoneInputCountrySelectArrow {
+  display: none;
+}
+.phone-input-caritas .PhoneInputInput {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 0;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: inherit;
+}
+.phone-input-caritas .PhoneInputInput::placeholder {
+  color: #9ca3af;
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;

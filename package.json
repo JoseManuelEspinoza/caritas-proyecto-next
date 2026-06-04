@@ -14,7 +14,7 @@
     "seed": "tsx -r dotenv/config prisma/seed.ts",
     "megaseed": "tsx -r dotenv/config prisma/megaseed.ts",
     "verify:grd": "npx tsx prisma/verify-grd.ts",
-    "verify:all": "npx tsx prisma/verify-all.ts", 
+    "verify:all": "npx tsx prisma/verify-all.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui"
@@ -39,6 +39,7 @@
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-leaflet": "^5.0.0",
+    "react-phone-number-input": "^3.4.17",
     "recharts": "^3.8.1",
     "server-only": "^0.0.1",
     "sonner": "^2.0.7",

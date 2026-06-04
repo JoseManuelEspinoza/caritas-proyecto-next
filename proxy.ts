@@ -11,7 +11,7 @@ const ROUTE_ROLES: { prefix: string; roles: FrontendRole[] }[] = [
   { prefix: "/usuarios", roles: ["admin"] },
   { prefix: "/brigadistas", roles: ["admin"] },
   { prefix: "/planes", roles: ["admin"] },
-  { prefix: "/kits", roles: ["admin"] },
+  { prefix: "/kits", roles: ["admin", "comite"] },
   { prefix: "/catalogos", roles: ["admin"] },
   { prefix: "/auditoria", roles: ["admin"] },
   { prefix: "/donaciones", roles: ["admin", "comite", "jefaOGP", "especialistaGRD"] },

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { forwardRef, useState, useTransition } from "react";
 import {
   Plus,
   Search,
@@ -18,6 +18,8 @@ import {
   MapPin,
   Filter,
 } from "lucide-react";
+import PhoneInput, { type Value as PhoneValue } from "react-phone-number-input";
+import "react-phone-number-input/style.css";
 import { toast } from "sonner";
 import {
   createBrigadista,
@@ -62,6 +64,60 @@ const inputCls =
   "w-full px-3 py-2 text-sm bg-[#F5F5F5] border border-[#DDDDDD] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#009850]/20 focus:border-[#009850] transition-colors";
 const labelCls = "block text-xs font-medium text-gray-700 mb-1";
 
+// Restringe el input a números peruanos: primer dígito = 9, máximo 9 dígitos.
+// Se usa como inputComponent de PhoneInput para interceptar antes de que la
+// librería procese el valor (evita el bug de maxLength con formato variable).
+const PeruvianPhoneInput = forwardRef<
+  HTMLInputElement,
+  React.InputHTMLAttributes<HTMLInputElement>
+>(function PeruvianPhoneInput(props, ref) {
+  return (
+    <input
+      {...props}
+      ref={ref}
+      onKeyDown={(e) => {
+        const CONTROL = ["Backspace", "Delete", "ArrowLeft", "ArrowRight", "Tab", "Home", "End"];
+        if (CONTROL.includes(e.key)) {
+          props.onKeyDown?.(e);
+          return;
+        }
+        if (!/^\d$/.test(e.key)) {
+          e.preventDefault();
+          return;
+        }
+
+        const input = e.currentTarget;
+        const hasSelection = (input.selectionStart ?? 0) !== (input.selectionEnd ?? 0);
+
+        if (hasSelection) {
+          // Con selección: calcular dígitos locales antes del cursor para validar primer dígito
+          const beforeSel = (input.value ?? "")
+            .slice(0, input.selectionStart ?? 0)
+            .replace(/\D/g, "")
+            .replace(/^51/, "");
+          if (beforeSel.length === 0 && e.key !== "9") {
+            e.preventDefault();
+            return;
+          }
+          props.onKeyDown?.(e);
+          return;
+        }
+
+        const digits = (input.value ?? "").replace(/\D/g, "").replace(/^51/, "");
+        if (digits.length === 0 && e.key !== "9") {
+          e.preventDefault();
+          return;
+        }
+        if (digits.length >= 9) {
+          e.preventDefault();
+          return;
+        }
+        props.onKeyDown?.(e);
+      }}
+    />
+  );
+});
+
 // ─── Modal formulario ─────────────────────────────────────────────────────────
 
 function BrigadistaModal({
@@ -89,6 +145,10 @@ function BrigadistaModal({
   }
 
   function handleSubmit() {
+    if (!editing && !form.correo?.trim()) {
+      toast.error("El correo es obligatorio para crear la cuenta de acceso");
+      return;
+    }
     startTransition(async () => {
       const result = editing
         ? await updateBrigadista(editing.id, form)
@@ -125,17 +185,23 @@ function BrigadistaModal({
               <input
                 type="text"
                 value={form.nombres}
-                onChange={(e) => set("nombres", e.target.value)}
+                onChange={(e) =>
+                  set("nombres", e.target.value.replace(/[^a-záéíóúüñA-ZÁÉÍÓÚÜÑ ]/g, ""))
+                }
                 placeholder="Ej: Ana María"
                 className={inputCls}
               />
             </div>
             <div>
-              <label className={labelCls}>Apellidos</label>
+              <label className={labelCls}>
+                Apellidos <span className="text-red-500">*</span>
+              </label>
               <input
                 type="text"
                 value={form.apellidos}
-                onChange={(e) => set("apellidos", e.target.value)}
+                onChange={(e) =>
+                  set("apellidos", e.target.value.replace(/[^a-záéíóúüñA-ZÁÉÍÓÚÜÑ ]/g, ""))
+                }
                 placeholder="Ej: Torres Quispe"
                 className={inputCls}
               />
@@ -144,7 +210,9 @@ function BrigadistaModal({
 
           {/* DNI */}
           <div>
-            <label className={labelCls}>DNI</label>
+            <label className={labelCls}>
+              DNI <span className="text-red-500">*</span>
+            </label>
             <input
               type="text"
               inputMode="numeric"
@@ -159,17 +227,26 @@ function BrigadistaModal({
           {/* Contacto */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={labelCls}>Celular</label>
-              <input
-                type="tel"
-                value={form.celular}
-                onChange={(e) => set("celular", e.target.value)}
-                placeholder="9XXXXXXXX"
-                className={inputCls}
+              <label className={labelCls}>
+                Celular <span className="text-red-500">*</span>
+              </label>
+              <PhoneInput
+                defaultCountry="PE"
+                countries={["PE"]}
+                international
+                countryCallingCodeEditable={false}
+                countrySelectProps={{ disabled: true, style: { cursor: "default" } }}
+                inputComponent={PeruvianPhoneInput}
+                value={form.celular as PhoneValue}
+                onChange={(v) => set("celular", v ?? "")}
+                placeholder="+51 987 654 321"
+                className="phone-input-caritas"
               />
             </div>
             <div>
-              <label className={labelCls}>Correo</label>
+              <label className={labelCls}>
+                Correo {!editing && <span className="text-red-500">*</span>}
+              </label>
               <input
                 type="email"
                 value={form.correo}
@@ -280,14 +357,6 @@ export function BrigadistasList({ brigadistas, parroquias, stats }: Props) {
   const visibleFrom = filtered.length === 0 ? 0 : startIndex + 1;
   const visibleTo = Math.min(startIndex + PAGE_SIZE, filtered.length);
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [search, filterParroquia, filterEstado]);
-
-  useEffect(() => {
-    if (currentPage > totalPages) setCurrentPage(totalPages);
-  }, [currentPage, totalPages]);
-
   function openCreate() {
     setEditing(undefined);
     setShowModal(true);
@@ -371,7 +440,10 @@ export function BrigadistasList({ brigadistas, parroquias, stats }: Props) {
             type="text"
             placeholder="Buscar por nombre o DNI..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setCurrentPage(1);
+            }}
             className="w-full pl-9 pr-3 py-2 text-sm bg-[#F5F5F5] border border-[#DDDDDD] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#009850]/20 focus:border-[#009850]"
           />
         </div>
@@ -379,7 +451,10 @@ export function BrigadistasList({ brigadistas, parroquias, stats }: Props) {
           <Filter className="w-4 h-4 text-gray-400 flex-shrink-0" />
           <select
             value={filterParroquia}
-            onChange={(e) => setFilterParroquia(e.target.value)}
+            onChange={(e) => {
+              setFilterParroquia(e.target.value);
+              setCurrentPage(1);
+            }}
             className="flex-1 px-3 py-2 text-sm bg-[#F5F5F5] border border-[#DDDDDD] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#009850]/20 focus:border-[#009850]"
           >
             <option value="all">Todas las parroquias</option>
@@ -391,7 +466,10 @@ export function BrigadistasList({ brigadistas, parroquias, stats }: Props) {
           </select>
           <select
             value={filterEstado}
-            onChange={(e) => setFilterEstado(e.target.value)}
+            onChange={(e) => {
+              setFilterEstado(e.target.value);
+              setCurrentPage(1);
+            }}
             className="flex-1 px-3 py-2 text-sm bg-[#F5F5F5] border border-[#DDDDDD] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#009850]/20 focus:border-[#009850]"
           >
             <option value="all">Todos los estados</option>

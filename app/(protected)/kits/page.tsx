@@ -1,14 +1,8 @@
-import { verifySession } from "@/app/lib/dal";
-import { toFrontendRole } from "@/app/lib/roles";
-import { redirect } from "next/navigation";
 import { prisma } from "@/app/lib/prisma";
 import { makeKitUseCases } from "@/core/infrastructure/factories/makeKitUseCases";
 import { KitsModule } from "@/app/ui/kits/kits-module";
 
 export default async function KitsPage() {
-  const session = await verifySession();
-  if (toFrontendRole(session.role) !== "admin") redirect("/dashboard");
-
   const [kits, parroquias] = await Promise.all([
     makeKitUseCases().listar.execute(),
     prisma.parroquia.findMany({

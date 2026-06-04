@@ -64,7 +64,7 @@ const ALL_NAV = [
     exact: false,
     roles: ["admin", "especialistaGRD", "brigadista"],
   },
-  { href: "/kits", icon: Package, label: "Kits de Emergencia", exact: false, roles: ["admin"] },
+  { href: "/kits", icon: Package, label: "Kits de Emergencia", exact: false, roles: ["admin", "comite"] },
   { href: "/catalogos", icon: Database, label: "Catálogos", exact: false, roles: ["admin"] },
   { href: "/auditoria", icon: HistoryIcon, label: "Auditoría", exact: false, roles: ["admin"] },
   { href: "/usuarios", icon: Users, label: "Gestión de Usuarios", exact: false, roles: ["admin"] },
