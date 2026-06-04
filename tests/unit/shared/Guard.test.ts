@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { Guard } from '../Guard'
-import { ValidationError } from '../../errors/DomainError'
+import { Guard } from '@/core/domain/shared/Guard'
+import { ValidationError } from '@/core/domain/errors/DomainError'
 
 describe('Guard.required', () => {
   it('no lanza error cuando el valor tiene contenido', () => {

@@ -3,8 +3,8 @@ import {
   BrigadistaParroquial,
   ESTADO,
   DISPONIBILIDAD,
-} from '../BrigadistaParroquial'
-import { ValidationError, BusinessRuleError } from '../../../errors/DomainError'
+} from '@/core/domain/entities/brigadista/BrigadistaParroquial'
+import { ValidationError, BusinessRuleError } from '@/core/domain/errors/DomainError'
 
 const BASE = {
   id: 'uuid-1',

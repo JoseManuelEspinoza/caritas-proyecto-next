@@ -5,11 +5,11 @@ import {
   ToggleEstadoBrigadistaUseCase,
   ToggleDisponibilidadUseCase,
   ListarBrigadistasUseCase,
-} from '../GestionarBrigadistas.usecase'
-import { IBrigadistaRepository } from '../../../../domain/repositories/IBrigadistaRepository'
-import { BrigadistaParroquial, ESTADO, DISPONIBILIDAD } from '../../../../domain/entities/brigadista/BrigadistaParroquial'
-import { ValidationError, NotFoundError, BusinessRuleError } from '../../../../domain/errors/DomainError'
-import { BrigadistaInput } from '../../../dtos/BrigadistaDTO'
+} from '@/core/application/use-cases/brigadistas/GestionarBrigadistas.usecase'
+import { IBrigadistaRepository } from '@/core/domain/repositories/IBrigadistaRepository'
+import { BrigadistaParroquial, ESTADO, DISPONIBILIDAD } from '@/core/domain/entities/brigadista/BrigadistaParroquial'
+import { ValidationError, NotFoundError, BusinessRuleError } from '@/core/domain/errors/DomainError'
+import { BrigadistaInput } from '@/core/application/dtos/BrigadistaDTO'
 
 // ---------------------------------------------------------------------------
 // Mock del repositorio
