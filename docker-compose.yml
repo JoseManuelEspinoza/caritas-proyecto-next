@@ -6,7 +6,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - DATABASE_URL=postgresql://postgres:CaritasDB_2026_Test@caritas-grd-db.c2sjosirydcu.us-east-1.rds.amazonaws.com:5432/caritas_db?schema=public&uselibpqcompat=true&sslmode=require
+      - DATABASE_URL=postgresql://postgres:admin123@db:5432/caritas_db
       - SESSION_SECRET=dev-secret-minimo-32-caracteres-cambiar-en-prod
       - APP_URL=http://localhost:3000
       - NODE_ENV=development
@@ -14,17 +14,14 @@ services:
       - CHOKIDAR_USEPOLLING=true
       - CHOKIDAR_INTERVAL=300
       # ─── Auth.js v5 + Keycloak (OIDC) ──────────────────────────────────────
-      # AUTH_KEYCLOAK_ISSUER → URL interna Docker: el contenedor la usa para
-      #   OIDC discovery, token exchange y JWKS (todos server-side via keycloak:8080).
-      # AUTH_KEYCLOAK_AUTHORIZATION → URL pública: solo el navegador la usa para
-      #   el redirect de login. Se sobreescribe en auth.config.ts.
+      # ISSUER = URL pública (navegador). INTERNAL = red Docker (callback/token).
       - AUTH_SECRET=dev-auth-secret-cambiar-en-produccion-min-32-chars
       - AUTH_TRUST_HOST=true
       - AUTH_URL=http://localhost:3000
       - AUTH_KEYCLOAK_ID=caritas-app
       - AUTH_KEYCLOAK_SECRET=caritas-app-secret-dev
-      - AUTH_KEYCLOAK_ISSUER=http://keycloak:8080/realms/caritas
-      - AUTH_KEYCLOAK_AUTHORIZATION=http://localhost:8085/realms/caritas/protocol/openid-connect/auth
+      - AUTH_KEYCLOAK_ISSUER=http://localhost:8080/realms/caritas
+      - AUTH_KEYCLOAK_INTERNAL_URL=http://keycloak:8080/realms/caritas
       # SMTP — se lee desde el archivo .env del proyecto
       - SMTP_HOST=${SMTP_HOST:-mailhog}
       - SMTP_PORT=${SMTP_PORT:-1025}
@@ -48,7 +45,7 @@ services:
       - "5434:5432"
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: CaritasDB_2026_Test
+      POSTGRES_PASSWORD: admin123
       POSTGRES_DB: caritas_db
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -93,7 +90,7 @@ services:
       KC_HOSTNAME_STRICT: "false"
       KC_HEALTH_ENABLED: "true"
     ports:
-      - "8085:8080"
+      - "8080:8080"
     volumes:
       # El realm se importa al primer arranque
       - ./keycloak/realm-caritas.json:/opt/keycloak/data/import/realm-caritas.json:ro
