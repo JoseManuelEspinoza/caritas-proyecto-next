@@ -37,6 +37,9 @@ import {
   Star,
   Pencil,
   X,
+  ExternalLink,
+  Image as ImageIcon,
+  Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -51,7 +54,10 @@ import {
   registrarAtencion,
   addSeguimiento,
   cerrarCaso,
+  agregarPersonaCampo,
+  addEvidenciasCampo,
 } from "@/app/actions/incidents";
+import { presignEvidencia } from "@/app/actions/evidencias";
 import type { FrontendRole } from "@/app/lib/roles";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -78,6 +84,8 @@ type IncidentData = {
   direccionEvento: string | null;
   descripcionEvento: string | null;
   gravedad: string | null;
+  causa: string | null;
+  reportanteRol: string | null;
   fechaRegistro: string;
   parroquia: string | null;
   aviso: {
@@ -148,6 +156,19 @@ type IncidentData = {
     celular: string | null;
     parroquia: string | null;
   }[];
+  evidencias: {
+    id: string;
+    nombreArchivo: string;
+    urlArchivo: string;
+    formato: string | null;
+    descripcion: string | null;
+    fecha: string;
+    tamano: number | null;
+    lat: number | null;
+    lng: number | null;
+    cargadoPor: string | null;
+  }[];
+  catalogoArticulos: { codigo: string; valor: string; descripcion: string | null }[];
   parroquias: string[];
   role: FrontendRole;
   userId: string;
@@ -267,6 +288,7 @@ function fmtDate(iso: string) {
     day: "2-digit",
     month: "short",
     year: "numeric",
+    timeZone: "America/Lima",
   });
 }
 function fmtDateTime(iso: string) {
@@ -276,7 +298,68 @@ function fmtDateTime(iso: string) {
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "America/Lima",
   });
+}
+
+/** Formatea bytes a una etiqueta legible (KB/MB). */
+function fmtBytes(bytes: number | null): string | null {
+  if (bytes == null) return null;
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/**
+ * Registro de todas las evidencias capturadas para la incidencia.
+ * Se muestra dentro del levantamiento de campo (entre los campos y la recomendación).
+ */
+function EvidenciasRegistro({ evidencias }: { evidencias: IncidentData["evidencias"] }) {
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">
+        Evidencias cargadas ({evidencias.length})
+      </p>
+      {evidencias.length === 0 ? (
+        <div className="text-center py-6 text-sm text-gray-400 bg-gray-50 border border-dashed border-gray-200 rounded-lg">
+          Aún no se han cargado evidencias para este caso.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {evidencias.map((ev) => {
+            const esImagen = (ev.formato ?? "").startsWith("image/");
+            const Icono = esImagen ? ImageIcon : FileText;
+            const peso = fmtBytes(ev.tamano);
+            return (
+              <a
+                key={ev.id}
+                href={ev.urlArchivo}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group flex items-center gap-3 p-2.5 border border-[#DDDDDD] rounded-lg hover:border-[#009850]/50 hover:bg-[#009850]/5 transition-colors"
+              >
+                <div className="w-9 h-9 rounded-lg bg-[#009850]/10 flex items-center justify-center flex-shrink-0">
+                  <Icono className="w-4 h-4 text-[#009850]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-800 truncate">{ev.nombreArchivo}</p>
+                  {ev.descripcion && (
+                    <p className="text-xs text-gray-500 truncate">{ev.descripcion}</p>
+                  )}
+                  <p className="text-[11px] text-gray-400 mt-0.5">
+                    {fmtDate(ev.fecha)}
+                    {peso ? ` · ${peso}` : ""}
+                    {ev.cargadoPor ? ` · ${ev.cargadoPor}` : ""}
+                  </p>
+                </div>
+                <ExternalLink className="w-4 h-4 text-gray-300 group-hover:text-[#009850] flex-shrink-0" />
+              </a>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ─── Panel: Registrar (info del incidente) ────────────────────────────────────
@@ -997,9 +1080,34 @@ function PanelAsignar({ data, onDone }: { data: IncidentData; onDone: () => void
   );
 }
 
+/** Tarjeta compacta de una evidencia (enlace al archivo). */
+function EvidenciaChip({ ev }: { ev: IncidentData["evidencias"][number] }) {
+  const esImagen = (ev.formato ?? "").startsWith("image/");
+  const Icono = esImagen ? ImageIcon : FileText;
+  return (
+    <a
+      href={ev.urlArchivo}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="group flex items-center gap-2 p-2 border border-[#DDDDDD] rounded-lg hover:border-[#009850]/50 hover:bg-[#009850]/5 transition-colors"
+    >
+      <div className="w-8 h-8 rounded-lg bg-[#009850]/10 flex items-center justify-center flex-shrink-0">
+        <Icono className="w-4 h-4 text-[#009850]" />
+      </div>
+      <span className="text-xs text-gray-800 truncate flex-1">{ev.nombreArchivo}</span>
+      <ExternalLink className="w-3.5 h-3.5 text-gray-300 group-hover:text-[#009850] flex-shrink-0" />
+    </a>
+  );
+}
+
+const SEXOS = ["", "M", "F"];
+const PARENTESCOS = ["", "Jefe(a) de hogar", "Cónyuge", "Hijo(a)", "Padre/Madre", "Otro"];
+const MARCA_CAMPO = "Evidencia de campo";
+
 // ─── Panel: Recopilar Información (Campo) ────────────────────────────────────
 
 function PanelCampo({ data, onDone }: { data: IncidentData; onDone: () => void }) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   // Brigadista solo puede llenar si está asignado a ESTE incidente
   const canAct =
@@ -1010,49 +1118,122 @@ function PanelCampo({ data, onDone }: { data: IncidentData; onDone: () => void }
   const done = data.estadoActual !== "ASIGNADO";
   const informeCampo = data.informes.find((i) => i.tipo === "CAMPO");
 
-  const [form, setForm] = useState({
-    descripcionEvento: "",
-    nivelVulnerabilidad: "Medio" as string,
-    necesidadesPrioritarias: "",
-    recomendacion: "",
-    observaciones: "",
-    agua: false,
-    electricidad: false,
-    refugio: false,
-    saludAmbiental: false,
-    acceso: false,
+  const [obsCampo, setObsCampo] = useState("");
+  const [obsBrig, setObsBrig] = useState("");
+  const [showPersona, setShowPersona] = useState(false);
+  const [savingPersona, setSavingPersona] = useState(false);
+  const [persona, setPersona] = useState({
+    nombres: "",
+    apellidos: "",
+    edad: "",
+    sexo: "",
+    numeroDocumento: "",
+    parentesco: "",
   });
+  const [subiendo, setSubiendo] = useState<string[]>([]);
 
-  function set(key: string, value: any) {
-    setForm((p) => ({ ...p, [key]: value }));
+  function handleAddPersona() {
+    if (!persona.nombres.trim()) {
+      toast.error("Ingresa al menos el nombre de la persona.");
+      return;
+    }
+    setSavingPersona(true);
+    startTransition(async () => {
+      const res = await agregarPersonaCampo(data.idIncidencia, {
+        nombres: persona.nombres,
+        apellidos: persona.apellidos || null,
+        edad: persona.edad ? parseInt(persona.edad, 10) : null,
+        sexo: persona.sexo || null,
+        numeroDocumento: persona.numeroDocumento || null,
+        parentesco: persona.parentesco || null,
+      });
+      setSavingPersona(false);
+      if (res && "message" in res) {
+        toast.error(res.message);
+        return;
+      }
+      toast.success("Persona agregada al empadronamiento.");
+      setPersona({
+        nombres: "",
+        apellidos: "",
+        edad: "",
+        sexo: "",
+        numeroDocumento: "",
+        parentesco: "",
+      });
+      setShowPersona(false);
+      router.refresh();
+    });
+  }
+
+  async function handleUploadCampo(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const arr = Array.from(files);
+    setSubiendo(arr.map((f) => f.name));
+    const subidas: {
+      key: string;
+      nombreArchivo: string;
+      formato: string | null;
+      tamano: number | null;
+      descripcion: string;
+    }[] = [];
+    for (const file of arr) {
+      const ct = file.type || "application/octet-stream";
+      try {
+        const res = await presignEvidencia({
+          nombreArchivo: file.name,
+          contentType: ct,
+          incidenciaId: data.idIncidencia,
+        });
+        if (!res.ok) throw new Error(res.message);
+        const put = await fetch(res.uploadUrl, {
+          method: "PUT",
+          body: file,
+          headers: { "Content-Type": ct },
+        });
+        if (!put.ok) throw new Error(`Error al subir (${put.status})`);
+        subidas.push({
+          key: res.key,
+          nombreArchivo: file.name,
+          formato: ct,
+          tamano: file.size,
+          descripcion: MARCA_CAMPO,
+        });
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "No se pudo subir el archivo.");
+      }
+    }
+    setSubiendo([]);
+    if (subidas.length) {
+      const r = await addEvidenciasCampo(data.idIncidencia, subidas);
+      if (r && "message" in r) {
+        toast.error(r.message);
+        return;
+      }
+      toast.success(
+        subidas.length === 1 ? "Evidencia de campo subida." : `${subidas.length} evidencias subidas.`
+      );
+      router.refresh();
+    }
   }
 
   function handleSubmit() {
-    if (!form.descripcionEvento || !form.recomendacion) {
-      toast.error("Completa los campos obligatorios");
-      return;
-    }
     startTransition(async () => {
-      await saveInfoCampo(data.idIncidencia, {
+      const res = await saveInfoCampo(data.idIncidencia, {
         fechaVisita: new Date().toISOString().split("T")[0],
-        responsable: data.isResponsableGRD ? data.currentUserName : "Equipo de campo",
-        descripcionEvento: form.descripcionEvento,
-        nivelVulnerabilidad: form.nivelVulnerabilidad as any,
-        necesidadesPrioritarias: form.necesidadesPrioritarias
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean),
-        recomendacion: form.recomendacion,
-        observaciones: form.observaciones,
-        condHabitabilidad: {
-          agua: form.agua,
-          electricidad: form.electricidad,
-          refugio: form.refugio,
-          saludAmbiental: form.saludAmbiental,
-          acceso: form.acceso,
-        },
+        responsable: data.currentUserName || "Equipo de campo",
+        descripcionEvento: obsCampo.trim() || "Levantamiento de campo realizado.",
+        nivelVulnerabilidad: "",
+        necesidadesPrioritarias: [],
+        recomendacion: "",
+        observaciones: obsBrig.trim(),
+        condHabitabilidad: {},
       });
-      toast.success("Levantamiento de campo guardado");
+      if (res && "message" in res) {
+        toast.error(res.message);
+        return;
+      }
+      toast.success("Levantamiento enviado al Especialista GRD.");
       onDone();
     });
   }
@@ -1077,12 +1258,15 @@ function PanelCampo({ data, onDone }: { data: IncidentData; onDone: () => void }
         </div>
         {parsed && (
           <div className="space-y-3 text-sm">
-            <InfoField label="Descripción en campo" value={parsed.descripcionEvento} />
-            <InfoField label="Nivel de vulnerabilidad" value={parsed.nivelVulnerabilidad} />
-            <InfoField
-              label="Necesidades"
-              value={parsed.necesidadesPrioritarias?.join(", ") ?? "—"}
-            />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <InfoField label="Descripción en campo" value={parsed.descripcionEvento} />
+              <InfoField label="Nivel de vulnerabilidad" value={parsed.nivelVulnerabilidad} />
+              <InfoField
+                label="Necesidades"
+                value={parsed.necesidadesPrioritarias?.join(", ") ?? "—"}
+              />
+            </div>
+            <EvidenciasRegistro evidencias={data.evidencias} />
             <InfoField label="Recomendación" value={parsed.recomendacion} />
           </div>
         )}
@@ -1098,118 +1282,475 @@ function PanelCampo({ data, onDone }: { data: IncidentData; onDone: () => void }
     );
   }
 
+  // ── Datos derivados para las secciones de verificación ──
+  const todasPersonas = data.gruposFamiliares.flatMap((g) => g.personas);
+  const totalPersonas = todasPersonas.length;
+  const ninos = todasPersonas.filter((p) => p.edad != null && Number(p.edad) < 18).length;
+  const mayores = todasPersonas.filter((p) => p.edad != null && Number(p.edad) >= 60).length;
+  const adultos = Math.max(0, totalPersonas - ninos - mayores);
+  const evidIniciales = data.evidencias.filter((e) => e.descripcion !== MARCA_CAMPO);
+  const evidCampo = data.evidencias.filter((e) => e.descripcion === MARCA_CAMPO);
+  const inicialesPorFuente = evidIniciales.reduce<Record<string, typeof evidIniciales>>(
+    (acc, ev) => {
+      const k = ev.descripcion?.trim() || "General";
+      (acc[k] = acc[k] ?? []).push(ev);
+      return acc;
+    },
+    {}
+  );
+  const setP = (k: string, v: string) => setPersona((p) => ({ ...p, [k]: v }));
+
   return (
     <div className="space-y-4">
+      {/* Header de etapa */}
+      <div className="rounded-xl bg-orange-500 text-white p-4 flex items-start gap-3">
+        <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
+          <ClipboardList className="w-5 h-5" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold">Etapa 3 — Levantamiento de Campo</p>
+          <p className="text-sm text-white/90">
+            Verifica los datos del evento, confirma el empadronamiento y documenta desde campo.
+            {data.currentUserName ? ` · ${data.currentUserName}` : ""}
+          </p>
+        </div>
+        <span className="text-[10px] font-bold bg-white/20 px-2 py-1 rounded-full uppercase flex-shrink-0">
+          {data.role === "brigadista" ? "Brigadista" : "GRD"}
+        </span>
+      </div>
+
+      {/* 1. Verificación del Evento */}
+      <details open className="border border-gray-200 rounded-xl overflow-hidden">
+        <summary className="cursor-pointer px-4 py-3 flex items-center gap-2 bg-gray-50 hover:bg-gray-100">
+          <span className="w-6 h-6 rounded-full bg-orange-100 text-orange-700 text-xs font-bold flex items-center justify-center">
+            1
+          </span>
+          <span className="text-sm font-semibold text-gray-800">Verificación del Evento</span>
+        </summary>
+        <div className="p-4 space-y-3 text-sm">
+          <div className="border border-gray-200 rounded-lg p-3 space-y-1.5">
+            <p className="text-xs font-semibold text-gray-500 uppercase mb-1">
+              Datos del evento registrados
+            </p>
+            <p>
+              <span className="font-semibold">Categoría:</span> {data.tipoEvento ?? "—"}
+            </p>
+            <p>
+              <span className="font-semibold">Ubicación:</span>{" "}
+              {[data.direccionEvento, data.parroquia].filter(Boolean).join(", ") || "—"}
+            </p>
+            {data.descripcionEvento && (
+              <p>
+                <span className="font-semibold">Descripción inicial:</span> {data.descripcionEvento}
+              </p>
+            )}
+            {data.causa && (
+              <p>
+                <span className="font-semibold">Causa:</span> {data.causa}
+              </p>
+            )}
+          </div>
+
+          {data.aviso && (
+            <div className="border border-gray-200 rounded-lg p-3 space-y-1">
+              <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Reportado por</p>
+              <p>
+                <span className="font-semibold">Nombre:</span> {data.aviso.nombreInformante ?? "—"}
+              </p>
+              {data.aviso.telefonoInformante && (
+                <p>
+                  <span className="font-semibold">Celular:</span> {data.aviso.telefonoInformante}
+                </p>
+              )}
+              {data.reportanteRol && (
+                <p>
+                  <span className="font-semibold">Rol/Institución:</span> {data.reportanteRol}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Evidencias iniciales */}
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Evidencias iniciales</p>
+            {evidIniciales.length === 0 ? (
+              <p className="text-xs text-gray-400">Sin evidencias iniciales registradas.</p>
+            ) : (
+              <div className="space-y-2.5">
+                {Object.entries(inicialesPorFuente).map(([fuente, items]) => (
+                  <div key={fuente}>
+                    <p className="text-[11px] text-gray-500 mb-1">
+                      {fuente} · {items.length} archivo(s)
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {items.map((ev) => (
+                        <EvidenciaChip key={ev.id} ev={ev} />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Estimación */}
+          <div className="border border-gray-200 rounded-lg p-3">
+            <p className="text-xs font-semibold text-gray-500 uppercase mb-2">
+              Estimación inicial de afectación
+            </p>
+            {data.gravedad && (
+              <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-200">
+                {data.gravedad}
+              </span>
+            )}
+            <p className="text-sm font-semibold mt-2">{totalPersonas} persona(s) afectada(s)</p>
+            <div className="flex flex-wrap gap-1 mt-1">
+              {[
+                ["Niños", ninos],
+                ["Adultos", adultos],
+                ["Adultos Mayores", mayores],
+              ].map(([label, n]) => (
+                <span
+                  key={label}
+                  className="px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] rounded-full"
+                >
+                  {label} · {n}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              Observaciones desde campo (opcional)
+            </label>
+            <textarea
+              rows={2}
+              className={textareaCls}
+              value={obsCampo}
+              onChange={(e) => setObsCampo(e.target.value)}
+              placeholder="Lo observado en campo..."
+            />
+          </div>
+        </div>
+      </details>
+
+      {/* 2. Verificación de Empadronamiento */}
+      <details className="border border-gray-200 rounded-xl overflow-hidden">
+        <summary className="cursor-pointer px-4 py-3 flex items-center gap-2 bg-gray-50 hover:bg-gray-100">
+          <span className="w-6 h-6 rounded-full bg-orange-100 text-orange-700 text-xs font-bold flex items-center justify-center">
+            2
+          </span>
+          <Users className="w-4 h-4 text-gray-500" />
+          <span className="text-sm font-semibold text-gray-800">
+            Verificación de Empadronamiento
+          </span>
+          <span className="ml-auto text-[11px] text-gray-500">
+            {totalPersonas} persona(s) · {data.gruposFamiliares.length} familia(s)
+          </span>
+        </summary>
+        <div className="p-4 space-y-2">
+          {totalPersonas === 0 ? (
+            <p className="text-xs text-gray-400 italic">Sin personas empadronadas aún.</p>
+          ) : (
+            data.gruposFamiliares.map((g) => (
+              <div key={g.id} className="bg-gray-50 rounded-lg border border-gray-100 p-2.5">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-[11px] font-bold text-gray-700">
+                    {g.nombreReferencia ?? "Grupo familiar"}
+                  </p>
+                  <span className="text-[10px] text-gray-500">{g.totalPersonas} miembro(s)</span>
+                </div>
+                <ul className="space-y-0.5">
+                  {g.personas.map((p) => (
+                    <li key={p.id} className="text-[11px] text-gray-700 flex justify-between gap-2">
+                      <span className="truncate">
+                        {p.nombres} {p.apellidos ?? ""}
+                        {p.parentesco ? <span className="text-gray-400"> · {p.parentesco}</span> : ""}
+                      </span>
+                      <span className="text-[10px] text-gray-500 flex-shrink-0">
+                        {p.edad ? `${p.edad}a` : "—"} · {p.sexo ?? "—"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))
+          )}
+
+          {!showPersona ? (
+            <button
+              type="button"
+              onClick={() => setShowPersona(true)}
+              className="w-full flex items-center justify-center gap-2 py-2 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-600 hover:border-[#009850] hover:text-[#009850] transition-colors"
+            >
+              <Plus className="w-4 h-4" /> Agregar persona
+            </button>
+          ) : (
+            <div className="border border-gray-200 rounded-lg p-3 space-y-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <input
+                  className={inputCls}
+                  placeholder="Nombres *"
+                  value={persona.nombres}
+                  onChange={(e) => setP("nombres", e.target.value)}
+                />
+                <input
+                  className={inputCls}
+                  placeholder="Apellidos"
+                  value={persona.apellidos}
+                  onChange={(e) => setP("apellidos", e.target.value)}
+                />
+                <input
+                  className={inputCls}
+                  placeholder="Edad"
+                  inputMode="numeric"
+                  value={persona.edad}
+                  onChange={(e) => setP("edad", e.target.value.replace(/\D/g, ""))}
+                />
+                <select
+                  className={inputCls}
+                  value={persona.sexo}
+                  onChange={(e) => setP("sexo", e.target.value)}
+                >
+                  {SEXOS.map((s) => (
+                    <option key={s} value={s}>
+                      {s === "" ? "Sexo…" : s === "M" ? "Masculino" : "Femenino"}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  className={inputCls}
+                  placeholder="N° documento"
+                  value={persona.numeroDocumento}
+                  onChange={(e) => setP("numeroDocumento", e.target.value)}
+                />
+                <select
+                  className={inputCls}
+                  value={persona.parentesco}
+                  onChange={(e) => setP("parentesco", e.target.value)}
+                >
+                  {PARENTESCOS.map((s) => (
+                    <option key={s} value={s}>
+                      {s === "" ? "Parentesco…" : s}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowPersona(false)}
+                  className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddPersona}
+                  disabled={savingPersona}
+                  className="px-3 py-1.5 text-sm text-white rounded-lg disabled:opacity-50"
+                  style={{ background: "var(--caritas-green)" }}
+                >
+                  {savingPersona ? "Agregando…" : "Agregar"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </details>
+
+      {/* 3. Evidencias de Campo */}
+      <details className="border border-gray-200 rounded-xl overflow-hidden">
+        <summary className="cursor-pointer px-4 py-3 flex items-center gap-2 bg-gray-50 hover:bg-gray-100">
+          <span className="w-6 h-6 rounded-full bg-orange-100 text-orange-700 text-xs font-bold flex items-center justify-center">
+            3
+          </span>
+          <Camera className="w-4 h-4 text-gray-500" />
+          <span className="text-sm font-semibold text-gray-800">Evidencias de Campo</span>
+          <span className="ml-auto text-[11px] text-gray-500">{evidCampo.length} subida(s)</span>
+        </summary>
+        <div className="p-4 space-y-3">
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-xs text-yellow-800">
+            <p className="font-semibold flex items-center gap-1">
+              <AlertTriangle className="w-3.5 h-3.5" /> Recomendaciones éticas:
+            </p>
+            <ul className="list-disc ml-5 mt-1 space-y-0.5">
+              <li>Evidenciar daños o afectaciones</li>
+              <li>No vulnerar la dignidad de las personas</li>
+              <li>Evitar exposición innecesaria de menores o situaciones sensibles</li>
+            </ul>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <label className="flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-600 hover:border-[#009850] hover:text-[#009850] cursor-pointer transition-colors">
+              <Camera className="w-4 h-4" /> Tomar foto
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={(e) => handleUploadCampo(e.target.files)}
+              />
+            </label>
+            <label className="flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-600 hover:border-[#009850] hover:text-[#009850] cursor-pointer transition-colors">
+              <Upload className="w-4 h-4" /> Cargar foto / video
+              <input
+                type="file"
+                multiple
+                accept="image/*,video/*,.pdf"
+                className="hidden"
+                onChange={(e) => handleUploadCampo(e.target.files)}
+              />
+            </label>
+          </div>
+
+          {subiendo.length > 0 && (
+            <p className="text-xs text-blue-600 flex items-center gap-1">
+              <Loader2 className="w-3 h-3 animate-spin" /> Subiendo {subiendo.length} archivo(s)…
+            </p>
+          )}
+
+          {evidCampo.length === 0 && subiendo.length === 0 ? (
+            <p className="text-center text-xs text-gray-400 py-2">
+              No hay evidencias de campo registradas
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {evidCampo.map((ev) => (
+                <EvidenciaChip key={ev.id} ev={ev} />
+              ))}
+            </div>
+          )}
+        </div>
+      </details>
+
+      {/* Observaciones del brigadista */}
       <div>
         <label className="block text-xs font-medium text-gray-700 mb-1">
-          Descripción del evento en campo <span className="text-red-500">*</span>
+          Observaciones del Brigadista
         </label>
         <textarea
           rows={3}
           className={textareaCls}
-          value={form.descripcionEvento}
-          onChange={(e) => set("descripcionEvento", e.target.value)}
-          placeholder="Describe lo observado en campo..."
+          value={obsBrig}
+          onChange={(e) => setObsBrig(e.target.value)}
+          placeholder="Observaciones generales del brigadista…"
         />
       </div>
 
-      <div>
-        <label className="block text-xs font-medium text-gray-700 mb-2">
-          Condiciones de habitabilidad
-        </label>
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-          {(["agua", "electricidad", "refugio", "saludAmbiental", "acceso"] as const).map(
-            (cond) => (
-              <label
-                key={cond}
-                className={`flex items-center gap-2 p-2 border rounded-lg cursor-pointer text-xs capitalize transition-colors ${form[cond] ? "border-[#009850] bg-[#009850]/5 text-[#009850]" : "border-[#DDDDDD] text-gray-600"}`}
-              >
-                <input
-                  type="checkbox"
-                  checked={form[cond]}
-                  onChange={(e) => set(cond, e.target.checked)}
-                  className="accent-[#009850]"
-                />
-                {cond === "saludAmbiental"
-                  ? "Salud Amb."
-                  : cond.charAt(0).toUpperCase() + cond.slice(1)}
-              </label>
-            )
-          )}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">
-            Nivel de vulnerabilidad
-          </label>
-          <select
-            className={inputCls}
-            value={form.nivelVulnerabilidad}
-            onChange={(e) => set("nivelVulnerabilidad", e.target.value)}
-          >
-            {["Bajo", "Medio", "Alto", "Crítico"].map((n) => (
-              <option key={n}>{n}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">
-            Necesidades prioritarias
-          </label>
-          <input
-            className={inputCls}
-            value={form.necesidadesPrioritarias}
-            onChange={(e) => set("necesidadesPrioritarias", e.target.value)}
-            placeholder="Alimentos, ropa, medicamentos..."
-          />
-        </div>
-      </div>
-
-      <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1">
-          Recomendación <span className="text-red-500">*</span>
-        </label>
-        <textarea
-          rows={2}
-          className={textareaCls}
-          value={form.recomendacion}
-          onChange={(e) => set("recomendacion", e.target.value)}
-          placeholder="Acción recomendada..."
-        />
-      </div>
-
-      <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1">
-          Observaciones adicionales
-        </label>
-        <textarea
-          rows={2}
-          className={textareaCls}
-          value={form.observaciones}
-          onChange={(e) => set("observaciones", e.target.value)}
-          placeholder="Observaciones relevantes..."
-        />
-      </div>
-
-      <div className="flex justify-end">
-        <button
-          onClick={handleSubmit}
-          disabled={isPending}
-          className={btnPrimary}
-          style={{ background: "var(--caritas-green)" }}
-        >
-          {isPending ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin inline mr-1" />
-              Guardando...
-            </>
+      {/* Resumen + enviar */}
+      <div className="flex flex-wrap items-center gap-3 text-xs text-gray-600">
+        <span className="flex items-center gap-1">
+          <CheckCircle className="w-3.5 h-3.5 text-green-600" /> {totalPersonas} persona(s)
+        </span>
+        <span className="flex items-center gap-1">
+          {obsBrig.trim() ? (
+            <CheckCircle className="w-3.5 h-3.5 text-green-600" />
           ) : (
-            "Guardar levantamiento"
+            <XCircle className="w-3.5 h-3.5 text-gray-400" />
           )}
-        </button>
+          Observaciones
+        </span>
+        <span className="flex items-center gap-1">
+          {evidCampo.length > 0 ? (
+            <CheckCircle className="w-3.5 h-3.5 text-green-600" />
+          ) : (
+            <XCircle className="w-3.5 h-3.5 text-gray-400" />
+          )}
+          {evidCampo.length} evidencia(s)
+        </span>
       </div>
+
+      <button
+        onClick={handleSubmit}
+        disabled={isPending}
+        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-white font-semibold disabled:opacity-50 transition-opacity"
+        style={{ background: "var(--caritas-green)" }}
+      >
+        {isPending ? (
+          <>
+            <Loader2 className="w-4 h-4 animate-spin" /> Enviando…
+          </>
+        ) : (
+          <>
+            <ClipboardList className="w-4 h-4" /> Enviar Levantamiento al Especialista GRD
+          </>
+        )}
+      </button>
+    </div>
+  );
+}
+
+/** Sección numerada (estilo informe del especialista). */
+function Seccion({
+  num,
+  titulo,
+  children,
+}: {
+  num: string;
+  titulo: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="border border-gray-200 rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200 flex items-center gap-2">
+        <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-700 text-xs font-bold flex items-center justify-center">
+          {num}
+        </span>
+        <span className="text-sm font-semibold text-gray-800 uppercase tracking-wide">{titulo}</span>
+      </div>
+      <div className="p-4 space-y-3">{children}</div>
+    </div>
+  );
+}
+
+/** Lista de inputs editable con agregar/quitar. */
+function ListaEditable({
+  label,
+  items,
+  setItems,
+  placeholder,
+  addLabel,
+}: {
+  label: string;
+  items: string[];
+  setItems: (fn: (prev: string[]) => string[]) => void;
+  placeholder: string;
+  addLabel: string;
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-gray-700 mb-1">{label}</label>
+      <div className="space-y-1.5">
+        {items.map((it, i) => (
+          <div key={i} className="flex items-center gap-1.5">
+            <span className="text-purple-400">•</span>
+            <input
+              className="flex-1 px-2.5 py-1.5 text-sm border border-gray-200 rounded-lg"
+              placeholder={placeholder}
+              value={it}
+              onChange={(e) => setItems((prev) => prev.map((x, j) => (j === i ? e.target.value : x)))}
+            />
+            {items.length > 1 && (
+              <button
+                type="button"
+                onClick={() => setItems((prev) => prev.filter((_, j) => j !== i))}
+                className="text-red-500 hover:bg-red-50 rounded p-1"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={() => setItems((prev) => [...prev, ""])}
+        className="text-[11px] text-purple-600 flex items-center gap-1 mt-1.5"
+      >
+        <Plus className="w-3 h-3" /> {addLabel}
+      </button>
     </div>
   );
 }
@@ -1235,27 +1776,139 @@ function PanelRevisar({ data, onDone }: { data: IncidentData; onDone: () => void
   });
   const setE = (k: string, v: string) => setEvalForm((p) => ({ ...p, [k]: v }));
 
+  // ── Informe enriquecido del Especialista ──
+  type ArtLocal = { codigo: string; descripcion: string; cantidad: number };
+  type KitLocal = { tipoKit: string; articulos: ArtLocal[] };
+  const KIT_TIPOS = [
+    "Kit de Víveres",
+    "Kit de Higiene",
+    "Kit de Dormitorio",
+    "Kit de Complementos",
+    "Otros",
+  ];
+  const [report, setReport] = useState({
+    motivo: "",
+    dirigidoA: "Comité de donaciones",
+    objetivoGeneral: "",
+    analisis: "",
+    hallazgosTexto: "",
+    conclusiones: "",
+  });
+  const setR = (k: string, v: string) => setReport((p) => ({ ...p, [k]: v }));
+  const [objetivos, setObjetivos] = useState<string[]>([""]);
+  const [hallazgos, setHallazgos] = useState<string[]>([""]);
+  const [asignaciones, setAsignaciones] = useState<Record<string, KitLocal[]>>({});
+  const [collapsed, setCollapsed] = useState(false);
+
+  const addKit = (refId: string, tipo: string) =>
+    setAsignaciones((p) => ({
+      ...p,
+      [refId]: [...(p[refId] ?? []), { tipoKit: tipo, articulos: [{ codigo: "", descripcion: "", cantidad: 1 }] }],
+    }));
+  const removeKit = (refId: string, ki: number) =>
+    setAsignaciones((p) => ({ ...p, [refId]: (p[refId] ?? []).filter((_, i) => i !== ki) }));
+  const addArt = (refId: string, ki: number) =>
+    setAsignaciones((p) => ({
+      ...p,
+      [refId]: (p[refId] ?? []).map((k, i) =>
+        i === ki ? { ...k, articulos: [...k.articulos, { codigo: "", descripcion: "", cantidad: 1 }] } : k
+      ),
+    }));
+  const updArt = (refId: string, ki: number, ai: number, patch: Partial<ArtLocal>) =>
+    setAsignaciones((p) => ({
+      ...p,
+      [refId]: (p[refId] ?? []).map((k, i) =>
+        i === ki
+          ? { ...k, articulos: k.articulos.map((a, j) => (j === ai ? { ...a, ...patch } : a)) }
+          : k
+      ),
+    }));
+
   const canEvaluar = data.role === "admin" || data.role === "especialistaGRD";
   const canDecidir = data.role === "admin" || data.role === "comite" || data.role === "jefaOGP";
   const informeEval = data.informes.find((i) => i.tipo === "EVALUACION");
   const solicitud = data.solicitudComite;
 
+  const targets = data.gruposFamiliares;
+  const integrantesDe = (g: IncidentData["gruposFamiliares"][number]) =>
+    g.personas.map((p) => `${p.nombres} ${p.apellidos ?? ""}`.trim());
+
+  function kitsLimpios(refId: string) {
+    return (asignaciones[refId] ?? [])
+      .map((k) => ({
+        tipoKit: k.tipoKit,
+        articulos: k.articulos
+          .filter((a) => a.descripcion.trim() || a.codigo.trim())
+          .map((a) => ({
+            codigo: a.codigo.trim(),
+            descripcion: a.descripcion.trim(),
+            cantidad: a.cantidad || 1,
+          })),
+      }))
+      .filter((k) => k.articulos.length);
+  }
+
   function handleEvaluar() {
-    if (!evalForm.analisis || !evalForm.conclusiones) {
-      toast.error("Completa los campos obligatorios");
+    if (!report.analisis.trim() || !report.conclusiones.trim()) {
+      toast.error("Completa el análisis de la situación y las conclusiones.");
       return;
     }
     startTransition(async () => {
-      await saveInformeEvaluacion(data.idIncidencia, {
-        analisisSituacion: evalForm.analisis,
-        hallazgosTexto: evalForm.hallazgos,
-        conclusiones: evalForm.conclusiones,
-        nivelUrgencia: evalForm.urgencia,
-        tipoIntervencion: evalForm.intervencion,
-        recomendacionComite: evalForm.recomendacion,
+      const res = await saveInformeEvaluacion(data.idIncidencia, {
+        analisisSituacion: report.analisis,
+        hallazgosTexto: report.hallazgosTexto,
+        conclusiones: report.conclusiones,
+        nivelUrgencia: "Alta",
+        tipoIntervencion: "Donación en especie",
+        recomendacionComite: "",
+        motivo: report.motivo,
+        dirigidoA: report.dirigidoA,
+        objetivoGeneral: report.objetivoGeneral,
+        objetivosEspecificos: objetivos.map((s) => s.trim()).filter(Boolean),
+        hallazgosClave: hallazgos.map((s) => s.trim()).filter(Boolean),
+        asignacionFamilias: targets.map((g) => ({
+          refId: g.id,
+          nombre: g.nombreReferencia ?? "Familia",
+          kits: kitsLimpios(g.id),
+        })),
       });
+      if (res && "message" in res) {
+        toast.error(res.message);
+        return;
+      }
       toast.success("Informe enviado al Comité");
       onDone();
+    });
+  }
+
+  async function handlePdf() {
+    const { generarInformePdf } = await import("@/app/lib/informe-pdf");
+    generarInformePdf({
+      codigo: data.codigoCaso ?? "GRD",
+      categoria: data.tipoEvento ?? "—",
+      evento: data.tituloIncidencia ?? data.codigoCaso ?? "Incidencia",
+      ubicacion: [data.direccionEvento, data.parroquia].filter(Boolean).join(", ") || "—",
+      fechaSuceso: fmtDate(data.fechaRegistro),
+      familiasAfectadas: targets.length,
+      personasEmpadronadas: targets.reduce((n, g) => n + g.personas.length, 0),
+      fechaEmision: fmtDate(new Date().toISOString()),
+      emitidoPor: `${data.currentUserName} — Especialista GRD`,
+      oficina: "Oficina de Gestión Pastoral / GRD",
+      motivo: report.motivo,
+      dirigidoA: report.dirigidoA,
+      objetivoGeneral: report.objetivoGeneral,
+      objetivosEspecificos: objetivos.map((s) => s.trim()).filter(Boolean),
+      analisisSituacion: report.analisis,
+      hallazgosTexto: report.hallazgosTexto,
+      hallazgosClave: hallazgos.map((s) => s.trim()).filter(Boolean),
+      necesidadesIdentificadas: [],
+      evidenciasCount: data.evidencias.length,
+      familias: targets.map((g) => ({
+        nombre: g.nombreReferencia ?? "Familia",
+        integrantes: integrantesDe(g),
+        kits: kitsLimpios(g.id),
+      })),
+      conclusiones: report.conclusiones,
     });
   }
 
@@ -1418,101 +2071,336 @@ function PanelRevisar({ data, onDone }: { data: IncidentData; onDone: () => void
               })()}
           </div>
         ) : canEvaluar ? (
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                Análisis de la situación <span className="text-red-500">*</span>
-              </label>
-              <textarea
-                rows={3}
-                className={textareaCls}
-                value={evalForm.analisis}
-                onChange={(e) => setE("analisis", e.target.value)}
-                placeholder="Describe la situación actual de las familias afectadas..."
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                Hallazgos principales
-              </label>
-              <textarea
-                rows={2}
-                className={textareaCls}
-                value={evalForm.hallazgos}
-                onChange={(e) => setE("hallazgos", e.target.value)}
-                placeholder="Principales hallazgos del informe..."
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                Conclusiones <span className="text-red-500">*</span>
-              </label>
-              <textarea
-                rows={2}
-                className={textareaCls}
-                value={evalForm.conclusiones}
-                onChange={(e) => setE("conclusiones", e.target.value)}
-                placeholder="Conclusiones del especialista..."
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Nivel de urgencia
-                </label>
-                <select
-                  className={inputCls}
-                  value={evalForm.urgencia}
-                  onChange={(e) => setE("urgencia", e.target.value)}
-                >
-                  {["Inmediata", "Alta", "Media", "Baja"].map((u) => (
-                    <option key={u}>{u}</option>
-                  ))}
-                </select>
+          <div className="space-y-4">
+            {/* Datalist de artículos del catálogo (autocompletado por código) */}
+            <datalist id="cat-articulos">
+              {data.catalogoArticulos.map((a) => (
+                <option key={a.codigo} value={a.codigo}>
+                  {a.valor}
+                </option>
+              ))}
+            </datalist>
+
+            {/* Header morado + resumen del evento */}
+            <div className="rounded-xl bg-purple-600 text-white p-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
+                  <BarChart3 className="w-5 h-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold">Informe de Atención de Ayuda Humanitaria</p>
+                  <p className="text-sm text-white/90">
+                    Revisa el levantamiento de campo y asigna los kits que recibirá cada familia.
+                  </p>
+                </div>
+                <span className="text-[10px] font-bold bg-white/20 px-2 py-1 rounded-full uppercase flex-shrink-0">
+                  Especialista GRD
+                </span>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Tipo de intervención
-                </label>
-                <select
-                  className={inputCls}
-                  value={evalForm.intervencion}
-                  onChange={(e) => setE("intervencion", e.target.value)}
-                >
-                  {[
-                    "Donación en especie",
-                    "Donación económica",
-                    "Derivación institucional",
-                    "Acompañamiento pastoral",
-                    "No aplica",
-                  ].map((t) => (
-                    <option key={t}>{t}</option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-3">
+                {[
+                  ["Código", data.codigoCaso ?? "—"],
+                  ["Familias", String(targets.length)],
+                  ["Personas", String(targets.reduce((n, g) => n + g.personas.length, 0))],
+                  ["Distrito", data.parroquia ?? "—"],
+                  ["Categoría", data.tipoEvento ?? "—"],
+                  ["Fecha suceso", fmtDate(data.fechaRegistro)],
+                ].map(([l, v]) => (
+                  <div key={l} className="bg-white/10 rounded-lg px-2.5 py-1.5">
+                    <p className="text-[10px] text-white/70 uppercase">{l}</p>
+                    <p className="text-xs font-semibold truncate">{v}</p>
+                  </div>
+                ))}
               </div>
             </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                Recomendación al Comité
-              </label>
-              <textarea
-                rows={2}
-                className={textareaCls}
-                value={evalForm.recomendacion}
-                onChange={(e) => setE("recomendacion", e.target.value)}
-                placeholder="Recomendación para el Comité de Donaciones..."
-              />
-            </div>
-            <div className="flex justify-end">
-              <button
-                onClick={handleEvaluar}
-                disabled={isPending}
-                className={btnPrimary}
-                style={{ background: "var(--caritas-green)" }}
-              >
-                {isPending ? "Enviando..." : "Enviar al Comité"}
-              </button>
-            </div>
+
+            <button
+              type="button"
+              onClick={() => setCollapsed((c) => !c)}
+              className="text-xs text-purple-700 font-medium flex items-center gap-1"
+            >
+              {collapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+              {collapsed ? "Mostrar formulario" : "Ocultar formulario"}
+            </button>
+
+            {!collapsed && (
+              <>
+                {/* A) Datos de identificación */}
+                <Seccion num="A" titulo="Datos de Identificación">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Motivo <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      rows={2}
+                      className={textareaCls}
+                      value={report.motivo}
+                      onChange={(e) => setR("motivo", e.target.value)}
+                      placeholder="Motivo del informe..."
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Dirigido a</label>
+                    <span className="inline-block px-3 py-1 rounded-full bg-purple-50 text-purple-700 text-xs font-medium border border-purple-200">
+                      {report.dirigidoA}
+                    </span>
+                  </div>
+                </Seccion>
+
+                {/* B) Objetivos de la visita */}
+                <Seccion num="B" titulo="Objetivos de la Visita">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Objetivo general <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      rows={2}
+                      className={textareaCls}
+                      value={report.objetivoGeneral}
+                      onChange={(e) => setR("objetivoGeneral", e.target.value)}
+                      placeholder="Describe el objetivo general..."
+                    />
+                  </div>
+                  <ListaEditable
+                    label="Objetivos específicos"
+                    items={objetivos}
+                    setItems={setObjetivos}
+                    placeholder="Objetivo específico..."
+                    addLabel="Agregar objetivo"
+                  />
+                </Seccion>
+
+                {/* C) Análisis y descripción */}
+                <Seccion num="C" titulo="Análisis y Descripción">
+                  {(() => {
+                    const campo = data.informes.find((i) => i.tipo === "CAMPO");
+                    let ref: any = null;
+                    try {
+                      ref = campo?.contenido ? JSON.parse(campo.contenido) : null;
+                    } catch {
+                      ref = null;
+                    }
+                    if (!ref) return null;
+                    return (
+                      <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-xs text-orange-900">
+                        <p className="font-bold uppercase tracking-wide mb-1">
+                          Levantamiento del brigadista (referencia)
+                        </p>
+                        {ref.nivelVulnerabilidad && (
+                          <p>
+                            <span className="font-semibold">Vulnerabilidad:</span>{" "}
+                            {ref.nivelVulnerabilidad}
+                          </p>
+                        )}
+                        {ref.descripcionEvento && (
+                          <p>
+                            <span className="font-semibold">Descripción:</span> {ref.descripcionEvento}
+                          </p>
+                        )}
+                        {ref.observaciones && (
+                          <p>
+                            <span className="font-semibold">Observaciones:</span> {ref.observaciones}
+                          </p>
+                        )}
+                        {ref.recomendacion && (
+                          <p>
+                            <span className="font-semibold">Recomendación:</span> {ref.recomendacion}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Análisis de la situación <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      rows={3}
+                      className={textareaCls}
+                      value={report.analisis}
+                      onChange={(e) => setR("analisis", e.target.value)}
+                      placeholder="Análisis socioeconómico, magnitud del daño, redes de apoyo..."
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Hallazgos principales (texto)
+                    </label>
+                    <textarea
+                      rows={2}
+                      className={textareaCls}
+                      value={report.hallazgosTexto}
+                      onChange={(e) => setR("hallazgosTexto", e.target.value)}
+                      placeholder="Resumen narrativo..."
+                    />
+                  </div>
+                  <ListaEditable
+                    label="Hallazgos clave (lista)"
+                    items={hallazgos}
+                    setItems={setHallazgos}
+                    placeholder="Hallazgo..."
+                    addLabel="Agregar hallazgo"
+                  />
+                </Seccion>
+
+                {/* D) Asignación de ayuda humanitaria por familia */}
+                <Seccion num="D" titulo="Asignación de Ayuda Humanitaria por Familia">
+                  {targets.length === 0 ? (
+                    <p className="text-xs text-gray-400">Sin familias empadronadas.</p>
+                  ) : (
+                    targets.map((g) => {
+                      const kits = asignaciones[g.id] ?? [];
+                      return (
+                        <div key={g.id} className="border border-gray-200 rounded-lg p-3 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <Users className="w-4 h-4 text-purple-600" />
+                            <p className="text-sm font-semibold text-gray-800">
+                              {g.nombreReferencia ?? "Familia"}
+                            </p>
+                            <span className="text-[10px] text-gray-500">
+                              {g.personas.length} integrante(s)
+                            </span>
+                          </div>
+                          <div className="bg-gray-50 rounded-lg p-2 text-[11px] text-gray-600">
+                            <p className="uppercase text-[10px] text-gray-400 mb-1">
+                              Datos recopilados en campo
+                            </p>
+                            <div className="flex flex-wrap gap-1">
+                              {g.personas.map((p) => {
+                                const mayor = p.edad != null && Number(p.edad) >= 60;
+                                return (
+                                  <span
+                                    key={p.id}
+                                    className={`px-1.5 py-0.5 rounded ${mayor ? "bg-amber-100 text-amber-700" : "bg-white border border-gray-200"}`}
+                                  >
+                                    {p.nombres} {p.apellidos ?? ""}
+                                    {p.edad ? ` · ${p.edad}a` : ""}
+                                    {mayor ? " ⚠ Adulto mayor" : ""}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {/* Kits asignados */}
+                          {kits.map((kit, ki) => (
+                            <div key={ki} className="border border-purple-100 rounded-lg p-2 bg-purple-50/40">
+                              <div className="flex items-center justify-between mb-1">
+                                <p className="text-xs font-semibold text-purple-700">{kit.tipoKit}</p>
+                                <button
+                                  type="button"
+                                  onClick={() => removeKit(g.id, ki)}
+                                  className="text-red-500 hover:bg-red-50 rounded p-0.5"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                              {kit.articulos.map((a, ai) => (
+                                <div key={ai} className="flex items-center gap-1.5 mb-1">
+                                  <input
+                                    list="cat-articulos"
+                                    className="w-20 px-2 py-1 text-xs border border-gray-200 rounded"
+                                    placeholder="Código"
+                                    value={a.codigo}
+                                    onChange={(e) => {
+                                      const codigo = e.target.value;
+                                      const cat = data.catalogoArticulos.find((c) => c.codigo === codigo);
+                                      updArt(g.id, ki, ai, {
+                                        codigo,
+                                        ...(cat ? { descripcion: cat.valor } : {}),
+                                      });
+                                    }}
+                                  />
+                                  <input
+                                    className="flex-1 px-2 py-1 text-xs border border-gray-200 rounded"
+                                    placeholder="Descripción del artículo"
+                                    value={a.descripcion}
+                                    onChange={(e) => updArt(g.id, ki, ai, { descripcion: e.target.value })}
+                                  />
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    className="w-14 px-2 py-1 text-xs border border-gray-200 rounded"
+                                    value={a.cantidad}
+                                    onChange={(e) =>
+                                      updArt(g.id, ki, ai, { cantidad: parseInt(e.target.value, 10) || 1 })
+                                    }
+                                  />
+                                </div>
+                              ))}
+                              <button
+                                type="button"
+                                onClick={() => addArt(g.id, ki)}
+                                className="text-[11px] text-purple-600 flex items-center gap-1 mt-1"
+                              >
+                                <Plus className="w-3 h-3" /> Artículo
+                              </button>
+                            </div>
+                          ))}
+
+                          <div className="flex flex-wrap gap-1.5">
+                            {KIT_TIPOS.map((t) => (
+                              <button
+                                key={t}
+                                type="button"
+                                onClick={() => addKit(g.id, t)}
+                                className="text-[11px] px-2 py-1 border border-dashed border-purple-300 text-purple-700 rounded-lg hover:bg-purple-50 flex items-center gap-1"
+                              >
+                                <Plus className="w-3 h-3" /> {t}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </Seccion>
+
+                {/* E) Conclusiones */}
+                <Seccion num="E" titulo="Conclusiones">
+                  <textarea
+                    rows={3}
+                    className={textareaCls}
+                    value={report.conclusiones}
+                    onChange={(e) => setR("conclusiones", e.target.value)}
+                    placeholder="Conclusiones finales del informe..."
+                  />
+                </Seccion>
+
+                {/* Evidencia tomada por el brigadista */}
+                <div className="border border-gray-200 rounded-xl p-3">
+                  <EvidenciasRegistro evidencias={data.evidencias} />
+                </div>
+
+                {/* Acciones */}
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    type="button"
+                    onClick={handlePdf}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 border border-purple-300 text-purple-700 rounded-xl font-medium hover:bg-purple-50"
+                  >
+                    <FileText className="w-4 h-4" /> Generar y descargar PDF
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleEvaluar}
+                    disabled={isPending}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-white font-semibold disabled:opacity-50"
+                    style={{ background: "#7c3aed" }}
+                  >
+                    {isPending ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" /> Enviando…
+                      </>
+                    ) : (
+                      <>
+                        <FileCheck className="w-4 h-4" /> Enviar Informe al Comité
+                      </>
+                    )}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         ) : (
           <p className="text-sm text-gray-500 text-center py-4">

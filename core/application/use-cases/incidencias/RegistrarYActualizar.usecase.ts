@@ -21,10 +21,15 @@ function validarEvento(data: CreateIncidenteData): void {
 /** ABIERTO: registra un incidente nuevo. Devuelve el id para redirigir. */
 export class RegistrarIncidenciaUseCase {
   constructor(private readonly repo: IIncidenciaRepository) {}
-  async execute(data: CreateIncidenteData): Promise<string> {
+  async execute(data: CreateIncidenteData, idUsuarioCargaGRD?: string | null): Promise<string> {
     validarCreacion(data);
     const codigo = await this.repo.nextCodigo();
-    return this.repo.crear(codigo, data);
+    const idIncidencia = await this.repo.crear(codigo, data);
+    // Persistir evidencias ya subidas a S3 (si las hay y conocemos quién las cargó).
+    if (data.evidencias?.length && idUsuarioCargaGRD) {
+      await this.repo.guardarEvidencias(idIncidencia, idUsuarioCargaGRD, data.evidencias);
+    }
+    return idIncidencia;
   }
 }
 

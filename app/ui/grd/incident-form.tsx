@@ -15,6 +15,7 @@ import {
   Upload,
   Trash2,
   Plus,
+  Loader2,
   Edit3,
   Calendar,
   Search,
@@ -33,6 +34,7 @@ import {
 } from "@/app/lib/import-personas";
 import { extraerTextoPdf } from "@/app/lib/pdf-text";
 import { consultarDni } from "@/app/actions/reniec";
+import { presignEvidencia } from "@/app/actions/evidencias";
 // xlsx se carga de forma dinámica para no aumentar el bundle inicial.
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -877,9 +879,17 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
   const [necesidadOtra, setNecesidadOtra] = useState(initialData?.necesidadOtra ?? "");
   const [necesidadesObs, setNecesidadesObs] = useState(initialData?.necesidadesObs ?? "");
 
-  // Sección 6
+  // Sección 6 — evidencias subidas a S3 (cada archivo lleva su estado de subida)
+  type EvidenciaArchivo = {
+    uid: string;
+    nombre: string;
+    tamano: number;
+    formato: string;
+    key?: string;
+    estado: "subiendo" | "listo" | "error";
+  };
   const [fuentesEvidencia, setFuentesEvidencia] = useState<
-    { id: string; fuente: string; archivos: File[] }[]
+    { id: string; fuente: string; archivos: EvidenciaArchivo[] }[]
   >([]);
 
   // Sección 7
@@ -1264,19 +1274,79 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
       const existentes = new Set(conservadas.map((f) => f.fuente));
       const nuevas = next
         .filter((n) => !existentes.has(n))
-        .map((n, i) => ({ id: `EV-${Date.now()}-${i}`, fuente: n, archivos: [] as File[] }));
+        .map((n, i) => ({
+          id: `EV-${Date.now()}-${i}`,
+          fuente: n,
+          archivos: [] as EvidenciaArchivo[],
+        }));
       // Mantiene el orden del catálogo
       return [...conservadas, ...nuevas];
     });
   }
 
-  function uploadArchivos(fuenteId: string, files: FileList | null) {
+  async function uploadArchivos(fuenteId: string, files: FileList | null) {
     if (!files) return;
-    setFuentesEvidencia((prev) =>
-      prev.map((f) =>
-        f.id === fuenteId ? { ...f, archivos: [...f.archivos, ...Array.from(files)] } : f
-      )
-    );
+    for (const file of Array.from(files)) {
+      const uid =
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random()}`;
+      const ct = file.type || "application/octet-stream";
+      // Placeholder "subiendo"
+      setFuentesEvidencia((prev) =>
+        prev.map((f) =>
+          f.id === fuenteId
+            ? {
+                ...f,
+                archivos: [
+                  ...f.archivos,
+                  { uid, nombre: file.name, tamano: file.size, formato: ct, estado: "subiendo" },
+                ],
+              }
+            : f
+        )
+      );
+      try {
+        const res = await presignEvidencia({
+          nombreArchivo: file.name,
+          contentType: ct,
+          incidenciaId,
+        });
+        if (!res.ok) throw new Error(res.message);
+        const put = await fetch(res.uploadUrl, {
+          method: "PUT",
+          body: file,
+          headers: { "Content-Type": ct },
+        });
+        if (!put.ok) throw new Error(`Error al subir (${put.status})`);
+        setFuentesEvidencia((prev) =>
+          prev.map((f) =>
+            f.id === fuenteId
+              ? {
+                  ...f,
+                  archivos: f.archivos.map((a) =>
+                    a.uid === uid ? { ...a, estado: "listo", key: res.key } : a
+                  ),
+                }
+              : f
+          )
+        );
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "No se pudo subir el archivo.");
+        setFuentesEvidencia((prev) =>
+          prev.map((f) =>
+            f.id === fuenteId
+              ? {
+                  ...f,
+                  archivos: f.archivos.map((a) =>
+                    a.uid === uid ? { ...a, estado: "error" } : a
+                  ),
+                }
+              : f
+          )
+        );
+      }
+    }
   }
 
   // ─── Guardar (crear o actualizar) ─────────────────────────────────────────
@@ -1323,6 +1393,17 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
       nivelAfectacion,
       lat,
       lng,
+      evidencias: fuentesEvidencia.flatMap((f) =>
+        f.archivos
+          .filter((a) => a.estado === "listo" && a.key)
+          .map((a) => ({
+            key: a.key as string,
+            nombreArchivo: a.nombre,
+            formato: a.formato || null,
+            tamano: a.tamano,
+            descripcion: f.fuente,
+          }))
+      ),
     };
 
     startTransition(async () => {
@@ -1926,15 +2007,26 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
                   <div className="p-3 space-y-2">
                     {fuente.archivos.map((archivo, i) => (
                       <div
-                        key={i}
+                        key={archivo.uid}
                         className="bg-white border border-gray-200 rounded px-3 py-2 flex items-center justify-between"
                       >
                         <div className="flex items-center gap-2 flex-1 min-w-0">
                           <FileText className="w-4 h-4 text-blue-500 flex-shrink-0" />
-                          <span className="text-xs text-gray-900 truncate">{archivo.name}</span>
+                          <span className="text-xs text-gray-900 truncate">{archivo.nombre}</span>
                           <span className="text-[10px] text-gray-400">
-                            ({(archivo.size / 1024).toFixed(1)} KB)
+                            ({(archivo.tamano / 1024).toFixed(1)} KB)
                           </span>
+                          {archivo.estado === "subiendo" && (
+                            <span className="text-[10px] text-blue-600 flex items-center gap-1">
+                              <Loader2 className="w-3 h-3 animate-spin" /> subiendo…
+                            </span>
+                          )}
+                          {archivo.estado === "listo" && (
+                            <span className="text-[10px] text-green-600">✓ subido</span>
+                          )}
+                          {archivo.estado === "error" && (
+                            <span className="text-[10px] text-red-600">✕ error</span>
+                          )}
                         </div>
                         <button
                           type="button"

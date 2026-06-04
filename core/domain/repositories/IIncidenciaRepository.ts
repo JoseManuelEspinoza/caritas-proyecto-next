@@ -101,4 +101,39 @@ export interface IIncidenciaRepository {
 
   /** Libera a los brigadistas asignados y cierra sus asignaciones. */
   liberarBrigadistas(idIncidencia: string): Promise<void>;
+
+  /**
+   * Agrega una persona afectada durante el levantamiento de campo.
+   * Si `familiaNombre` coincide con un grupo existente lo usa; si no, crea/usa
+   * un grupo por defecto para la incidencia.
+   */
+  agregarPersona(
+    idIncidencia: string,
+    persona: {
+      nombres: string;
+      apellidos?: string | null;
+      edad?: number | null;
+      sexo?: string | null;
+      tipoDocumento?: string | null;
+      numeroDocumento?: string | null;
+      parentesco?: string | null;
+      familiaNombre?: string | null;
+    }
+  ): Promise<void>;
+
+  /**
+   * Persiste evidencias (ya subidas a S3) asociadas a la incidencia.
+   * `idUsuarioCargaGRD` identifica a quién las cargó.
+   */
+  guardarEvidencias(
+    idIncidencia: string,
+    idUsuarioCargaGRD: string,
+    evidencias: {
+      key: string;
+      nombreArchivo: string;
+      formato: string | null;
+      tamano: number | null;
+      descripcion?: string | null;
+    }[]
+  ): Promise<void>;
 }

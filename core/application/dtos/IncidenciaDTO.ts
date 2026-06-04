@@ -25,6 +25,15 @@ export type FamiliaForm = {
   observaciones?: string;
 };
 
+/** Evidencia ya subida a almacenamiento (S3); se persiste como EvidenciaGRD. */
+export type EvidenciaInput = {
+  key: string; // object key en el bucket
+  nombreArchivo: string;
+  formato: string | null;
+  tamano: number | null;
+  descripcion?: string | null; // fuente / nota
+};
+
 export type CreateIncidenteData = {
   // Sección 1 - Informante
   reportaDni: string;
@@ -57,6 +66,8 @@ export type CreateIncidenteData = {
   // Ubicación geográfica (RF07 GPS / RF08 manual)
   lat?: number | null;
   lng?: number | null;
+  // Sección 6 - Evidencias ya subidas a S3
+  evidencias?: EvidenciaInput[];
 };
 
 export type InfoCampoData = {
@@ -70,6 +81,17 @@ export type InfoCampoData = {
   condHabitabilidad: Record<string, boolean>;
 };
 
+/** Artículo asignado dentro de un kit. */
+export type ArticuloKit = { codigo: string; descripcion: string; cantidad: number };
+/** Kit asignado a una familia/persona. */
+export type KitAsignado = { tipoKit: string; articulos: ArticuloKit[] };
+/** Asignación de ayuda por familia/persona. */
+export type AsignacionFamilia = {
+  refId: string; // id de grupo familiar o persona
+  nombre: string;
+  kits: KitAsignado[];
+};
+
 export type InformeEvaluacionData = {
   analisisSituacion: string;
   hallazgosTexto: string;
@@ -77,6 +99,13 @@ export type InformeEvaluacionData = {
   nivelUrgencia: string;
   tipoIntervencion: string;
   recomendacionComite: string;
+  // Campos enriquecidos del informe del Especialista (se serializan en el JSON)
+  motivo?: string;
+  dirigidoA?: string;
+  objetivoGeneral?: string;
+  objetivosEspecificos?: string[];
+  hallazgosClave?: string[];
+  asignacionFamilias?: AsignacionFamilia[];
 };
 
 export type CorreccionData = {
