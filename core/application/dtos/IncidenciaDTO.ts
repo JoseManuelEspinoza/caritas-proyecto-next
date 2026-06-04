@@ -5,97 +5,97 @@
  */
 
 export type PersonaForm = {
-  id: string
-  tipoDoc: string
-  dni: string
-  nombre: string
-  apellidoPaterno: string
-  apellidoMaterno: string
-  edad: string
-  genero: string
-  celular: string
-  parentesco: string
-  situacionActual: string
-  familiaId?: string
-}
+  id: string;
+  tipoDoc: string;
+  dni: string;
+  nombre: string;
+  apellidoPaterno: string;
+  apellidoMaterno: string;
+  edad: string;
+  genero: string;
+  celular: string;
+  parentesco: string;
+  situacionActual: string;
+  familiaId?: string;
+};
 
 export type FamiliaForm = {
-  id: string
-  nombre: string
-  observaciones?: string
-}
+  id: string;
+  nombre: string;
+  observaciones?: string;
+};
 
 export type CreateIncidenteData = {
   // Sección 1 - Informante
-  reportaDni: string
-  reportaNombre: string
-  reportaTel: string
-  reportaRol: string
-  fechaReporte: string
+  reportaDni: string;
+  reportaNombre: string;
+  reportaTel: string;
+  reportaRol: string;
+  fechaReporte: string;
   // Sección 2 - Evento
-  fechaSuceso: string
-  horaSuceso: string
-  categoria: string
-  pais: string
-  region: string
-  distrito: string
-  parroquia: string
-  direccion: string
-  referencia: string
+  fechaSuceso: string;
+  horaSuceso: string;
+  categoria: string;
+  pais: string;
+  region: string;
+  distrito: string;
+  parroquia: string;
+  direccion: string;
+  referencia: string;
   // Sección 3 - Descripción
-  descripcion: string
-  causa: string
+  descripcion: string;
+  causa: string;
   // Sección 4 - Personas
-  familias: FamiliaForm[]
-  personas: PersonaForm[]
+  familias: FamiliaForm[];
+  personas: PersonaForm[];
   // Sección 5 - Necesidades
-  necesidades: string[]
-  necesidadOtra: string
-  necesidadesObs: string
+  necesidades: string[];
+  necesidadOtra: string;
+  necesidadesObs: string;
   // Sección 7 - Estimación
-  nivelAfectacion: string
+  nivelAfectacion: string;
   // Ubicación geográfica (RF07 GPS / RF08 manual)
-  lat?: number | null
-  lng?: number | null
-}
+  lat?: number | null;
+  lng?: number | null;
+};
 
 export type InfoCampoData = {
-  fechaVisita: string
-  responsable: string
-  descripcionEvento: string
-  nivelVulnerabilidad: string
-  necesidadesPrioritarias: string[]
-  recomendacion: string
-  observaciones?: string
-  condHabitabilidad: Record<string, boolean>
-}
+  fechaVisita: string;
+  responsable: string;
+  descripcionEvento: string;
+  nivelVulnerabilidad: string;
+  necesidadesPrioritarias: string[];
+  recomendacion: string;
+  observaciones?: string;
+  condHabitabilidad: Record<string, boolean>;
+};
 
 export type InformeEvaluacionData = {
-  analisisSituacion: string
-  hallazgosTexto: string
-  conclusiones: string
-  nivelUrgencia: string
-  tipoIntervencion: string
-  recomendacionComite: string
-}
+  analisisSituacion: string;
+  hallazgosTexto: string;
+  conclusiones: string;
+  nivelUrgencia: string;
+  tipoIntervencion: string;
+  recomendacionComite: string;
+};
 
 export type CorreccionData = {
-  analisisSituacion: string
-  hallazgosTexto: string
-  conclusiones: string
-  recomendacionComite: string
-}
+  analisisSituacion: string;
+  hallazgosTexto: string;
+  conclusiones: string;
+  recomendacionComite: string;
+};
 
 export type AtencionData = {
-  tipoAyuda: string
-  descripcionAyuda: string
-  lugarEntrega: string
-  observaciones?: string
-}
+  tipoAyuda: string;
+  descripcionAyuda: string;
+  lugarEntrega: string;
+  observaciones?: string;
+};
 
 export type SeguimientoData = {
-  situacion: string
-  descripcion: string
-  necesidadesPendientes?: string
-  recomendaciones?: string
-}
+  situacion: string;
+  descripcion: string;
+  necesidadesPendientes?: string;
+  recomendaciones?: string;
+};

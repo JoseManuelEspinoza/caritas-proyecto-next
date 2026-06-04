@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ['pino', 'thread-stream'],
+  serverExternalPackages: ["pino", "thread-stream"],
   experimental: {
     // Reduces webpack memory footprint when not using Turbopack.
     webpackMemoryOptimizations: true,

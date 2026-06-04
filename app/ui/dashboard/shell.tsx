@@ -1,67 +1,127 @@
-'use client'
+"use client";
 
-import { useState, useEffect } from 'react'
-import Image from 'next/image'
+import { useState, useEffect } from "react";
+import Image from "next/image";
 import {
-  LayoutDashboard, AlertTriangle, Users, FileText, Bell,
-  Menu, X, LogOut, User, GraduationCap, ClipboardList,
-  Map, Package, History as HistoryIcon, Database, ChevronDown, HandHeart,
-} from 'lucide-react'
-import { NavLink } from './nav-link'
-import { logout } from '@/app/actions/auth'
-import { getRoleLabel, getInitials, type FrontendRole } from '@/app/lib/roles'
-import { Toaster } from 'sonner'
+  LayoutDashboard,
+  AlertTriangle,
+  Users,
+  FileText,
+  Bell,
+  Menu,
+  X,
+  LogOut,
+  User,
+  GraduationCap,
+  ClipboardList,
+  Map,
+  Package,
+  History as HistoryIcon,
+  Database,
+  ChevronDown,
+  HandHeart,
+} from "lucide-react";
+import { NavLink } from "./nav-link";
+import { logout } from "@/app/actions/auth";
+import { getRoleLabel, getInitials, type FrontendRole } from "@/app/lib/roles";
+import { Toaster } from "sonner";
 
 const ALL_NAV = [
-  { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard',           exact: true,  roles: ['admin', 'especialistaGRD', 'comite', 'jefaOGP'] },
-  { href: '/grd',       icon: AlertTriangle,   label: 'Incidencias GRD',     exact: false, roles: ['admin', 'especialistaGRD', 'brigadista', 'jefaOGP'] },
-  { href: '/donaciones', icon: HandHeart,      label: 'Donaciones',          exact: false, roles: ['admin', 'comite', 'jefaOGP', 'especialistaGRD'] },
-  { href: '/capacitaciones', icon: GraduationCap, label: 'Capacitaciones',   exact: false, roles: ['admin', 'especialistaGRD', 'brigadista'] },
-  { href: '/brigadistas',    icon: Users,         label: 'Brigadistas',       exact: false, roles: ['admin'] },
-  { href: '/planes',         icon: ClipboardList, label: 'Planes GRD',        exact: false, roles: ['admin'] },
-  { href: '/simulacros',     icon: Map,           label: 'Simulacros',        exact: false, roles: ['admin', 'especialistaGRD', 'brigadista'] },
-  { href: '/kits',           icon: Package,       label: 'Kits de Emergencia',exact: false, roles: ['admin'] },
-  { href: '/catalogos',      icon: Database,      label: 'Catálogos',         exact: false, roles: ['admin'] },
-  { href: '/auditoria',      icon: HistoryIcon,   label: 'Auditoría',         exact: false, roles: ['admin'] },
-  { href: '/usuarios',       icon: Users,         label: 'Gestión de Usuarios',exact: false,roles: ['admin'] },
-  { href: '/reportes',       icon: FileText,      label: 'Reportes',          exact: false, roles: ['admin', 'comite', 'jefaOGP'] },
-]
+  {
+    href: "/dashboard",
+    icon: LayoutDashboard,
+    label: "Dashboard",
+    exact: true,
+    roles: ["admin", "especialistaGRD", "comite", "jefaOGP"],
+  },
+  {
+    href: "/grd",
+    icon: AlertTriangle,
+    label: "Incidencias GRD",
+    exact: false,
+    roles: ["admin", "especialistaGRD", "brigadista", "jefaOGP"],
+  },
+  {
+    href: "/donaciones",
+    icon: HandHeart,
+    label: "Donaciones",
+    exact: false,
+    roles: ["admin", "comite", "jefaOGP", "especialistaGRD"],
+  },
+  {
+    href: "/capacitaciones",
+    icon: GraduationCap,
+    label: "Capacitaciones",
+    exact: false,
+    roles: ["admin", "especialistaGRD", "brigadista"],
+  },
+  { href: "/brigadistas", icon: Users, label: "Brigadistas", exact: false, roles: ["admin"] },
+  { href: "/planes", icon: ClipboardList, label: "Planes GRD", exact: false, roles: ["admin"] },
+  {
+    href: "/simulacros",
+    icon: Map,
+    label: "Simulacros",
+    exact: false,
+    roles: ["admin", "especialistaGRD", "brigadista"],
+  },
+  { href: "/kits", icon: Package, label: "Kits de Emergencia", exact: false, roles: ["admin"] },
+  { href: "/catalogos", icon: Database, label: "Catálogos", exact: false, roles: ["admin"] },
+  { href: "/auditoria", icon: HistoryIcon, label: "Auditoría", exact: false, roles: ["admin"] },
+  { href: "/usuarios", icon: Users, label: "Gestión de Usuarios", exact: false, roles: ["admin"] },
+  {
+    href: "/reportes",
+    icon: FileText,
+    label: "Reportes",
+    exact: false,
+    roles: ["admin", "comite", "jefaOGP"],
+  },
+];
 
 interface ShellProps {
-  children: React.ReactNode
-  userName: string
-  userEmail: string
-  userRole: string
-  frontendRole: FrontendRole
+  children: React.ReactNode;
+  userName: string;
+  userEmail: string;
+  userRole: string;
+  frontendRole: FrontendRole;
 }
 
-export function DashboardShell({ children, userName, userEmail, userRole, frontendRole }: ShellProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [showUserMenu, setShowUserMenu] = useState(false)
-  const [isMobile, setIsMobile] = useState(false)
+export function DashboardShell({
+  children,
+  userName,
+  userEmail,
+  userRole,
+  frontendRole,
+}: ShellProps) {
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     const check = () => {
-      const mobile = window.innerWidth < 768
-      setIsMobile(mobile)
-      if (mobile) setSidebarOpen(false)
-      else { setSidebarOpen(true); setMobileMenuOpen(false) }
-    }
-    check()
-    window.addEventListener('resize', check)
-    return () => window.removeEventListener('resize', check)
-  }, [])
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      if (mobile) setSidebarOpen(false);
+      else {
+        setSidebarOpen(true);
+        setMobileMenuOpen(false);
+      }
+    };
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
 
-  const navItems = ALL_NAV.filter((item) => item.roles.includes(frontendRole))
-  const closeMobile = () => { if (isMobile) setMobileMenuOpen(false) }
-  const collapsed = !isMobile && !sidebarOpen
-  const roleLabel = getRoleLabel(userRole)
-  const initials = getInitials(userName)
+  const navItems = ALL_NAV.filter((item) => item.roles.includes(frontendRole));
+  const closeMobile = () => {
+    if (isMobile) setMobileMenuOpen(false);
+  };
+  const collapsed = !isMobile && !sidebarOpen;
+  const roleLabel = getRoleLabel(userRole);
+  const initials = getInitials(userName);
 
   return (
     <div className="h-screen flex overflow-hidden bg-gray-50">
-
       {/* Mobile overlay */}
       {isMobile && mobileMenuOpen && (
         <div
@@ -73,27 +133,45 @@ export function DashboardShell({ children, userName, userEmail, userRole, fronte
       {/* Sidebar */}
       <aside
         className={`
-          ${isMobile ? 'fixed inset-y-0 left-0 z-50 w-64' : collapsed ? 'w-20' : 'w-64'}
-          ${isMobile && !mobileMenuOpen ? '-translate-x-full' : 'translate-x-0'}
+          ${isMobile ? "fixed inset-y-0 left-0 z-50 w-64" : collapsed ? "w-20" : "w-64"}
+          ${isMobile && !mobileMenuOpen ? "-translate-x-full" : "translate-x-0"}
           bg-white border-r border-[#DDDDDD] transition-all duration-300 flex flex-col
         `}
       >
         {/* Logo */}
         <div className="h-12 flex items-center justify-between px-4 border-b border-[#DDDDDD]">
           {(!isMobile && !collapsed) || (isMobile && mobileMenuOpen) ? (
-            <Image src="/caritas-logo.png" alt="Cáritas Lima" width={120} height={28} className="h-7 w-auto" />
+            <Image
+              src="/caritas-logo.png"
+              alt="Cáritas Lima"
+              width={120}
+              height={28}
+              className="h-7 w-auto"
+            />
           ) : (
             <div className="mx-auto">
-              <Image src="/caritas-symbol.png" alt="Cáritas" width={24} height={24} className="h-6 w-6" />
+              <Image
+                src="/caritas-symbol.png"
+                alt="Cáritas"
+                width={24}
+                height={24}
+                className="h-6 w-6"
+              />
             </div>
           )}
           {!isMobile && (
-            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="text-gray-500 hover:text-gray-700 p-0.5">
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="text-gray-500 hover:text-gray-700 p-0.5"
+            >
               {sidebarOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
             </button>
           )}
           {isMobile && (
-            <button onClick={() => setMobileMenuOpen(false)} className="text-gray-500 hover:text-gray-700 p-0.5">
+            <button
+              onClick={() => setMobileMenuOpen(false)}
+              className="text-gray-500 hover:text-gray-700 p-0.5"
+            >
               <X className="w-4 h-4" />
             </button>
           )}
@@ -124,7 +202,6 @@ export function DashboardShell({ children, userName, userEmail, userRole, fronte
 
       {/* Main area */}
       <div className="flex-1 flex flex-col overflow-hidden">
-
         {/* Top bar */}
         <header className="h-12 bg-white border-b border-[#DDDDDD] flex items-center justify-between px-3 md:px-6">
           {isMobile && (
@@ -201,12 +278,10 @@ export function DashboardShell({ children, userName, userEmail, userRole, fronte
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-auto">
-          {children}
-        </main>
+        <main className="flex-1 overflow-auto">{children}</main>
       </div>
 
       <Toaster position="top-right" richColors />
     </div>
-  )
+  );
 }

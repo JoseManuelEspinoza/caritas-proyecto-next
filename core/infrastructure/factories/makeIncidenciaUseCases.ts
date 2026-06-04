@@ -1,5 +1,8 @@
-import { PrismaIncidenciaRepository } from '../database/PrismaIncidenciaRepository'
-import { RegistrarIncidenciaUseCase, ActualizarIncidenciaUseCase } from '../../application/use-cases/incidencias/RegistrarYActualizar.usecase'
+import { PrismaIncidenciaRepository } from "../database/PrismaIncidenciaRepository";
+import {
+  RegistrarIncidenciaUseCase,
+  ActualizarIncidenciaUseCase,
+} from "../../application/use-cases/incidencias/RegistrarYActualizar.usecase";
 import {
   AsignarBrigadistaUseCase,
   AsignarEquipoUseCase,
@@ -7,17 +10,17 @@ import {
   RegistrarLevantamientoUseCase,
   GenerarInformeEvaluacionUseCase,
   CorregirYReenviarUseCase,
-} from '../../application/use-cases/incidencias/FlujoCampo.usecase'
-import { DecisionComiteUseCase } from '../../application/use-cases/incidencias/DecisionComite.usecase'
+} from "../../application/use-cases/incidencias/FlujoCampo.usecase";
+import { DecisionComiteUseCase } from "../../application/use-cases/incidencias/DecisionComite.usecase";
 import {
   RegistrarAtencionUseCase,
   AgregarSeguimientoUseCase,
   CerrarCasoUseCase,
-} from '../../application/use-cases/incidencias/AtencionYCierre.usecase'
+} from "../../application/use-cases/incidencias/AtencionYCierre.usecase";
 
 /** Composition root del flujo de Incidencias (DI manual). */
 export function makeIncidenciaUseCases() {
-  const repo = new PrismaIncidenciaRepository()
+  const repo = new PrismaIncidenciaRepository();
   return {
     registrar: new RegistrarIncidenciaUseCase(repo),
     actualizar: new ActualizarIncidenciaUseCase(repo),
@@ -31,5 +34,5 @@ export function makeIncidenciaUseCases() {
     registrarAtencion: new RegistrarAtencionUseCase(repo),
     agregarSeguimiento: new AgregarSeguimientoUseCase(repo),
     cerrar: new CerrarCasoUseCase(repo),
-  }
+  };
 }

@@ -20,11 +20,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-import type {
-  Incident,
-  IncidentStatus,
-  HistoryEntry,
-} from "@/app/lib/incident-types";
+import type { Incident, IncidentStatus, HistoryEntry } from "@/app/lib/incident-types";
 import { initialIncidents } from "@/app/lib/incident-data";
 
 const STATUS_COLOR: Record<IncidentStatus, string> = {
@@ -73,25 +69,25 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
   const [selected, setSelected] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
 
-  const [search, setSearch] = useState("")
-  const [statusFilter, setStatusFilter] = useState("all")
-  const [categoryFilter, setCategoryFilter] = useState("all")
-  const [parroquiaFilter, setParroquiaFilter] = useState("all")
-  const [queuePage, setQueuePage] = useState(1)
-  const [historyPage, setHistoryPage] = useState(1)
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [parroquiaFilter, setParroquiaFilter] = useState("all");
+  const [queuePage, setQueuePage] = useState(1);
+  const [historyPage, setHistoryPage] = useState(1);
 
   const queueAll = useMemo(
     () => incidents.filter((i) => ["EN EVALUACION", "OBSERVADO"].includes(i.status)),
-    [incidents],
-  )
+    [incidents]
+  );
 
   const filteredIncidents = useMemo(() => {
-    const q = search.trim().toLowerCase()
+    const q = search.trim().toLowerCase();
     return incidents.filter((i) => {
-      if (statusFilter !== "all" && i.status !== statusFilter) return false
-      if (categoryFilter !== "all" && i.category !== categoryFilter) return false
-      if (parroquiaFilter !== "all" && (i.parroquia ?? "") !== parroquiaFilter) return false
-      if (!q) return true
+      if (statusFilter !== "all" && i.status !== statusFilter) return false;
+      if (categoryFilter !== "all" && i.category !== categoryFilter) return false;
+      if (parroquiaFilter !== "all" && (i.parroquia ?? "") !== parroquiaFilter) return false;
+      if (!q) return true;
       return [
         i.id,
         i.name,
@@ -109,37 +105,35 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
         i.informeEvaluacion?.recomendacionComite,
       ]
         .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(q))
-    })
-  }, [incidents, search, statusFilter, categoryFilter, parroquiaFilter])
+        .some((value) => String(value).toLowerCase().includes(q));
+    });
+  }, [incidents, search, statusFilter, categoryFilter, parroquiaFilter]);
 
   const queue = useMemo(
     () => filteredIncidents.filter((i) => ["EN EVALUACION", "OBSERVADO"].includes(i.status)),
-    [filteredIncidents],
-  )
+    [filteredIncidents]
+  );
   const closed = useMemo(
     () => filteredIncidents.filter((i) => !["EN EVALUACION", "OBSERVADO"].includes(i.status)),
-    [filteredIncidents],
-  )
+    [filteredIncidents]
+  );
 
-  const queueTotalPages = Math.max(1, Math.ceil(queue.length / 10))
-  const historyTotalPages = Math.max(1, Math.ceil(closed.length / 10))
-  const safeQueuePage = Math.min(queuePage, queueTotalPages)
-  const safeHistoryPage = Math.min(historyPage, historyTotalPages)
-  const queueSlice = queue.slice((safeQueuePage - 1) * 10, safeQueuePage * 10)
-  const historySlice = closed.slice((safeHistoryPage - 1) * 10, safeHistoryPage * 10)
-  const queueFrom = queue.length === 0 ? 0 : (safeQueuePage - 1) * 10 + 1
-  const queueTo = Math.min(queue.length, safeQueuePage * 10)
-  const historyFrom = closed.length === 0 ? 0 : (safeHistoryPage - 1) * 10 + 1
-  const historyTo = Math.min(closed.length, safeHistoryPage * 10)
+  const queueTotalPages = Math.max(1, Math.ceil(queue.length / 10));
+  const historyTotalPages = Math.max(1, Math.ceil(closed.length / 10));
+  const safeQueuePage = Math.min(queuePage, queueTotalPages);
+  const safeHistoryPage = Math.min(historyPage, historyTotalPages);
+  const queueSlice = queue.slice((safeQueuePage - 1) * 10, safeQueuePage * 10);
+  const historySlice = closed.slice((safeHistoryPage - 1) * 10, safeHistoryPage * 10);
+  const queueFrom = queue.length === 0 ? 0 : (safeQueuePage - 1) * 10 + 1;
+  const queueTo = Math.min(queue.length, safeQueuePage * 10);
+  const historyFrom = closed.length === 0 ? 0 : (safeHistoryPage - 1) * 10 + 1;
+  const historyTo = Math.min(closed.length, safeHistoryPage * 10);
 
   // El clamping de página se resuelve en render con safeQueuePage/safeHistoryPage
   // (Math.min). No se usan efectos con setState para evitar renders en cascada
   // (regla react-hooks/set-state-in-effect).
 
-  const current = selected
-    ? (incidents.find((i) => i.id === selected) ?? null)
-    : null;
+  const current = selected ? (incidents.find((i) => i.id === selected) ?? null) : null;
 
   const aprobarCaso = (id: string, notas: string) => {
     setIncidents((prev) =>
@@ -161,7 +155,7 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
           updatedBy: currentUser,
           history: [...(i.history ?? []), entry],
         };
-      }),
+      })
     );
   };
 
@@ -189,7 +183,7 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
           updatedBy: currentUser,
           history: [...(i.history ?? []), entry],
         };
-      }),
+      })
     );
   };
 
@@ -213,7 +207,7 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
           updatedBy: currentUser,
           history: [...(i.history ?? []), entry],
         };
-      }),
+      })
     );
   };
 
@@ -256,25 +250,16 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
         <div
           className="w-10 h-10 rounded-lg flex items-center justify-center"
           style={{
-            backgroundColor:
-              "color-mix(in srgb, var(--caritas-green) 10%, transparent)",
+            backgroundColor: "color-mix(in srgb, var(--caritas-green) 10%, transparent)",
           }}
         >
-          <HandHeart
-            className="w-5 h-5"
-            style={{ color: "var(--caritas-green)" }}
-          />
+          <HandHeart className="w-5 h-5" style={{ color: "var(--caritas-green)" }} />
         </div>
         <div>
-          <h1
-            className="font-bold text-lg"
-            style={{ color: "var(--caritas-text)" }}
-          >
+          <h1 className="font-bold text-lg" style={{ color: "var(--caritas-text)" }}>
             Gestión de Donaciones
           </h1>
-          <p className="text-sm text-gray-500">
-            Evaluación y decisión sobre solicitudes de apoyo
-          </p>
+          <p className="text-sm text-gray-500">Evaluación y decisión sobre solicitudes de apoyo</p>
         </div>
       </div>
 
@@ -286,11 +271,7 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
         </div>
         <div className="bg-green-50 border border-green-200 rounded-xl p-4">
           <p className="text-2xl font-bold text-green-900">
-            {
-              incidents.filter(
-                (i) => i.status === "APROBADO" || i.status === "ATENDIDO",
-              ).length
-            }
+            {incidents.filter((i) => i.status === "APROBADO" || i.status === "ATENDIDO").length}
           </p>
           <p className="text-xs text-green-700">Donaciones aprobadas</p>
         </div>
@@ -330,7 +311,9 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
                 className="w-full pl-9 pr-3 py-2.5 text-sm border border-[var(--caritas-border)] rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[var(--caritas-green)]/20 focus:border-[var(--caritas-green)]"
               >
                 {STATUS_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
                 ))}
               </select>
             </div>
@@ -344,7 +327,9 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
               >
                 <option value="all">Todas las categorías</option>
                 {[...new Set(incidents.map((i) => i.category).filter(Boolean))].map((cat) => (
-                  <option key={cat as string} value={cat as string}>{cat}</option>
+                  <option key={cat as string} value={cat as string}>
+                    {cat}
+                  </option>
                 ))}
               </select>
             </div>
@@ -358,7 +343,9 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
               >
                 <option value="all">Todas las parroquias</option>
                 {[...new Set(incidents.map((i) => i.parroquia).filter(Boolean))].map((p) => (
-                  <option key={p as string} value={p as string}>{p}</option>
+                  <option key={p as string} value={p as string}>
+                    {p}
+                  </option>
                 ))}
               </select>
             </div>
@@ -367,16 +354,20 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
 
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <p className="text-xs text-gray-500">
-            {filteredIncidents.length} caso{filteredIncidents.length !== 1 ? "s" : ""} filtrado{filteredIncidents.length !== 1 ? "s" : ""}
+            {filteredIncidents.length} caso{filteredIncidents.length !== 1 ? "s" : ""} filtrado
+            {filteredIncidents.length !== 1 ? "s" : ""}
           </p>
-          {(search || statusFilter !== "all" || categoryFilter !== "all" || parroquiaFilter !== "all") && (
+          {(search ||
+            statusFilter !== "all" ||
+            categoryFilter !== "all" ||
+            parroquiaFilter !== "all") && (
             <button
               type="button"
               onClick={() => {
-                setSearch("")
-                setStatusFilter("all")
-                setCategoryFilter("all")
-                setParroquiaFilter("all")
+                setSearch("");
+                setStatusFilter("all");
+                setCategoryFilter("all");
+                setParroquiaFilter("all");
               }}
               className="text-xs font-medium text-[var(--caritas-green)] hover:underline self-start sm:self-auto"
             >
@@ -394,16 +385,12 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
         >
           <div className="bg-purple-700 px-4 py-3 flex items-center gap-2">
             <Clock className="w-4 h-4 text-white" />
-            <p className="text-white font-bold text-sm">
-              Cola de Evaluación ({queue.length})
-            </p>
+            <p className="text-white font-bold text-sm">Cola de Evaluación ({queue.length})</p>
           </div>
           {queue.length === 0 ? (
             <div className="p-8 text-center">
               <CheckCircle className="w-10 h-10 text-green-400 mx-auto mb-2" />
-              <p className="text-sm text-gray-500">
-                No hay incidentes pendientes
-              </p>
+              <p className="text-sm text-gray-500">No hay incidentes pendientes</p>
             </div>
           ) : (
             <div className="divide-y divide-gray-100">
@@ -415,15 +402,11 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="text-xs font-mono text-gray-400">
-                        {inc.id}
-                      </p>
+                      <p className="text-xs font-mono text-gray-400">{inc.id}</p>
                       <p className="text-sm font-semibold text-gray-900 leading-tight truncate">
                         {inc.name}
                       </p>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        {inc.distrito ?? inc.location}
-                      </p>
+                      <p className="text-xs text-gray-500 mt-0.5">{inc.distrito ?? inc.location}</p>
                     </div>
                     <span
                       className={`flex-shrink-0 px-2 py-0.5 text-[10px] rounded-full font-semibold ${STATUS_COLOR[inc.status]}`}
@@ -432,7 +415,6 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
                     </span>
                   </div>
                   {inc.informeEvaluacion && (
-
                     <div className="mt-1.5 flex gap-2">
                       <span
                         className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
@@ -453,7 +435,9 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
               ))}
               {queue.length > 0 && (
                 <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 bg-gray-50">
-                  <p className="text-xs text-gray-500">Mostrando {queueFrom}-{queueTo} de {queue.length}</p>
+                  <p className="text-xs text-gray-500">
+                    Mostrando {queueFrom}-{queueTo} de {queue.length}
+                  </p>
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
@@ -463,7 +447,9 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
                     >
                       <ChevronLeft className="w-3.5 h-3.5" /> Anterior
                     </button>
-                    <span className="text-xs text-gray-500 font-medium">{safeQueuePage} / {queueTotalPages}</span>
+                    <span className="text-xs text-gray-500 font-medium">
+                      {safeQueuePage} / {queueTotalPages}
+                    </span>
                     <button
                       type="button"
                       onClick={() => setQueuePage((p) => Math.min(queueTotalPages, p + 1))}
@@ -495,12 +481,8 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="text-xs font-mono text-gray-400">
-                          {inc.id}
-                        </p>
-                        <p className="text-xs font-medium text-gray-700 truncate">
-                          {inc.name}
-                        </p>
+                        <p className="text-xs font-mono text-gray-400">{inc.id}</p>
+                        <p className="text-xs font-medium text-gray-700 truncate">{inc.name}</p>
                       </div>
                       <span
                         className={`flex-shrink-0 px-2 py-0.5 text-[10px] rounded-full font-semibold ${STATUS_COLOR[inc.status]}`}
@@ -512,7 +494,9 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
                 ))}
               </div>
               <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 bg-gray-50">
-                <p className="text-xs text-gray-500">Mostrando {historyFrom}-{historyTo} de {closed.length}</p>
+                <p className="text-xs text-gray-500">
+                  Mostrando {historyFrom}-{historyTo} de {closed.length}
+                </p>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
@@ -522,7 +506,9 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
                   >
                     <ChevronLeft className="w-3.5 h-3.5" /> Anterior
                   </button>
-                  <span className="text-xs text-gray-500 font-medium">{safeHistoryPage} / {historyTotalPages}</span>
+                  <span className="text-xs text-gray-500 font-medium">
+                    {safeHistoryPage} / {historyTotalPages}
+                  </span>
                   <button
                     type="button"
                     onClick={() => setHistoryPage((p) => Math.min(historyTotalPages, p + 1))}
@@ -561,9 +547,7 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
               <div className="p-4 border-b border-gray-100">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-xs font-mono text-gray-400">
-                      {current.id}
-                    </p>
+                    <p className="text-xs font-mono text-gray-400">{current.id}</p>
                     <p className="text-base font-bold text-gray-900 leading-tight">
                       {current.name}
                     </p>
@@ -610,9 +594,7 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
                         <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-0.5">
                           {label}
                         </p>
-                        <p className="text-xs font-semibold text-gray-900">
-                          {value}
-                        </p>
+                        <p className="text-xs font-semibold text-gray-900">{value}</p>
                       </div>
                     ))}
                 </div>
@@ -642,9 +624,7 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
                           <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-0.5">
                             Descripción
                           </p>
-                          <p className="text-xs text-gray-800">
-                            {current.description}
-                          </p>
+                          <p className="text-xs text-gray-800">{current.description}</p>
                         </div>
                       )}
                       {current.causaSuceso && (
@@ -652,9 +632,7 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
                           <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-0.5">
                             Causa
                           </p>
-                          <p className="text-xs text-gray-800">
-                            {current.causaSuceso}
-                          </p>
+                          <p className="text-xs text-gray-800">{current.causaSuceso}</p>
                         </div>
                       )}
                       {(current.distrito || current.direccion) && (
@@ -665,11 +643,7 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
                               Ubicación
                             </p>
                             <p className="text-xs text-gray-800">
-                              {[
-                                current.direccion,
-                                current.distrito,
-                                current.region,
-                              ]
+                              {[current.direccion, current.distrito, current.region]
                                 .filter(Boolean)
                                 .join(", ")}
                             </p>
@@ -703,25 +677,23 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
                           )}
                         </div>
                       )}
-                      {current.necesidadesUrgentes &&
-                        current.necesidadesUrgentes.length > 0 && (
-                          <div>
-                            <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-1">
-                              <AlertTriangle className="w-3 h-3" /> Necesidades
-                              urgentes
-                            </p>
-                            <div className="flex flex-wrap gap-1">
-                              {current.necesidadesUrgentes.map((n) => (
-                                <span
-                                  key={n}
-                                  className="px-2 py-0.5 bg-orange-50 text-orange-700 border border-orange-200 text-[10px] rounded-full font-medium"
-                                >
-                                  {n}
-                                </span>
-                              ))}
-                            </div>
+                      {current.necesidadesUrgentes && current.necesidadesUrgentes.length > 0 && (
+                        <div>
+                          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+                            <AlertTriangle className="w-3 h-3" /> Necesidades urgentes
+                          </p>
+                          <div className="flex flex-wrap gap-1">
+                            {current.necesidadesUrgentes.map((n) => (
+                              <span
+                                key={n}
+                                className="px-2 py-0.5 bg-orange-50 text-orange-700 border border-orange-200 text-[10px] rounded-full font-medium"
+                              >
+                                {n}
+                              </span>
+                            ))}
                           </div>
-                        )}
+                        </div>
+                      )}
                       {current.nivelAfectacion && (
                         <div className="bg-gray-50 rounded-lg p-2.5 border border-gray-100">
                           <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-0.5">
@@ -751,64 +723,50 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
                       </span>
                     </summary>
                     <div className="px-3 pb-3 space-y-2">
-                      {!current.affectedPeople ||
-                      current.affectedPeople.length === 0 ? (
+                      {!current.affectedPeople || current.affectedPeople.length === 0 ? (
                         <p className="text-[11px] text-gray-500 italic px-1">
                           Sin personas empadronadas registradas.
                         </p>
                       ) : (
                         (() => {
                           const grupos = current.affectedPeople!.reduce<
-                            Record<
-                              string,
-                              NonNullable<typeof current.affectedPeople>
-                            >
+                            Record<string, NonNullable<typeof current.affectedPeople>>
                           >((acc, p) => {
-                            const k =
-                              p.familiaNombre ?? p.familiaId ?? "Sin familia";
+                            const k = p.familiaNombre ?? p.familiaId ?? "Sin familia";
                             (acc[k] = acc[k] ?? []).push(p);
                             return acc;
                           }, {});
-                          return Object.entries(grupos).map(
-                            ([fam, miembros]) => (
-                              <div
-                                key={fam}
-                                className="bg-gray-50 rounded-lg border border-gray-100 p-2.5"
-                              >
-                                <div className="flex items-center justify-between mb-1.5">
-                                  <p className="text-[11px] font-bold text-gray-700">
-                                    {fam}
-                                  </p>
-                                  <span className="text-[10px] text-gray-500">
-                                    {miembros.length} miembro(s)
-                                  </span>
-                                </div>
-                                <ul className="space-y-1">
-                                  {miembros.map((p) => (
-                                    <li
-                                      key={p.id}
-                                      className="flex items-center justify-between gap-2 text-[11px] text-gray-700"
-                                    >
-                                      <span className="truncate">
-                                        {p.nombre} {p.apellidoPaterno ?? ""}{" "}
-                                        {p.apellidoMaterno ?? ""}
-                                        {p.parentesco && (
-                                          <span className="text-gray-400">
-                                            {" "}
-                                            · {p.parentesco}
-                                          </span>
-                                        )}
-                                      </span>
-                                      <span className="text-[10px] text-gray-500 flex-shrink-0">
-                                        {p.edad}a · {p.genero ?? "—"} · DNI{" "}
-                                        {p.dni}
-                                      </span>
-                                    </li>
-                                  ))}
-                                </ul>
+                          return Object.entries(grupos).map(([fam, miembros]) => (
+                            <div
+                              key={fam}
+                              className="bg-gray-50 rounded-lg border border-gray-100 p-2.5"
+                            >
+                              <div className="flex items-center justify-between mb-1.5">
+                                <p className="text-[11px] font-bold text-gray-700">{fam}</p>
+                                <span className="text-[10px] text-gray-500">
+                                  {miembros.length} miembro(s)
+                                </span>
                               </div>
-                            ),
-                          );
+                              <ul className="space-y-1">
+                                {miembros.map((p) => (
+                                  <li
+                                    key={p.id}
+                                    className="flex items-center justify-between gap-2 text-[11px] text-gray-700"
+                                  >
+                                    <span className="truncate">
+                                      {p.nombre} {p.apellidoPaterno ?? ""} {p.apellidoMaterno ?? ""}
+                                      {p.parentesco && (
+                                        <span className="text-gray-400"> · {p.parentesco}</span>
+                                      )}
+                                    </span>
+                                    <span className="text-[10px] text-gray-500 flex-shrink-0">
+                                      {p.edad}a · {p.genero ?? "—"} · DNI {p.dni}
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ));
                         })()
                       )}
                     </div>
@@ -825,16 +783,14 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
                         Evidencias de Campo
                       </span>
                       <span className="ml-auto text-[10px] text-gray-500">
-                        {current.evidenciasPorFuente?.flatMap((e) => e.archivos)
-                          .length ??
+                        {current.evidenciasPorFuente?.flatMap((e) => e.archivos).length ??
                           current.uploadedFiles?.length ??
                           0}{" "}
                         archivo(s)
                       </span>
                     </summary>
                     <div className="px-3 pb-3 space-y-2">
-                      {current.evidenciasPorFuente &&
-                      current.evidenciasPorFuente.length > 0 ? (
+                      {current.evidenciasPorFuente && current.evidenciasPorFuente.length > 0 ? (
                         current.evidenciasPorFuente.map((grp) => (
                           <div
                             key={grp.fuente}
@@ -856,8 +812,7 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
                             </ul>
                           </div>
                         ))
-                      ) : current.uploadedFiles &&
-                        current.uploadedFiles.length > 0 ? (
+                      ) : current.uploadedFiles && current.uploadedFiles.length > 0 ? (
                         <ul className="space-y-1 bg-gray-50 rounded-lg border border-gray-100 p-2.5">
                           {current.uploadedFiles.map((a) => (
                             <li
@@ -886,19 +841,14 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
                     </p>
                     <div className="grid grid-cols-2 gap-2">
                       <div className="bg-white rounded-lg p-2.5 border border-purple-100">
-                        <p className="text-[10px] text-gray-400 mb-0.5">
-                          Urgencia
-                        </p>
+                        <p className="text-[10px] text-gray-400 mb-0.5">Urgencia</p>
                         <p
                           className={`text-sm font-bold ${
-                            current.informeEvaluacion.nivelUrgencia ===
-                            "Inmediata"
+                            current.informeEvaluacion.nivelUrgencia === "Inmediata"
                               ? "text-red-700"
-                              : current.informeEvaluacion.nivelUrgencia ===
-                                  "Alta"
+                              : current.informeEvaluacion.nivelUrgencia === "Alta"
                                 ? "text-orange-700"
-                                : current.informeEvaluacion.nivelUrgencia ===
-                                    "Media"
+                                : current.informeEvaluacion.nivelUrgencia === "Media"
                                   ? "text-yellow-700"
                                   : "text-green-700"
                           }`}
@@ -907,9 +857,7 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
                         </p>
                       </div>
                       <div className="bg-white rounded-lg p-2.5 border border-purple-100">
-                        <p className="text-[10px] text-gray-400 mb-0.5">
-                          Intervención
-                        </p>
+                        <p className="text-[10px] text-gray-400 mb-0.5">Intervención</p>
                         <p className="text-xs font-bold text-purple-800">
                           {current.informeEvaluacion.tipoIntervencion}
                         </p>
@@ -933,19 +881,16 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
                       </p>
                     </div>
                     {current.informeEvaluacion.criteriosPriorizacion &&
-                      current.informeEvaluacion.criteriosPriorizacion.length >
-                        0 && (
+                      current.informeEvaluacion.criteriosPriorizacion.length > 0 && (
                         <div className="flex flex-wrap gap-1.5">
-                          {current.informeEvaluacion.criteriosPriorizacion.map(
-                            (c) => (
-                              <span
-                                key={c}
-                                className="px-2 py-0.5 bg-purple-100 text-purple-800 text-[10px] rounded-full border border-purple-200 font-medium"
-                              >
-                                {c}
-                              </span>
-                            ),
-                          )}
+                          {current.informeEvaluacion.criteriosPriorizacion.map((c) => (
+                            <span
+                              key={c}
+                              className="px-2 py-0.5 bg-purple-100 text-purple-800 text-[10px] rounded-full border border-purple-200 font-medium"
+                            >
+                              {c}
+                            </span>
+                          ))}
                         </div>
                       )}
                     {current.informeEvaluacion.observacionesComite && (
@@ -962,44 +907,41 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
                 )}
 
                 {/* Panel de decisión */}
-                {canEvaluate &&
-                  ["EN EVALUACION", "OBSERVADO"].includes(current.status) && (
-                    <div className="border-t border-gray-100 pt-4 space-y-3">
-                      <p className="text-xs font-bold text-gray-700">
-                        Resolución del Comité
-                      </p>
-                      <textarea
-                        value={notes}
-                        onChange={(e) => setNotes(e.target.value)}
-                        rows={3}
-                        placeholder="Justificación de la decisión, criterios aplicados, condiciones, monto o kit aprobado..."
-                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-purple-400 resize-none"
-                      />
-                      <div className="grid grid-cols-3 gap-2">
-                        <button
-                          onClick={handleAprobar}
-                          className="flex flex-col items-center gap-1 py-2.5 bg-green-600 hover:bg-green-700 text-white font-bold text-xs rounded-lg transition-all"
-                        >
-                          <CheckCircle className="w-4 h-4" />
-                          Aprobar
-                        </button>
-                        <button
-                          onClick={handleObservar}
-                          className="flex flex-col items-center gap-1 py-2.5 bg-yellow-500 hover:bg-yellow-600 text-white font-bold text-xs rounded-lg transition-all"
-                        >
-                          <AlertCircle className="w-4 h-4" />
-                          Observar
-                        </button>
-                        <button
-                          onClick={handleRechazar}
-                          className="flex flex-col items-center gap-1 py-2.5 bg-red-500 hover:bg-red-600 text-white font-bold text-xs rounded-lg transition-all"
-                        >
-                          <XCircle className="w-4 h-4" />
-                          Rechazar
-                        </button>
-                      </div>
+                {canEvaluate && ["EN EVALUACION", "OBSERVADO"].includes(current.status) && (
+                  <div className="border-t border-gray-100 pt-4 space-y-3">
+                    <p className="text-xs font-bold text-gray-700">Resolución del Comité</p>
+                    <textarea
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      rows={3}
+                      placeholder="Justificación de la decisión, criterios aplicados, condiciones, monto o kit aprobado..."
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-purple-400 resize-none"
+                    />
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        onClick={handleAprobar}
+                        className="flex flex-col items-center gap-1 py-2.5 bg-green-600 hover:bg-green-700 text-white font-bold text-xs rounded-lg transition-all"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                        Aprobar
+                      </button>
+                      <button
+                        onClick={handleObservar}
+                        className="flex flex-col items-center gap-1 py-2.5 bg-yellow-500 hover:bg-yellow-600 text-white font-bold text-xs rounded-lg transition-all"
+                      >
+                        <AlertCircle className="w-4 h-4" />
+                        Observar
+                      </button>
+                      <button
+                        onClick={handleRechazar}
+                        className="flex flex-col items-center gap-1 py-2.5 bg-red-500 hover:bg-red-600 text-white font-bold text-xs rounded-lg transition-all"
+                      >
+                        <XCircle className="w-4 h-4" />
+                        Rechazar
+                      </button>
                     </div>
-                  )}
+                  </div>
+                )}
 
                 {/* Vista de solo lectura para casos procesados */}
                 {!["EN EVALUACION", "OBSERVADO"].includes(current.status) &&
@@ -1010,8 +952,7 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
                         Última acción registrada
                       </p>
                       {(() => {
-                        const last =
-                          current.history![current.history!.length - 1];
+                        const last = current.history![current.history!.length - 1];
                         return (
                           <div className="bg-gray-50 border border-gray-100 rounded-lg px-3 py-2.5">
                             <div className="flex items-center justify-between mb-1">
@@ -1019,16 +960,10 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
                                 {last.action}
                               </span>
                               <span className="text-[10px] text-gray-400">
-                                {new Date(last.timestamp).toLocaleDateString(
-                                  "es-PE",
-                                )}
+                                {new Date(last.timestamp).toLocaleDateString("es-PE")}
                               </span>
                             </div>
-                            {last.notes && (
-                              <p className="text-xs text-gray-700">
-                                {last.notes}
-                              </p>
-                            )}
+                            {last.notes && <p className="text-xs text-gray-700">{last.notes}</p>}
                           </div>
                         );
                       })()}

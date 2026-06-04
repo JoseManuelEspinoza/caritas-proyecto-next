@@ -8,6 +8,7 @@
     "start": "next start",
     "clean": "rm -rf .next",
     "lint": "eslint",
+    "lint:fix": "eslint --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "seed": "tsx -r dotenv/config prisma/seed.ts",

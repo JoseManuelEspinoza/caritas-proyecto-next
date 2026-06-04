@@ -1,6 +1,6 @@
-import 'server-only'
-import { prisma } from './prisma'
-import { verifySession } from './dal'
+import "server-only";
+import { prisma } from "./prisma";
+import { verifySession } from "./dal";
 
 /**
  * Resuelve el `idUsuarioGRD` del usuario en sesión.
@@ -13,10 +13,10 @@ import { verifySession } from './dal'
  * Devuelve `null` si el usuario autenticado no tiene perfil GRD asociado.
  */
 export async function getUsuarioGRDId(): Promise<string | null> {
-  const session = await verifySession()
+  const session = await verifySession();
   const perfil = await prisma.usuarioGRD.findUnique({
     where: { idCredencial: session.userId },
     select: { idUsuarioGRD: true },
-  })
-  return perfil?.idUsuarioGRD ?? null
+  });
+  return perfil?.idUsuarioGRD ?? null;
 }

@@ -1,7 +1,7 @@
 import type {
   ParroquiaRef,
   BrigadistaCandidatoRaw,
-} from '../../application/dtos/SugerenciaBrigadistasDTO'
+} from "../../application/dtos/SugerenciaBrigadistasDTO";
 
 /**
  * Contrato de consulta del algoritmo de sugerencia de brigadistas (RF36).
@@ -12,21 +12,17 @@ import type {
  */
 export interface ISugerenciaBrigadistasRepository {
   /** Parroquia del incidente (para coords de respaldo y zona pastoral). */
-  getParroquia(idParroquia: string): Promise<ParroquiaRef | null>
+  getParroquia(idParroquia: string): Promise<ParroquiaRef | null>;
 
   /** Brigadistas DISPONIBLES y ACTIVOS de una parroquia (Fase 1). */
-  getBrigadistasDisponiblesPorParroquia(
-    idParroquia: string,
-  ): Promise<BrigadistaCandidatoRaw[]>
+  getBrigadistasDisponiblesPorParroquia(idParroquia: string): Promise<BrigadistaCandidatoRaw[]>;
 
   /** Brigadistas DISPONIBLES y ACTIVOS de TODAS las demás parroquias (Fase 2). */
-  getTodosBrigadistasDisponibles(
-    excluirParroquia: string,
-  ): Promise<BrigadistaCandidatoRaw[]>
+  getTodosBrigadistasDisponibles(excluirParroquia: string): Promise<BrigadistaCandidatoRaw[]>;
 
   /** Nº de incidencias atendidas por un brigadista (componente del score). */
-  getIncidenciasAtendidas(idBrigadistaParroquial: string): Promise<number>
+  getIncidenciasAtendidas(idBrigadistaParroquial: string): Promise<number>;
 
   /** Registra que no se hallaron candidatos (Fase 3) para trazabilidad. */
-  registrarIntentoFallido(idParroquia: string, tipoIncidente: string): Promise<void>
+  registrarIntentoFallido(idParroquia: string, tipoIncidente: string): Promise<void>;
 }

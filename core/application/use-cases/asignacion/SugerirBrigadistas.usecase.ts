@@ -7,9 +7,9 @@
 // Depende de `ISugerenciaBrigadistasRepository` (dominio), por lo que es
 // independiente de Prisma y testeable con un mock.
 
-import type { ISugerenciaBrigadistasRepository } from '../../../domain/repositories/ISugerenciaBrigadistasRepository'
-import { haversine } from '../../../domain/services/haversine'
-import { confianzaMixta } from '../../../domain/services/confianza'
+import type { ISugerenciaBrigadistasRepository } from "../../../domain/repositories/ISugerenciaBrigadistasRepository";
+import { haversine } from "../../../domain/services/haversine";
+import { confianzaMixta } from "../../../domain/services/confianza";
 import {
   CONFIG_DEFAULT,
   type BrigadistaCandidatoRaw,
@@ -17,14 +17,14 @@ import {
   type ConfigAlgoritmo,
   type EntradaAlgoritmo,
   type SalidaAlgoritmo,
-} from '../../dtos/SugerenciaBrigadistasDTO'
+} from "../../dtos/SugerenciaBrigadistasDTO";
 
 // ── Helper: construir un CandidatoSugerido a partir del brigadista crudo ───────
 function buildCandidato(
   b: BrigadistaCandidatoRaw,
   distanciaKm: number | null,
   mismaZonaPastoral: boolean | null,
-  scoreConfianza: number | null,
+  scoreConfianza: number | null
 ): CandidatoSugerido {
   return {
     idBrigadistaParroquial: b.idBrigadistaParroquial,
@@ -33,25 +33,25 @@ function buildCandidato(
     celular: b.celular ?? null,
     correo: b.correo ?? null,
     idParroquia: b.idParroquia,
-    nombreParroquia: b.parroquia?.nombre ?? '',
-    tipo: 'brigadista',
+    nombreParroquia: b.parroquia?.nombre ?? "",
+    tipo: "brigadista",
     disponibilidad: b.disponibilidad,
     distanciaKm,
     mismaZonaPastoral,
     scoreConfianza,
-  }
+  };
 }
 
 // ── Helper: orden de la lista sugerida ─────────────────────────────────────────
 //   Fase 1 → por scoreConfianza DESC; Fase 2 → por distanciaKm ASC; desempate alfabético.
 function ordenar(a: CandidatoSugerido, b: CandidatoSugerido): number {
   if (a.scoreConfianza !== null && b.scoreConfianza !== null) {
-    if (b.scoreConfianza !== a.scoreConfianza) return b.scoreConfianza - a.scoreConfianza
+    if (b.scoreConfianza !== a.scoreConfianza) return b.scoreConfianza - a.scoreConfianza;
   }
   if (a.distanciaKm !== null && b.distanciaKm !== null) {
-    if (a.distanciaKm !== b.distanciaKm) return a.distanciaKm - b.distanciaKm
+    if (a.distanciaKm !== b.distanciaKm) return a.distanciaKm - b.distanciaKm;
   }
-  return a.apellidos.localeCompare(b.apellidos)
+  return a.apellidos.localeCompare(b.apellidos);
 }
 
 /**
@@ -66,42 +66,42 @@ export class SugerirBrigadistasUseCase {
 
   async execute(
     entrada: EntradaAlgoritmo,
-    config: ConfigAlgoritmo = CONFIG_DEFAULT,
+    config: ConfigAlgoritmo = CONFIG_DEFAULT
   ): Promise<SalidaAlgoritmo> {
     // CB-02: si el incidente no trae GPS → usar las coordenadas de la parroquia.
-    let latIncidente = entrada.latitud
-    let lngIncidente = entrada.longitud
+    let latIncidente = entrada.latitud;
+    let lngIncidente = entrada.longitud;
 
-    const parroquiaRef = await this.repo.getParroquia(entrada.idParroquia)
+    const parroquiaRef = await this.repo.getParroquia(entrada.idParroquia);
 
     if (latIncidente === null || lngIncidente === null) {
-      latIncidente = parroquiaRef?.latitud ?? null
-      lngIncidente = parroquiaRef?.longitud ?? null
+      latIncidente = parroquiaRef?.latitud ?? null;
+      lngIncidente = parroquiaRef?.longitud ?? null;
     }
 
-    const zonaPastoralIncidente = parroquiaRef?.idZonaPastoral ?? null
+    const zonaPastoralIncidente = parroquiaRef?.idZonaPastoral ?? null;
 
     // ───────────────────────────────────────────────────────────────────────
     // FASE 1 — Brigadistas disponibles en la parroquia del incidente
     // ───────────────────────────────────────────────────────────────────────
     const brigadistasF1 = await this.repo.getBrigadistasDisponiblesPorParroquia(
-      entrada.idParroquia,
-    )
+      entrada.idParroquia
+    );
 
     if (brigadistasF1.length > 0) {
       const candidatos: CandidatoSugerido[] = await Promise.all(
         brigadistasF1.map(async (b) => {
-          const inc = await this.repo.getIncidenciasAtendidas(b.idBrigadistaParroquial)
-          const score = confianzaMixta(b, inc, config)
-          return buildCandidato(b, null, null, score)
-        }),
-      )
+          const inc = await this.repo.getIncidenciasAtendidas(b.idBrigadistaParroquial);
+          const score = confianzaMixta(b, inc, config);
+          return buildCandidato(b, null, null, score);
+        })
+      );
 
       return {
         listaSugerida: candidatos.sort(ordenar).slice(0, config.topN),
-        faseResultado: 'F1',
+        faseResultado: "F1",
         mensaje: null,
-      }
+      };
     }
 
     // ───────────────────────────────────────────────────────────────────────
@@ -112,7 +112,7 @@ export class SugerirBrigadistasUseCase {
     //    null hasta que exista el modelo ZonaPastoral.)
     // ───────────────────────────────────────────────────────────────────────
     if (latIncidente !== null && lngIncidente !== null) {
-      const todosF2 = await this.repo.getTodosBrigadistasDisponibles(entrada.idParroquia)
+      const todosF2 = await this.repo.getTodosBrigadistasDisponibles(entrada.idParroquia);
 
       const candidatosF2: CandidatoSugerido[] = todosF2
         .filter((b) => b.parroquia?.latitud != null && b.parroquia?.longitud != null)
@@ -121,22 +121,22 @@ export class SugerirBrigadistasUseCase {
             b.parroquia.latitud as number,
             b.parroquia.longitud as number,
             latIncidente as number,
-            lngIncidente as number,
-          )
+            lngIncidente as number
+          );
           const mismaZona =
             zonaPastoralIncidente !== null
               ? b.parroquia.idZonaPastoral === zonaPastoralIncidente
-              : null
+              : null;
 
-          return buildCandidato(b, parseFloat(dist.toFixed(2)), mismaZona, null)
-        })
+          return buildCandidato(b, parseFloat(dist.toFixed(2)), mismaZona, null);
+        });
 
       if (candidatosF2.length > 0) {
         return {
           listaSugerida: candidatosF2.sort(ordenar).slice(0, config.topN),
-          faseResultado: 'F2',
+          faseResultado: "F2",
           mensaje: null,
-        }
+        };
       }
     }
 
@@ -156,14 +156,14 @@ export class SugerirBrigadistasUseCase {
     // ───────────────────────────────────────────────────────────────────────
     // FASE 3 — Sin candidatos disponibles
     // ───────────────────────────────────────────────────────────────────────
-    await this.repo.registrarIntentoFallido(entrada.idParroquia, entrada.tipoIncidente)
+    await this.repo.registrarIntentoFallido(entrada.idParroquia, entrada.tipoIncidente);
 
     return {
       listaSugerida: [],
-      faseResultado: 'F3',
+      faseResultado: "F3",
       mensaje:
-        'No se encontraron brigadistas disponibles en ninguna zona. ' +
-        'Se requiere intervención manual del especialista.',
-    }
+        "No se encontraron brigadistas disponibles en ninguna zona. " +
+        "Se requiere intervención manual del especialista.",
+    };
   }
 }

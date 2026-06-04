@@ -1,17 +1,17 @@
-import { Incidencia } from '../../domain/entities/incidencia/Incidencia'
-import { EstadoIncidencia } from '../../domain/entities/incidencia/EstadoIncidencia'
+import { Incidencia } from "../../domain/entities/incidencia/Incidencia";
+import { EstadoIncidencia } from "../../domain/entities/incidencia/EstadoIncidencia";
 
 /** Fila mínima necesaria para reconstruir el agregado (estado + identificadores). */
 export type IncidenciaEstadoRow = {
-  idIncidencia: string
-  codigoCaso: string | null
-  idAviso: string | null
-  idParroquia: string | null
-  tituloIncidencia: string | null
-  tipoEvento: string | null
-  gravedad: string | null
-  estadoActual: string
-}
+  idIncidencia: string;
+  codigoCaso: string | null;
+  idAviso: string | null;
+  idParroquia: string | null;
+  tituloIncidencia: string | null;
+  tipoEvento: string | null;
+  gravedad: string | null;
+  estadoActual: string;
+};
 
 /** Traduce la fila de `Incidencia` al agregado de dominio (solo lo necesario para el flujo). */
 export const IncidenciaMapper = {
@@ -25,6 +25,6 @@ export const IncidenciaMapper = {
       tipoEvento: row.tipoEvento,
       gravedad: row.gravedad,
       estadoActual: row.estadoActual as EstadoIncidencia,
-    })
+    });
   },
-}
+};

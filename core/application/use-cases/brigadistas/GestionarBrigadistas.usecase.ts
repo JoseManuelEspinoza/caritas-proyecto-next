@@ -1,22 +1,28 @@
-import { randomUUID } from 'crypto'
-import { BrigadistaParroquial } from '../../../domain/entities/brigadista/BrigadistaParroquial'
-import { IBrigadistaRepository } from '../../../domain/repositories/IBrigadistaRepository'
-import { NotFoundError, ValidationError } from '../../../domain/errors/DomainError'
-import { BrigadistaInput, BrigadistaOutput, toBrigadistaOutput } from '../../dtos/BrigadistaDTO'
+import { randomUUID } from "crypto";
+import { BrigadistaParroquial } from "../../../domain/entities/brigadista/BrigadistaParroquial";
+import { IBrigadistaRepository } from "../../../domain/repositories/IBrigadistaRepository";
+import { NotFoundError, ValidationError } from "../../../domain/errors/DomainError";
+import { BrigadistaInput, BrigadistaOutput, toBrigadistaOutput } from "../../dtos/BrigadistaDTO";
 
 async function cargar(repo: IBrigadistaRepository, id: string): Promise<BrigadistaParroquial> {
-  const b = await repo.findById(id)
-  if (!b) throw new NotFoundError('Brigadista no encontrado.')
-  return b
+  const b = await repo.findById(id);
+  if (!b) throw new NotFoundError("Brigadista no encontrado.");
+  return b;
 }
 
 /** Valida que el DNI no esté repetido (opcionalmente excluyendo un id propio). */
-async function assertDniUnico(repo: IBrigadistaRepository, dni: string | undefined, exceptId?: string): Promise<void> {
-  const limpio = dni?.trim()
-  if (!limpio) return
-  const dueno = await repo.findIdByDni(limpio)
+async function assertDniUnico(
+  repo: IBrigadistaRepository,
+  dni: string | undefined,
+  exceptId?: string
+): Promise<void> {
+  const limpio = dni?.trim();
+  if (!limpio) return;
+  const dueno = await repo.findIdByDni(limpio);
   if (dueno && dueno !== exceptId) {
-    throw new ValidationError(exceptId ? 'Ya existe otro brigadista con ese DNI.' : 'Ya existe un brigadista con ese DNI.')
+    throw new ValidationError(
+      exceptId ? "Ya existe otro brigadista con ese DNI." : "Ya existe un brigadista con ese DNI."
+    );
   }
 }
 
@@ -24,7 +30,7 @@ async function assertDniUnico(repo: IBrigadistaRepository, dni: string | undefin
 export class CrearBrigadistaUseCase {
   constructor(private readonly repo: IBrigadistaRepository) {}
   async execute(input: BrigadistaInput): Promise<BrigadistaOutput> {
-    await assertDniUnico(this.repo, input.dni)
+    await assertDniUnico(this.repo, input.dni);
     const brigadista = BrigadistaParroquial.crear({
       id: randomUUID(),
       idParroquia: input.idParroquia,
@@ -34,9 +40,9 @@ export class CrearBrigadistaUseCase {
       celular: input.celular,
       correo: input.correo,
       disponibilidad: input.disponibilidad,
-    })
-    await this.repo.save(brigadista)
-    return toBrigadistaOutput(brigadista)
+    });
+    await this.repo.save(brigadista);
+    return toBrigadistaOutput(brigadista);
   }
 }
 
@@ -44,11 +50,11 @@ export class CrearBrigadistaUseCase {
 export class ActualizarBrigadistaUseCase {
   constructor(private readonly repo: IBrigadistaRepository) {}
   async execute(id: string, input: BrigadistaInput): Promise<BrigadistaOutput> {
-    await assertDniUnico(this.repo, input.dni, id)
-    const brigadista = await cargar(this.repo, id)
-    brigadista.actualizarDatos(input)
-    await this.repo.update(brigadista)
-    return toBrigadistaOutput(brigadista)
+    await assertDniUnico(this.repo, input.dni, id);
+    const brigadista = await cargar(this.repo, id);
+    brigadista.actualizarDatos(input);
+    await this.repo.update(brigadista);
+    return toBrigadistaOutput(brigadista);
   }
 }
 
@@ -56,10 +62,10 @@ export class ActualizarBrigadistaUseCase {
 export class ToggleEstadoBrigadistaUseCase {
   constructor(private readonly repo: IBrigadistaRepository) {}
   async execute(id: string): Promise<BrigadistaOutput> {
-    const brigadista = await cargar(this.repo, id)
-    brigadista.toggleEstado()
-    await this.repo.update(brigadista)
-    return toBrigadistaOutput(brigadista)
+    const brigadista = await cargar(this.repo, id);
+    brigadista.toggleEstado();
+    await this.repo.update(brigadista);
+    return toBrigadistaOutput(brigadista);
   }
 }
 
@@ -67,10 +73,10 @@ export class ToggleEstadoBrigadistaUseCase {
 export class ToggleDisponibilidadUseCase {
   constructor(private readonly repo: IBrigadistaRepository) {}
   async execute(id: string): Promise<BrigadistaOutput> {
-    const brigadista = await cargar(this.repo, id)
-    brigadista.toggleDisponibilidad()
-    await this.repo.update(brigadista)
-    return toBrigadistaOutput(brigadista)
+    const brigadista = await cargar(this.repo, id);
+    brigadista.toggleDisponibilidad();
+    await this.repo.update(brigadista);
+    return toBrigadistaOutput(brigadista);
   }
 }
 
@@ -78,6 +84,6 @@ export class ToggleDisponibilidadUseCase {
 export class ListarBrigadistasUseCase {
   constructor(private readonly repo: IBrigadistaRepository) {}
   async execute(): Promise<BrigadistaOutput[]> {
-    return (await this.repo.findAll()).map(toBrigadistaOutput)
+    return (await this.repo.findAll()).map(toBrigadistaOutput);
   }
 }

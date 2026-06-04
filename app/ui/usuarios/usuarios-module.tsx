@@ -1,21 +1,21 @@
-import { Users, Info } from 'lucide-react'
+import { Users, Info } from "lucide-react";
 
-type Usuario = { id: string; email: string; name: string; role: string; estado: string }
+type Usuario = { id: string; email: string; name: string; role: string; estado: string };
 
 const ROLE_LABEL: Record<string, string> = {
-  ADMINISTRADOR: 'Administrador',
-  ESPECIALISTAGRD: 'Especialista GRD',
-  BRIGADISTA: 'Brigadista',
-  COMITEDONACIONES: 'Comité de Donaciones',
-  JEFAOGP: 'Jefa OGP',
-}
+  ADMINISTRADOR: "Administrador",
+  ESPECIALISTAGRD: "Especialista GRD",
+  BRIGADISTA: "Brigadista",
+  COMITEDONACIONES: "Comité de Donaciones",
+  JEFAOGP: "Jefa OGP",
+};
 const ROLE_BADGE: Record<string, string> = {
-  ADMINISTRADOR: 'bg-purple-50 text-purple-700',
-  ESPECIALISTAGRD: 'bg-green-50 text-green-700',
-  BRIGADISTA: 'bg-blue-50 text-blue-700',
-  COMITEDONACIONES: 'bg-orange-50 text-orange-700',
-  JEFAOGP: 'bg-cyan-50 text-cyan-700',
-}
+  ADMINISTRADOR: "bg-purple-50 text-purple-700",
+  ESPECIALISTAGRD: "bg-green-50 text-green-700",
+  BRIGADISTA: "bg-blue-50 text-blue-700",
+  COMITEDONACIONES: "bg-orange-50 text-orange-700",
+  JEFAOGP: "bg-cyan-50 text-cyan-700",
+};
 
 /**
  * Gestión de usuarios — SOLO LECTURA.
@@ -39,10 +39,11 @@ export function UsuariosModule({ usuarios }: { usuarios: Usuario[] }) {
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-5 flex items-start gap-2">
         <Info className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
         <p className="text-xs text-blue-800">
-          La autenticación está gestionada por <strong>Keycloak</strong>. Para crear usuarios, asignar roles o
-          restablecer contraseñas, usa la <strong>consola de administración de Keycloak</strong>
-          (<code className="bg-white px-1 rounded">http://localhost:8080/admin</code>). Esta lista muestra los
-          usuarios que ya han ingresado a la aplicación.
+          La autenticación está gestionada por <strong>Keycloak</strong>. Para crear usuarios,
+          asignar roles o restablecer contraseñas, usa la{" "}
+          <strong>consola de administración de Keycloak</strong>(
+          <code className="bg-white px-1 rounded">http://localhost:8080/admin</code>). Esta lista
+          muestra los usuarios que ya han ingresado a la aplicación.
         </p>
       </div>
 
@@ -61,14 +62,32 @@ export function UsuariosModule({ usuarios }: { usuarios: Usuario[] }) {
               <tr key={u.id} className="border-t border-[var(--caritas-border)]">
                 <td className="px-4 py-2 font-medium text-[var(--caritas-text)]">{u.name}</td>
                 <td className="px-4 py-2 text-gray-600">{u.email}</td>
-                <td className="px-4 py-2"><span className={`px-2 py-0.5 rounded text-xs ${ROLE_BADGE[u.role] ?? 'bg-gray-100 text-gray-700'}`}>{ROLE_LABEL[u.role] ?? u.role}</span></td>
-                <td className="px-4 py-2"><span className={`px-2 py-0.5 rounded text-xs ${u.estado === 'ACTIVO' ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>{u.estado}</span></td>
+                <td className="px-4 py-2">
+                  <span
+                    className={`px-2 py-0.5 rounded text-xs ${ROLE_BADGE[u.role] ?? "bg-gray-100 text-gray-700"}`}
+                  >
+                    {ROLE_LABEL[u.role] ?? u.role}
+                  </span>
+                </td>
+                <td className="px-4 py-2">
+                  <span
+                    className={`px-2 py-0.5 rounded text-xs ${u.estado === "ACTIVO" ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500"}`}
+                  >
+                    {u.estado}
+                  </span>
+                </td>
               </tr>
             ))}
-            {usuarios.length === 0 && <tr><td colSpan={4} className="text-center py-8 text-gray-500">Aún no hay usuarios que hayan iniciado sesión.</td></tr>}
+            {usuarios.length === 0 && (
+              <tr>
+                <td colSpan={4} className="text-center py-8 text-gray-500">
+                  Aún no hay usuarios que hayan iniciado sesión.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
     </div>
-  )
+  );
 }

@@ -1,65 +1,62 @@
-'use client'
+"use client";
 
-import { useMemo, useState } from 'react'
-import { Search } from 'lucide-react'
-import type { AuditEntry } from '@/app/actions/auditoria'
+import { useMemo, useState } from "react";
+import { Search } from "lucide-react";
+import type { AuditEntry } from "@/app/actions/auditoria";
 
 const SOURCE_LABELS: Record<string, string> = {
-  grd: 'GRD',
-  estado: 'Incidencia',
-  auth: 'Auth',
-}
+  grd: "GRD",
+  estado: "Incidencia",
+  auth: "Auth",
+};
 
 const ACTION_COLORS: Record<string, string> = {
-  'cambio_estado':   'bg-blue-100 text-blue-700',
-  'creación':        'bg-green-100 text-green-700',
-  'edición':         'bg-yellow-100 text-yellow-700',
-  'asignación':      'bg-purple-100 text-purple-700',
-  'aprobacion':      'bg-emerald-100 text-emerald-700',
-  'rechazo':         'bg-red-100 text-red-700',
-  'cierre':          'bg-gray-200 text-gray-700',
-  'login':           'bg-sky-100 text-sky-700',
-  'login failed':    'bg-red-100 text-red-700',
-  'logout':          'bg-slate-100 text-slate-600',
-}
+  cambio_estado: "bg-blue-100 text-blue-700",
+  creación: "bg-green-100 text-green-700",
+  edición: "bg-yellow-100 text-yellow-700",
+  asignación: "bg-purple-100 text-purple-700",
+  aprobacion: "bg-emerald-100 text-emerald-700",
+  rechazo: "bg-red-100 text-red-700",
+  cierre: "bg-gray-200 text-gray-700",
+  login: "bg-sky-100 text-sky-700",
+  "login failed": "bg-red-100 text-red-700",
+  logout: "bg-slate-100 text-slate-600",
+};
 
 function ActionBadge({ action }: { action: string }) {
-  const cls = ACTION_COLORS[action] ?? 'bg-gray-100 text-gray-600'
-  return (
-    <span className={`px-2 py-0.5 rounded text-xs font-medium ${cls}`}>
-      {action}
-    </span>
-  )
+  const cls = ACTION_COLORS[action] ?? "bg-gray-100 text-gray-600";
+  return <span className={`px-2 py-0.5 rounded text-xs font-medium ${cls}`}>{action}</span>;
 }
 
-const PAGE_SIZE = 25
+const PAGE_SIZE = 25;
 
 export function AuditoriaTable({ entries }: { entries: AuditEntry[] }) {
-  const [query, setQuery] = useState('')
-  const [actionFilter, setActionFilter] = useState('')
-  const [sourceFilter, setSourceFilter] = useState('')
-  const [page, setPage] = useState(1)
+  const [query, setQuery] = useState("");
+  const [actionFilter, setActionFilter] = useState("");
+  const [sourceFilter, setSourceFilter] = useState("");
+  const [page, setPage] = useState(1);
 
   const actions = useMemo(
     () => Array.from(new Set(entries.map((e) => e.action))).sort(),
     [entries]
-  )
+  );
 
   const filtered = useMemo(() => {
-    const q = query.toLowerCase()
+    const q = query.toLowerCase();
     return entries.filter((e) => {
-      const text = `${e.entityId} ${e.entityName} ${e.user} ${e.notes ?? ''} ${e.field ?? ''}`.toLowerCase()
+      const text =
+        `${e.entityId} ${e.entityName} ${e.user} ${e.notes ?? ""} ${e.field ?? ""}`.toLowerCase();
       return (
         (!q || text.includes(q)) &&
         (!actionFilter || e.action === actionFilter) &&
         (!sourceFilter || e.source === sourceFilter)
-      )
-    })
-  }, [entries, query, actionFilter, sourceFilter])
+      );
+    });
+  }, [entries, query, actionFilter, sourceFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const currentPage = Math.min(page, totalPages)
-  const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   return (
     <div className="bg-white border border-[#DDDDDD] rounded-xl">
@@ -69,24 +66,35 @@ export function AuditoriaTable({ entries }: { entries: AuditEntry[] }) {
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             value={query}
-            onChange={(e) => { setQuery(e.target.value); setPage(1) }}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setPage(1);
+            }}
             placeholder="Buscar por registro, usuario o nota…"
             className="pl-9 pr-3 py-2 w-full border border-[#DDDDDD] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#009850]/30"
           />
         </div>
         <select
           value={actionFilter}
-          onChange={(e) => { setActionFilter(e.target.value); setPage(1) }}
+          onChange={(e) => {
+            setActionFilter(e.target.value);
+            setPage(1);
+          }}
           className="px-3 py-2 border border-[#DDDDDD] rounded-lg text-sm bg-white focus:outline-none"
         >
           <option value="">Todas las acciones</option>
           {actions.map((a) => (
-            <option key={a} value={a}>{a}</option>
+            <option key={a} value={a}>
+              {a}
+            </option>
           ))}
         </select>
         <select
           value={sourceFilter}
-          onChange={(e) => { setSourceFilter(e.target.value); setPage(1) }}
+          onChange={(e) => {
+            setSourceFilter(e.target.value);
+            setPage(1);
+          }}
           className="px-3 py-2 border border-[#DDDDDD] rounded-lg text-sm bg-white focus:outline-none"
         >
           <option value="">Todos los módulos</option>
@@ -95,7 +103,7 @@ export function AuditoriaTable({ entries }: { entries: AuditEntry[] }) {
           <option value="auth">Autenticación</option>
         </select>
         <span className="text-xs text-gray-400 ml-auto">
-          {filtered.length} registro{filtered.length !== 1 ? 's' : ''}
+          {filtered.length} registro{filtered.length !== 1 ? "s" : ""}
         </span>
       </div>
 
@@ -116,23 +124,26 @@ export function AuditoriaTable({ entries }: { entries: AuditEntry[] }) {
             {paginated.map((e) => (
               <tr key={`${e.source}-${e.id}`} className="hover:bg-gray-50 transition-colors">
                 <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
-                  {new Date(e.timestamp).toLocaleString('es-PE', {
-                    day: '2-digit', month: '2-digit', year: 'numeric',
-                    hour: '2-digit', minute: '2-digit',
-                    timeZone: 'America/Lima',
+                  {new Date(e.timestamp).toLocaleString("es-PE", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    timeZone: "America/Lima",
                   })}
                 </td>
                 <td className="px-4 py-3">
                   <div className="font-medium text-gray-800">{e.user}</div>
-                  {e.userRole && (
-                    <div className="text-xs text-gray-400">{e.userRole}</div>
-                  )}
+                  {e.userRole && <div className="text-xs text-gray-400">{e.userRole}</div>}
                 </td>
                 <td className="px-4 py-3">
                   <ActionBadge action={e.action} />
                 </td>
                 <td className="px-4 py-3">
-                  <div className="text-xs text-gray-400">{e.entity !== 'GRD' ? e.entity : (SOURCE_LABELS[e.source] ?? e.entity)}</div>
+                  <div className="text-xs text-gray-400">
+                    {e.entity !== "GRD" ? e.entity : (SOURCE_LABELS[e.source] ?? e.entity)}
+                  </div>
                   <div className="text-gray-800 max-w-[200px] truncate" title={e.entityName}>
                     {e.entityName}
                   </div>
@@ -140,9 +151,11 @@ export function AuditoriaTable({ entries }: { entries: AuditEntry[] }) {
                 <td className="px-4 py-3 text-xs">
                   {e.field ? (
                     <div>
-                      <span className="font-medium text-gray-600">{e.field}:</span>{' '}
-                      {e.prevValue && <span className="line-through text-gray-400">{e.prevValue}</span>}
-                      {e.prevValue && ' → '}
+                      <span className="font-medium text-gray-600">{e.field}:</span>{" "}
+                      {e.prevValue && (
+                        <span className="line-through text-gray-400">{e.prevValue}</span>
+                      )}
+                      {e.prevValue && " → "}
                       <span className="font-medium text-gray-800">{e.newValue}</span>
                     </div>
                   ) : e.prevStatus || e.newStatus ? (
@@ -154,8 +167,11 @@ export function AuditoriaTable({ entries }: { entries: AuditEntry[] }) {
                     <span className="text-gray-300">—</span>
                   )}
                 </td>
-                <td className="px-4 py-3 text-xs text-gray-500 max-w-[180px] truncate" title={e.notes}>
-                  {e.notes ?? ''}
+                <td
+                  className="px-4 py-3 text-xs text-gray-500 max-w-[180px] truncate"
+                  title={e.notes}
+                >
+                  {e.notes ?? ""}
                 </td>
               </tr>
             ))}
@@ -174,7 +190,8 @@ export function AuditoriaTable({ entries }: { entries: AuditEntry[] }) {
       {totalPages > 1 && (
         <div className="px-4 py-3 border-t border-[#DDDDDD] flex items-center justify-between text-sm text-gray-500">
           <span>
-            {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filtered.length)} de {filtered.length} registros
+            {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filtered.length)}{" "}
+            de {filtered.length} registros
           </span>
           <div className="flex items-center gap-1">
             <button
@@ -212,5 +229,5 @@ export function AuditoriaTable({ entries }: { entries: AuditEntry[] }) {
         </div>
       )}
     </div>
-  )
+  );
 }

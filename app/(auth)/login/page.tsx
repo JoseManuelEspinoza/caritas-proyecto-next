@@ -1,10 +1,10 @@
-import type { Metadata } from 'next'
-import { LogIn, ShieldCheck } from 'lucide-react'
-import { loginConKeycloak } from '@/app/actions/auth'
+import type { Metadata } from "next";
+import { LogIn, ShieldCheck } from "lucide-react";
+import { loginConKeycloak } from "@/app/actions/auth";
 
 export const metadata: Metadata = {
-  title: 'Iniciar sesión — Cáritas Lima',
-}
+  title: "Iniciar sesión — Cáritas Lima",
+};
 
 export default function LoginPage() {
   return (
@@ -12,17 +12,15 @@ export default function LoginPage() {
       <div className="w-14 h-14 mx-auto mb-4 bg-[var(--caritas-green)]/10 rounded-2xl flex items-center justify-center">
         <ShieldCheck className="w-7 h-7 text-[var(--caritas-green)]" />
       </div>
-      <h2 className="text-lg md:text-xl mb-1" style={{ color: 'var(--caritas-text)' }}>
+      <h2 className="text-lg md:text-xl mb-1" style={{ color: "var(--caritas-text)" }}>
         Iniciar Sesión
       </h2>
-      <p className="text-sm text-gray-500 mb-6">
-        Accede con tu cuenta institucional de Cáritas
-      </p>
+      <p className="text-sm text-gray-500 mb-6">Accede con tu cuenta institucional de Cáritas</p>
 
       <form
         action={async () => {
-          'use server'
-          await loginConKeycloak()
+          "use server";
+          await loginConKeycloak();
         }}
       >
         <button
@@ -38,5 +36,5 @@ export default function LoginPage() {
         Serás redirigido al proveedor de identidad seguro.
       </p>
     </div>
-  )
+  );
 }

@@ -1,15 +1,15 @@
-import { History } from 'lucide-react'
-import { verifySession } from '@/app/lib/dal'
-import { toFrontendRole } from '@/app/lib/roles'
-import { redirect } from 'next/navigation'
-import { getAuditEntries } from '@/app/actions/auditoria'
-import { AuditoriaTable } from '@/app/ui/auditoria/auditoria-table'
+import { History } from "lucide-react";
+import { verifySession } from "@/app/lib/dal";
+import { toFrontendRole } from "@/app/lib/roles";
+import { redirect } from "next/navigation";
+import { getAuditEntries } from "@/app/actions/auditoria";
+import { AuditoriaTable } from "@/app/ui/auditoria/auditoria-table";
 
 export default async function AuditoriaPage() {
-  const session = await verifySession()
-  if (toFrontendRole(session.role) !== 'admin') redirect('/dashboard')
+  const session = await verifySession();
+  if (toFrontendRole(session.role) !== "admin") redirect("/dashboard");
 
-  const entries = await getAuditEntries()
+  const entries = await getAuditEntries();
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
@@ -25,5 +25,5 @@ export default async function AuditoriaPage() {
 
       <AuditoriaTable entries={entries} />
     </div>
-  )
+  );
 }

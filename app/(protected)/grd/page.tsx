@@ -1,29 +1,29 @@
-import { verifySession } from '@/app/lib/dal'
-import { prisma } from '@/app/lib/prisma'
-import { toFrontendRole } from '@/app/lib/roles'
-import { GrdList, type IncidenteItem } from '@/app/ui/grd/grd-list'
+import { verifySession } from "@/app/lib/dal";
+import { prisma } from "@/app/lib/prisma";
+import { toFrontendRole } from "@/app/lib/roles";
+import { GrdList, type IncidenteItem } from "@/app/ui/grd/grd-list";
 
 export default async function GrdPage() {
-  const session = await verifySession()
-  const role = toFrontendRole(session.role)
+  const session = await verifySession();
+  const role = toFrontendRole(session.role);
 
   // Brigadistas: filtrar solo sus incidentes asignados
-  let whereClause: Record<string, any> = { deletedAt: null }
+  const whereClause: Record<string, any> = { deletedAt: null };
 
-  if (role === 'brigadista') {
+  if (role === "brigadista") {
     const usuarioGRD = await prisma.usuarioGRD.findUnique({
       where: { idCredencial: session.userId },
       select: { idUsuarioGRD: true },
-    })
+    });
     if (usuarioGRD) {
       const brigadista = await prisma.brigadistaParroquial.findFirst({
         where: { idUsuarioGRD: usuarioGRD.idUsuarioGRD },
         select: { idBrigadistaParroquial: true },
-      })
+      });
       if (brigadista) {
         whereClause.asignaciones = {
           some: { idBrigadistaParroquial: brigadista.idBrigadistaParroquial },
-        }
+        };
       }
     }
     // Si el brigadista no tiene record aún, ve lista vacía (seguro)
@@ -31,15 +31,15 @@ export default async function GrdPage() {
 
   const incidencias = await prisma.incidencia.findMany({
     where: whereClause,
-    orderBy: { createdAt: 'desc' },
+    orderBy: { createdAt: "desc" },
     select: {
-      idIncidencia:    true,
-      codigoCaso:      true,
+      idIncidencia: true,
+      codigoCaso: true,
       tituloIncidencia: true,
-      tipoEvento:      true,
-      estadoActual:    true,
+      tipoEvento: true,
+      estadoActual: true,
       direccionEvento: true,
-      fechaRegistro:   true,
+      fechaRegistro: true,
       parroquia: { select: { nombre: true } },
       // Contamos personas via include de grupos
       gruposFamiliares: {
@@ -49,29 +49,29 @@ export default async function GrdPage() {
         },
       },
       asignaciones: {
-        where: { estadoAsignacion: 'ASIGNADA' },
+        where: { estadoAsignacion: "ASIGNADA" },
         select: {
           brigadista: { select: { nombres: true, apellidos: true } },
         },
       },
     },
-  })
+  });
 
   const items: IncidenteItem[] = incidencias.map((i) => ({
-    idIncidencia:     i.idIncidencia,
-    codigoCaso:       i.codigoCaso,
+    idIncidencia: i.idIncidencia,
+    codigoCaso: i.codigoCaso,
     tituloIncidencia: i.tituloIncidencia,
-    tipoEvento:       i.tipoEvento,
-    estadoActual:     i.estadoActual,
-    direccionEvento:  i.direccionEvento,
-    fechaRegistro:    i.fechaRegistro.toISOString(),
-    parroquia:        i.parroquia?.nombre ?? null,
-    totalFamilias:    i.gruposFamiliares.length,
-    totalPersonas:    i.gruposFamiliares.reduce((s, g) => s + g.personas.length, 0),
-    brigadistas:      i.asignaciones.map(
-      (a) => `${a.brigadista.nombres} ${a.brigadista.apellidos ?? ''}`.trim()
+    tipoEvento: i.tipoEvento,
+    estadoActual: i.estadoActual,
+    direccionEvento: i.direccionEvento,
+    fechaRegistro: i.fechaRegistro.toISOString(),
+    parroquia: i.parroquia?.nombre ?? null,
+    totalFamilias: i.gruposFamiliares.length,
+    totalPersonas: i.gruposFamiliares.reduce((s, g) => s + g.personas.length, 0),
+    brigadistas: i.asignaciones.map((a) =>
+      `${a.brigadista.nombres} ${a.brigadista.apellidos ?? ""}`.trim()
     ),
-  }))
+  }));
 
-  return <GrdList items={items} role={role} />
+  return <GrdList items={items} role={role} />;
 }

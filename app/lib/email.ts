@@ -1,13 +1,13 @@
-import nodemailer from 'nodemailer'
+import nodemailer from "nodemailer";
 
 function createTransporter() {
-  const host = process.env.SMTP_HOST ?? 'localhost'
-  const port = Number(process.env.SMTP_PORT ?? 1025)
-  const user = process.env.SMTP_USER
-  const pass = process.env.SMTP_PASS
+  const host = process.env.SMTP_HOST ?? "localhost";
+  const port = Number(process.env.SMTP_PORT ?? 1025);
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
 
   // Gmail: puerto 465 usa SSL directo, 587 usa STARTTLS
-  const secure = port === 465
+  const secure = port === 465;
 
   return nodemailer.createTransport({
     host,
@@ -15,18 +15,18 @@ function createTransporter() {
     secure,
     auth: user ? { user, pass } : undefined,
     // Gmail rechaza conexiones sin TLS válido en producción
-    tls: { rejectUnauthorized: process.env.NODE_ENV === 'production' },
-  })
+    tls: { rejectUnauthorized: process.env.NODE_ENV === "production" },
+  });
 }
 
 export async function sendPasswordResetEmail(to: string, token: string) {
-  const resetUrl = `${process.env.APP_URL}/recuperar/${token}`
-  const transporter = createTransporter()
+  const resetUrl = `${process.env.APP_URL}/recuperar/${token}`;
+  const transporter = createTransporter();
 
   await transporter.sendMail({
-    from: process.env.SMTP_FROM ?? 'no-reply@caritas-lima.pe',
+    from: process.env.SMTP_FROM ?? "no-reply@caritas-lima.pe",
     to,
-    subject: 'Recuperación de contraseña — Cáritas Lima',
+    subject: "Recuperación de contraseña — Cáritas Lima",
     html: `
       <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px">
         <h2 style="color:#b91c1c;margin-bottom:4px">Cáritas Lima</h2>
@@ -48,5 +48,5 @@ export async function sendPasswordResetEmail(to: string, token: string) {
         </p>
       </div>
     `,
-  })
+  });
 }

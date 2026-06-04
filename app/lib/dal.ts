@@ -1,9 +1,9 @@
-import 'server-only'
-import { cache } from 'react'
-import { redirect } from 'next/navigation'
-import type { Role } from '@prisma/client'
-import { auth } from '@/auth'
-import { prisma } from './prisma'
+import "server-only";
+import { cache } from "react";
+import { redirect } from "next/navigation";
+import type { Role } from "@prisma/client";
+import { auth } from "@/auth";
+import { prisma } from "./prisma";
 
 /**
  * Capa de acceso a datos de sesión.
@@ -16,42 +16,45 @@ import { prisma } from './prisma'
 // El User.id es estable por email → se cachea en memoria para no consultar la
 // BD en cada navegación (gran parte de la lentitud al cambiar de pestaña).
 // Con un TTL corto el cache se auto-refresca (evita cualquier inconsistencia).
-const USER_ID_TTL_MS = 10 * 60 * 1000 // 10 minutos
-const userIdCache = new Map<string, { id: string; exp: number }>()
+const USER_ID_TTL_MS = 10 * 60 * 1000; // 10 minutos
+const userIdCache = new Map<string, { id: string; exp: number }>();
 
 async function getAppUserId(email: string, name: string, role: string): Promise<string> {
-  const cached = userIdCache.get(email)
-  if (cached && cached.exp > Date.now()) return cached.id
+  const cached = userIdCache.get(email);
+  if (cached && cached.exp > Date.now()) return cached.id;
 
-  let user = await prisma.user.findUnique({ where: { email }, select: { id: true } })
+  let user = await prisma.user.findUnique({ where: { email }, select: { id: true } });
   if (!user) {
     // Fallback de provisión por si el evento signIn no corrió.
-    user = await prisma.user.create({ data: { email, name, role: role as Role }, select: { id: true } })
+    user = await prisma.user.create({
+      data: { email, name, role: role as Role },
+      select: { id: true },
+    });
   }
-  userIdCache.set(email, { id: user.id, exp: Date.now() + USER_ID_TTL_MS })
-  return user.id
+  userIdCache.set(email, { id: user.id, exp: Date.now() + USER_ID_TTL_MS });
+  return user.id;
 }
 
-type AppSession = { isAuth: true; userId: string; role: string; name: string; email: string }
+type AppSession = { isAuth: true; userId: string; role: string; name: string; email: string };
 
 const resolver = cache(async (): Promise<AppSession | null> => {
-  const session = await auth()
-  const email = session?.user?.email
-  if (!email) return null
+  const session = await auth();
+  const email = session?.user?.email;
+  if (!email) return null;
   // rol/nombre salen del token (sin BD); solo el id consulta (cacheado).
-  const name = session.user?.name ?? email
-  const role = session.user?.role ?? 'BRIGADISTA'
-  const userId = await getAppUserId(email, name, role)
-  return { isAuth: true, userId, role, name, email }
-})
+  const name = session.user?.name ?? email;
+  const role = session.user?.role ?? "BRIGADISTA";
+  const userId = await getAppUserId(email, name, role);
+  return { isAuth: true, userId, role, name, email };
+});
 
 export const verifySession = cache(async (): Promise<AppSession> => {
-  const s = await resolver()
-  if (!s) redirect('/login')
-  return s
-})
+  const s = await resolver();
+  if (!s) redirect("/login");
+  return s;
+});
 
 export const getSession = cache(async () => {
-  const s = await resolver()
-  return s ? { userId: s.userId, role: s.role } : null
-})
+  const s = await resolver();
+  return s ? { userId: s.userId, role: s.role } : null;
+});
