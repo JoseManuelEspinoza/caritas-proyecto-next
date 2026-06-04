@@ -88,6 +88,8 @@ services:
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
       # HTTP local (sin TLS en dev) + health
       KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME: localhost
+      KC_HOSTNAME_PORT: "8080"
       KC_HOSTNAME_STRICT: "false"
       KC_HEALTH_ENABLED: "true"
     ports:
