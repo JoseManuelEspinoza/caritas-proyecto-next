@@ -1,7 +1,0 @@
-# Override local: evita el choque con el PostgreSQL 18 instalado en el host
-# (que ya ocupa el puerto 5432). El contenedor sigue usando 5432 internamente;
-# solo se cambia el puerto publicado al host a 5433.
-services:
-  db:
-    ports:
-      - "5433:5433"

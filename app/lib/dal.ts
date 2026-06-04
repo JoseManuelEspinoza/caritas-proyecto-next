@@ -1,57 +1,21 @@
 import 'server-only'
 import { cache } from 'react'
+import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
-import type { Role } from '@prisma/client'
-import { auth } from '@/auth'
-import { prisma } from './prisma'
+import { decrypt } from './session'
 
-/**
- * Capa de acceso a datos de sesión.
- *
- * La autenticación la provee Keycloak (vía Auth.js). Aquí traducimos esa
- * identidad a la credencial `User` de la app (creada en el evento de login) para
- * devolver la MISMA forma `{ isAuth, userId, role }` que ya consume todo el GRD
- * (incluido `getUsuarioGRDId`). Así la lógica de negocio no cambia.
- */
-// El User.id es estable por email → se cachea en memoria para no consultar la
-// BD en cada navegación (gran parte de la lentitud al cambiar de pestaña).
-// Con un TTL corto el cache se auto-refresca (evita cualquier inconsistencia).
-const USER_ID_TTL_MS = 10 * 60 * 1000 // 10 minutos
-const userIdCache = new Map<string, { id: string; exp: number }>()
+export const verifySession = cache(async () => {
+  const cookie = (await cookies()).get('session')?.value
+  const session = await decrypt(cookie)
 
-async function getAppUserId(email: string, name: string, role: string): Promise<string> {
-  const cached = userIdCache.get(email)
-  if (cached && cached.exp > Date.now()) return cached.id
-
-  let user = await prisma.user.findUnique({ where: { email }, select: { id: true } })
-  if (!user) {
-    // Fallback de provisión por si el evento signIn no corrió.
-    user = await prisma.user.create({ data: { email, name, role: role as Role }, select: { id: true } })
+  if (!session?.userId) {
+    redirect('/login')
   }
-  userIdCache.set(email, { id: user.id, exp: Date.now() + USER_ID_TTL_MS })
-  return user.id
-}
 
-type AppSession = { isAuth: true; userId: string; role: string; name: string; email: string }
-
-const resolver = cache(async (): Promise<AppSession | null> => {
-  const session = await auth()
-  const email = session?.user?.email
-  if (!email) return null
-  // rol/nombre salen del token (sin BD); solo el id consulta (cacheado).
-  const name = session.user?.name ?? email
-  const role = session.user?.role ?? 'BRIGADISTA'
-  const userId = await getAppUserId(email, name, role)
-  return { isAuth: true, userId, role, name, email }
-})
-
-export const verifySession = cache(async (): Promise<AppSession> => {
-  const s = await resolver()
-  if (!s) redirect('/login')
-  return s
+  return { isAuth: true, userId: session.userId, role: session.role }
 })
 
 export const getSession = cache(async () => {
-  const s = await resolver()
-  return s ? { userId: s.userId, role: s.role } : null
+  const cookie = (await cookies()).get('session')?.value
+  return decrypt(cookie)
 })

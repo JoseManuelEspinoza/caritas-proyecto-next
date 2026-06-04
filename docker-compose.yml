@@ -6,52 +6,32 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - DATABASE_URL=postgresql://postgres:CaritasDB_2026_Test@caritas-grd-db.c2sjosirydcu.us-east-1.rds.amazonaws.com:5432/caritas_db?schema=public&uselibpqcompat=true&sslmode=require
+      - DATABASE_URL=postgresql://postgres:admin123@db:5432/caritas_db
       - SESSION_SECRET=dev-secret-minimo-32-caracteres-cambiar-en-prod
       - APP_URL=http://localhost:3000
       - NODE_ENV=development
-      # Limit Node.js heap to 4 GB — prevents unbounded growth that caused ~60 GB RAM usage.
-      - NODE_OPTIONS=--max-old-space-size=4096
       - WATCHPACK_POLLING=true
-      - CHOKIDAR_USEPOLLING=true
-      # 300 ms was polling 1 GB of node_modules thousands of times/sec; 3 s is sufficient.
-      - CHOKIDAR_INTERVAL=3000
-      # ─── Auth.js v5 + Keycloak (OIDC) ──────────────────────────────────────
-      # AUTH_KEYCLOAK_ISSUER → URL interna Docker: el contenedor la usa para
-      #   OIDC discovery, token exchange y JWKS (todos server-side via keycloak:8080).
-      # AUTH_KEYCLOAK_AUTHORIZATION → URL pública: solo el navegador la usa para
-      #   el redirect de login. Se sobreescribe en auth.config.ts.
-      - AUTH_SECRET=dev-auth-secret-cambiar-en-produccion-min-32-chars
-      - AUTH_TRUST_HOST=true
-      - AUTH_URL=http://localhost:3000
-      - AUTH_KEYCLOAK_ID=caritas-app
-      - AUTH_KEYCLOAK_SECRET=caritas-app-secret-dev
-      - AUTH_KEYCLOAK_ISSUER=http://keycloak:8080/realms/caritas
-      - AUTH_KEYCLOAK_AUTHORIZATION=http://localhost:8085/realms/caritas/protocol/openid-connect/auth
       # SMTP — se lee desde el archivo .env del proyecto
       - SMTP_HOST=${SMTP_HOST:-mailhog}
       - SMTP_PORT=${SMTP_PORT:-1025}
       - SMTP_USER=${SMTP_USER:-}
       - SMTP_PASS=${SMTP_PASS:-}
       - SMTP_FROM=${SMTP_FROM:-no-reply@caritas-lima.pe}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     volumes:
       - .:/app
       - node_modules:/app/node_modules
     depends_on:
       db:
         condition: service_healthy
-    command: sh -c "npm install && npx prisma generate && npx prisma db push && npm run dev"
+    command: sh -c "npx prisma generate && npx prisma db push && npm run dev"
 
-  # ─── Base de datos de la APLICACIÓN ──────────────────────────────────────────
   db:
     image: postgres:15-alpine
     ports:
-      - "5434:5432"
+      - "5432:5432"
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: CaritasDB_2026_Test
+      POSTGRES_PASSWORD: admin123
       POSTGRES_DB: caritas_db
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -60,51 +40,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-
-  # ─── Base de datos de KEYCLOAK (separada de la app, NO H2) ───────────────────
-  keycloak-db:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_USER: keycloak
-      POSTGRES_PASSWORD: keycloak123
-      POSTGRES_DB: keycloak
-    volumes:
-      - keycloak_db_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U keycloak"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
-  # ─── KEYCLOAK (Identity Provider / OIDC) ─────────────────────────────────────
-  keycloak:
-    image: quay.io/keycloak/keycloak:26.0
-    command: start-dev --import-realm
-    environment:
-      # Persistencia en PostgreSQL (buena práctica de producción; nada de H2)
-      KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
-      KC_DB_USERNAME: keycloak
-      KC_DB_PASSWORD: keycloak123
-      # Admin inicial (consola en /admin)
-      KC_BOOTSTRAP_ADMIN_USERNAME: admin
-      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
-      # HTTP local (sin TLS en dev) + health
-      KC_HTTP_ENABLED: "true"
-      KC_HOSTNAME: localhost
-      KC_HOSTNAME_PORT: "8080"
-      KC_HOSTNAME_STRICT: "false"
-      KC_HEALTH_ENABLED: "true"
-    ports:
-      - "8085:8080"
-    volumes:
-      # El realm se importa al primer arranque
-      - ./keycloak/realm-caritas.json:/opt/keycloak/data/import/realm-caritas.json:ro
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    depends_on:
-      keycloak-db:
-        condition: service_healthy
 
   # Servidor de email para desarrollo — Bandeja web: http://localhost:8025
   mailhog:
@@ -115,5 +50,4 @@ services:
 
 volumes:
   postgres_data:
-  keycloak_db_data:
   node_modules:

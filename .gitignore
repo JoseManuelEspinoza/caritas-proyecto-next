@@ -44,5 +44,3 @@ yarn-error.log*
 next-env.d.ts
 
 /app/generated/prisma
-# Archivos temporales de Office (lock files)
-~$*
