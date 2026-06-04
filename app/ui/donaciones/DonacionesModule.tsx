@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useTransition } from "react";
+import { useState, useMemo } from "react";
 import {
   HandHeart,
   CheckCircle,
@@ -8,7 +8,6 @@ import {
   Eye,
   AlertCircle,
   Clock,
-  Package,
   ShieldCheck,
   FileText,
   Users,
@@ -54,6 +53,14 @@ const STATUS_LABEL: Record<IncidentStatus, string> = {
   CERRADO: "Cerrado",
 };
 
+const STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: "all", label: "Todos los estados" },
+  ...(Object.keys(STATUS_LABEL) as IncidentStatus[]).map((s) => ({
+    value: s,
+    label: STATUS_LABEL[s],
+  })),
+];
+
 const nowIso = () => new Date().toISOString();
 
 interface Props {
@@ -66,15 +73,6 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
   const [selected, setSelected] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
 
-  const queue = useMemo(
-    () => incidents.filter((i) => ["EN EVALUACION", "OBSERVADO"].includes(i.status)),
-    [incidents],
-  )
-  const closed = useMemo(
-    () => incidents.filter((i) => ["APROBADO", "ATENDIDO", "SEGUIMIENTO ABIERTO", "RECHAZADO", "CERRADO"].includes(i.status)),
-    [incidents],
-  )
-  
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [categoryFilter, setCategoryFilter] = useState("all")
@@ -86,35 +84,29 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
     () => incidents.filter((i) => ["EN EVALUACION", "OBSERVADO"].includes(i.status)),
     [incidents],
   )
-  const closedAll = useMemo(
-    () => incidents.filter((i) => !["EN EVALUACION", "OBSERVADO"].includes(i.status)),
-    [incidents],
-  )
 
   const filteredIncidents = useMemo(() => {
     const q = search.trim().toLowerCase()
     return incidents.filter((i) => {
       if (statusFilter !== "all" && i.status !== statusFilter) return false
-      if (categoryFilter !== "all" && i.categoria !== categoryFilter) return false
+      if (categoryFilter !== "all" && i.category !== categoryFilter) return false
       if (parroquiaFilter !== "all" && (i.parroquia ?? "") !== parroquiaFilter) return false
       if (!q) return true
       return [
-        i.codigo,
-        i.titulo,
-        i.estado,
-        i.categoria,
-        i.gravedad,
+        i.id,
+        i.name,
+        i.status,
+        i.category,
+        i.nivelAfectacion,
         i.parroquia,
         i.direccion,
-        i.descripcion,
-        i.solicitudTipo,
-        i.solicitudNecesidad,
-        i.informe?.analisisSituacion,
-        i.informe?.hallazgosTexto,
-        i.informe?.conclusiones,
-        i.informe?.nivelUrgencia,
-        i.informe?.tipoIntervencion,
-        i.informe?.recomendacionComite,
+        i.description,
+        i.informeEvaluacion?.analisisSituacion,
+        i.informeEvaluacion?.hallazgosTexto,
+        i.informeEvaluacion?.conclusiones,
+        i.informeEvaluacion?.nivelUrgencia,
+        i.informeEvaluacion?.tipoIntervencion,
+        i.informeEvaluacion?.recomendacionComite,
       ]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(q))
@@ -141,18 +133,9 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
   const historyFrom = closed.length === 0 ? 0 : (safeHistoryPage - 1) * 10 + 1
   const historyTo = Math.min(closed.length, safeHistoryPage * 10)
 
-  useEffect(() => {
-    setQueuePage(1)
-    setHistoryPage(1)
-  }, [search, statusFilter, categoryFilter, parroquiaFilter])
-
-  useEffect(() => {
-    if (queuePage > queueTotalPages) setQueuePage(queueTotalPages)
-  }, [queuePage, queueTotalPages])
-
-  useEffect(() => {
-    if (historyPage > historyTotalPages) setHistoryPage(historyTotalPages)
-  }, [historyPage, historyTotalPages])
+  // El clamping de página se resuelve en render con safeQueuePage/safeHistoryPage
+  // (Math.min). No se usan efectos con setState para evitar renders en cascada
+  // (regla react-hooks/set-state-in-effect).
 
   const current = selected
     ? (incidents.find((i) => i.id === selected) ?? null)
@@ -360,7 +343,7 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
                 className="w-full pl-9 pr-3 py-2.5 text-sm border border-[var(--caritas-border)] rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[var(--caritas-green)]/20 focus:border-[var(--caritas-green)]"
               >
                 <option value="all">Todas las categorías</option>
-                {[...new Set(incidents.map((i) => i.categoria).filter(Boolean))].map((cat) => (
+                {[...new Set(incidents.map((i) => i.category).filter(Boolean))].map((cat) => (
                   <option key={cat as string} value={cat as string}>{cat}</option>
                 ))}
               </select>
@@ -450,37 +433,13 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
                   </div>
                   {inc.informeEvaluacion && (
 
-                {queue.length > 0 && (
-                  <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 bg-gray-50">
-                    <p className="text-xs text-gray-500">Mostrando {queueFrom}-{queueTo} de {queue.length}</p>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setQueuePage((p) => Math.max(1, p - 1))}
-                        disabled={safeQueuePage === 1}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-[var(--caritas-border)] rounded-lg bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <ChevronLeft className="w-3.5 h-3.5" /> Anterior
-                      </button>
-                      <span className="text-xs text-gray-500 font-medium">{safeQueuePage} / {queueTotalPages}</span>
-                      <button
-                        type="button"
-                        onClick={() => setQueuePage((p) => Math.min(queueTotalPages, p + 1))}
-                        disabled={safeQueuePage === queueTotalPages}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-[var(--caritas-border)] rounded-lg bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Siguiente <ChevronRight className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                )}
                     <div className="mt-1.5 flex gap-2">
                       <span
                         className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
                           inc.informeEvaluacion.nivelUrgencia === "Inmediata"
                             ? "bg-red-100 text-red-700"
                             : inc.informeEvaluacion.nivelUrgencia === "Alta"
-                      {historySlice.map((inc) => (
+                              ? "bg-orange-100 text-orange-700"
                               : inc.informeEvaluacion.nivelUrgencia === "Media"
                                 ? "bg-yellow-100 text-yellow-700"
                                 : "bg-gray-100 text-gray-700"
@@ -492,6 +451,30 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
                   )}
                 </button>
               ))}
+              {queue.length > 0 && (
+                <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 bg-gray-50">
+                  <p className="text-xs text-gray-500">Mostrando {queueFrom}-{queueTo} de {queue.length}</p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setQueuePage((p) => Math.max(1, p - 1))}
+                      disabled={safeQueuePage === 1}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-[var(--caritas-border)] rounded-lg bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" /> Anterior
+                    </button>
+                    <span className="text-xs text-gray-500 font-medium">{safeQueuePage} / {queueTotalPages}</span>
+                    <button
+                      type="button"
+                      onClick={() => setQueuePage((p) => Math.min(queueTotalPages, p + 1))}
+                      disabled={safeQueuePage === queueTotalPages}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-[var(--caritas-border)] rounded-lg bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Siguiente <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -504,7 +487,7 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
                 </p>
               </div>
               <div className="divide-y divide-gray-100 max-h-48 overflow-y-auto">
-                {closed.map((inc) => (
+                {historySlice.map((inc) => (
                   <button
                     key={inc.id}
                     onClick={() => setSelected(inc.id)}
