@@ -168,7 +168,7 @@ type IncidentData = {
     lng: number | null;
     cargadoPor: string | null;
   }[];
-  catalogoArticulos: { codigo: string; valor: string; descripcion: string | null }[];
+  catalogoArticulos: { codigo: string; valor: string; descripcion: string | null; catalogo: string }[];
   parroquias: string[];
   role: FrontendRole;
   userId: string;
@@ -2072,14 +2072,18 @@ function PanelRevisar({ data, onDone }: { data: IncidentData; onDone: () => void
           </div>
         ) : canEvaluar ? (
           <div className="space-y-4">
-            {/* Datalist de artículos del catálogo (autocompletado por código) */}
-            <datalist id="cat-articulos">
-              {data.catalogoArticulos.map((a) => (
-                <option key={a.codigo} value={a.codigo}>
-                  {a.valor}
-                </option>
-              ))}
-            </datalist>
+            {/* Un datalist por tipo de kit: cada kit muestra solo su catálogo */}
+            {KIT_TIPOS.map((tipo, ti) => (
+              <datalist key={tipo} id={`cat-${ti}`}>
+                {data.catalogoArticulos
+                  .filter((a) => a.catalogo === tipo)
+                  .map((a) => (
+                    <option key={a.codigo} value={a.codigo}>
+                      {a.valor}
+                    </option>
+                  ))}
+              </datalist>
+            ))}
 
             {/* Header morado + resumen del evento */}
             <div className="rounded-xl bg-purple-600 text-white p-4">
@@ -2298,13 +2302,15 @@ function PanelRevisar({ data, onDone }: { data: IncidentData; onDone: () => void
                               {kit.articulos.map((a, ai) => (
                                 <div key={ai} className="flex items-center gap-1.5 mb-1">
                                   <input
-                                    list="cat-articulos"
+                                    list={`cat-${KIT_TIPOS.indexOf(kit.tipoKit)}`}
                                     className="w-20 px-2 py-1 text-xs border border-gray-200 rounded"
                                     placeholder="Código"
                                     value={a.codigo}
                                     onChange={(e) => {
                                       const codigo = e.target.value;
-                                      const cat = data.catalogoArticulos.find((c) => c.codigo === codigo);
+                                      const cat = data.catalogoArticulos.find(
+                                        (c) => c.codigo === codigo && c.catalogo === kit.tipoKit
+                                      );
                                       updArt(g.id, ki, ai, {
                                         codigo,
                                         ...(cat ? { descripcion: cat.valor } : {}),

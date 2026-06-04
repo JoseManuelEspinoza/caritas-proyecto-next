@@ -149,10 +149,15 @@ export default async function IncidentePage({ params }: { params: Promise<{ id: 
 
   const asignadosIds = inc.asignaciones.map((a) => a.brigadista.idBrigadistaParroquial);
 
-  // Catálogo de artículos para la asignación de kits (informe del especialista).
+  // Catálogo de artículos por tipo de kit (solo catálogos "Kit de ...").
   const catalogoArticulos = await prisma.catalogoDetalleGRD.findMany({
-    where: { estado: "ACTIVO" },
-    select: { codigo: true, valor: true, descripcion: true },
+    where: { estado: "ACTIVO", catalogo: { nombreCatalogo: { startsWith: "Kit de " } } },
+    select: {
+      codigo: true,
+      valor: true,
+      descripcion: true,
+      catalogo: { select: { nombreCatalogo: true } },
+    },
     orderBy: { codigo: "asc" },
     take: 300,
   });
@@ -361,6 +366,7 @@ export default async function IncidentePage({ params }: { params: Promise<{ id: 
       codigo: c.codigo,
       valor: c.valor,
       descripcion: c.descripcion,
+      catalogo: c.catalogo?.nombreCatalogo ?? "",
     })),
 
     parroquias: parroquiasDisp.map((p) => p.nombre),
