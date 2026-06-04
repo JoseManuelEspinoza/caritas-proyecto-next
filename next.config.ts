@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Salida autocontenida para imágenes Docker pequeñas en producción.
+  output: "standalone",
   serverExternalPackages: ["pino", "thread-stream"],
   experimental: {
     // Reduces webpack memory footprint when not using Turbopack.

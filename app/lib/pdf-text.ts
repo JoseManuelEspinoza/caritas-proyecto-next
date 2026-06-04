@@ -64,8 +64,8 @@ async function extraerCapaTexto(
     const page = await pdf.getPage(p);
     const content = await page.getTextContent();
     const items = content.items.filter(
-      (i): i is { str: string; transform: number[]; width: number } => "str" in i && !!i.str
-    );
+      (i) => "str" in i && !!(i as { str?: string }).str
+    ) as { str: string; transform: number[]; width: number }[];
     const filas = construirFilas(items);
     todasFilas.push(...filas);
     for (const f of filas) lineas.push(f.celdas.map((c) => c.text).join(" "));
