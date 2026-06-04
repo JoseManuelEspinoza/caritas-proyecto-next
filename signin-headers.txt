@@ -1,0 +1,10 @@
+HTTP/1.1 302 Found
+vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch
+location: http://localhost:8080/realms/caritas/protocol/openid-connect/auth?scope=openid+profile+email&response_type=code&client_id=caritas-app&redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fcallback%2Fkeycloak&code_challenge=bPGh5Er8EtFJxwcTrk_hb1uyQR4nWz7A5NdJEbEYlE8&code_challenge_method=S256
+set-cookie: authjs.callback-url=http%3A%2F%2Flocalhost%3A3000%2Fdashboard; Path=/; HttpOnly; SameSite=Lax
+set-cookie: authjs.pkce.code_verifier=eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2Q0JDLUhTNTEyIiwia2lkIjoicHp1WDkyN09MSTZTRTRvSEo0U2JpdGRPY1dIWGkzbDBzeEdCT2Y4Z3NvenFtaG55NzdaQzBDeENrUFY0WGxCVUNnVF9aWTBmQTNkOE0tMEgyUl9xd0EifQ..V_gFAkZ5kEfLXC81UFXSCQ.EqeKwSq-nvUIGplh1Cs1RnWy0EwLZhKqUCT9yq7rC_fd8RUAjxfo738Hy6kGQjodEGiJFCns2RQ_poxFhkPVTObChWkcrF8fAAyMz-9WBy9SNuiBWJPSt4AggnHPa-4hAIn0_lEmDhwnk7QfNiRCVlePNK8DMG2GiXzn5Zv6ZQFwJ12S9bB8fZK8XCpVW--Q.3xNSVlYj-Qe29U0p3ckhIRdQzkZKeukbwQBpCuzhim0; Max-Age=900; Path=/; Expires=Tue, 02 Jun 2026 22:04:11 GMT; HttpOnly; SameSite=Lax
+Date: Tue, 02 Jun 2026 21:49:11 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+Transfer-Encoding: chunked
+

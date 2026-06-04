@@ -8,11 +8,11 @@ import {
   XCircle, FileCheck, Flame, Waves, Mountain, Zap, TrendingDown,
   UserCheck, ClipboardList, BarChart3, Package, ShieldCheck,
   Phone, Calendar, AlertTriangle, Clock, ChevronDown, ChevronUp,
-  Plus, Loader2, HandHeart, Search, UserPlus, Star,
+  Plus, Loader2, HandHeart, Search, UserPlus, Star, Pencil, X,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
-  assignBrigadista, assignEquipo, autoasignarme, saveInfoCampo, saveInformeEvaluacion,
+  assignEquipo, autoasignarme, saveInfoCampo, saveInformeEvaluacion,
   aprobarCaso, observarCaso, rechazarCaso, corregirYReenviar,
   registrarAtencion, addSeguimiento, cerrarCaso,
 } from '@/app/actions/incidents'
@@ -38,7 +38,18 @@ type IncidentData = {
   fechaRegistro: string
   parroquia: string | null
   aviso: { nombreInformante: string | null; telefonoInformante: string | null; descripcion: string | null } | null
-  asignaciones: { brigadistaId: string; nombres: string; apellidos: string | null; celular: string | null; parroquia: string | null; fechaAsignacion: string }[]
+  asignaciones: {
+    brigadistaId: string
+    nombres: string
+    apellidos: string | null
+    celular: string | null
+    parroquia: string | null
+    fechaAsignacion: string
+    esResponsable: boolean
+    observaciones: string | null
+  }[]
+  responsableGRD: { id: string; nombre: string; correo: string | null } | null
+  instruccionesAsignacion: string | null
   gruposFamiliares: { id: string; nombreReferencia: string | null; totalPersonas: number; personas: Persona[] }[]
   informes: { id: string; titulo: string; tipo: string | null; resumen: string | null; contenido: string | null; estado: string; fecha: string }[]
   seguimientos: { id: string; situacion: string | null; descripcion: string | null; necesidadesPendientes: string | null; recomendaciones: string | null; fecha: string }[]
@@ -48,9 +59,11 @@ type IncidentData = {
   brigadistasDisponibles: { id: string; nombres: string; apellidos: string | null; celular: string | null; parroquia: string | null }[]
   role: FrontendRole
   userId: string
+  idUsuarioGRDActual: string | null
   currentUserName: string
   currentUserBrigadistaId: string | null
   isBrigadistaAsignado: boolean
+  isResponsableGRD: boolean
 }
 
 // ─── Config visual ────────────────────────────────────────────────────────────
@@ -79,6 +92,7 @@ const STEPS = [
 ]
 
 function getStepIndex(status: string): number {
+  if (status === 'ABIERTO') return 1
   for (let i = 0; i < STEPS.length; i++) {
     if (STEPS[i].statuses.includes(status)) return i
   }
@@ -196,22 +210,70 @@ function iniciales(nombres: string, apellidos: string | null): string {
   return `${nombres?.[0] ?? ''}${apellidos?.[0] ?? ''}`.toUpperCase()
 }
 
+function BrigCard({
+  id, nombres, apellidos, parroquia, celular, badge, onRemove, draggable, onDragStart, onDragEnd,
+}: {
+  id: string
+  nombres: string
+  apellidos: string | null
+  parroquia: string | null
+  celular: string | null
+  badge?: string
+  onRemove?: () => void
+  draggable?: boolean
+  onDragStart?: (e:React.DragEvent) => void
+  onDragEnd?: (e:React.DragEvent) => void
+}) {
+  return (
+    <div draggable={draggable}
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+        className={`flex items-center gap-2 p-2 bg-white border border-[#DDDDDD] rounded-lg ${draggable ? 'cursor-grab active:cursor-grabbing' : ''}`}>
+      <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${avatarColor(id)}`}>
+        <span className="text-white text-[10px] font-bold">{iniciales(nombres, apellidos)}</span>
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          <p className="text-xs font-medium text-gray-900 truncate">{nombres} {apellidos ?? ''}</p>
+          {badge && (
+            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-[#00C8B4]/15 text-[#009850]">{badge}</span>
+          )}
+        </div>
+        <p className="text-[10px] text-gray-500 truncate">{parroquia ?? '—'}{celular ? ` · ${celular}` : ''}</p>
+      </div>
+      {onRemove && (
+        <button type="button" onClick={onRemove} className="p-1 text-gray-400 hover:text-red-500" aria-label="Quitar">
+          <X className="w-3.5 h-3.5" />
+        </button>
+      )}
+    </div>
+  )
+}
+
 function PanelAsignar({ data, onDone }: { data: IncidentData; onDone: () => void }) {
-  const [tab, setTab] = useState<'equipo' | 'auto'>('equipo')
-  const [selected, setSelected] = useState<string[]>([])
-  const [query, setQuery] = useState('')
-  const [instrucciones, setInstrucciones] = useState('')
-  const [isPending, startTransition] = useTransition()
   const canAct = data.role === 'admin' || data.role === 'especialistaGRD'
+  const puedeEditar =
+    canAct && (data.estadoActual === 'ABIERTO' || (data.estadoActual === 'ASIGNADO' && !data.informes.some((i) => i.tipo === 'CAMPO')))
+  const tieneEquipo = data.asignaciones.length > 0 || Boolean(data.responsableGRD)
 
-  const yaAsignados = new Set(data.asignaciones.map((a) => a.brigadistaId))
+  const respInicial = data.asignaciones.find((a) => a.esResponsable)?.brigadistaId ?? ''
+  const equipoInicial = data.asignaciones.filter((a) => !a.esResponsable).map((a) => a.brigadistaId)
 
-  // Recomendado = misma parroquia que la incidencia.
+  const [editing, setEditing] = useState(!tieneEquipo && puedeEditar)
+  const [tab, setTab] = useState<'equipo' | 'auto'>('equipo')
+  const [responsable, setResponsable] = useState(respInicial)
+  const [equipo, setEquipo] = useState<string[]>(equipoInicial)
+  const [query, setQuery] = useState('')
+  const [instrucciones, setInstrucciones] = useState(data.instruccionesAsignacion ?? '')
+  const [isPending, startTransition] = useTransition()
+  const [dragging, setDragging] = useState<{ id: string; from: 'responsable' | 'equipo' | 'catalogo' } | null>(null)
+
+  const seleccionados = [responsable, ...equipo].filter(Boolean)
   const esRecomendado = (parroquia: string | null) =>
     !!data.parroquia && !!parroquia && parroquia.trim().toLowerCase() === data.parroquia.trim().toLowerCase()
 
-  const disponibles = data.brigadistasDisponibles
-    .filter((b) => !yaAsignados.has(b.id))
+  const catalogo = data.brigadistasDisponibles
+    .filter((b) => !seleccionados.includes(b.id))
     .filter((b) => {
       const q = query.trim().toLowerCase()
       if (!q) return true
@@ -220,187 +282,401 @@ function PanelAsignar({ data, onDone }: { data: IncidentData; onDone: () => void
         (b.parroquia ?? '').toLowerCase().includes(q)
       )
     })
-    // Recomendados primero.
     .sort((a, b) => Number(esRecomendado(b.parroquia)) - Number(esRecomendado(a.parroquia)))
 
-  function toggle(id: string) {
-    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+  function findBrig(id: string) {
+    return (
+      data.brigadistasDisponibles.find((b) => b.id === id) ??
+      data.asignaciones.find((a) => a.brigadistaId === id)
+    )
   }
 
-  function handleAsignarEquipo() {
-    if (selected.length === 0) return
+  function agregarBrigadista(id: string) {
+    if (!responsable) setResponsable(id)
+    else if (!equipo.includes(id) && id !== responsable) setEquipo((prev) => [...prev, id])
+  }
+
+  function iniciarEdicion() {
+    setResponsable(respInicial)
+    setEquipo(equipoInicial)
+    setInstrucciones(data.instruccionesAsignacion ?? '')
+    setTab(data.responsableGRD ? 'auto' : 'equipo')
+    setEditing(true)
+  }
+
+  function handleGuardarEquipo() {
+    if (!responsable) {
+      toast.error('Debes designar un brigadista responsable')
+      return
+    }
     startTransition(async () => {
-      const res = await assignEquipo(data.idIncidencia, selected, instrucciones)
+      const res = await assignEquipo(data.idIncidencia, responsable, equipo, instrucciones)
       if (res && 'message' in res) { toast.error(res.message); return }
-      toast.success(selected.length === 1 ? 'Brigadista asignado correctamente' : `${selected.length} brigadistas asignados`)
-      setSelected([])
-      setInstrucciones('')
+      const total = 1 + equipo.length
+      toast.success(total === 1 ? 'Equipo asignado correctamente' : `Equipo de ${total} personas asignado`)
+      setEditing(false)
       onDone()
     })
   }
 
   function handleAutoasignarme() {
     startTransition(async () => {
-      const res = await autoasignarme(data.idIncidencia)
+      const res = await autoasignarme(data.idIncidencia, instrucciones)
       if (res && 'message' in res) { toast.error(res.message); return }
-      toast.success('Te autoasignaste como responsable del caso')
+      toast.success('Te autoasignaste como único responsable del caso')
+      setEditing(false)
       onDone()
     })
   }
 
-  if (!canAct) {
+  if (!canAct && !tieneEquipo) {
     return <p className="text-sm text-gray-500 text-center py-4">Solo el Especialista GRD puede gestionar la asignación del equipo.</p>
   }
 
+  if (data.estadoActual !== 'ABIERTO' && !tieneEquipo && !puedeEditar) {
+    return <p className="text-sm text-gray-500 text-center py-4">No hay equipo asignado para este incidente.</p>
+  }
+
+  if (tieneEquipo && !editing) {
+    const respBrig = data.asignaciones.find((a) => a.esResponsable)
+    const integrantes = data.asignaciones.filter((a) => !a.esResponsable)
+
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Equipo asignado</p>
+          {puedeEditar && (
+            <button
+              type="button"
+              onClick={iniciarEdicion}
+              className="p-2 rounded-lg border border-[#DDDDDD] text-gray-600 hover:bg-gray-50 hover:text-[var(--caritas-green)] transition-colors"
+              title="Editar asignación"
+            >
+              <Pencil className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+
+        {data.responsableGRD ? (
+          <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl space-y-2">
+            <span className="text-[10px] font-bold uppercase text-blue-700">Especialista GRD — Responsable único</span>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-[var(--caritas-green)]/20 flex items-center justify-center">
+                <UserCheck className="w-5 h-5 text-[var(--caritas-green)]" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-900">{data.responsableGRD.nombre}</p>
+                {data.responsableGRD.correo && <p className="text-xs text-gray-500">{data.responsableGRD.correo}</p>}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {respBrig && (
+              <div>
+                <p className="text-[10px] font-semibold text-gray-400 uppercase mb-1.5">Responsable</p>
+                <BrigCard
+                  id={respBrig.brigadistaId}
+                  nombres={respBrig.nombres}
+                  apellidos={respBrig.apellidos}
+                  parroquia={respBrig.parroquia}
+                  celular={respBrig.celular}
+                  badge="RESPONSABLE"
+                />
+              </div>
+            )}
+            {integrantes.length > 0 && (
+              <div>
+                <p className="text-[10px] font-semibold text-gray-400 uppercase mb-1.5">Equipo ({integrantes.length})</p>
+                <div className="space-y-2">
+                  {integrantes.map((m) => (
+                    <BrigCard
+                      key={m.brigadistaId}
+                      id={m.brigadistaId}
+                      nombres={m.nombres}
+                      apellidos={m.apellidos}
+                      parroquia={m.parroquia}
+                      celular={m.celular}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {data.instruccionesAsignacion && (
+          <div className="bg-[#91D723]/10 border border-[#91D723]/30 rounded-lg px-3 py-2">
+            <p className="text-[10px] text-[#009850] uppercase font-semibold mb-0.5">Instrucciones</p>
+            <p className="text-xs text-[#009850]">{data.instruccionesAsignacion}</p>
+          </div>
+        )}
+
+        {data.estadoActual === 'ASIGNADO' && (
+          <p className="text-[10px] text-gray-400">El incidente está en estado Asignado. El equipo puede iniciar el levantamiento en campo.</p>
+        )}
+      </div>
+    )
+  }
+
+  if (!puedeEditar) {
+    return <p className="text-sm text-gray-500 text-center py-4">La asignación ya no puede modificarse en esta etapa.</p>
+  }
+
   return (
-    <div className="space-y-4">
-      {/* Tabs */}
-      <div className="flex gap-1 p-1 bg-gray-100 rounded-xl">
-        <button
-          onClick={() => setTab('equipo')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors ${
-            tab === 'equipo' ? 'bg-white text-[var(--caritas-green)] shadow-sm' : 'text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          <Users className="w-4 h-4" /> Asignar Equipo
-        </button>
-        <button
-          onClick={() => setTab('auto')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors ${
-            tab === 'auto' ? 'bg-white text-[var(--caritas-green)] shadow-sm' : 'text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          <UserPlus className="w-4 h-4" /> Autoasignarme
-        </button>
+    <div className="space-y-4 border border-gray-200 rounded-2xl overflow-hidden">
+      <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+        <h2 className="text-sm font-medium text-gray-700">
+          {tieneEquipo ? 'Modificar asignación' : 'Nueva asignación'}
+        </h2>
+        {tieneEquipo && (
+          <button type="button" onClick={() => setEditing(false)} className="text-xs font-bold text-[#009850] hover:text-gray-800 cursor-pointer">
+            Cancelar
+          </button>
+        )}
       </div>
 
-      {/* Asignados actuales */}
-      {data.asignaciones.length > 0 && (
-        <div>
-          <p className="text-xs font-semibold text-gray-500 mb-2">Equipo asignado</p>
-          <div className="space-y-2">
-            {data.asignaciones.map((a) => (
-              <div key={a.brigadistaId} className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-                <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${avatarColor(a.brigadistaId)}`}>
-                  <span className="text-white text-xs font-bold">{iniciales(a.nombres, a.apellidos)}</span>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-900">{a.nombres} {a.apellidos ?? ''}</p>
-                  <p className="text-xs text-gray-500">{a.parroquia ?? ''} {a.celular ? `· ${a.celular}` : ''}</p>
-                </div>
-                <CheckCircle className="w-4 h-4 text-[#009850] ml-auto" />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {tab === 'equipo' && (data.estadoActual === 'ABIERTO' || data.estadoActual === 'ASIGNADO') && (
-        <>
-          {/* Búsqueda */}
-          <div className="relative">
-            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar brigadista por nombre o parroquia..."
-              className="w-full pl-9 pr-3 py-2 text-sm border border-[#DDDDDD] rounded-lg focus:outline-none focus:border-[var(--caritas-green)]"
-            />
-          </div>
-
-          {/* Lista de disponibles */}
-          {disponibles.length === 0 ? (
-            <div className="text-center py-6 text-sm text-gray-400 bg-gray-50 rounded-lg">
-              {query ? 'Ningún brigadista coincide con la búsqueda' : 'No hay brigadistas disponibles en este momento'}
-            </div>
-          ) : (
-            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-              {disponibles.map((b) => {
-                const isSel = selected.includes(b.id)
-                const rec = esRecomendado(b.parroquia)
-                return (
-                  <button
-                    type="button"
-                    key={b.id}
-                    onClick={() => toggle(b.id)}
-                    className={`w-full flex items-center gap-3 p-3 border rounded-lg text-left transition-colors ${
-                      isSel ? 'border-[#009850] bg-[#009850]/5' : 'border-[#DDDDDD] hover:border-[#009850]/40'
-                    }`}
-                  >
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${avatarColor(b.id)}`}>
-                      <span className="text-white text-xs font-bold">{iniciales(b.nombres, b.apellidos)}</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium text-gray-800 truncate">{b.nombres} {b.apellidos ?? ''}</p>
-                        {rec && (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700">
-                            <Star className="w-3 h-3 fill-amber-500 text-amber-500" /> RECOMENDADO
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-gray-500 flex items-center gap-2">
-                        <span>{b.parroquia ?? '—'}</span>
-                        {b.celular && <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{b.celular}</span>}
-                      </p>
-                    </div>
-                    <div className={`w-5 h-5 rounded-md border flex items-center justify-center flex-shrink-0 ${
-                      isSel ? 'bg-[#009850] border-[#009850]' : 'border-gray-300'
-                    }`}>
-                      {isSel && <CheckCircle className="w-4 h-4 text-white" />}
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
-          )}
-
-          {/* Instrucciones */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-500 mb-1">Instrucciones para el equipo</label>
-            <textarea
-              value={instrucciones}
-              onChange={(e) => setInstrucciones(e.target.value)}
-              rows={3}
-              placeholder="Indicaciones, punto de encuentro, materiales necesarios..."
-              className="w-full px-3 py-2 text-sm border border-[#DDDDDD] rounded-lg focus:outline-none focus:border-[var(--caritas-green)] resize-none"
-            />
-          </div>
-
+      <div className="px-4 space-y-4 pb-4">
+        <div className="flex gap-1 p-1 bg-gray-100 rounded-xl">
           <button
-            onClick={handleAsignarEquipo}
-            disabled={isPending || selected.length === 0}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-white font-semibold disabled:opacity-50 transition-opacity"
-            style={{ background: 'var(--caritas-green)' }}
+            type="button"
+            onClick={() => setTab('equipo')}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors ${
+              tab === 'equipo' ? 'bg-white text-[var(--caritas-green)] shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            }`}
           >
-            {isPending
-              ? <><Loader2 className="w-4 h-4 animate-spin" />Asignando...</>
-              : <><UserCheck className="w-4 h-4" />Asignar Equipo{selected.length > 0 ? ` (${selected.length})` : ''}</>}
+            <Users className="w-4 h-4" /> Asignar brigadistas
           </button>
-        </>
-      )}
+          <button
+            type="button"
+            onClick={() => setTab('auto')}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors ${
+              tab === 'auto' ? 'bg-white text-[var(--caritas-green)] shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <UserPlus className="w-4 h-4" /> Autoasignarme
+          </button>
+        </div>
 
-      {tab === 'auto' && (
-        <div className="space-y-4">
-          <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <UserPlus className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-blue-800">
-              Te registrarás como <strong>responsable GRD</strong> de este caso. Si la incidencia está abierta,
-              pasará automáticamente al estado <strong>Asignado</strong>.
+        {tab === 'equipo' ? (
+          <>
+            <p className="text-xs text-gray-600">
+              Elige brigadistas con el buscador. El primero seleccionado será responsable; puedes reorganizarlo entre las áreas.
             </p>
+
+            {seleccionados.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div 
+                  className={`border rounded-xl p-3 min-h-[88px] transition-colors ${
+                    dragging && dragging.id !== responsable
+                      ? 'border-[#009850] bg-[#009850]/10'
+                      : 'border-[#00C8B4]/30 bg-[#00C8B4]/5'
+                  }`}
+                  onDragOver={(e) => { if (dragging && dragging.id !== responsable) e.preventDefault() }}
+                  onDrop={() => {
+                    if (!dragging || dragging.id === responsable) return
+                    const draggedId = dragging.id
+                    const from = dragging.from
+                    setDragging(null)
+                    if (from === 'equipo') {
+                      // Intercambio: responsable actual baja a equipo
+                      setEquipo((prev) => {
+                        const sinDragged = prev.filter((x) => x !== draggedId)
+                        return responsable ? [responsable, ...sinDragged] : sinDragged
+                      })
+                      setResponsable(draggedId)
+                    } else if (from === 'catalogo') {
+                      // Viene de la lista: si ya hay responsable, lo manda a equipo
+                      if (responsable) setEquipo((prev) => [...prev.filter((x) => x !== draggedId), responsable])
+                      else setEquipo((prev) => prev.filter((x) => x !== draggedId))
+                      setResponsable(draggedId)
+                    }
+                  }}
+                >
+                  <p className="text-[10px] font-bold text-[#009850] uppercase mb-2">Responsable</p>
+                  {responsable ? (() => {
+                    const b = findBrig(responsable)
+                    if (!b) return null
+                    return (
+                      <BrigCard
+                        id={responsable}
+                        nombres={b.nombres}
+                        apellidos={b.apellidos ?? null}
+                        parroquia={b.parroquia ?? null}
+                        celular={'celular' in b ? b.celular : null}
+                        draggable
+                        onDragStart={() => setDragging({ id: responsable, from: 'responsable' })}
+                        onDragEnd={() => setDragging(null)}
+                        onRemove={() => {
+                          if (equipo.length > 0) {
+                            setResponsable(equipo[0])
+                            setEquipo((prev) => prev.slice(1))
+                          } else setResponsable('')
+                        }}
+                      />
+                    )
+                  })() : (
+                    <p className="text-xs text-gray-400 italic">
+                      {dragging ? 'Suelta aquí para asignar como responsable' : 'Selecciona un brigadista de la lista'}
+                    </p>
+                  )}
+                </div>
+                <div
+                  className={`border rounded-xl p-3 min-h-[88px] transition-colors ${
+                    dragging && dragging.from !== 'equipo' && dragging.id !== responsable
+                      ? 'border-blue-400 bg-blue-50'
+                      : 'border-gray-200 bg-gray-50'
+                  }`}
+                  onDragOver={(e) => {
+                    if (dragging && dragging.from !== 'equipo' && dragging.id !== responsable) e.preventDefault()
+                  }}
+                  onDrop={() => {
+                    if (!dragging || dragging.from === 'equipo' || dragging.id === responsable) return
+                    const draggedId = dragging.id
+                    setDragging(null)
+                    if (dragging.from === 'responsable') {
+                      // Responsable baja a equipo, promueve el primero del equipo
+                      const nuevoResponsable = equipo[0] ?? ''
+                      setResponsable(nuevoResponsable)
+                      setEquipo((prev) => [...prev.slice(1), draggedId])
+                    } else if (dragging.from === 'catalogo') {
+                      if (!equipo.includes(draggedId)) setEquipo((prev) => [...prev, draggedId])
+                    }
+                  }}
+                >
+                  <p className="text-[10px] font-bold text-gray-500 uppercase mb-2">Equipo</p>
+                  {equipo.length === 0 ? (
+                    <p className="text-xs text-gray-400 italic">
+                      {dragging ? 'Suelta aquí para agregar al equipo' : 'Integrantes adicionales'}
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {equipo.map((id) => {
+                        const b = findBrig(id)
+                        if (!b) return null
+                        return (
+                          <BrigCard
+                            key={id}
+                            id={id}
+                            nombres={b.nombres}
+                            apellidos={b.apellidos ?? null}
+                            parroquia={b.parroquia ?? null}
+                            celular={'celular' in b ? b.celular : null}
+                            draggable
+                            onDragStart={() => setDragging({ id, from: 'equipo' })}
+                            onDragEnd={() => setDragging(null)}
+                            onRemove={() => setEquipo((prev) => prev.filter((x) => x !== id))}
+                          />
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="relative">
+              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Buscar por nombre o parroquia..."
+                className="w-full pl-9 pr-3 py-2 text-sm border border-[#DDDDDD] rounded-lg focus:outline-none focus:border-[var(--caritas-green)]"
+              />
+            </div>
+
+            <div className="space-y-2 max-h-60 overflow-y-auto pr-1 border border-gray-100 rounded-xl">
+              {catalogo.length === 0 ? (
+                <p className="text-center py-6 text-sm text-gray-400">No hay brigadistas para mostrar</p>
+              ) : (
+                catalogo.map((b) => {
+                  const rec = esRecomendado(b.parroquia)
+                  return (
+                    <button
+                      type="button"
+                      key={b.id}
+                      draggable
+                      onDragStart={() => setDragging({ id: b.id, from: 'catalogo' })}
+                      onDragEnd={() => setDragging(null)}
+                      onClick={() => agregarBrigadista(b.id)}
+                      className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 text-left border-b border-gray-50 last:border-0 cursor-grab active:cursor-grabbing"
+                    >
+                      <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${avatarColor(b.id)}`}>
+                        <span className="text-white text-xs font-bold">{iniciales(b.nombres, b.apellidos)}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium text-gray-800 truncate">{b.nombres} {b.apellidos ?? ''}</p>
+                          {rec && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700">
+                              <Star className="w-3 h-3 fill-amber-500 text-amber-500" /> RECOMENDADO
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500">{b.parroquia ?? '—'}{b.celular ? ` · ${b.celular}` : ''}</p>
+                      </div>
+                      <Plus className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                    </button>
+                  )
+                })
+              )}
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Instrucciones para el equipo</label>
+              <textarea
+                value={instrucciones}
+                onChange={(e) => setInstrucciones(e.target.value)}
+                rows={3}
+                placeholder="Indicaciones, punto de encuentro, materiales..."
+                className="w-full px-3 py-2 text-sm border border-[#DDDDDD] rounded-lg focus:outline-none focus:border-[var(--caritas-green)] resize-none"
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={handleGuardarEquipo}
+              disabled={isPending || !responsable}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-white font-semibold disabled:opacity-50"
+              style={{ background: 'var(--caritas-green)' }}
+            >
+              {isPending ? <><Loader2 className="w-4 h-4 animate-spin" />Guardando...</> : (
+                <><UserCheck className="w-4 h-4" />Guardar asignación{seleccionados.length > 0 ? ` (${seleccionados.length})` : ''}</>
+              )}
+            </button>
+          </>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <UserPlus className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-blue-800">
+                Serás el <strong>único responsable</strong> del levantamiento. No se asignará brigadista adicional.
+                {data.estadoActual === 'ABIERTO' && ' El incidente pasará a estado Asignado.'}
+              </p>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Notas internas (opcional)</label>
+              <textarea
+                value={instrucciones}
+                onChange={(e) => setInstrucciones(e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2 text-sm border border-[#DDDDDD] rounded-lg focus:outline-none focus:border-[var(--caritas-green)] resize-none"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleAutoasignarme}
+              disabled={isPending}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-white font-semibold disabled:opacity-50"
+              style={{ background: 'var(--caritas-green)' }}
+            >
+              {isPending ? <><Loader2 className="w-4 h-4 animate-spin" />Procesando...</> : (
+                <><UserPlus className="w-4 h-4" />Autoasignarme como responsable</>
+              )}
+            </button>
           </div>
-          <button
-            onClick={handleAutoasignarme}
-            disabled={isPending}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-white font-semibold disabled:opacity-50 transition-opacity"
-            style={{ background: 'var(--caritas-green)' }}
-          >
-            {isPending
-              ? <><Loader2 className="w-4 h-4 animate-spin" />Procesando...</>
-              : <><UserPlus className="w-4 h-4" />Autoasignarme como responsable</>}
-          </button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }
@@ -410,8 +686,11 @@ function PanelAsignar({ data, onDone }: { data: IncidentData; onDone: () => void
 function PanelCampo({ data, onDone }: { data: IncidentData; onDone: () => void }) {
   const [isPending, startTransition] = useTransition()
   // Brigadista solo puede llenar si está asignado a ESTE incidente
-  const canAct = data.role === 'admin' || data.role === 'especialistaGRD'
-    || (data.role === 'brigadista' && data.isBrigadistaAsignado)
+  const canAct =
+    data.role === 'admin' ||
+    data.role === 'especialistaGRD' ||
+    data.isResponsableGRD ||
+    (data.role === 'brigadista' && data.isBrigadistaAsignado)
   const done = data.estadoActual !== 'ASIGNADO'
   const informeCampo = data.informes.find((i) => i.tipo === 'CAMPO')
 
@@ -434,7 +713,7 @@ function PanelCampo({ data, onDone }: { data: IncidentData; onDone: () => void }
     startTransition(async () => {
       await saveInfoCampo(data.idIncidencia, {
         fechaVisita: new Date().toISOString().split('T')[0],
-        responsable: 'Equipo de campo',
+        responsable: data.isResponsableGRD ? data.currentUserName : 'Equipo de campo',
         descripcionEvento: form.descripcionEvento,
         nivelVulnerabilidad: form.nivelVulnerabilidad as any,
         necesidadesPrioritarias: form.necesidadesPrioritarias.split(',').map((s) => s.trim()).filter(Boolean),
