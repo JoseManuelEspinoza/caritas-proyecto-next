@@ -14,7 +14,7 @@ import { Toaster } from 'sonner'
 
 const ALL_NAV = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard',           exact: true,  roles: ['admin', 'especialistaGRD', 'comite', 'jefaOGP'] },
-  { href: '/grd',       icon: AlertTriangle,   label: 'Incidencias GRD',     exact: false, roles: ['admin', 'especialistaGRD', 'brigadista', 'comite', 'jefaOGP'] },
+  { href: '/grd',       icon: AlertTriangle,   label: 'Incidencias GRD',     exact: false, roles: ['admin', 'especialistaGRD', 'brigadista', 'jefaOGP'] },
   { href: '/donaciones', icon: HandHeart,      label: 'Donaciones',          exact: false, roles: ['admin', 'comite', 'jefaOGP', 'especialistaGRD'] },
   { href: '/capacitaciones', icon: GraduationCap, label: 'Capacitaciones',   exact: false, roles: ['admin', 'especialistaGRD', 'brigadista'] },
   { href: '/brigadistas',    icon: Users,         label: 'Brigadistas',       exact: false, roles: ['admin'] },

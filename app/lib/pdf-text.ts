@@ -98,21 +98,32 @@ export function tablaDeFilas(filas: Fila[]): Record<string, string>[] {
 
 /** Renderiza cada página a imagen y la pasa por OCR (Tesseract.js, español). */
 async function ocrPdf(pdf: Awaited<ReturnType<typeof cargarPdf>>, onProgress?: ProgresoCb): Promise<string> {
-  const Tesseract = (await import('tesseract.js')).default
-  const partes: string[] = []
-  for (let p = 1; p <= pdf.numPages; p++) {
-    onProgress?.({ fase: 'ocr', pagina: p, total: pdf.numPages })
-    const page = await pdf.getPage(p)
-    const viewport = page.getViewport({ scale: 2 }) // mayor escala = mejor OCR
-    const canvas = document.createElement('canvas')
-    canvas.width = viewport.width
-    canvas.height = viewport.height
-    const ctx = canvas.getContext('2d')!
-    await page.render({ canvas, canvasContext: ctx, viewport }).promise
-    const { data } = await Tesseract.recognize(canvas, 'spa')
-    partes.push(data.text)
+  const { createWorker } = await import('tesseract.js')
+  // Un único worker compartido entre todas las páginas: evita descargar el
+  // modelo de idioma N veces y elimina la fuga de procesos trabajadores.
+  const worker = await createWorker('spa')
+  try {
+    const partes: string[] = []
+    for (let p = 1; p <= pdf.numPages; p++) {
+      onProgress?.({ fase: 'ocr', pagina: p, total: pdf.numPages })
+      const page = await pdf.getPage(p)
+      const viewport = page.getViewport({ scale: 2 }) // mayor escala = mejor OCR
+      const canvas = document.createElement('canvas')
+      canvas.width = viewport.width
+      canvas.height = viewport.height
+      const ctx = canvas.getContext('2d')!
+      await page.render({ canvas, canvasContext: ctx, viewport }).promise
+      const { data } = await worker.recognize(canvas)
+      partes.push(data.text)
+      // Libera recursos de la página y del canvas tras cada iteración.
+      page.cleanup()
+      canvas.width = 0
+      canvas.height = 0
+    }
+    return partes.join('\n')
+  } finally {
+    await worker.terminate()
   }
-  return partes.join('\n')
 }
 
 /** ¿El texto extraído es demasiado pobre? → probablemente es un PDF escaneado. */

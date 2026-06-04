@@ -1,23 +1,6 @@
 import type { NextAuthConfig } from 'next-auth'
 import Keycloak from 'next-auth/providers/keycloak'
 
-const keycloakIssuer = process.env.AUTH_KEYCLOAK_ISSUER
-const keycloakInternal = process.env.AUTH_KEYCLOAK_INTERNAL_URL ?? keycloakIssuer
-
-function keycloakProvider() {
-  if (!keycloakIssuer) return Keycloak
-  return Keycloak({
-    clientId: process.env.AUTH_KEYCLOAK_ID,
-    clientSecret: process.env.AUTH_KEYCLOAK_SECRET,
-    issuer: keycloakIssuer,
-    wellKnown: `${keycloakInternal}/.well-known/openid-configuration`,
-    authorization: `${keycloakIssuer}/protocol/openid-connect/auth`,
-    token: `${keycloakInternal}/protocol/openid-connect/token`,
-    userinfo: `${keycloakInternal}/protocol/openid-connect/userinfo`,
-    jwks_endpoint: `${keycloakInternal}/protocol/openid-connect/certs`,
-  })
-}
-
 /** Roles conocidos de la app, en orden de prioridad (el "principal" se elige así). */
 const KNOWN_ROLES = ['ADMINISTRADOR', 'ESPECIALISTAGRD', 'COMITEDONACIONES', 'JEFAOGP', 'BRIGADISTA']
 
@@ -72,28 +55,15 @@ function keycloakProvider({
   })
 }
 
-/**
- * Configuración EDGE-SAFE de Auth.js (sin Prisma ni dependencias de Node).
- * La usa el proxy (middleware) para leer la sesión y los roles del token.
- */
-// AUTH_KEYCLOAK_AUTHORIZATION se define solo en Docker (docker-compose.yml).
-// Cuando existe, sobreescribe el authorization_endpoint del OIDC discovery
-// para que el navegador vaya a localhost:8085 en vez de keycloak:8080.
-// En desarrollo local (.env sin esta var) se usa el endpoint del discovery.
-const keycloakProvider = {
-  ...Keycloak({
-    clientId: process.env.AUTH_KEYCLOAK_ID!,
-    clientSecret: process.env.AUTH_KEYCLOAK_SECRET!,
-    issuer: process.env.AUTH_KEYCLOAK_ISSUER,
-  }),
-  ...(process.env.AUTH_KEYCLOAK_AUTHORIZATION
-    ? { authorization: process.env.AUTH_KEYCLOAK_AUTHORIZATION }
-    : {}),
-}
-
 export const authConfig: NextAuthConfig = {
   trustHost: true,
-  providers: [keycloakProvider],
+  providers: [
+    keycloakProvider({
+      clientId: process.env.AUTH_KEYCLOAK_ID,
+      clientSecret: process.env.AUTH_KEYCLOAK_SECRET,
+      issuer: process.env.AUTH_KEYCLOAK_ISSUER,
+    }),
+  ],
   pages: { signIn: '/login' },
   callbacks: {
     async jwt({ token, account }) {
