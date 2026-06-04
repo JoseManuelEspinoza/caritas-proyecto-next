@@ -2000,7 +2000,7 @@ export function IncidentDetail({ data }: { data: IncidentData }) {
               <button
                 key={step.key}
                 onClick={() => setActiveStep(idx)}
-                disabled={false}
+                disabled={!current && !completed && idx !== currentStepIdx + 1}
                 className={`flex flex-col items-center gap-1 px-3 md:px-4 py-3 text-xs font-medium transition-colors border-b-2 flex-shrink-0 min-w-[70px] ${
                   active
                     ? "border-[#009850] text-[#009850] bg-[#009850]/5"
