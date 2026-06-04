@@ -142,6 +142,13 @@ export default async function IncidentePage({ params }: { params: Promise<{ id: 
     : false
 
   const asignadosIds = inc.asignaciones.map((a) => a.brigadista.idBrigadistaParroquial)
+
+  const parroquiasDisp = await prisma.parroquia.findMany({
+    where: { estado: 'ACTIVO' },
+    select: { nombre: true },
+    orderBy: { nombre: 'asc' },
+  })
+
   const brigadistasDisp = await prisma.brigadistaParroquial.findMany({
     where: {
       estado: 'ACTIVO',
@@ -281,6 +288,8 @@ export default async function IncidentePage({ params }: { params: Promise<{ id: 
       celular:   b.celular,
       parroquia: b.parroquia?.nombre ?? null,
     })),
+
+    parroquias: parroquiasDisp.map((p) => p.nombre),
 
     // Contexto del usuario actual
     role,

@@ -57,6 +57,7 @@ type IncidentData = {
   historial: { estadoAnterior: string | null; estadoNuevo: string; motivoCambio: string | null; observaciones: string | null; fecha: string }[]
   solicitudComite: { estado: string; resultado: string | null; observaciones: string | null; fecha: string | null } | null
   brigadistasDisponibles: { id: string; nombres: string; apellidos: string | null; celular: string | null; parroquia: string | null }[]
+  parroquias: string[]
   role: FrontendRole
   userId: string
   idUsuarioGRDActual: string | null
@@ -1060,7 +1061,10 @@ function PanelAtender({ data, onDone }: { data: IncidentData; onDone: () => void
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-700 mb-1">Lugar de entrega <span className="text-red-500">*</span></label>
-          <input className={inputCls} value={form.lugar} onChange={(e) => set('lugar', e.target.value)} placeholder="Domicilio, parroquia, etc." />
+          <select className={inputCls} value={form.lugar} onChange={(e) => set('lugar', e.target.value)}>
+            <option value="">Selecciona una parroquia...</option>
+            {data.parroquias.map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
         </div>
       </div>
       <div>
