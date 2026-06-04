@@ -1,36 +1,966 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
+// Prisma schema - Cáritas GRD
+// Versión inicial basada en los DER revisados.
+// Nota práctica: se conserva el modelo User actual para no romper el login existente.
+// En el DER, User funciona como la Credencial técnica del sistema.
 
 generator client {
   provider = "prisma-client-js"
 }
 
-
 datasource db {
   provider = "postgresql"
 }
+
+// -----------------------------------------------------------------------------
+// Compatibilidad con login actual
+// -----------------------------------------------------------------------------
 
 enum Role {
   ADMINISTRADOR
   ESPECIALISTAGRD
   BRIGADISTA
   COMITEDONACIONES
+  JEFAOGP
 }
 
 model User {
-  id                  String    @id @default(uuid())
-  email               String    @unique
+  id                  String     @id @default(uuid())
+  email               String     @unique
   name                String
-  password            String    
+  // Autenticación delegada a Keycloak: la app NO almacena contraseñas.
+  password            String?
   role                Role      @default(BRIGADISTA)
-  
+
   resetPasswordToken  String?   @unique
   resetPasswordExpiry DateTime?
-  
+
+  estado              String    @default("ACTIVO")
+  ultimoAcceso        DateTime?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
-
-  @@map("users") 
+  auditLogs           AuditLog[]
+  usuarioGRD          UsuarioGRD?
+  modulos             CredencialModulo[]
+  rolesCredencial     CredencialRol[]
+  sesiones            Sesion[]
+  intentosLogin       IntentoLogin[]
+  recuperaciones      RecuperacionContrasena[]
+  @@map("users")
 }
+
+// -----------------------------------------------------------------------------
+// Auth / RBAC homologable con ELV
+// -----------------------------------------------------------------------------
+
+model CredencialModulo {
+  idCredencialModulo String   @id @default(uuid())
+  idCredencial       String
+  modulo             String
+  estado             String   @default("ACTIVO")
+  fechaAsignacion    DateTime @default(now())
+
+  credencial         User     @relation(fields: [idCredencial], references: [id])
+
+  @@unique([idCredencial, modulo])
+  @@map("credencial_modulo")
+}
+
+model RecursoAPI {
+  idRecursoAPI     String    @id @default(uuid())
+  nombre           String
+  identificadorURI String    @unique
+  modulo           String
+  estado           String    @default("ACTIVO")
+
+  permisos         Permiso[]
+
+  @@map("recurso_api")
+}
+
+model Permiso {
+  idPermiso     String   @id @default(uuid())
+  idRecursoAPI  String
+  codigoPermiso String
+  nombrePermiso String
+  descripcion   String?
+  estado        String   @default("ACTIVO")
+
+  recursoAPI    RecursoAPI   @relation(fields: [idRecursoAPI], references: [idRecursoAPI])
+  rolesPermiso  RolPermiso[]
+
+  @@unique([idRecursoAPI, codigoPermiso])
+  @@map("permiso")
+}
+
+model Rol {
+  idRol           String   @id @default(uuid())
+  nombreRol       String
+  descripcion     String?
+  modulo          String
+  estado          String   @default("ACTIVO")
+  fechaCreacion   DateTime @default(now())
+  fechaActualizacion DateTime @updatedAt
+
+  permisos        RolPermiso[]
+  credenciales    CredencialRol[]
+
+  @@unique([nombreRol, modulo])
+  @@map("rol")
+}
+
+model RolPermiso {
+  idRolPermiso   String   @id @default(uuid())
+  idRol          String
+  idPermiso      String
+  estado         String   @default("ACTIVO")
+  fechaAsignacion DateTime @default(now())
+
+  rol            Rol      @relation(fields: [idRol], references: [idRol])
+  permiso        Permiso  @relation(fields: [idPermiso], references: [idPermiso])
+
+  @@unique([idRol, idPermiso])
+  @@map("rol_permiso")
+}
+
+model CredencialRol {
+  idCredencialRol String   @id @default(uuid())
+  idCredencial    String
+  idRol           String
+  estado          String   @default("ACTIVO")
+  fechaAsignacion DateTime @default(now())
+
+  credencial      User     @relation(fields: [idCredencial], references: [id])
+  rol             Rol      @relation(fields: [idRol], references: [idRol])
+
+  @@unique([idCredencial, idRol])
+  @@map("credencial_rol")
+}
+
+model Sesion {
+  idSesion        String   @id @default(uuid())
+  idCredencial    String
+  moduloActivo    String
+  tokenJWT        String?  @db.Text
+  refreshToken    String?  @db.Text
+  ipOrigen        String?
+  dispositivo     String?
+  estado          String   @default("ACTIVA")
+  fechaInicio     DateTime @default(now())
+  fechaExpiracion DateTime?
+
+  credencial      User     @relation(fields: [idCredencial], references: [id])
+
+  @@map("sesion")
+}
+
+model IntentoLogin {
+  idIntento    String   @id @default(uuid())
+  idCredencial String?
+  correo       String
+  ipOrigen     String?
+  exitoso      Boolean  @default(false)
+  motivoFallo  String?
+  fechaIntento DateTime @default(now())
+
+  credencial   User?    @relation(fields: [idCredencial], references: [id])
+
+  @@map("intento_login")
+}
+
+model RecuperacionContrasena {
+  idRecuperacion  String    @id @default(uuid())
+  idCredencial    String
+  token           String    @unique
+  estado          String    @default("PENDIENTE")
+  ipSolicitud     String?
+  fechaCreacion   DateTime  @default(now())
+  fechaExpiracion DateTime
+  fechaUso        DateTime?
+
+  credencial      User      @relation(fields: [idCredencial], references: [id])
+
+  @@map("recuperacion_contrasena")
+}
+
+// -----------------------------------------------------------------------------
+// Usuarios funcionales GRD, catálogos y territorio
+// -----------------------------------------------------------------------------
+
+model UsuarioGRD {
+  idUsuarioGRD    String   @id @default(uuid())
+  idCredencial    String   @unique
+  nombres         String
+  apellidos       String
+  correoReferencia String?
+  telefono        String?
+  estado          String   @default("ACTIVO")
+  fechaCreacion   DateTime @default(now())
+
+  credencial      User     @relation(fields: [idCredencial], references: [id])
+
+  cursosResponsable CursoCapacitacion[]
+  planesResponsable PlanTrabajoGRD[]
+  actividadesRegistro ActividadPreventiva[] @relation("UsuarioRegistroActividad")
+  movimientosKit   MovimientoKit[]
+  evidenciasCargadas EvidenciaGRD[]
+  observaciones     ObservacionGRD[]
+  auditorias        HistorialAuditoriaGRD[]
+  incidenciasResponsable Incidencia[]
+  avisosRegistrados AvisoEmergencia[]
+  asignacionesRealizadas AsignacionBrigadistaIncidencia[]
+
+  @@map("usuario_grd")
+}
+
+model CatalogoGRD {
+  idCatalogoGRD String   @id @default(uuid())
+  nombreCatalogo String  @unique
+  descripcion   String?
+  estado        String   @default("ACTIVO")
+
+  detalles      CatalogoDetalleGRD[]
+
+  @@map("catalogo_grd")
+}
+
+model CatalogoDetalleGRD {
+  idCatalogoDetalleGRD String @id @default(uuid())
+  idCatalogoGRD        String
+  codigo               String
+  valor                String
+  descripcion          String?
+  orden                Int?
+  estado               String @default("ACTIVO")
+
+  catalogo             CatalogoGRD @relation(fields: [idCatalogoGRD], references: [idCatalogoGRD])
+
+  evidenciasTipo       EvidenciaGRD[] @relation("TipoEvidenciaCatalogo")
+  auditoriasTipoAccion HistorialAuditoriaGRD[] @relation("TipoAccionAuditoria")
+
+  @@unique([idCatalogoGRD, codigo])
+  @@map("catalogo_detalle_grd")
+}
+
+model TipoLugar {
+  idTipoLugar   String   @id @default(uuid())
+  codigoTipoLugar String @unique
+  nombreTipoLugar String
+  descripcion   String?
+  estado        String   @default("ACTIVO")
+
+  lugares       CatalogoLugar[]
+
+  @@map("tipo_lugar")
+}
+
+model CatalogoLugar {
+  idLugar       String   @id @default(uuid())
+  idTipoLugar   String
+  idLugarPadre  String?
+  nombreLugar   String
+  direccion     String?
+  referencia    String?
+  latitud       Decimal? @db.Decimal(10, 7)
+  longitud      Decimal? @db.Decimal(10, 7)
+  telefono      String?
+  correo        String?
+  estado        String   @default("ACTIVO")
+
+  tipoLugar     TipoLugar @relation(fields: [idTipoLugar], references: [idTipoLugar])
+  padre         CatalogoLugar? @relation("JerarquiaLugar", fields: [idLugarPadre], references: [idLugar])
+  hijos         CatalogoLugar[] @relation("JerarquiaLugar")
+  parroquia     Parroquia?
+
+  @@map("catalogo_lugar")
+}
+
+model Parroquia {
+  idParroquia       String   @id @default(uuid())
+  idLugarCatalogo   String?  @unique
+  nombre            String
+  direccion         String?
+  referencia        String?
+  latitud           Decimal? @db.Decimal(10, 7)
+  longitud          Decimal? @db.Decimal(10, 7)
+  telefono          String?
+  correo            String?
+  estado            String   @default("ACTIVO")
+
+  lugarCatalogo     CatalogoLugar? @relation(fields: [idLugarCatalogo], references: [idLugar])
+
+  avisos            AvisoEmergencia[]
+  incidencias       Incidencia[]
+  participantes     Participante[]
+  brigadistas       BrigadistaParroquial[]
+  planesTrabajo     PlanTrabajoGRD[]
+  actividades       ActividadPreventiva[]
+  kitsBeneficiarios KitEmergencia[]
+  movimientosDestino MovimientoKit[]
+
+  @@map("parroquia")
+}
+
+model TipoReferencia {
+  idTipoReferencia String @id @default(uuid())
+  codigoEntidad    String @unique
+  nombreEntidad    String
+  descripcion      String?
+  estado           String @default("ACTIVO")
+
+  evidencias       EvidenciaGRD[]
+  observaciones    ObservacionGRD[]
+  auditorias       HistorialAuditoriaGRD[]
+
+  @@map("tipo_referencia")
+}
+
+// -----------------------------------------------------------------------------
+// Incidencias GRD
+// -----------------------------------------------------------------------------
+
+model AvisoEmergencia {
+  idAviso          String   @id @default(uuid())
+  idParroquia      String?
+  idUsuarioGRD     String?
+  codigoAviso      String?  @unique
+  medioAviso       String?
+  fechaHoraAviso   DateTime @default(now())
+  descripcion      String?
+  nombreInformante String?
+  telefonoInformante String?
+  direccionPreliminar String?
+  latitud          Decimal? @db.Decimal(10, 7)
+  longitud         Decimal? @db.Decimal(10, 7)
+  estadoAviso      String   @default("RECIBIDO")
+  observaciones    String?
+
+  parroquia        Parroquia? @relation(fields: [idParroquia], references: [idParroquia])
+  usuarioGRD       UsuarioGRD? @relation(fields: [idUsuarioGRD], references: [idUsuarioGRD])
+  incidencias      Incidencia[]
+
+  uuidMovil        String?  @unique
+  syncEstado       String?
+  fechaSincronizacion DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  deletedAt        DateTime?
+
+  @@map("aviso_emergencia")
+}
+
+model Incidencia {
+  idIncidencia     String   @id @default(uuid())
+  idAviso          String?
+  idParroquia      String?
+  idUsuarioResponsableGRD String?
+  codigoCaso       String?  @unique
+  fechaRegistro    DateTime @default(now())
+  tituloIncidencia String?
+  relatoActual     String?
+  direccionEvento  String?
+  contextoCaso     String?
+  tipoEvento       String?
+  descripcionEvento String?
+  gravedad         String?
+  estadoActual     String   @default("REGISTRADA")
+  latitud          Decimal? @db.Decimal(10, 7)
+  longitud         Decimal? @db.Decimal(10, 7)
+  observacionesGenerales String?
+
+  aviso            AvisoEmergencia? @relation(fields: [idAviso], references: [idAviso])
+  parroquia        Parroquia? @relation(fields: [idParroquia], references: [idParroquia])
+  usuarioResponsable UsuarioGRD? @relation(fields: [idUsuarioResponsableGRD], references: [idUsuarioGRD])
+
+  gruposFamiliares GrupoFamiliarAfectado[]
+  asignaciones     AsignacionBrigadistaIncidencia[]
+  acciones         AccionRespuesta[]
+  solicitudesAyuda SolicitudAyudaHumanitaria[]
+  entregasAyuda    EntregaAyudaHumanitaria[]
+  seguimientos     SeguimientoIncidencia[]
+  informes         Informe[]
+  historialEstados HistorialEstadoIncidencia[]
+
+  uuidMovil        String?  @unique
+  syncEstado       String?
+  fechaSincronizacion DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  deletedAt        DateTime?
+
+  @@map("incidencia")
+}
+
+model HistorialEstadoIncidencia {
+  idHistorial      String   @id @default(uuid())
+  idIncidencia     String
+  idUsuarioGRD     String?
+  estadoAnterior   String?
+  estadoNuevo      String
+  motivoCambio     String?
+  observaciones    String?
+  fechaCambio      DateTime @default(now())
+
+  incidencia       Incidencia @relation(fields: [idIncidencia], references: [idIncidencia])
+
+  @@map("historial_estado_incidencia")
+}
+
+model GrupoFamiliarAfectado {
+  idGrupoFamiliar  String   @id @default(uuid())
+  idIncidencia     String
+  codigoGrupo      String?
+  nombreReferencia String?
+  direccion        String?
+  condicionVivienda String?
+  condicionFinal   String?
+  observaciones    String?
+
+  incidencia       Incidencia @relation(fields: [idIncidencia], references: [idIncidencia])
+  personas         PersonaAfectada[]
+
+  @@map("grupo_familiar_afectado")
+}
+
+model PersonaAfectada {
+  idPersonaAfectada String @id @default(uuid())
+  idGrupoFamiliar   String
+  tipoDocumento     String?
+  numeroDocumento   String?
+  nombres           String
+  apellidos         String?
+  fechaNacimiento   DateTime?
+  sexo              String?
+  parentesco        String?
+  condicionSalud    String?
+  condicionEspecial String?
+  esVulnerable      Boolean @default(false)
+  telefono          String?
+  observaciones     String?
+
+  grupoFamiliar     GrupoFamiliarAfectado @relation(fields: [idGrupoFamiliar], references: [idGrupoFamiliar])
+
+  @@map("persona_afectada")
+}
+
+model AsignacionBrigadistaIncidencia {
+  idAsignacionBrigadista String @id @default(uuid())
+  idIncidencia           String
+  idBrigadistaParroquial String
+  idUsuarioAsignadorGRD  String?
+  fechaAsignacion        DateTime @default(now())
+  fechaInicioCampo       DateTime?
+  fechaLlegadaCampo      DateTime?
+  fechaCierreCampo       DateTime?
+  estadoAsignacion       String   @default("ASIGNADA")
+  rolEnEquipo            String?
+  esResponsableEquipo    Boolean  @default(false)
+  origenAsignacion       String   @default("MANUAL")
+  puntajeAsignacion      Decimal? @db.Decimal(5, 2)
+  criterioAsignacion     String?
+  progresoEvidencias     Int?
+  observaciones          String?
+
+  incidencia             Incidencia @relation(fields: [idIncidencia], references: [idIncidencia])
+  brigadista             BrigadistaParroquial @relation(fields: [idBrigadistaParroquial], references: [idBrigadistaParroquial])
+  usuarioAsignador       UsuarioGRD? @relation(fields: [idUsuarioAsignadorGRD], references: [idUsuarioGRD])
+
+  @@map("asignacion_brigadista_incidencia")
+}
+
+model AccionRespuesta {
+  idAccion        String   @id @default(uuid())
+  idIncidencia    String
+  idUsuarioGRD    String?
+  fechaAccion     DateTime @default(now())
+  tipoAccion      String?
+  descripcionAccion String?
+  resultado       String?
+  observaciones   String?
+
+  incidencia      Incidencia @relation(fields: [idIncidencia], references: [idIncidencia])
+
+  @@map("accion_respuesta")
+}
+
+model SolicitudAyudaHumanitaria {
+  idSolicitud        String   @id @default(uuid())
+  idIncidencia       String
+  idUsuarioSolicitanteGRD String?
+  idUsuarioEvaluadorGRD String?
+  codigoSolicitud    String? @unique
+  fechaSolicitud     DateTime @default(now())
+  motivoSolicitud    String?
+  tipoAyudaSolicitada String?
+  descripcionNecesidad String?
+  estadoSolicitud    String @default("REGISTRADA")
+  resultadoEvaluacion String?
+  fechaEvaluacion    DateTime?
+  observaciones      String?
+
+  incidencia         Incidencia @relation(fields: [idIncidencia], references: [idIncidencia])
+  entregas           EntregaAyudaHumanitaria[]
+
+  @@map("solicitud_ayuda_humanitaria")
+}
+
+model EntregaAyudaHumanitaria {
+  idEntrega          String   @id @default(uuid())
+  idSolicitud        String?
+  idIncidencia       String
+  idUsuarioResponsableGRD String?
+  codigoEntrega      String? @unique
+  fechaEntrega       DateTime?
+  lugarEntrega       String?
+  tipoAyuda          String?
+  descripcionAyuda   String?
+  cantidadEntregada  Int?
+  conformidadRecepcion Boolean?
+  entregaParcial     Boolean @default(false)
+  observaciones      String?
+
+  solicitud          SolicitudAyudaHumanitaria? @relation(fields: [idSolicitud], references: [idSolicitud])
+  incidencia         Incidencia @relation(fields: [idIncidencia], references: [idIncidencia])
+
+  uuidMovil          String? @unique
+  syncEstado         String?
+  fechaSincronizacion DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  deletedAt          DateTime?
+
+  @@map("entrega_ayuda_humanitaria")
+}
+
+model SeguimientoIncidencia {
+  idSeguimiento    String   @id @default(uuid())
+  idIncidencia     String
+  idUsuarioGRD     String?
+  fechaSeguimiento DateTime @default(now())
+  situacion        String?
+  descripcion      String?
+  necesidadesPendientes String?
+  recomendaciones  String?
+  estado           String?
+  observaciones    String?
+
+  incidencia       Incidencia @relation(fields: [idIncidencia], references: [idIncidencia])
+
+  uuidMovil        String? @unique
+  syncEstado       String?
+  fechaSincronizacion DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  deletedAt        DateTime?
+
+  @@map("seguimiento_incidencia")
+}
+
+model Informe {
+  idInforme        String   @id @default(uuid())
+  idIncidencia     String
+  idUsuarioGRD     String?
+  tituloInforme    String
+  tipoInforme      String?
+  fechaElaboracion DateTime @default(now())
+  resumen          String?
+  contenido        String? @db.Text
+  urlDocumento     String?
+  estadoInforme    String @default("BORRADOR")
+
+  incidencia       Incidencia @relation(fields: [idIncidencia], references: [idIncidencia])
+
+  @@map("informe")
+}
+
+// -----------------------------------------------------------------------------
+// Evidencias, observaciones y auditoría transversal
+// -----------------------------------------------------------------------------
+
+model EvidenciaGRD {
+  idEvidenciaGRD   String   @id @default(uuid())
+  idTipoReferencia String
+  idReferencia     String
+  idUsuarioCargaGRD String
+  idTipoEvidencia  String?
+  nombreArchivo    String
+  urlArchivo       String
+  formatoArchivo   String?
+  descripcion      String?
+  fechaCarga       DateTime @default(now())
+  tamanoArchivo    Int?
+  latitud          Decimal? @db.Decimal(10, 7)
+  longitud         Decimal? @db.Decimal(10, 7)
+  estado           String   @default("ACTIVO")
+
+  tipoReferencia   TipoReferencia @relation(fields: [idTipoReferencia], references: [idTipoReferencia])
+  usuarioCarga     UsuarioGRD @relation(fields: [idUsuarioCargaGRD], references: [idUsuarioGRD])
+  tipoEvidencia    CatalogoDetalleGRD? @relation("TipoEvidenciaCatalogo", fields: [idTipoEvidencia], references: [idCatalogoDetalleGRD])
+
+  uuidMovil        String? @unique
+  syncEstado       String?
+  fechaSincronizacion DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  deletedAt        DateTime?
+
+  @@index([idTipoReferencia, idReferencia])
+  @@map("evidencia_grd")
+}
+
+model ObservacionGRD {
+  idObservacionGRD String   @id @default(uuid())
+  idTipoReferencia String
+  idReferencia     String
+  idUsuarioGRD     String
+  textoObservacion String
+  fechaRegistro    DateTime @default(now())
+  estado           String   @default("ACTIVO")
+
+  tipoReferencia   TipoReferencia @relation(fields: [idTipoReferencia], references: [idTipoReferencia])
+  usuario          UsuarioGRD @relation(fields: [idUsuarioGRD], references: [idUsuarioGRD])
+
+  uuidMovil        String? @unique
+  syncEstado       String?
+  fechaSincronizacion DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  deletedAt        DateTime?
+
+  @@index([idTipoReferencia, idReferencia])
+  @@map("observacion_grd")
+}
+
+model HistorialAuditoriaGRD {
+  idAuditoriaGRD   String   @id @default(uuid())
+  idTipoReferencia String
+  idReferencia     String
+  idUsuarioGRD     String?
+  idTipoAccion     String?
+  campoModificado  String?
+  valorAnterior    String? @db.Text
+  valorNuevo       String? @db.Text
+  estadoAnterior   String?
+  estadoNuevo      String?
+  fechaHora        DateTime @default(now())
+  ipOrigen         String?
+  modulo           String?
+  observacion      String?
+
+  tipoReferencia   TipoReferencia @relation(fields: [idTipoReferencia], references: [idTipoReferencia])
+  usuario          UsuarioGRD? @relation(fields: [idUsuarioGRD], references: [idUsuarioGRD])
+  tipoAccion       CatalogoDetalleGRD? @relation("TipoAccionAuditoria", fields: [idTipoAccion], references: [idCatalogoDetalleGRD])
+
+  @@index([idTipoReferencia, idReferencia])
+  @@map("historial_auditoria_grd")
+}
+
+// -----------------------------------------------------------------------------
+// Prevención y logística
+// -----------------------------------------------------------------------------
+
+model PlanTrabajoGRD {
+  idPlanTrabajoGRD String   @id @default(uuid())
+  idParroquia      String
+  idUsuarioResponsableGRD String
+  codigoPlan       String? @unique
+  nombrePlan       String
+  diagnosticoRiesgo String?
+  objetivos        String? @db.Text
+  actividadesGenerales String? @db.Text
+  fechaInicio      DateTime?
+  fechaFin         DateTime?
+  rutasEvacuacion  String?
+  zonasSeguras     String?
+  estadoAprobacion String @default("BORRADOR")
+  observaciones    String?
+
+  parroquia        Parroquia @relation(fields: [idParroquia], references: [idParroquia])
+  usuarioResponsable UsuarioGRD @relation(fields: [idUsuarioResponsableGRD], references: [idUsuarioGRD])
+  actividades      ActividadPreventiva[]
+
+  @@map("plan_trabajo_grd")
+}
+
+model ActividadPreventiva {
+  idActividadPreventiva String @id @default(uuid())
+  idPlanTrabajoGRD      String?
+  idParroquia           String
+  idBrigadistaResponsable String?
+  idUsuarioRegistroGRD  String
+  idTipoActividadPreventiva String
+  codigoActividad       String? @unique
+  nombreActividad       String
+  fechaProgramada       DateTime?
+  fechaEjecucion        DateTime?
+  horarioInicio         String?
+  horarioFin            String?
+  lugarActividad        String?
+  publicoObjetivo       String?
+  numeroParticipantesEstimado Int?
+  numeroParticipantesReal Int?
+  descripcionActividad  String? @db.Text
+  resultadoGeneral      String?
+  recomendaciones       String?
+  observaciones         String?
+  estadoActividad       String @default("PROGRAMADA")
+  fechaRegistro         DateTime @default(now())
+
+  planTrabajo           PlanTrabajoGRD? @relation(fields: [idPlanTrabajoGRD], references: [idPlanTrabajoGRD])
+  parroquia             Parroquia @relation(fields: [idParroquia], references: [idParroquia])
+  brigadistaResponsable BrigadistaParroquial? @relation(fields: [idBrigadistaResponsable], references: [idBrigadistaParroquial])
+  usuarioRegistro       UsuarioGRD @relation("UsuarioRegistroActividad", fields: [idUsuarioRegistroGRD], references: [idUsuarioGRD])
+  movimientosKit        MovimientoKit[]
+
+  uuidMovil             String? @unique
+  syncEstado            String?
+  fechaSincronizacion   DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  deletedAt             DateTime?
+
+  @@map("actividad_preventiva")
+}
+
+model BrigadistaParroquial {
+  idBrigadistaParroquial String @id @default(uuid())
+  idParroquia            String
+  idUsuarioGRD           String? @unique
+  idCertificacionCurso   String? @unique
+  dni                    String? @unique
+  nombres                String
+  apellidos              String?
+  celular                String?
+  correo                 String?
+  disponibilidad         String?
+  estado                 String @default("ACTIVO")
+  fechaRegistro          DateTime @default(now())
+
+  parroquia              Parroquia @relation(fields: [idParroquia], references: [idParroquia])
+  certificacionCurso     CertificacionCurso? @relation(fields: [idCertificacionCurso], references: [idCertificacionCurso])
+  actividadesResponsable ActividadPreventiva[]
+  asignacionesIncidencia AsignacionBrigadistaIncidencia[]
+
+  @@map("brigadista_parroquial")
+}
+
+model KitEmergencia {
+  idKitEmergencia      String @id @default(uuid())
+  idParroquiaBeneficiaria String?
+  codigoAlmacen        String?
+  tipoKit              String
+  descripcion          String?
+  stockActual          Int @default(0)
+  estadoKit            String @default("ACTIVO")
+  fechaRegistro        DateTime @default(now())
+  ubicacionAlmacen     String?
+  observaciones        String?
+
+  parroquiaBeneficiaria Parroquia? @relation(fields: [idParroquiaBeneficiaria], references: [idParroquia])
+  movimientos          MovimientoKit[]
+
+  @@map("kit_emergencia")
+}
+
+model MovimientoKit {
+  idMovimientoKit      String @id @default(uuid())
+  idKitEmergencia      String
+  idUsuarioResponsableGRD String
+  idParroquiaDestino   String?
+  idActividadPreventiva String?
+  tipoMovimiento       String
+  cantidad             Int
+  motivoMovimiento     String?
+  observaciones        String?
+  fechaMovimiento      DateTime @default(now())
+
+  kitEmergencia        KitEmergencia @relation(fields: [idKitEmergencia], references: [idKitEmergencia])
+  usuarioResponsable   UsuarioGRD @relation(fields: [idUsuarioResponsableGRD], references: [idUsuarioGRD])
+  parroquiaDestino     Parroquia? @relation(fields: [idParroquiaDestino], references: [idParroquia])
+  actividadPreventiva  ActividadPreventiva? @relation(fields: [idActividadPreventiva], references: [idActividadPreventiva])
+
+  uuidMovil            String? @unique
+  syncEstado           String?
+  fechaSincronizacion  DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  deletedAt            DateTime?
+
+  @@map("movimiento_kit")
+}
+
+// -----------------------------------------------------------------------------
+// Capacitación asíncrona
+// -----------------------------------------------------------------------------
+
+model InstitucionAliada {
+  idInstitucionAliada String @id @default(uuid())
+  nombreInstitucion   String
+  tipoInstitucion     String?
+  personaContacto     String?
+  correoContacto      String?
+  telefonoContacto    String?
+  estado              String @default("ACTIVO")
+  fechaCreacion       DateTime @default(now())
+
+  cursos              CursoCapacitacion[]
+
+  @@map("institucion_aliada")
+}
+
+model CursoCapacitacion {
+  idCursoCapacitacion String @id @default(uuid())
+  idUsuarioResponsableGRD String
+  idInstitucionAliada String?
+  codigoCurso         String? @unique
+  nombreCurso         String
+  descripcion         String? @db.Text
+  fechaPublicacion    DateTime?
+  fechaCierre         DateTime?
+  duracionEstimadaHoras Int?
+  modalidadGeneral    String @default("ASINCRONA")
+  estadoCurso         String @default("BORRADOR")
+  fechaCreacion       DateTime @default(now())
+
+  usuarioResponsable  UsuarioGRD @relation(fields: [idUsuarioResponsableGRD], references: [idUsuarioGRD])
+  institucionAliada   InstitucionAliada? @relation(fields: [idInstitucionAliada], references: [idInstitucionAliada])
+  unidades            UnidadContenido[]
+  materiales          MaterialCapacitacion[]
+  inscripciones       InscripcionCurso[]
+
+  @@map("curso_capacitacion")
+}
+
+model UnidadContenido {
+  idUnidadContenido   String @id @default(uuid())
+  idCursoCapacitacion String
+  numeroOrden         Int
+  tituloUnidad        String
+  descripcion         String?
+  duracionEstimadaMinutos Int?
+  estado              String @default("ACTIVO")
+
+  curso               CursoCapacitacion @relation(fields: [idCursoCapacitacion], references: [idCursoCapacitacion])
+  materiales          MaterialCapacitacion[]
+  progresos           ProgresoCapacitacion[]
+
+  @@unique([idCursoCapacitacion, numeroOrden])
+  @@map("unidad_contenido")
+}
+
+model MaterialCapacitacion {
+  idMaterialCapacitacion String @id @default(uuid())
+  idCursoCapacitacion    String
+  idUnidadContenido      String?
+  titulo                 String
+  tipoMaterial           String?
+  enlaceMaterial         String?
+  descripcion            String?
+  categoria              String?
+  fechaPublicacion       DateTime?
+  estado                 String @default("ACTIVO")
+
+  curso                  CursoCapacitacion @relation(fields: [idCursoCapacitacion], references: [idCursoCapacitacion])
+  unidadContenido        UnidadContenido? @relation(fields: [idUnidadContenido], references: [idUnidadContenido])
+
+  @@map("material_capacitacion")
+}
+
+model Participante {
+  idParticipante      String @id @default(uuid())
+  idParroquia         String?
+  tipoDocumento       String?
+  numeroDocumento     String?
+  nombres             String
+  apellidos           String?
+  edad                Int?
+  celular             String?
+  correo              String?
+  rolPastoralComunitario String?
+  estado              String @default("ACTIVO")
+
+  parroquia           Parroquia? @relation(fields: [idParroquia], references: [idParroquia])
+  inscripciones       InscripcionCurso[]
+
+  @@unique([tipoDocumento, numeroDocumento])
+  @@map("participante")
+}
+
+model InscripcionCurso {
+  idInscripcionCurso  String @id @default(uuid())
+  idCursoCapacitacion String
+  idParticipante      String
+  fechaInscripcion    DateTime @default(now())
+  fechaInicioContenido DateTime?
+  fechaFinalizacionContenido DateTime?
+  estadoInscripcion   String @default("INSCRITO")
+  canalComunicacion   String?
+  observacion         String?
+
+  curso               CursoCapacitacion @relation(fields: [idCursoCapacitacion], references: [idCursoCapacitacion])
+  participante        Participante @relation(fields: [idParticipante], references: [idParticipante])
+  progresos           ProgresoCapacitacion[]
+  evaluaciones        EvaluacionCurso[]
+  certificacion       CertificacionCurso?
+
+  @@unique([idCursoCapacitacion, idParticipante])
+  @@map("inscripcion_curso")
+}
+
+model ProgresoCapacitacion {
+  idProgresoCapacitacion String @id @default(uuid())
+  idInscripcionCurso     String
+  idUnidadContenido      String?
+  porcentajeAvance       Int @default(0)
+  estadoProgreso         String @default("NO_INICIADO")
+  fechaInicio            DateTime?
+  fechaUltimoAcceso      DateTime?
+  fechaCompletado        DateTime?
+  observacion            String?
+
+  inscripcion            InscripcionCurso @relation(fields: [idInscripcionCurso], references: [idInscripcionCurso])
+  unidadContenido        UnidadContenido? @relation(fields: [idUnidadContenido], references: [idUnidadContenido])
+
+  @@unique([idInscripcionCurso, idUnidadContenido])
+  @@map("progreso_capacitacion")
+}
+
+model EvaluacionCurso {
+  idEvaluacionCurso   String @id @default(uuid())
+  idInscripcionCurso  String
+  tipoEvaluacion      String?
+  numeroIntento       Int @default(1)
+  nota                Decimal? @db.Decimal(5, 2)
+  resultado           String?
+  fechaEvaluacion     DateTime?
+  observacion         String?
+
+  inscripcion         InscripcionCurso @relation(fields: [idInscripcionCurso], references: [idInscripcionCurso])
+
+  @@map("evaluacion_curso")
+}
+
+model CertificacionCurso {
+  idCertificacionCurso String @id @default(uuid())
+  idInscripcionCurso   String @unique
+  estadoCertificacion  String @default("GENERADA")
+  fechaCertificacion   DateTime?
+  constanciaUrl        String?
+  medioEnvioConstancia String?
+  observacion          String?
+
+  inscripcion          InscripcionCurso @relation(fields: [idInscripcionCurso], references: [idInscripcionCurso])
+  brigadista           BrigadistaParroquial?
+
+  @@map("certificacion_curso")
+}
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  detail    Json?
+  createdAt DateTime @default(now())
+
+  @@map("audit_logs")
+}
+
