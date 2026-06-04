@@ -48,9 +48,24 @@ export function pickAppRole(roles: string[]): string {
  * Configuración EDGE-SAFE de Auth.js (sin Prisma ni dependencias de Node).
  * La usa el proxy (middleware) para leer la sesión y los roles del token.
  */
+// AUTH_KEYCLOAK_AUTHORIZATION se define solo en Docker (docker-compose.yml).
+// Cuando existe, sobreescribe el authorization_endpoint del OIDC discovery
+// para que el navegador vaya a localhost:8085 en vez de keycloak:8080.
+// En desarrollo local (.env sin esta var) se usa el endpoint del discovery.
+const keycloakProvider = {
+  ...Keycloak({
+    clientId: process.env.AUTH_KEYCLOAK_ID!,
+    clientSecret: process.env.AUTH_KEYCLOAK_SECRET!,
+    issuer: process.env.AUTH_KEYCLOAK_ISSUER,
+  }),
+  ...(process.env.AUTH_KEYCLOAK_AUTHORIZATION
+    ? { authorization: process.env.AUTH_KEYCLOAK_AUTHORIZATION }
+    : {}),
+}
+
 export const authConfig: NextAuthConfig = {
   trustHost: true,
-  providers: [keycloakProvider()],
+  providers: [keycloakProvider],
   pages: { signIn: '/login' },
   callbacks: {
     async jwt({ token, account }) {

@@ -1,16 +1,19 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Package, Plus, ArrowDownCircle, ArrowUpCircle, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { crearKit, registrarMovimientoKit, listarMovimientosKit } from '@/app/actions/kits'
+import { PaginationControls } from '@/app/ui/shared/pagination-controls'
 
 type Kit = { id: string; tipoKit: string; descripcion: string | null; stockActual: number; estadoKit: string }
 type Parroquia = { id: string; nombre: string }
 type Movimiento = { id: string; tipo: string; cantidad: number; fecha: string; responsable: string | null; motivoMovimiento: string | null; observaciones: string | null }
 
 const TIPOS = ['INGRESO', 'ENTREGA', 'REPOSICION'] as const
+const KIT_PAGE_SIZE = 5
+const MOV_PAGE_SIZE = 5
 
 export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parroquia[] }) {
   const router = useRouter()
@@ -19,17 +22,64 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
   const [movimientos, setMovimientos] = useState<Movimiento[]>([])
   const [showKitForm, setShowKitForm] = useState(false)
   const [showMovForm, setShowMovForm] = useState(false)
+  const [kitPage, setKitPage] = useState(1)
+  const [movementPage, setMovementPage] = useState(1)
 
   const [kitForm, setKitForm] = useState({ tipoKit: '', descripcion: '', stockInicial: 0 })
   const [movForm, setMovForm] = useState({ tipo: 'ENTREGA' as (typeof TIPOS)[number], cantidad: 1, idParroquiaDestino: parroquias[0]?.id ?? '', motivoMovimiento: '', observaciones: '' })
 
   const current = kits.find((k) => k.id === selected) ?? null
 
+  const totalKitPages = Math.max(1, Math.ceil(kits.length / KIT_PAGE_SIZE))
+  const safeKitPage = Math.min(kitPage, totalKitPages)
+  const kitStart = (safeKitPage - 1) * KIT_PAGE_SIZE
+  const visibleKits = kits.slice(kitStart, kitStart + KIT_PAGE_SIZE)
+  const kitFrom = kits.length === 0 ? 0 : kitStart + 1
+  const kitTo = Math.min(kitStart + KIT_PAGE_SIZE, kits.length)
+
+  const totalMovementPages = Math.max(1, Math.ceil(movimientos.length / MOV_PAGE_SIZE))
+  const safeMovementPage = Math.min(movementPage, totalMovementPages)
+  const movementStart = (safeMovementPage - 1) * MOV_PAGE_SIZE
+  const visibleMovimientos = movimientos.slice(movementStart, movementStart + MOV_PAGE_SIZE)
+  const movementFrom = movimientos.length === 0 ? 0 : movementStart + 1
+  const movementTo = Math.min(movementStart + MOV_PAGE_SIZE, movimientos.length)
+
+  useEffect(() => {
+    if (kitPage > totalKitPages) setKitPage(totalKitPages)
+  }, [kitPage, totalKitPages])
+
+  useEffect(() => {
+    if (movementPage > totalMovementPages) setMovementPage(totalMovementPages)
+  }, [movementPage, totalMovementPages])
+
   const selectKit = (id: string) => {
     setSelected(id)
     setShowMovForm(false)
-    listarMovimientosKit(id).then(setMovimientos).catch(() => setMovimientos([]))
+    setMovementPage(1)
   }
+
+  useEffect(() => {
+    let active = true
+
+    if (!selected) {
+      setMovimientos([])
+      return () => {
+        active = false
+      }
+    }
+
+    listarMovimientosKit(selected)
+      .then((items) => {
+        if (active) setMovimientos(items)
+      })
+      .catch(() => {
+        if (active) setMovimientos([])
+      })
+
+    return () => {
+      active = false
+    }
+  }, [selected])
 
   const submitKit = () => {
     if (!kitForm.tipoKit.trim()) { toast.error('Indica el tipo de kit.'); return }
@@ -95,12 +145,22 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div className="lg:col-span-1 space-y-3">
           {kits.length === 0 && <p className="text-sm text-gray-500">No hay kits registrados.</p>}
-          {kits.map((k) => (
+          {visibleKits.map((k) => (
             <button key={k.id} onClick={() => selectKit(k.id)} className={`w-full text-left p-4 border rounded-xl transition-colors ${selected === k.id ? 'border-[var(--caritas-green)] bg-[var(--caritas-green)]/5' : 'border-[var(--caritas-border)] hover:bg-gray-50'}`}>
               <div className="text-sm font-medium text-[var(--caritas-text)]">{k.tipoKit}</div>
               <div className="text-xs text-gray-600 mt-1">Stock: <span className={`font-semibold ${k.stockActual < 5 ? 'text-red-600' : 'text-green-700'}`}>{k.stockActual}</span></div>
             </button>
           ))}
+          <PaginationControls
+            total={kits.length}
+            start={kitFrom}
+            end={kitTo}
+            page={safeKitPage}
+            totalPages={totalKitPages}
+            onPrevious={() => setKitPage((page) => Math.max(1, page - 1))}
+            onNext={() => setKitPage((page) => Math.min(totalKitPages, page + 1))}
+            className="mt-4"
+          />
         </div>
 
         <div className="lg:col-span-2 bg-white border border-[var(--caritas-border)] rounded-xl p-5">
@@ -146,7 +206,7 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
 
               <h3 className="text-sm text-gray-600 mb-2">Historial de movimientos</h3>
               <ul className="space-y-2">
-                {movimientos.map((m) => (
+                {visibleMovimientos.map((m) => (
                   <li key={m.id} className="flex items-start gap-3 p-3 border border-[var(--caritas-border)] rounded">
                     {m.tipo === 'ENTREGA' ? <ArrowUpCircle className="w-5 h-5 text-red-600" /> : <ArrowDownCircle className="w-5 h-5 text-green-600" />}
                     <div className="flex-1">
@@ -159,6 +219,16 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
                 ))}
                 {movimientos.length === 0 && <p className="text-sm text-gray-500">Sin movimientos.</p>}
               </ul>
+              <PaginationControls
+                total={movimientos.length}
+                start={movementFrom}
+                end={movementTo}
+                page={safeMovementPage}
+                totalPages={totalMovementPages}
+                onPrevious={() => setMovementPage((page) => Math.max(1, page - 1))}
+                onNext={() => setMovementPage((page) => Math.min(totalMovementPages, page + 1))}
+                className="mt-4"
+              />
             </>
           )}
         </div>

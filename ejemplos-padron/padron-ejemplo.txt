@@ -1,0 +1,29 @@
+grupo_familiar: Grupo Familiar 1
+tipo_doc: DNI
+numero_documento: 60587924
+nombres: Juan Carlos
+apellido_paterno: Valverde
+apellido_materno: Torres
+edad: 32
+genero: Masculino
+celular: 987654321
+parentesco: Jefe(a) de Hogar
+situacion_especial: Herido
+
+grupo_familiar: Grupo Familiar 1
+tipo_doc: DNI
+numero_documento: 45221033
+nombres: María Elena
+apellido_paterno: Valverde
+edad: 28
+genero: Femenino
+parentesco: Cónyuge
+situacion_especial: Gestante
+
+tipo_doc: DNI
+numero_documento: 60582332
+nombres: Rosa
+apellido_paterno: Carhuapoma
+edad: 21
+genero: Femenino
+situacion_especial: Con Lactancia

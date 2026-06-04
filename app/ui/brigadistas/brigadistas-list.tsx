@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import {
   Plus, Search, Users, ShieldCheck, UserCheck, UserX,
   Edit3, ToggleLeft, ToggleRight, X, Loader2, Phone, Mail,
@@ -12,6 +12,7 @@ import {
   toggleEstadoBrigadista, toggleDisponibilidadBrigadista,
   type BrigadistaFormData,
 } from '@/app/actions/brigadistas'
+import { PaginationControls } from '@/app/ui/shared/pagination-controls'
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -40,6 +41,8 @@ const DISPONIBILIDAD_CFG: Record<string, { label: string; badge: string }> = {
   'EN CAMPO':      { label: 'En campo',     badge: 'bg-blue-100 text-blue-700' },
   'NO DISPONIBLE': { label: 'No disponible', badge: 'bg-gray-100 text-gray-600' },
 }
+
+const PAGE_SIZE = 10
 
 const inputCls = 'w-full px-3 py-2 text-sm bg-[#F5F5F5] border border-[#DDDDDD] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#009850]/20 focus:border-[#009850] transition-colors'
 const labelCls = 'block text-xs font-medium text-gray-700 mb-1'
@@ -183,6 +186,7 @@ export function BrigadistasList({ brigadistas, parroquias, stats }: Props) {
   const [search, setSearch]       = useState('')
   const [filterParroquia, setFilterParroquia] = useState('all')
   const [filterEstado, setFilterEstado]       = useState('all')
+  const [currentPage, setCurrentPage] = useState(1)
 
   const filtered = brigadistas.filter((b) => {
     if (filterEstado !== 'all' && b.estado !== filterEstado) return false
@@ -194,6 +198,21 @@ export function BrigadistasList({ brigadistas, parroquias, stats }: Props) {
     }
     return true
   })
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const safePage = Math.min(currentPage, totalPages)
+  const startIndex = (safePage - 1) * PAGE_SIZE
+  const paginated = filtered.slice(startIndex, startIndex + PAGE_SIZE)
+  const visibleFrom = filtered.length === 0 ? 0 : startIndex + 1
+  const visibleTo = Math.min(startIndex + PAGE_SIZE, filtered.length)
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [search, filterParroquia, filterEstado])
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages)
+  }, [currentPage, totalPages])
 
   function openCreate() { setEditing(undefined); setShowModal(true) }
   function openEdit(b: BrigadistaItem) { setEditing(b); setShowModal(true) }
@@ -287,7 +306,7 @@ export function BrigadistasList({ brigadistas, parroquias, stats }: Props) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#DDDDDD]">
-                {filtered.map((b) => {
+                {paginated.map((b) => {
                   const dispCfg = DISPONIBILIDAD_CFG[b.disponibilidad ?? 'NO DISPONIBLE'] ?? DISPONIBILIDAD_CFG['NO DISPONIBLE']
                   return (
                     <tr key={b.id} className="hover:bg-gray-50 transition-colors">
@@ -361,7 +380,7 @@ export function BrigadistasList({ brigadistas, parroquias, stats }: Props) {
       <div className="md:hidden space-y-3">
         {filtered.length === 0 ? (
           <div className="text-center py-10 text-gray-400 text-sm">Sin brigadistas que mostrar</div>
-        ) : filtered.map((b) => {
+        ) : paginated.map((b) => {
           const dispCfg = DISPONIBILIDAD_CFG[b.disponibilidad ?? 'NO DISPONIBLE'] ?? DISPONIBILIDAD_CFG['NO DISPONIBLE']
           return (
             <div key={b.id} className="bg-white border border-[#DDDDDD] rounded-xl p-4 space-y-3">
@@ -408,6 +427,16 @@ export function BrigadistasList({ brigadistas, parroquias, stats }: Props) {
           )
         })}
       </div>
+
+      <PaginationControls
+        total={filtered.length}
+        start={visibleFrom}
+        end={visibleTo}
+        page={safePage}
+        totalPages={totalPages}
+        onPrevious={() => setCurrentPage((page) => Math.max(1, page - 1))}
+        onNext={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+      />
 
       {/* Modal */}
       {showModal && (

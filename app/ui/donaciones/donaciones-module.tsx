@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { HandHeart, CheckCircle, XCircle, AlertCircle, Clock, Eye } from 'lucide-react'
 import { toast } from 'sonner'
 import { aprobarCaso, observarCaso, rechazarCaso } from '@/app/actions/incidents'
+import { PaginationControls } from '@/app/ui/shared/pagination-controls'
 
 type Informe = {
   analisisSituacion?: string
@@ -42,16 +43,42 @@ const STATUS_COLOR: Record<string, string> = {
 }
 
 const PENDIENTES = ['EN EVALUACION', 'OBSERVADO']
+const QUEUE_PAGE_SIZE = 9
+const HISTORY_PAGE_SIZE = 9
 
 export function DonacionesModule({ casos, canEvaluate }: { casos: Caso[]; canEvaluate: boolean }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [selectedId, setSelectedId] = useState<string | null>(casos.find((c) => PENDIENTES.includes(c.estado))?.id ?? null)
   const [notes, setNotes] = useState('')
+  const [queuePage, setQueuePage] = useState(1)
+  const [historyPage, setHistoryPage] = useState(1)
 
   const queue = casos.filter((c) => PENDIENTES.includes(c.estado))
   const closed = casos.filter((c) => !PENDIENTES.includes(c.estado))
   const current = casos.find((c) => c.id === selectedId) ?? null
+
+  const totalQueuePages = Math.max(1, Math.ceil(queue.length / QUEUE_PAGE_SIZE))
+  const safeQueuePage = Math.min(queuePage, totalQueuePages)
+  const queueStart = (safeQueuePage - 1) * QUEUE_PAGE_SIZE
+  const paginatedQueue = queue.slice(queueStart, queueStart + QUEUE_PAGE_SIZE)
+  const queueFrom = queue.length === 0 ? 0 : queueStart + 1
+  const queueTo = Math.min(queueStart + QUEUE_PAGE_SIZE, queue.length)
+
+  const totalHistoryPages = Math.max(1, Math.ceil(closed.length / HISTORY_PAGE_SIZE))
+  const safeHistoryPage = Math.min(historyPage, totalHistoryPages)
+  const historyStart = (safeHistoryPage - 1) * HISTORY_PAGE_SIZE
+  const paginatedHistory = closed.slice(historyStart, historyStart + HISTORY_PAGE_SIZE)
+  const historyFrom = closed.length === 0 ? 0 : historyStart + 1
+  const historyTo = Math.min(historyStart + HISTORY_PAGE_SIZE, closed.length)
+
+  useEffect(() => {
+    if (queuePage > totalQueuePages) setQueuePage(totalQueuePages)
+  }, [queuePage, totalQueuePages])
+
+  useEffect(() => {
+    if (historyPage > totalHistoryPages) setHistoryPage(totalHistoryPages)
+  }, [historyPage, totalHistoryPages])
 
   const decidir = (accion: 'APROBAR' | 'OBSERVAR' | 'RECHAZAR') => {
     if (!current) return
@@ -102,21 +129,41 @@ export function DonacionesModule({ casos, canEvaluate }: { casos: Caso[]; canEva
             </div>
           ) : (
             <div className="divide-y divide-gray-100">
-              {queue.map((c) => (
+              {paginatedQueue.map((c) => (
                 <CasoRow key={c.id} c={c} selected={selectedId === c.id} onClick={() => setSelectedId(c.id)} />
               ))}
             </div>
           )}
+          <PaginationControls
+            total={queue.length}
+            start={queueFrom}
+            end={queueTo}
+            page={safeQueuePage}
+            totalPages={totalQueuePages}
+            onPrevious={() => setQueuePage((page) => Math.max(1, page - 1))}
+            onNext={() => setQueuePage((page) => Math.min(totalQueuePages, page + 1))}
+            className="rounded-none border-x-0 border-b-0"
+          />
           {closed.length > 0 && (
             <>
               <div className="bg-gray-50 border-t border-gray-200 px-4 py-2">
                 <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Historial ({closed.length})</p>
               </div>
-              <div className="divide-y divide-gray-100 max-h-64 overflow-y-auto">
-                {closed.map((c) => (
+              <div className="divide-y divide-gray-100">
+                {paginatedHistory.map((c) => (
                   <CasoRow key={c.id} c={c} selected={selectedId === c.id} onClick={() => setSelectedId(c.id)} compact />
                 ))}
               </div>
+              <PaginationControls
+                total={closed.length}
+                start={historyFrom}
+                end={historyTo}
+                page={safeHistoryPage}
+                totalPages={totalHistoryPages}
+                onPrevious={() => setHistoryPage((page) => Math.max(1, page - 1))}
+                onNext={() => setHistoryPage((page) => Math.min(totalHistoryPages, page + 1))}
+                className="rounded-none border-x-0 border-b-0"
+              />
             </>
           )}
         </div>
