@@ -1,6 +1,6 @@
-'use client'
+"use client";
 
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 export function PaginationControls({
   total,
@@ -10,21 +10,23 @@ export function PaginationControls({
   totalPages,
   onPrevious,
   onNext,
-  className = '',
+  className = "",
 }: {
-  total: number
-  start: number
-  end: number
-  page: number
-  totalPages: number
-  onPrevious: () => void
-  onNext: () => void
-  className?: string
+  total: number;
+  start: number;
+  end: number;
+  page: number;
+  totalPages: number;
+  onPrevious: () => void;
+  onNext: () => void;
+  className?: string;
 }) {
-  if (total === 0 || totalPages <= 1) return null
+  if (total === 0 || totalPages <= 1) return null;
 
   return (
-    <div className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white border border-[var(--caritas-border)] rounded-xl px-4 py-3 ${className}`.trim()}>
+    <div
+      className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white border border-[var(--caritas-border)] rounded-xl px-4 py-3 ${className}`.trim()}
+    >
       <p className="text-xs text-gray-500">
         Mostrando {start}-{end} de {total}
       </p>
@@ -50,5 +52,5 @@ export function PaginationControls({
         </button>
       </div>
     </div>
-  )
+  );
 }

@@ -1,8 +1,8 @@
-import { Prisma } from '@prisma/client'
-import type { CursoCapacitacion as CursoRow } from '@prisma/client'
-import { Curso, EstadoCurso } from '../../domain/entities/curso/Curso'
+import { Prisma } from "@prisma/client";
+import type { CursoCapacitacion as CursoRow } from "@prisma/client";
+import { Curso, EstadoCurso } from "../../domain/entities/curso/Curso";
 
-const iso = (d: Date | null) => (d ? d.toISOString() : null)
+const iso = (d: Date | null) => (d ? d.toISOString() : null);
 
 export const CursoMapper = {
   toDomain(row: CursoRow): Curso {
@@ -18,11 +18,11 @@ export const CursoMapper = {
       duracionEstimadaHoras: row.duracionEstimadaHoras,
       modalidadGeneral: row.modalidadGeneral,
       estadoCurso: row.estadoCurso as EstadoCurso,
-    })
+    });
   },
 
   toPersistence(c: Curso): Prisma.CursoCapacitacionUncheckedCreateInput {
-    const s = c.snapshot
+    const s = c.snapshot;
     return {
       idCursoCapacitacion: s.id,
       idUsuarioResponsableGRD: s.idUsuarioResponsableGRD,
@@ -35,6 +35,6 @@ export const CursoMapper = {
       duracionEstimadaHoras: s.duracionEstimadaHoras ?? undefined,
       modalidadGeneral: s.modalidadGeneral,
       estadoCurso: s.estadoCurso,
-    }
+    };
   },
-}
+};
