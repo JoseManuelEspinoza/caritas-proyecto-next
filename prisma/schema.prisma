@@ -865,18 +865,19 @@ model InstitucionAliada {
 }
 
 model CursoCapacitacion {
-  idCursoCapacitacion     String    @id @default(uuid())
+  idCursoCapacitacion     String              @id @default(uuid())
   idUsuarioResponsableGRD String
   idInstitucionAliada     String?
-  codigoCurso             String?   @unique
+  codigoCurso             String?             @unique
   nombreCurso             String
-  descripcion             String?   @db.Text
+  descripcion             String?             @db.Text
   fechaPublicacion        DateTime?
   fechaCierre             DateTime?
   duracionEstimadaHoras   Int?
-  modalidadGeneral        String    @default("ASINCRONA")
-  estadoCurso             String    @default("BORRADOR")
-  fechaCreacion           DateTime  @default(now())
+  modalidadGeneral        String              @default("ASINCRONA")
+  estadoCurso             String              @default("BORRADOR")
+  fechaCreacion           DateTime            @default(now())
+  cuestionarios           CuestionarioCurso[]
 
   usuarioResponsable UsuarioGRD             @relation(fields: [idUsuarioResponsableGRD], references: [idUsuarioGRD])
   institucionAliada  InstitucionAliada?     @relation(fields: [idInstitucionAliada], references: [idInstitucionAliada])
@@ -982,17 +983,25 @@ model ProgresoCapacitacion {
 }
 
 model EvaluacionCurso {
-  idEvaluacionCurso  String    @id @default(uuid())
-  idInscripcionCurso String
-  tipoEvaluacion     String?
-  numeroIntento      Int       @default(1)
-  nota               Decimal?  @db.Decimal(5, 2)
-  resultado          String?
-  fechaEvaluacion    DateTime?
-  observacion        String?
+  idEvaluacionCurso   String    @id @default(uuid())
+  idInscripcionCurso  String
+  idCuestionarioCurso String?
+  tipoEvaluacion      String?
+  numeroIntento       Int       @default(1)
+  nota                Decimal?  @db.Decimal(5, 2)
+  puntajeObtenido     Decimal?  @db.Decimal(5, 2)
+  puntajeTotal        Decimal?  @db.Decimal(5, 2)
+  porcentajeObtenido  Decimal?  @db.Decimal(5, 2)
+  resultado           String?
+  fechaEvaluacion     DateTime?
+  observacion         String?
 
-  inscripcion InscripcionCurso @relation(fields: [idInscripcionCurso], references: [idInscripcionCurso])
+  inscripcion  InscripcionCurso      @relation(fields: [idInscripcionCurso], references: [idInscripcionCurso])
+  cuestionario CuestionarioCurso?    @relation(fields: [idCuestionarioCurso], references: [idCuestionarioCurso])
+  respuestas   RespuestaEvaluacion[]
 
+  @@index([idInscripcionCurso, numeroIntento])
+  @@index([idCuestionarioCurso])
   @@map("evaluacion_curso")
 }
 
@@ -1009,6 +1018,80 @@ model CertificacionCurso {
   brigadista  BrigadistaParroquial?
 
   @@map("certificacion_curso")
+}
+
+model CuestionarioCurso {
+  idCuestionarioCurso String   @id @default(uuid())
+  idCursoCapacitacion String
+  titulo              String
+  descripcion         String?
+  tipoCuestionario    String   @default("FINAL") // INICIAL, FINAL, UNICO
+  notaAprobatoria     Decimal  @default(11.00) @db.Decimal(5, 2)
+  maxIntentos         Int      @default(3)
+  estado              String   @default("ACTIVO")
+  fechaCreacion       DateTime @default(now())
+
+  curso        CursoCapacitacion      @relation(fields: [idCursoCapacitacion], references: [idCursoCapacitacion])
+  preguntas    PreguntaCuestionario[]
+  evaluaciones EvaluacionCurso[]
+
+  @@index([idCursoCapacitacion, estado])
+  @@map("cuestionario_curso")
+}
+
+model PreguntaCuestionario {
+  idPreguntaCuestionario String  @id @default(uuid())
+  idCuestionarioCurso    String
+  enunciado              String  @db.Text
+  tipoPregunta           String  @default("OPCION_UNICA") // OPCION_UNICA, VERDADERO_FALSO
+  puntaje                Decimal @default(1.00) @db.Decimal(5, 2)
+  orden                  Int
+  estado                 String  @default("ACTIVO")
+
+  cuestionario CuestionarioCurso     @relation(fields: [idCuestionarioCurso], references: [idCuestionarioCurso])
+  opciones     OpcionPregunta[]
+  respuestas   RespuestaEvaluacion[]
+
+  @@unique([idCuestionarioCurso, orden])
+  @@index([idCuestionarioCurso, estado])
+  @@map("pregunta_cuestionario")
+}
+
+model OpcionPregunta {
+  idOpcionPregunta       String  @id @default(uuid())
+  idPreguntaCuestionario String
+  textoOpcion            String  @db.Text
+  esCorrecta             Boolean @default(false)
+  orden                  Int
+  estado                 String  @default("ACTIVO")
+
+  pregunta   PreguntaCuestionario  @relation(fields: [idPreguntaCuestionario], references: [idPreguntaCuestionario])
+  respuestas RespuestaEvaluacion[]
+
+  @@unique([idPreguntaCuestionario, orden])
+  @@index([idPreguntaCuestionario, estado])
+  @@map("opcion_pregunta")
+}
+
+model RespuestaEvaluacion {
+  idRespuestaEvaluacion  String   @id @default(uuid())
+  idEvaluacionCurso      String
+  idPreguntaCuestionario String
+  idOpcionPregunta       String?
+  respuestaTexto         String?
+  esCorrecta             Boolean?
+  puntajeObtenido        Decimal? @db.Decimal(5, 2)
+  fechaRespuesta         DateTime @default(now())
+
+  evaluacion EvaluacionCurso      @relation(fields: [idEvaluacionCurso], references: [idEvaluacionCurso])
+  pregunta   PreguntaCuestionario @relation(fields: [idPreguntaCuestionario], references: [idPreguntaCuestionario])
+  opcion     OpcionPregunta?      @relation(fields: [idOpcionPregunta], references: [idOpcionPregunta])
+
+  @@unique([idEvaluacionCurso, idPreguntaCuestionario])
+  @@index([idEvaluacionCurso])
+  @@index([idPreguntaCuestionario])
+  @@index([idOpcionPregunta])
+  @@map("respuesta_evaluacion")
 }
 
 model AuditLog {
