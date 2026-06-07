@@ -101,13 +101,76 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
     };
   }, [selected]);
 
+  function validarKitForm(): string | null {
+    const tipoKit = kitForm.tipoKit.trim();
+    const stockInicial = Number(kitForm.stockInicial);
+
+    if (!tipoKit) return "Indica el tipo de kit.";
+    if (tipoKit.length < 3) return "El tipo de kit debe tener al menos 3 caracteres.";
+
+    if (!Number.isFinite(stockInicial)) {
+      return "El stock inicial debe ser un número válido.";
+    }
+
+    if (!Number.isInteger(stockInicial)) {
+      return "El stock inicial debe ser un número entero.";
+    }
+
+    if (stockInicial < 0) {
+      return "El stock inicial no puede ser negativo.";
+    }
+
+    return null;
+  }
+
+  function validarMovimientoForm(): string | null {
+    if (!current) return "Selecciona un kit.";
+
+    const cantidad = Number(movForm.cantidad);
+
+    if (!TIPOS.includes(movForm.tipo)) {
+      return "Selecciona un tipo de movimiento válido.";
+    }
+
+    if (!Number.isFinite(cantidad)) {
+      return "La cantidad debe ser un número válido.";
+    }
+
+    if (!Number.isInteger(cantidad)) {
+      return "La cantidad debe ser un número entero.";
+    }
+
+    if (cantidad <= 0) {
+      return "La cantidad debe ser mayor que cero.";
+    }
+
+    if (movForm.tipo === "ENTREGA" && !movForm.idParroquiaDestino.trim()) {
+      return "Selecciona la parroquia destino para la entrega.";
+    }
+
+    if (movForm.tipo === "ENTREGA" && cantidad > current.stockActual) {
+      return `Stock insuficiente: hay ${current.stockActual} y se intentan entregar ${cantidad}.`;
+    }
+
+    return null;
+  }
+
   const submitKit = () => {
-    if (!kitForm.tipoKit.trim()) {
-      toast.error("Indica el tipo de kit.");
+    const errorValidacion = validarKitForm();
+
+    if (errorValidacion) {
+      toast.error(errorValidacion);
       return;
     }
+
     startTransition(async () => {
-      const res = await crearKit(kitForm);
+      const res = await crearKit({
+        ...kitForm,
+        tipoKit: kitForm.tipoKit.trim(),
+        descripcion: kitForm.descripcion.trim(),
+        stockInicial: Number(kitForm.stockInicial),
+      });
+
       if (res?.message) toast.error(res.message);
       else {
         toast.success("Kit creado.");
@@ -119,20 +182,30 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
   };
 
   const submitMov = () => {
+    const errorValidacion = validarMovimientoForm();
+
+    if (errorValidacion) {
+      toast.error(errorValidacion);
+      return;
+    }
+
     if (!current) return;
+
     startTransition(async () => {
       const res = await registrarMovimientoKit(current.id, {
         tipo: movForm.tipo,
-        cantidad: movForm.cantidad,
+        cantidad: Number(movForm.cantidad),
         idParroquiaDestino:
           movForm.tipo === "ENTREGA" ? movForm.idParroquiaDestino || undefined : undefined,
-        motivoMovimiento: movForm.motivoMovimiento || undefined,
-        observaciones: movForm.observaciones || undefined,
+        motivoMovimiento: movForm.motivoMovimiento.trim() || undefined,
+        observaciones: movForm.observaciones.trim() || undefined,
       });
-      if (res?.message && /insuficiente|no se pudo|no tiene/i.test(res.message)) {
+
+      if (res?.message && /insuficiente|no se pudo|no tiene|válid|obligatori|selecciona/i.test(res.message)) {
         toast.error(res.message);
         return;
       }
+
       toast.success(res?.message ?? "Movimiento registrado.");
       setShowMovForm(false);
       setMovForm({ ...movForm, cantidad: 1, motivoMovimiento: "", observaciones: "" });
