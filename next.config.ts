@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["pino", "thread-stream"],
+  // Salida autocontenida para imágenes Docker pequeñas en producción.
+  output: "standalone",
+  serverExternalPackages: ["pino", "thread-stream", "lightningcss", "@tailwindcss/node", "@tailwindcss/postcss"],
   experimental: {
     // Reduces webpack memory footprint when not using Turbopack.
     webpackMemoryOptimizations: true,

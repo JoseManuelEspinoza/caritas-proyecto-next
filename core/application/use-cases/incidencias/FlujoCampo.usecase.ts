@@ -62,6 +62,46 @@ export class AutoasignarmeUseCase {
   }
 }
 
+/** Agrega una persona afectada durante el levantamiento (empadronamiento editable). */
+export class AgregarPersonaUseCase {
+  constructor(private readonly repo: IIncidenciaRepository) {}
+  async execute(
+    idIncidencia: string,
+    persona: {
+      nombres: string;
+      apellidos?: string | null;
+      edad?: number | null;
+      sexo?: string | null;
+      tipoDocumento?: string | null;
+      numeroDocumento?: string | null;
+      parentesco?: string | null;
+      familiaNombre?: string | null;
+    }
+  ): Promise<void> {
+    await cargar(this.repo, idIncidencia); // valida que exista
+    await this.repo.agregarPersona(idIncidencia, persona);
+  }
+}
+
+/** Registra evidencias de campo (ya subidas a S3) en una incidencia existente. */
+export class AgregarEvidenciasUseCase {
+  constructor(private readonly repo: IIncidenciaRepository) {}
+  async execute(
+    idIncidencia: string,
+    idUsuarioCargaGRD: string,
+    evidencias: {
+      key: string;
+      nombreArchivo: string;
+      formato: string | null;
+      tamano: number | null;
+      descripcion?: string | null;
+    }[]
+  ): Promise<void> {
+    await cargar(this.repo, idIncidencia);
+    await this.repo.guardarEvidencias(idIncidencia, idUsuarioCargaGRD, evidencias);
+  }
+}
+
 /** ASIGNADO → DATA RECOPILADA: guarda el levantamiento de campo. */
 export class RegistrarLevantamientoUseCase {
   constructor(private readonly repo: IIncidenciaRepository) {}

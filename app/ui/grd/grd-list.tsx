@@ -331,7 +331,10 @@ export function GrdList({ items, role }: GrdListProps) {
                       {item.tituloIncidencia ?? "Sin título"}
                     </p>
                     <p className="text-xs text-gray-500">
-                      {item.codigoCaso} · {new Date(item.fechaRegistro).toLocaleDateString("es-PE")}
+                      {item.codigoCaso} ·{" "}
+                      {new Date(item.fechaRegistro).toLocaleDateString("es-PE", {
+                        timeZone: "America/Lima",
+                      })}
                     </p>
                   </div>
                 </div>
@@ -456,7 +459,9 @@ export function GrdList({ items, role }: GrdListProps) {
                       <td className="px-5 py-4 whitespace-nowrap">
                         <span className="flex items-center gap-1 text-sm text-gray-500">
                           <Calendar className="w-3 h-3" />
-                          {new Date(item.fechaRegistro).toLocaleDateString("es-PE")}
+                          {new Date(item.fechaRegistro).toLocaleDateString("es-PE", {
+                            timeZone: "America/Lima",
+                          })}
                         </span>
                       </td>
                     </tr>

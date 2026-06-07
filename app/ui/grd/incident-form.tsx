@@ -15,6 +15,7 @@ import {
   Upload,
   Trash2,
   Plus,
+  Loader2,
   Edit3,
   Calendar,
   Search,
@@ -33,6 +34,7 @@ import {
 } from "@/app/lib/import-personas";
 import { extraerTextoPdf } from "@/app/lib/pdf-text";
 import { consultarDni } from "@/app/actions/reniec";
+import { presignEvidencia } from "@/app/actions/evidencias";
 // xlsx se carga de forma dinámica para no aumentar el bundle inicial.
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -877,9 +879,17 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
   const [necesidadOtra, setNecesidadOtra] = useState(initialData?.necesidadOtra ?? "");
   const [necesidadesObs, setNecesidadesObs] = useState(initialData?.necesidadesObs ?? "");
 
-  // Sección 6
+  // Sección 6 — evidencias subidas a S3 (cada archivo lleva su estado de subida)
+  type EvidenciaArchivo = {
+    uid: string;
+    nombre: string;
+    tamano: number;
+    formato: string;
+    key?: string;
+    estado: "subiendo" | "listo" | "error";
+  };
   const [fuentesEvidencia, setFuentesEvidencia] = useState<
-    { id: string; fuente: string; archivos: File[] }[]
+    { id: string; fuente: string; archivos: EvidenciaArchivo[] }[]
   >([]);
 
   // Sección 7
@@ -1264,19 +1274,150 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
       const existentes = new Set(conservadas.map((f) => f.fuente));
       const nuevas = next
         .filter((n) => !existentes.has(n))
-        .map((n, i) => ({ id: `EV-${Date.now()}-${i}`, fuente: n, archivos: [] as File[] }));
+        .map((n, i) => ({
+          id: `EV-${Date.now()}-${i}`,
+          fuente: n,
+          archivos: [] as EvidenciaArchivo[],
+        }));
       // Mantiene el orden del catálogo
       return [...conservadas, ...nuevas];
     });
   }
 
-  function uploadArchivos(fuenteId: string, files: FileList | null) {
+  async function uploadArchivos(fuenteId: string, files: FileList | null) {
     if (!files) return;
-    setFuentesEvidencia((prev) =>
-      prev.map((f) =>
-        f.id === fuenteId ? { ...f, archivos: [...f.archivos, ...Array.from(files)] } : f
-      )
-    );
+    for (const file of Array.from(files)) {
+      const uid =
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random()}`;
+      const ct = file.type || "application/octet-stream";
+      // Placeholder "subiendo"
+      setFuentesEvidencia((prev) =>
+        prev.map((f) =>
+          f.id === fuenteId
+            ? {
+                ...f,
+                archivos: [
+                  ...f.archivos,
+                  { uid, nombre: file.name, tamano: file.size, formato: ct, estado: "subiendo" },
+                ],
+              }
+            : f
+        )
+      );
+      try {
+        const res = await presignEvidencia({
+          nombreArchivo: file.name,
+          contentType: ct,
+          incidenciaId,
+        });
+        if (!res.ok) throw new Error(res.message);
+        const put = await fetch(res.uploadUrl, {
+          method: "PUT",
+          body: file,
+          headers: { "Content-Type": ct },
+        });
+        if (!put.ok) throw new Error(`Error al subir (${put.status})`);
+        setFuentesEvidencia((prev) =>
+          prev.map((f) =>
+            f.id === fuenteId
+              ? {
+                  ...f,
+                  archivos: f.archivos.map((a) =>
+                    a.uid === uid ? { ...a, estado: "listo", key: res.key } : a
+                  ),
+                }
+              : f
+          )
+        );
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "No se pudo subir el archivo.");
+        setFuentesEvidencia((prev) =>
+          prev.map((f) =>
+            f.id === fuenteId
+              ? {
+                  ...f,
+                  archivos: f.archivos.map((a) =>
+                    a.uid === uid ? { ...a, estado: "error" } : a
+                  ),
+                }
+              : f
+          )
+        );
+      }
+    }
+  }
+
+  function hoyLocalISO(): string {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().slice(0, 10);
+  }
+
+  function validarFormularioIncidencia(): string | null {
+    const dni = reportaDni.replace(/\D/g, "");
+    const tel = reportaTel.replace(/\D/g, "");
+
+    if (!dni) return "Ingresa el DNI de la persona que reportó.";
+    if (dni.length !== 8) return "El DNI de quien reporta debe tener exactamente 8 dígitos.";
+
+    if (!reportaNombre.trim()) return "Ingresa el nombre completo de quien reportó.";
+    if (reportaNombre.trim().length < 5) {
+      return "El nombre de quien reporta debe tener al menos 5 caracteres.";
+    }
+
+    if (!tel) return "Ingresa el número de celular de quien reportó.";
+
+    if (reportaTelCodigo === "+51" && !/^9\d{8}$/.test(tel)) {
+      return "Para Perú, el celular debe tener 9 dígitos y empezar con 9.";
+    }
+
+    if (reportaTelCodigo !== "+51" && (tel.length < 7 || tel.length > 12)) {
+      return "El número de celular debe tener entre 7 y 12 dígitos.";
+    }
+
+    if (!reportaRol.trim()) return "Selecciona el rol o institución de quien reportó.";
+
+    if (!fechaSuceso) return "Ingresa la fecha del suceso.";
+    if (fechaSuceso > hoyLocalISO()) return "La fecha del suceso no puede ser futura.";
+
+    if (!categoria.trim()) return "Selecciona la categoría del evento.";
+    if (!distrito.trim()) return "Selecciona el distrito del suceso.";
+
+    if (!direccion.trim()) return "Ingresa la dirección del suceso.";
+    if (direccion.trim().length < 5) return "La dirección debe tener al menos 5 caracteres.";
+
+    if (!descripcion.trim()) return "Ingresa una descripción breve del evento.";
+    if (descripcion.trim().length < 10) {
+      return "La descripción del evento debe tener al menos 10 caracteres.";
+    }
+
+    if (!nivelAfectacion) return "Selecciona el nivel de afectación.";
+
+    if (necesidades.includes("Otros") && !necesidadOtra.trim()) {
+      return "Especifica la necesidad adicional en el campo 'Otros'.";
+    }
+
+    if (lat != null && (lat < -90 || lat > 90)) {
+      return "La latitud registrada está fuera del rango válido.";
+    }
+
+    if (lng != null && (lng < -180 || lng > 180)) {
+      return "La longitud registrada está fuera del rango válido.";
+    }
+
+    const archivos = fuentesEvidencia.flatMap((f) => f.archivos);
+
+    if (archivos.some((a) => a.estado === "subiendo")) {
+      return "Espera a que terminen de subirse las evidencias antes de guardar.";
+    }
+
+    if (archivos.some((a) => a.estado === "error")) {
+      return "Hay evidencias con error de subida. Elimínalas o vuelve a subirlas antes de guardar.";
+    }
+
+    return null;
   }
 
   // ─── Guardar (crear o actualizar) ─────────────────────────────────────────
@@ -1284,17 +1425,9 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
   function handleSave() {
     // Validación de campos obligatorios.
     setIntentoEnvio(true);
-    const faltan =
-      !reportaDni.trim() ||
-      !reportaNombre.trim() ||
-      !reportaTel.trim() ||
-      !reportaRol.trim() ||
-      !fechaSuceso ||
-      !categoria.trim() ||
-      !distrito.trim() ||
-      !direccion.trim();
-    if (faltan) {
-      toast.error("Completa los campos obligatorios marcados en rojo.");
+    const errorValidacion = validarFormularioIncidencia();
+    if (errorValidacion) {
+      toast.error(errorValidacion);
       return;
     }
 
@@ -1323,6 +1456,17 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
       nivelAfectacion,
       lat,
       lng,
+      evidencias: fuentesEvidencia.flatMap((f) =>
+        f.archivos
+          .filter((a) => a.estado === "listo" && a.key)
+          .map((a) => ({
+            key: a.key as string,
+            nombreArchivo: a.nombre,
+            formato: a.formato || null,
+            tamano: a.tamano,
+            descripcion: f.fuente,
+          }))
+      ),
     };
 
     startTransition(async () => {
@@ -1664,14 +1808,14 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
                   <div>
                     <label className="text-xs font-semibold text-gray-600 mb-1.5 block">
-                      Descripción breve del evento
+                      Descripción breve del evento <span className="text-red-500">*</span>
                     </label>
                     <textarea
                       rows={5}
                       placeholder="Describe lo que se reportó: tipo de afectación, magnitud aproximada, situación actual..."
                       value={descripcion}
                       onChange={(e) => setDescripcion(e.target.value)}
-                      className={`${inputCls} resize-none`}
+                      className={`${inputCls} resize-none ${errBorde(!descripcion.trim())}`}
                     />
                   </div>
                   <div>
@@ -1926,15 +2070,26 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
                   <div className="p-3 space-y-2">
                     {fuente.archivos.map((archivo, i) => (
                       <div
-                        key={i}
+                        key={archivo.uid}
                         className="bg-white border border-gray-200 rounded px-3 py-2 flex items-center justify-between"
                       >
                         <div className="flex items-center gap-2 flex-1 min-w-0">
                           <FileText className="w-4 h-4 text-blue-500 flex-shrink-0" />
-                          <span className="text-xs text-gray-900 truncate">{archivo.name}</span>
+                          <span className="text-xs text-gray-900 truncate">{archivo.nombre}</span>
                           <span className="text-[10px] text-gray-400">
-                            ({(archivo.size / 1024).toFixed(1)} KB)
+                            ({(archivo.tamano / 1024).toFixed(1)} KB)
                           </span>
+                          {archivo.estado === "subiendo" && (
+                            <span className="text-[10px] text-blue-600 flex items-center gap-1">
+                              <Loader2 className="w-3 h-3 animate-spin" /> subiendo…
+                            </span>
+                          )}
+                          {archivo.estado === "listo" && (
+                            <span className="text-[10px] text-green-600">✓ subido</span>
+                          )}
+                          {archivo.estado === "error" && (
+                            <span className="text-[10px] text-red-600">✕ error</span>
+                          )}
                         </div>
                         <button
                           type="button"

@@ -29,6 +29,7 @@ type Actividad = {
   fechaProgramada: string | null;
   fechaEjecucion: string | null;
   resultadoGeneral: string | null;
+  lugarActividad?: string | null;
 };
 type Parroquia = { id: string; nombre: string };
 

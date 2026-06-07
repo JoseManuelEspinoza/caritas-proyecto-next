@@ -52,9 +52,10 @@ async function nombreUsuario(): Promise<string | undefined> {
 
 export async function createIncidente(data: CreateIncidenteData) {
   const session = await verifySession();
+  const idUsuarioGRD = await getUsuarioGRDId();
   let id: string;
   try {
-    id = await makeIncidenciaUseCases().registrar.execute(data);
+    id = await makeIncidenciaUseCases().registrar.execute(data, idUsuarioGRD);
   } catch (err) {
     return asMessage(err);
   }
@@ -175,6 +176,57 @@ export async function saveInfoCampo(incidenciaId: string, data: InfoCampoData) {
   const responsable = (await nombreUsuario()) ?? data.responsable;
   try {
     await makeIncidenciaUseCases().registrarCampo.execute(incidenciaId, data, responsable);
+  } catch (err) {
+    return asMessage(err);
+  }
+  revalidar(incidenciaId);
+}
+
+/** Empadronamiento editable: agrega una persona afectada durante el campo. */
+export async function agregarPersonaCampo(
+  incidenciaId: string,
+  persona: {
+    nombres: string;
+    apellidos?: string | null;
+    edad?: number | null;
+    sexo?: string | null;
+    tipoDocumento?: string | null;
+    numeroDocumento?: string | null;
+    parentesco?: string | null;
+    familiaNombre?: string | null;
+  }
+) {
+  await verifySession();
+  try {
+    await makeIncidenciaUseCases().agregarPersona.execute(incidenciaId, persona);
+  } catch (err) {
+    return asMessage(err);
+  }
+  revalidar(incidenciaId);
+}
+
+/** Registra evidencias de campo (ya subidas a S3) en la incidencia. */
+export async function addEvidenciasCampo(
+  incidenciaId: string,
+  evidencias: {
+    key: string;
+    nombreArchivo: string;
+    formato: string | null;
+    tamano: number | null;
+    descripcion?: string | null;
+  }[]
+) {
+  await verifySession();
+  const idUsuarioGRD = await getUsuarioGRDId();
+  if (!idUsuarioGRD) {
+    return { message: "No se encontró tu perfil GRD para registrar evidencias." };
+  }
+  try {
+    await makeIncidenciaUseCases().agregarEvidencias.execute(
+      incidenciaId,
+      idUsuarioGRD,
+      evidencias
+    );
   } catch (err) {
     return asMessage(err);
   }

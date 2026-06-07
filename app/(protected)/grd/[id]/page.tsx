@@ -4,6 +4,7 @@ import { getUsuarioGRDId } from "@/app/lib/usuario-grd";
 import { prisma } from "@/app/lib/prisma";
 import { toFrontendRole } from "@/app/lib/roles";
 import { IncidentDetail } from "@/app/ui/grd/incident-detail";
+import { presignGet, isS3Configured } from "@/app/lib/s3";
 
 export default async function IncidentePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -40,7 +41,12 @@ export default async function IncidentePage({ params }: { params: Promise<{ id: 
     include: {
       parroquia: { select: { nombre: true } },
       aviso: {
-        select: { nombreInformante: true, telefonoInformante: true, descripcion: true },
+        select: {
+          nombreInformante: true,
+          telefonoInformante: true,
+          descripcion: true,
+          medioAviso: true,
+        },
       },
       usuarioResponsable: {
         select: { idUsuarioGRD: true, nombres: true, apellidos: true, correoReferencia: true },
@@ -143,11 +149,73 @@ export default async function IncidentePage({ params }: { params: Promise<{ id: 
 
   const asignadosIds = inc.asignaciones.map((a) => a.brigadista.idBrigadistaParroquial);
 
+  // Catálogo de artículos por tipo de kit (solo catálogos "Kit de ...").
+  const catalogoArticulos = await prisma.catalogoDetalleGRD.findMany({
+    where: { estado: "ACTIVO", catalogo: { nombreCatalogo: { startsWith: "Kit de " } } },
+    select: {
+      codigo: true,
+      valor: true,
+      descripcion: true,
+      catalogo: { select: { nombreCatalogo: true } },
+    },
+    orderBy: { codigo: "asc" },
+    take: 300,
+  });
+
   const parroquiasDisp = await prisma.parroquia.findMany({
     where: { estado: "ACTIVO" },
     select: { nombre: true },
     orderBy: { nombre: "asc" },
   });
+
+  // Registro de TODAS las evidencias capturadas para esta incidencia
+  // (EvidenciaGRD es polimórfica: idReferencia = idIncidencia).
+  const evidenciasInc = await prisma.evidenciaGRD.findMany({
+    where: { idReferencia: id, estado: "ACTIVO", deletedAt: null },
+    orderBy: { fechaCarga: "desc" },
+    select: {
+      idEvidenciaGRD: true,
+      nombreArchivo: true,
+      urlArchivo: true,
+      formatoArchivo: true,
+      descripcion: true,
+      fechaCarga: true,
+      tamanoArchivo: true,
+      latitud: true,
+      longitud: true,
+      usuarioCarga: { select: { nombres: true, apellidos: true } },
+    },
+  });
+
+  // El campo urlArchivo guarda el object key de S3 → se prefirma un GET temporal
+  // para mostrarlo. Si es una URL absoluta (datos demo/seed), se usa tal cual.
+  const s3Ok = isS3Configured();
+  const evidenciasMapped = await Promise.all(
+    evidenciasInc.map(async (e) => {
+      let url = e.urlArchivo;
+      if (url && !/^https?:\/\//i.test(url) && s3Ok) {
+        try {
+          url = await presignGet(url);
+        } catch {
+          url = "#";
+        }
+      }
+      return {
+        id: e.idEvidenciaGRD,
+        nombreArchivo: e.nombreArchivo,
+        urlArchivo: url,
+        formato: e.formatoArchivo,
+        descripcion: e.descripcion,
+        fecha: e.fechaCarga.toISOString(),
+        tamano: e.tamanoArchivo,
+        lat: e.latitud != null ? Number(e.latitud) : null,
+        lng: e.longitud != null ? Number(e.longitud) : null,
+        cargadoPor: e.usuarioCarga
+          ? `${e.usuarioCarga.nombres} ${e.usuarioCarga.apellidos ?? ""}`.trim()
+          : null,
+      };
+    })
+  );
 
   const brigadistasDisp = await prisma.brigadistaParroquial.findMany({
     where: {
@@ -177,6 +245,8 @@ export default async function IncidentePage({ params }: { params: Promise<{ id: 
     direccionEvento: inc.direccionEvento,
     descripcionEvento: inc.descripcionEvento,
     gravedad: inc.gravedad,
+    causa: inc.contextoCaso ?? null,
+    reportanteRol: inc.aviso?.medioAviso ?? null,
     fechaRegistro: inc.fechaRegistro.toISOString(),
     parroquia: inc.parroquia?.nombre ?? null,
 
@@ -288,6 +358,15 @@ export default async function IncidentePage({ params }: { params: Promise<{ id: 
       apellidos: b.apellidos,
       celular: b.celular,
       parroquia: b.parroquia?.nombre ?? null,
+    })),
+
+    evidencias: evidenciasMapped,
+
+    catalogoArticulos: catalogoArticulos.map((c) => ({
+      codigo: c.codigo,
+      valor: c.valor,
+      descripcion: c.descripcion,
+      catalogo: c.catalogo?.nombreCatalogo ?? "",
     })),
 
     parroquias: parroquiasDisp.map((p) => p.nombre),

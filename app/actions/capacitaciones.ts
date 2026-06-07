@@ -17,22 +17,266 @@ function fail(err: unknown, fallback: string) {
   return { message: fallback };
 }
 
+// ── Shared types ──────────────────────────────────────────────────────────────
+
+export type Material = {
+  id: string;
+  titulo: string;
+  tipoMaterial: string | null;
+  enlaceMaterial: string | null;
+};
+
+export type Sesion = {
+  id: string;
+  numeroOrden: number;
+  tituloUnidad: string;
+  materiales: Material[];
+};
+
+export type CursoDetalle = {
+  id: string;
+  codigoCurso: string | null;
+  nombreCurso: string;
+  descripcion: string | null;
+  modalidadGeneral: string;
+  estadoCurso: string;
+  fechaPublicacion: string | null;
+  fechaCierre: string | null;
+  responsable: string;
+  idResponsable: string;
+  totalInscritos: number;
+  sesiones: Sesion[];
+};
+
+export type CursoInscrito = {
+  id: string;
+  codigoCurso: string | null;
+  nombreCurso: string;
+  descripcion: string | null;
+  modalidadGeneral: string;
+  estadoCurso: string;
+  fechaPublicacion: string | null;
+  fechaCierre: string | null;
+  responsable: string;
+  idInscripcion: string;
+  estadoInscripcion: string;
+  evalInicial: number | null;
+  evalFinal: number | null;
+  resultado: string | null;
+  certificado: boolean;
+  sesiones: Sesion[];
+};
+
+export type CursoDisponible = {
+  id: string;
+  codigoCurso: string | null;
+  nombreCurso: string;
+  descripcion: string | null;
+  modalidadGeneral: string;
+  fechaPublicacion: string | null;
+  fechaCierre: string | null;
+  responsable: string;
+  totalInscritos: number;
+  totalSesiones: number;
+};
+
+// ── Read actions ──────────────────────────────────────────────────────────────
+
 export async function listarInscripciones(idCurso: string) {
   await verifySession();
   return makeCursoUseCases().listarInscripciones.execute(idCurso);
 }
+
+export async function listarCursosConSesiones(idResponsable?: string): Promise<CursoDetalle[]> {
+  await verifySession();
+  const rows = await prisma.cursoCapacitacion.findMany({
+    where: idResponsable ? { idUsuarioResponsableGRD: idResponsable } : undefined,
+    orderBy: { fechaCreacion: "desc" },
+    include: {
+      usuarioResponsable: { select: { nombres: true, apellidos: true } },
+      unidades: {
+        where: { estado: "ACTIVO" },
+        orderBy: { numeroOrden: "asc" },
+        include: {
+          materiales: {
+            where: { estado: "ACTIVO" },
+            select: {
+              idMaterialCapacitacion: true,
+              titulo: true,
+              tipoMaterial: true,
+              enlaceMaterial: true,
+            },
+          },
+        },
+      },
+      _count: { select: { inscripciones: true } },
+    },
+  });
+  return rows.map((r) => ({
+    id: r.idCursoCapacitacion,
+    codigoCurso: r.codigoCurso,
+    nombreCurso: r.nombreCurso,
+    descripcion: r.descripcion,
+    modalidadGeneral: r.modalidadGeneral,
+    estadoCurso: r.estadoCurso,
+    fechaPublicacion: r.fechaPublicacion?.toISOString() ?? null,
+    fechaCierre: r.fechaCierre?.toISOString() ?? null,
+    responsable: `${r.usuarioResponsable.nombres} ${r.usuarioResponsable.apellidos}`.trim(),
+    idResponsable: r.idUsuarioResponsableGRD,
+    totalInscritos: r._count.inscripciones,
+    sesiones: r.unidades.map((u) => ({
+      id: u.idUnidadContenido,
+      numeroOrden: u.numeroOrden,
+      tituloUnidad: u.tituloUnidad,
+      materiales: u.materiales.map((m) => ({
+        id: m.idMaterialCapacitacion,
+        titulo: m.titulo,
+        tipoMaterial: m.tipoMaterial,
+        enlaceMaterial: m.enlaceMaterial,
+      })),
+    })),
+  }));
+}
+
+export async function listarEspecialistas(): Promise<{ id: string; nombre: string }[]> {
+  await verifySession();
+  const rows = await prisma.usuarioGRD.findMany({
+    where: { credencial: { role: "ESPECIALISTAGRD" }, estado: "ACTIVO" },
+    select: { idUsuarioGRD: true, nombres: true, apellidos: true },
+    orderBy: { nombres: "asc" },
+  });
+  return rows.map((r) => ({ id: r.idUsuarioGRD, nombre: `${r.nombres} ${r.apellidos}`.trim() }));
+}
+
+export async function listarMisCursos(): Promise<CursoInscrito[]> {
+  const session = await verifySession();
+  const participante = await prisma.participante.findFirst({
+    where: { correo: session.email },
+    select: { idParticipante: true },
+  });
+  if (!participante) return [];
+
+  const inscripciones = await prisma.inscripcionCurso.findMany({
+    where: { idParticipante: participante.idParticipante },
+    orderBy: { fechaInscripcion: "desc" },
+    include: {
+      curso: {
+        include: {
+          usuarioResponsable: { select: { nombres: true, apellidos: true } },
+          unidades: {
+            where: { estado: "ACTIVO" },
+            orderBy: { numeroOrden: "asc" },
+            include: {
+              materiales: {
+                where: { estado: "ACTIVO" },
+                select: {
+                  idMaterialCapacitacion: true,
+                  titulo: true,
+                  tipoMaterial: true,
+                  enlaceMaterial: true,
+                },
+              },
+            },
+          },
+        },
+      },
+      evaluaciones: { orderBy: { fechaEvaluacion: "asc" } },
+      certificacion: { select: { idCertificacionCurso: true } },
+    },
+  });
+
+  return inscripciones.map((i) => {
+    const evals = i.evaluaciones;
+    return {
+      id: i.curso.idCursoCapacitacion,
+      codigoCurso: i.curso.codigoCurso,
+      nombreCurso: i.curso.nombreCurso,
+      descripcion: i.curso.descripcion,
+      modalidadGeneral: i.curso.modalidadGeneral,
+      estadoCurso: i.curso.estadoCurso,
+      fechaPublicacion: i.curso.fechaPublicacion?.toISOString() ?? null,
+      fechaCierre: i.curso.fechaCierre?.toISOString() ?? null,
+      responsable: `${i.curso.usuarioResponsable.nombres} ${i.curso.usuarioResponsable.apellidos}`.trim(),
+      idInscripcion: i.idInscripcionCurso,
+      estadoInscripcion: i.estadoInscripcion,
+      evalInicial: evals[0]?.nota != null ? Number(evals[0].nota) : null,
+      evalFinal:
+        evals.length > 1 && evals[evals.length - 1].nota != null
+          ? Number(evals[evals.length - 1].nota)
+          : null,
+      resultado: evals.length > 0 ? (evals[evals.length - 1].resultado ?? null) : null,
+      certificado: i.certificacion !== null,
+      sesiones: i.curso.unidades.map((u) => ({
+        id: u.idUnidadContenido,
+        numeroOrden: u.numeroOrden,
+        tituloUnidad: u.tituloUnidad,
+        materiales: u.materiales.map((m) => ({
+          id: m.idMaterialCapacitacion,
+          titulo: m.titulo,
+          tipoMaterial: m.tipoMaterial,
+          enlaceMaterial: m.enlaceMaterial,
+        })),
+      })),
+    };
+  });
+}
+
+export async function listarCursosDisponiblesBrigadista(): Promise<CursoDisponible[]> {
+  const session = await verifySession();
+  const participante = await prisma.participante.findFirst({
+    where: { correo: session.email },
+    select: { idParticipante: true },
+  });
+  const enrolledIds = participante
+    ? (
+        await prisma.inscripcionCurso.findMany({
+          where: { idParticipante: participante.idParticipante },
+          select: { idCursoCapacitacion: true },
+        })
+      ).map((r) => r.idCursoCapacitacion)
+    : [];
+
+  const rows = await prisma.cursoCapacitacion.findMany({
+    where: {
+      estadoCurso: "PUBLICADO",
+      ...(enrolledIds.length > 0 ? { idCursoCapacitacion: { notIn: enrolledIds } } : {}),
+    },
+    orderBy: { fechaCreacion: "desc" },
+    include: {
+      usuarioResponsable: { select: { nombres: true, apellidos: true } },
+      _count: { select: { inscripciones: true, unidades: true } },
+    },
+  });
+
+  return rows.map((r) => ({
+    id: r.idCursoCapacitacion,
+    codigoCurso: r.codigoCurso,
+    nombreCurso: r.nombreCurso,
+    descripcion: r.descripcion,
+    modalidadGeneral: r.modalidadGeneral,
+    fechaPublicacion: r.fechaPublicacion?.toISOString() ?? null,
+    fechaCierre: r.fechaCierre?.toISOString() ?? null,
+    responsable: `${r.usuarioResponsable.nombres} ${r.usuarioResponsable.apellidos}`.trim(),
+    totalInscritos: r._count.inscripciones,
+    totalSesiones: r._count.unidades,
+  }));
+}
+
+// ── Mutation actions ──────────────────────────────────────────────────────────
 
 export async function crearCurso(input: {
   nombreCurso: string;
   descripcion?: string;
   idInstitucionAliada?: string;
   duracionEstimadaHoras?: number;
+  idResponsable?: string;
 }) {
   const session = await verifySession();
-  const idUsuarioResponsableGRD = await getUsuarioGRDId();
+  const { idResponsable, ...rest } = input;
+  const idUsuarioResponsableGRD = idResponsable ?? (await getUsuarioGRDId());
   if (!idUsuarioResponsableGRD) return { message: "Tu usuario no tiene perfil GRD asociado." };
   try {
-    await makeCursoUseCases().crear.execute({ ...input, idUsuarioResponsableGRD });
+    await makeCursoUseCases().crear.execute({ ...rest, idUsuarioResponsableGRD });
   } catch (err) {
     return fail(err, "No se pudo crear el curso.");
   }
@@ -44,6 +288,35 @@ export async function crearCurso(input: {
     entityName: input.nombreCurso,
     module: "Capacitaciones",
   });
+  revalidatePath(REVALIDATE);
+}
+
+export async function editarCurso(
+  id: string,
+  data: { nombreCurso: string; descripcion?: string; idResponsable: string }
+): Promise<void | { message: string }> {
+  const session = await verifySession();
+  if (!data.nombreCurso.trim()) return { message: "El nombre del curso es obligatorio." };
+  try {
+    await prisma.cursoCapacitacion.update({
+      where: { idCursoCapacitacion: id },
+      data: {
+        nombreCurso: data.nombreCurso.trim(),
+        descripcion: data.descripcion ?? null,
+        idUsuarioResponsableGRD: data.idResponsable,
+      },
+    });
+    await logGRDAction({
+      userId: session.userId,
+      action: "EDITAR",
+      entity: "Curso",
+      entityId: id,
+      entityName: data.nombreCurso,
+      module: "Capacitaciones",
+    });
+  } catch (err) {
+    return fail(err, "No se pudo editar el curso.");
+  }
   revalidatePath(REVALIDATE);
 }
 
@@ -71,6 +344,68 @@ export async function cambiarEstadoCurso(id: string, accion: "PUBLICAR" | "CERRA
   revalidatePath(REVALIDATE);
 }
 
+export async function crearSesion(
+  idCurso: string,
+  data: { tituloUnidad: string }
+): Promise<void | { message: string }> {
+  const session = await verifySession();
+  if (!data.tituloUnidad.trim()) return { message: "El título de la sesión es obligatorio." };
+  try {
+    const count = await prisma.unidadContenido.count({ where: { idCursoCapacitacion: idCurso } });
+    await prisma.unidadContenido.create({
+      data: {
+        idCursoCapacitacion: idCurso,
+        numeroOrden: count + 1,
+        tituloUnidad: data.tituloUnidad.trim(),
+        estado: "ACTIVO",
+      },
+    });
+    await logGRDAction({
+      userId: session.userId,
+      action: "CREAR",
+      entity: "Sesión",
+      entityId: idCurso,
+      entityName: data.tituloUnidad,
+      module: "Capacitaciones",
+    });
+  } catch (err) {
+    return fail(err, "No se pudo crear la sesión.");
+  }
+  revalidatePath(REVALIDATE);
+}
+
+export async function agregarMaterial(
+  idCurso: string,
+  idUnidad: string,
+  data: { titulo: string; tipoMaterial: string; enlaceMaterial: string }
+): Promise<void | { message: string }> {
+  const session = await verifySession();
+  if (!data.titulo.trim()) return { message: "El título del material es obligatorio." };
+  try {
+    await prisma.materialCapacitacion.create({
+      data: {
+        idCursoCapacitacion: idCurso,
+        idUnidadContenido: idUnidad,
+        titulo: data.titulo.trim(),
+        tipoMaterial: data.tipoMaterial || null,
+        enlaceMaterial: data.enlaceMaterial.trim() || null,
+        estado: "ACTIVO",
+      },
+    });
+    await logGRDAction({
+      userId: session.userId,
+      action: "CREAR",
+      entity: "Material",
+      entityId: idCurso,
+      entityName: data.titulo,
+      module: "Capacitaciones",
+    });
+  } catch (err) {
+    return fail(err, "No se pudo agregar el material.");
+  }
+  revalidatePath(REVALIDATE);
+}
+
 export async function inscribirParticipante(idCurso: string, participante: ParticipanteData) {
   const session = await verifySession();
   try {
@@ -89,6 +424,61 @@ export async function inscribirParticipante(idCurso: string, participante: Parti
   revalidatePath(REVALIDATE);
 }
 
+export async function inscribirme(idCurso: string): Promise<void | { message: string }> {
+  const session = await verifySession();
+  try {
+    const curso = await prisma.cursoCapacitacion.findUnique({
+      where: { idCursoCapacitacion: idCurso },
+      select: { estadoCurso: true },
+    });
+    if (!curso) return { message: "Curso no encontrado." };
+    if (curso.estadoCurso !== "PUBLICADO")
+      return { message: "El curso no está disponible para inscripción." };
+
+    let participante = await prisma.participante.findFirst({
+      where: { correo: session.email },
+      select: { idParticipante: true },
+    });
+    if (!participante) {
+      const parts = session.name.split(" ");
+      const mid = Math.ceil(parts.length / 2);
+      participante = await prisma.participante.create({
+        data: {
+          nombres: parts.slice(0, mid).join(" "),
+          apellidos: parts.slice(mid).join(" ") || undefined,
+          correo: session.email,
+        },
+        select: { idParticipante: true },
+      });
+    }
+
+    const exists = await prisma.inscripcionCurso.findUnique({
+      where: {
+        idCursoCapacitacion_idParticipante: {
+          idCursoCapacitacion: idCurso,
+          idParticipante: participante.idParticipante,
+        },
+      },
+    });
+    if (exists) return { message: "Ya estás inscrito en este curso." };
+
+    await prisma.inscripcionCurso.create({
+      data: { idCursoCapacitacion: idCurso, idParticipante: participante.idParticipante },
+    });
+    await logGRDAction({
+      userId: session.userId,
+      action: "CREAR",
+      entity: "Inscripción",
+      entityId: idCurso,
+      entityName: session.name,
+      module: "Capacitaciones",
+    });
+  } catch (err) {
+    return fail(err, "No se pudo completar la inscripción.");
+  }
+  revalidatePath(REVALIDATE);
+}
+
 async function nombreDeInscripcion(idInscripcion: string): Promise<string> {
   const ins = await prisma.inscripcionCurso.findUnique({
     where: { idInscripcionCurso: idInscripcion },
@@ -98,9 +488,8 @@ async function nombreDeInscripcion(idInscripcion: string): Promise<string> {
     },
   });
   if (!ins) return idInscripcion;
-  const participante =
-    `${ins.participante?.nombres ?? ""} ${ins.participante?.apellidos ?? ""}`.trim();
-  return `${ins.curso?.nombreCurso ?? ""} — ${participante}`;
+  const p = `${ins.participante?.nombres ?? ""} ${ins.participante?.apellidos ?? ""}`.trim();
+  return `${ins.curso?.nombreCurso ?? ""} — ${p}`;
 }
 
 export async function registrarEvaluacion(

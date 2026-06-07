@@ -312,6 +312,95 @@ export class PrismaIncidenciaRepository implements IIncidenciaRepository {
     });
   }
 
+  async agregarPersona(
+    idIncidencia: string,
+    persona: {
+      nombres: string;
+      apellidos?: string | null;
+      edad?: number | null;
+      sexo?: string | null;
+      tipoDocumento?: string | null;
+      numeroDocumento?: string | null;
+      parentesco?: string | null;
+      familiaNombre?: string | null;
+    }
+  ): Promise<void> {
+    // Resuelve el grupo familiar: por nombre, o el primero, o crea uno nuevo.
+    let grupo = persona.familiaNombre?.trim()
+      ? await prisma.grupoFamiliarAfectado.findFirst({
+          where: { idIncidencia, nombreReferencia: persona.familiaNombre.trim() },
+          select: { idGrupoFamiliar: true },
+        })
+      : await prisma.grupoFamiliarAfectado.findFirst({
+          where: { idIncidencia },
+          select: { idGrupoFamiliar: true },
+        });
+    if (!grupo) {
+      grupo = await prisma.grupoFamiliarAfectado.create({
+        data: {
+          idIncidencia,
+          nombreReferencia: persona.familiaNombre?.trim() || "Grupo Familiar 1",
+        },
+        select: { idGrupoFamiliar: true },
+      });
+    }
+    const fechaNacimiento =
+      persona.edad != null && persona.edad > 0
+        ? new Date(new Date().getFullYear() - persona.edad, 0, 1)
+        : null;
+    await prisma.personaAfectada.create({
+      data: {
+        idGrupoFamiliar: grupo.idGrupoFamiliar,
+        nombres: persona.nombres.trim(),
+        apellidos: persona.apellidos?.trim() || null,
+        fechaNacimiento,
+        sexo: persona.sexo || null,
+        tipoDocumento: persona.tipoDocumento || null,
+        numeroDocumento: persona.numeroDocumento || null,
+        parentesco: persona.parentesco || null,
+      },
+    });
+  }
+
+  async guardarEvidencias(
+    idIncidencia: string,
+    idUsuarioCargaGRD: string,
+    evidencias: {
+      key: string;
+      nombreArchivo: string;
+      formato: string | null;
+      tamano: number | null;
+      descripcion?: string | null;
+    }[]
+  ): Promise<void> {
+    if (!evidencias.length) return;
+    // Asegura el TipoReferencia "INCIDENCIA" (idem megaseed).
+    const tipo = await prisma.tipoReferencia.upsert({
+      where: { codigoEntidad: "INCIDENCIA" },
+      update: {},
+      create: {
+        codigoEntidad: "INCIDENCIA",
+        nombreEntidad: "Incidencia",
+        descripcion: "Referencia transversal para Incidencia",
+        estado: "ACTIVO",
+      },
+    });
+    await prisma.evidenciaGRD.createMany({
+      data: evidencias.map((ev) => ({
+        idTipoReferencia: tipo.idTipoReferencia,
+        idReferencia: idIncidencia,
+        idUsuarioCargaGRD,
+        nombreArchivo: ev.nombreArchivo,
+        urlArchivo: ev.key, // se guarda el object key; al mostrar se prefirma un GET
+        formatoArchivo: ev.formato,
+        descripcion: ev.descripcion ?? null,
+        tamanoArchivo: ev.tamano ?? null,
+        estado: "ACTIVO",
+        syncEstado: "SINCRONIZADO",
+      })),
+    });
+  }
+
   async guardarInforme(
     idIncidencia: string,
     informe: { titulo: string; tipo: string; resumen: string; contenido: string; estado: string }
