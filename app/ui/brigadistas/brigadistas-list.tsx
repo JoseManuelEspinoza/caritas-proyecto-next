@@ -145,14 +145,61 @@ function BrigadistaModal({
   }
 
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const DISPONIBILIDADES_VALIDAS = ["DISPONIBLE", "EN CAMPO", "NO DISPONIBLE"];
 
-  function handleSubmit() {
-    if (!editing && !form.correo?.trim()) {
-      toast.error("El correo es obligatorio para crear la cuenta de acceso");
-      return;
+  function soloDigitos(value?: string | null): string {
+    return (value ?? "").replace(/\D/g, "");
+  }
+
+  function celularPeruano(value?: string | null): string {
+    const digits = soloDigitos(value);
+    return digits.startsWith("51") ? digits.slice(2) : digits;
+  }
+
+  function validarFormularioBrigadista(): string | null {
+    const nombres = form.nombres.trim();
+    const apellidos = form.apellidos?.trim() ?? "";
+    const dni = soloDigitos(form.dni);
+    const celular = celularPeruano(form.celular);
+    const correo = form.correo?.trim() ?? "";
+
+    if (!nombres) return "Ingresa los nombres del brigadista.";
+    if (nombres.length < 2) return "Los nombres deben tener al menos 2 caracteres.";
+
+    if (!apellidos) return "Ingresa los apellidos del brigadista.";
+    if (apellidos.length < 2) return "Los apellidos deben tener al menos 2 caracteres.";
+
+    if (!dni) return "Ingresa el DNI del brigadista.";
+    if (dni.length !== 8) return "El DNI debe tener exactamente 8 dígitos.";
+
+    if (!celular) return "Ingresa el celular del brigadista.";
+    if (!/^9\d{8}$/.test(celular)) {
+      return "El celular debe tener 9 dígitos y empezar con 9.";
     }
-    if (form.correo?.trim() && !EMAIL_RE.test(form.correo.trim())) {
-      toast.error("El correo no tiene un formato válido");
+
+    if (!editing && !correo) {
+      return "El correo es obligatorio para crear la cuenta de acceso.";
+    }
+
+    if (correo && !EMAIL_RE.test(correo)) {
+      return "El correo no tiene un formato válido.";
+    }
+
+    if (!form.idParroquia?.trim()) {
+      return "Selecciona la parroquia del brigadista.";
+    }
+
+    if (!DISPONIBILIDADES_VALIDAS.includes(form.disponibilidad)) {
+      return "Selecciona una disponibilidad válida.";
+    }
+
+    return null;
+  }
+  function handleSubmit() {
+    const errorValidacion = validarFormularioBrigadista();
+
+    if (errorValidacion) {
+      toast.error(errorValidacion);
       return;
     }
     startTransition(async () => {
