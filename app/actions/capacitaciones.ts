@@ -355,10 +355,11 @@ export async function crearCurso(input: {
   );
   if (errorDescripcion) return errorDescripcion;
 
-  const errorDuracion = validarEnteroPositivo(
-    input.duracionEstimadaHoras,
-    "La duración estimada"
-  );
+  const duracionRecibida = input.duracionEstimadaHoras;
+  const duracionNormalizada =
+    duracionRecibida == null || duracionRecibida === 0 ? undefined : duracionRecibida;
+
+  const errorDuracion = validarEnteroPositivo(duracionNormalizada, "La duración estimada");
   if (errorDuracion) return errorDuracion;  
   const { idResponsable, ...rest } = input;
   const idUsuarioResponsableGRD = idResponsable ?? (await getUsuarioGRDId());
@@ -368,6 +369,7 @@ export async function crearCurso(input: {
       ...rest,
       nombreCurso: input.nombreCurso.trim(),
       descripcion: texto(input.descripcion) || undefined,
+      duracionEstimadaHoras: duracionNormalizada,
       idUsuarioResponsableGRD,
     });
   } catch (err) {

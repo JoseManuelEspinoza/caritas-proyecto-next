@@ -33,7 +33,26 @@ export interface CursoProps {
  */
 export class Curso {
   private constructor(private props: CursoProps) {}
+  private static assertDuracionValida(value: number | null | undefined): void {
+    if (value == null) return;
 
+    if (!Number.isFinite(value)) {
+      throw new BusinessRuleError("La duración estimada debe ser un número válido.");
+    }
+
+    if (!Number.isInteger(value)) {
+      throw new BusinessRuleError("La duración estimada debe ser un número entero.");
+    }
+
+    if (value <= 0) {
+      throw new BusinessRuleError("La duración estimada debe ser mayor que cero.");
+    }
+  }
+
+  private static limpiarOpcional(value?: string | null): string | null {
+    const limpio = value?.trim() ?? "";
+    return limpio || null;
+  }
   static crear(input: {
     id: string;
     idUsuarioResponsableGRD: string;
@@ -43,18 +62,22 @@ export class Curso {
     codigoCurso?: string | null;
     duracionEstimadaHoras?: number | null;
   }): Curso {
-    Guard.required(input.idUsuarioResponsableGRD, "idUsuarioResponsableGRD");
-    Guard.minLength(input.nombreCurso, 3, "nombreCurso");
+    Guard.required(input.id.trim(), "id");
+    Guard.required(input.idUsuarioResponsableGRD.trim(), "idUsuarioResponsableGRD");
+    Guard.minLength(input.nombreCurso.trim(), 3, "nombreCurso");
+    const duracion = input.duracionEstimadaHoras ?? null;
+    Curso.assertDuracionValida(duracion);
+
     return new Curso({
-      id: input.id,
-      idUsuarioResponsableGRD: input.idUsuarioResponsableGRD,
-      idInstitucionAliada: input.idInstitucionAliada ?? null,
-      codigoCurso: input.codigoCurso ?? null,
+      id: input.id.trim(),
+      idUsuarioResponsableGRD: input.idUsuarioResponsableGRD.trim(),
+      idInstitucionAliada: Curso.limpiarOpcional(input.idInstitucionAliada),
+      codigoCurso: Curso.limpiarOpcional(input.codigoCurso),
       nombreCurso: input.nombreCurso.trim(),
-      descripcion: input.descripcion ?? null,
+      descripcion: Curso.limpiarOpcional(input.descripcion),
       fechaPublicacion: null,
       fechaCierre: null,
-      duracionEstimadaHoras: input.duracionEstimadaHoras ?? null,
+      duracionEstimadaHoras: duracion,
       modalidadGeneral: "ASINCRONA",
       estadoCurso: "BORRADOR",
     });
