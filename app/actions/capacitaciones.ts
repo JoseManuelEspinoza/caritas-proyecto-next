@@ -16,7 +16,79 @@ function fail(err: unknown, fallback: string) {
   console.error("[Capacitaciones] Error inesperado:", err);
   return { message: fallback };
 }
+const TIPOS_MATERIAL_VALIDOS = [
+  "Documento (PDF, Word, Excel)",
+  "Presentación",
+  "Video",
+  "Enlace web",
+  "Otro",
+];
 
+const TIPOS_EVALUACION_VALIDOS = ["INICIAL", "FINAL", "UNICO"];
+
+function texto(value?: string | null): string {
+  return value?.trim() ?? "";
+}
+
+function validarId(value: string | undefined | null, mensaje: string): { message: string } | null {
+  if (!texto(value)) return { message: mensaje };
+  return null;
+}
+
+function validarTextoMinimo(
+  value: string | undefined | null,
+  campo: string,
+  min: number,
+  obligatorio = true
+): { message: string } | null {
+  const limpio = texto(value);
+
+  if (!limpio && obligatorio) {
+    return { message: `${campo} es obligatorio.` };
+  }
+
+  if (limpio && limpio.length < min) {
+    return { message: `${campo} debe tener al menos ${min} caracteres.` };
+  }
+
+  return null;
+}
+
+function validarEnteroPositivo(
+  value: number | undefined | null,
+  campo: string
+): { message: string } | null {
+  if (value == null) return null;
+
+  if (!Number.isFinite(value)) {
+    return { message: `${campo} debe ser un número válido.` };
+  }
+
+  if (!Number.isInteger(value)) {
+    return { message: `${campo} debe ser un número entero.` };
+  }
+
+  if (value <= 0) {
+    return { message: `${campo} debe ser mayor que cero.` };
+  }
+
+  return null;
+}
+
+function validarUrlOpcional(value?: string | null): { message: string } | null {
+  const limpio = texto(value);
+  if (!limpio) return null;
+
+  try {
+    const url = new URL(limpio);
+    if (!["http:", "https:"].includes(url.protocol)) {
+      return { message: "El enlace del material debe iniciar con http:// o https://." };
+    }
+    return null;
+  } catch {
+    return { message: "El enlace del material no tiene un formato válido." };
+  }
+}
 // ── Shared types ──────────────────────────────────────────────────────────────
 
 export type Material = {
@@ -272,11 +344,32 @@ export async function crearCurso(input: {
   idResponsable?: string;
 }) {
   const session = await verifySession();
+  const errorNombre = validarTextoMinimo(input.nombreCurso, "El nombre del curso", 3);
+  if (errorNombre) return errorNombre;
+
+  const errorDescripcion = validarTextoMinimo(
+    input.descripcion,
+    "La descripción del curso",
+    5,
+    false
+  );
+  if (errorDescripcion) return errorDescripcion;
+
+  const errorDuracion = validarEnteroPositivo(
+    input.duracionEstimadaHoras,
+    "La duración estimada"
+  );
+  if (errorDuracion) return errorDuracion;  
   const { idResponsable, ...rest } = input;
   const idUsuarioResponsableGRD = idResponsable ?? (await getUsuarioGRDId());
   if (!idUsuarioResponsableGRD) return { message: "Tu usuario no tiene perfil GRD asociado." };
   try {
-    await makeCursoUseCases().crear.execute({ ...rest, idUsuarioResponsableGRD });
+    await makeCursoUseCases().crear.execute({
+      ...rest,
+      nombreCurso: input.nombreCurso.trim(),
+      descripcion: texto(input.descripcion) || undefined,
+      idUsuarioResponsableGRD,
+    });
   } catch (err) {
     return fail(err, "No se pudo crear el curso.");
   }
@@ -285,7 +378,7 @@ export async function crearCurso(input: {
     action: "CREAR",
     entity: "Curso",
     entityId: idUsuarioResponsableGRD,
-    entityName: input.nombreCurso,
+    entityName: input.nombreCurso.trim(),
     module: "Capacitaciones",
   });
   revalidatePath(REVALIDATE);
@@ -296,13 +389,30 @@ export async function editarCurso(
   data: { nombreCurso: string; descripcion?: string; idResponsable: string }
 ): Promise<void | { message: string }> {
   const session = await verifySession();
-  if (!data.nombreCurso.trim()) return { message: "El nombre del curso es obligatorio." };
+
+  const errorId = validarId(id, "No se encontró el curso a editar.");
+  if (errorId) return errorId;
+
+  const errorNombre = validarTextoMinimo(data.nombreCurso, "El nombre del curso", 3);
+  if (errorNombre) return errorNombre;
+
+  const errorResponsable = validarId(data.idResponsable, "Selecciona el responsable del curso.");
+  if (errorResponsable) return errorResponsable;
+
+  const errorDescripcion = validarTextoMinimo(
+    data.descripcion,
+    "La descripción del curso",
+    5,
+    false
+  );
+  if (errorDescripcion) return errorDescripcion;
+
   try {
     await prisma.cursoCapacitacion.update({
       where: { idCursoCapacitacion: id },
       data: {
         nombreCurso: data.nombreCurso.trim(),
-        descripcion: data.descripcion ?? null,
+        descripcion: texto(data.descripcion) || null,
         idUsuarioResponsableGRD: data.idResponsable,
       },
     });
@@ -311,7 +421,7 @@ export async function editarCurso(
       action: "EDITAR",
       entity: "Curso",
       entityId: id,
-      entityName: data.nombreCurso,
+      entityName: data.nombreCurso.trim(),
       module: "Capacitaciones",
     });
   } catch (err) {
@@ -349,8 +459,24 @@ export async function crearSesion(
   data: { tituloUnidad: string }
 ): Promise<void | { message: string }> {
   const session = await verifySession();
-  if (!data.tituloUnidad.trim()) return { message: "El título de la sesión es obligatorio." };
+
+  const errorCurso = validarId(idCurso, "No se encontró el curso.");
+  if (errorCurso) return errorCurso;
+
+  const errorTitulo = validarTextoMinimo(data.tituloUnidad, "El título de la sesión", 3);
+  if (errorTitulo) return errorTitulo;
+
   try {
+    const curso = await prisma.cursoCapacitacion.findUnique({
+      where: { idCursoCapacitacion: idCurso },
+      select: { estadoCurso: true },
+    });
+
+    if (!curso) return { message: "Curso no encontrado." };
+    if (curso.estadoCurso === "CERRADO") {
+      return { message: "No se pueden agregar sesiones a un curso cerrado." };
+    }
+
     const count = await prisma.unidadContenido.count({ where: { idCursoCapacitacion: idCurso } });
     await prisma.unidadContenido.create({
       data: {
@@ -365,7 +491,7 @@ export async function crearSesion(
       action: "CREAR",
       entity: "Sesión",
       entityId: idCurso,
-      entityName: data.tituloUnidad,
+      entityName: data.tituloUnidad.trim(),
       module: "Capacitaciones",
     });
   } catch (err) {
@@ -380,15 +506,36 @@ export async function agregarMaterial(
   data: { titulo: string; tipoMaterial: string; enlaceMaterial: string }
 ): Promise<void | { message: string }> {
   const session = await verifySession();
-  if (!data.titulo.trim()) return { message: "El título del material es obligatorio." };
+
+  const errorCurso = validarId(idCurso, "No se encontró el curso.");
+  if (errorCurso) return errorCurso;
+
+  const errorUnidad = validarId(idUnidad, "Selecciona la sesión a la que pertenece el material.");
+  if (errorUnidad) return errorUnidad;
+
+  const errorTitulo = validarTextoMinimo(data.titulo, "El título del material", 3);
+  if (errorTitulo) return errorTitulo;
+
+  const tipoMaterial = texto(data.tipoMaterial);
+  if (!tipoMaterial) {
+    return { message: "Selecciona el tipo de material." };
+  }
+
+  if (!TIPOS_MATERIAL_VALIDOS.includes(tipoMaterial)) {
+    return { message: "Selecciona un tipo de material válido." };
+  }
+
+  const errorUrl = validarUrlOpcional(data.enlaceMaterial);
+  if (errorUrl) return errorUrl;
+
   try {
     await prisma.materialCapacitacion.create({
       data: {
         idCursoCapacitacion: idCurso,
         idUnidadContenido: idUnidad,
         titulo: data.titulo.trim(),
-        tipoMaterial: data.tipoMaterial || null,
-        enlaceMaterial: data.enlaceMaterial.trim() || null,
+        tipoMaterial,
+        enlaceMaterial: texto(data.enlaceMaterial) || null,
         estado: "ACTIVO",
       },
     });
@@ -397,7 +544,7 @@ export async function agregarMaterial(
       action: "CREAR",
       entity: "Material",
       entityId: idCurso,
-      entityName: data.titulo,
+      entityName: data.titulo.trim(),
       module: "Capacitaciones",
     });
   } catch (err) {
@@ -426,6 +573,17 @@ export async function inscribirParticipante(idCurso: string, participante: Parti
 
 export async function inscribirme(idCurso: string): Promise<void | { message: string }> {
   const session = await verifySession();
+  const errorCurso = validarId(idCurso, "No se encontró el curso.");
+  if (errorCurso) return errorCurso;
+
+  if (!texto(session.email)) {
+    return { message: "Tu usuario no tiene correo asociado para registrar la inscripción." };
+  }
+
+  const nombreSesion = texto(session.name);
+  if (!nombreSesion) {
+    return { message: "Tu usuario no tiene nombre asociado para registrar la inscripción." };
+  }  
   try {
     const curso = await prisma.cursoCapacitacion.findUnique({
       where: { idCursoCapacitacion: idCurso },
@@ -440,13 +598,13 @@ export async function inscribirme(idCurso: string): Promise<void | { message: st
       select: { idParticipante: true },
     });
     if (!participante) {
-      const parts = session.name.split(" ");
+      const parts = nombreSesion.split(/\s+/);
       const mid = Math.ceil(parts.length / 2);
       participante = await prisma.participante.create({
         data: {
           nombres: parts.slice(0, mid).join(" "),
           apellidos: parts.slice(mid).join(" ") || undefined,
-          correo: session.email,
+          correo: session.email.trim(),
         },
         select: { idParticipante: true },
       });
@@ -470,7 +628,7 @@ export async function inscribirme(idCurso: string): Promise<void | { message: st
       action: "CREAR",
       entity: "Inscripción",
       entityId: idCurso,
-      entityName: session.name,
+      entityName: nombreSesion,
       module: "Capacitaciones",
     });
   } catch (err) {
@@ -498,6 +656,26 @@ export async function registrarEvaluacion(
   opts?: { tipoEvaluacion?: string; numeroIntento?: number }
 ) {
   const session = await verifySession();
+  const errorInscripcion = validarId(idInscripcion, "No se encontró la inscripción.");
+  if (errorInscripcion) return errorInscripcion;
+
+  if (!Number.isFinite(nota)) {
+    return { message: "La nota debe ser un número válido." };
+  }
+
+  if (nota < 0 || nota > 20) {
+    return { message: "La nota debe estar entre 0 y 20." };
+  }
+
+  if (opts?.numeroIntento != null) {
+    if (!Number.isInteger(opts.numeroIntento) || opts.numeroIntento <= 0) {
+      return { message: "El número de intento debe ser un entero positivo." };
+    }
+  }
+
+  if (opts?.tipoEvaluacion && !TIPOS_EVALUACION_VALIDOS.includes(opts.tipoEvaluacion)) {
+    return { message: "Selecciona un tipo de evaluación válido." };
+  }  
   try {
     const r = await makeCursoUseCases().evaluar.execute(idInscripcion, nota, opts);
     const nombre = await nombreDeInscripcion(idInscripcion);
