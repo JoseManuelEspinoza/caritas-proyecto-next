@@ -1,8 +1,11 @@
-import { Prisma } from '@prisma/client'
-import type { ActividadPreventiva as ActividadRow } from '@prisma/client'
-import { ActividadPreventiva, EstadoActividad } from '../../domain/entities/actividad/ActividadPreventiva'
+import { Prisma } from "@prisma/client";
+import type { ActividadPreventiva as ActividadRow } from "@prisma/client";
+import {
+  ActividadPreventiva,
+  EstadoActividad,
+} from "../../domain/entities/actividad/ActividadPreventiva";
 
-const iso = (d: Date | null) => (d ? d.toISOString() : null)
+const iso = (d: Date | null) => (d ? d.toISOString() : null);
 
 export const ActividadMapper = {
   toDomain(row: ActividadRow): ActividadPreventiva {
@@ -26,11 +29,11 @@ export const ActividadMapper = {
       recomendaciones: row.recomendaciones,
       observaciones: row.observaciones,
       estadoActividad: row.estadoActividad as EstadoActividad,
-    })
+    });
   },
 
   toPersistence(a: ActividadPreventiva): Prisma.ActividadPreventivaUncheckedCreateInput {
-    const s = a.snapshot
+    const s = a.snapshot;
     return {
       idActividadPreventiva: s.id,
       idParroquia: s.idParroquia,
@@ -51,6 +54,6 @@ export const ActividadMapper = {
       recomendaciones: s.recomendaciones ?? undefined,
       observaciones: s.observaciones ?? undefined,
       estadoActividad: s.estadoActividad,
-    }
+    };
   },
-}
+};

@@ -1,6 +1,6 @@
-import { Prisma } from '@prisma/client'
-import type { KitEmergencia as KitRow } from '@prisma/client'
-import { KitEmergencia } from '../../domain/entities/kit/KitEmergencia'
+import { Prisma } from "@prisma/client";
+import type { KitEmergencia as KitRow } from "@prisma/client";
+import { KitEmergencia } from "../../domain/entities/kit/KitEmergencia";
 
 export const KitMapper = {
   toDomain(row: KitRow): KitEmergencia {
@@ -13,11 +13,11 @@ export const KitMapper = {
       codigoAlmacen: row.codigoAlmacen,
       ubicacionAlmacen: row.ubicacionAlmacen,
       idParroquiaBeneficiaria: row.idParroquiaBeneficiaria,
-    })
+    });
   },
 
   toPersistence(k: KitEmergencia): Prisma.KitEmergenciaUncheckedCreateInput {
-    const s = k.snapshot
+    const s = k.snapshot;
     return {
       idKitEmergencia: s.id,
       tipoKit: s.tipoKit,
@@ -27,6 +27,6 @@ export const KitMapper = {
       codigoAlmacen: s.codigoAlmacen ?? undefined,
       ubicacionAlmacen: s.ubicacionAlmacen ?? undefined,
       idParroquiaBeneficiaria: s.idParroquiaBeneficiaria ?? undefined,
-    }
+    };
   },
-}
+};

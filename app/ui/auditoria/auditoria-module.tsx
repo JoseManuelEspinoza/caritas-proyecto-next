@@ -1,30 +1,31 @@
-'use client'
+"use client";
 
-import { useMemo, useState } from 'react'
-import { History, Search } from 'lucide-react'
+import { useMemo, useState } from "react";
+import { History, Search } from "lucide-react";
 
 export type AuditEntry = {
-  id: string
-  fecha: string
-  usuario: string
-  estadoAnterior: string | null
-  estadoNuevo: string
-  motivo: string | null
-  casoCodigo: string | null
-  casoTitulo: string | null
-}
+  id: string;
+  fecha: string;
+  usuario: string;
+  estadoAnterior: string | null;
+  estadoNuevo: string;
+  motivo: string | null;
+  casoCodigo: string | null;
+  casoTitulo: string | null;
+};
 
 export function AuditoriaModule({ entries }: { entries: AuditEntry[] }) {
-  const [query, setQuery] = useState('')
-  const [estadoFilter, setEstadoFilter] = useState('')
+  const [query, setQuery] = useState("");
+  const [estadoFilter, setEstadoFilter] = useState("");
 
-  const estados = useMemo(() => Array.from(new Set(entries.map((e) => e.estadoNuevo))), [entries])
+  const estados = useMemo(() => Array.from(new Set(entries.map((e) => e.estadoNuevo))), [entries]);
 
   const filtered = entries.filter((e) => {
-    const q = query.toLowerCase()
-    const text = `${e.casoCodigo ?? ''} ${e.casoTitulo ?? ''} ${e.usuario} ${e.motivo ?? ''}`.toLowerCase()
-    return (!q || text.includes(q)) && (!estadoFilter || e.estadoNuevo === estadoFilter)
-  })
+    const q = query.toLowerCase();
+    const text =
+      `${e.casoCodigo ?? ""} ${e.casoTitulo ?? ""} ${e.usuario} ${e.motivo ?? ""}`.toLowerCase();
+    return (!q || text.includes(q)) && (!estadoFilter || e.estadoNuevo === estadoFilter);
+  });
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
@@ -49,9 +50,15 @@ export function AuditoriaModule({ entries }: { entries: AuditEntry[] }) {
               className="pl-9 pr-3 py-2 w-full border border-[var(--caritas-border)] rounded text-sm"
             />
           </div>
-          <select value={estadoFilter} onChange={(e) => setEstadoFilter(e.target.value)} className="px-3 py-2 border border-[var(--caritas-border)] rounded text-sm bg-white">
+          <select
+            value={estadoFilter}
+            onChange={(e) => setEstadoFilter(e.target.value)}
+            className="px-3 py-2 border border-[var(--caritas-border)] rounded text-sm bg-white"
+          >
             <option value="">Todos los estados</option>
-            {estados.map((s) => <option key={s}>{s}</option>)}
+            {estados.map((s) => (
+              <option key={s}>{s}</option>
+            ))}
           </select>
         </div>
 
@@ -69,22 +76,37 @@ export function AuditoriaModule({ entries }: { entries: AuditEntry[] }) {
             <tbody>
               {filtered.map((e) => (
                 <tr key={e.id} className="border-t border-[var(--caritas-border)]">
-                  <td className="px-4 py-2 text-xs text-gray-500">{new Date(e.fecha).toLocaleString('es-PE')}</td>
-                  <td className="px-4 py-2">{e.usuario}</td>
-                  <td className="px-4 py-2"><div className="text-xs text-gray-500">{e.casoCodigo}</div><div>{e.casoTitulo}</div></td>
-                  <td className="px-4 py-2 text-xs">
-                    {e.estadoAnterior ? <>{e.estadoAnterior} → <span className="font-medium">{e.estadoNuevo}</span></> : <span className="font-medium">{e.estadoNuevo}</span>}
+                  <td className="px-4 py-2 text-xs text-gray-500">
+                    {new Date(e.fecha).toLocaleString("es-PE")}
                   </td>
-                  <td className="px-4 py-2 text-xs text-gray-600">{e.motivo ?? ''}</td>
+                  <td className="px-4 py-2">{e.usuario}</td>
+                  <td className="px-4 py-2">
+                    <div className="text-xs text-gray-500">{e.casoCodigo}</div>
+                    <div>{e.casoTitulo}</div>
+                  </td>
+                  <td className="px-4 py-2 text-xs">
+                    {e.estadoAnterior ? (
+                      <>
+                        {e.estadoAnterior} → <span className="font-medium">{e.estadoNuevo}</span>
+                      </>
+                    ) : (
+                      <span className="font-medium">{e.estadoNuevo}</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2 text-xs text-gray-600">{e.motivo ?? ""}</td>
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={5} className="text-center py-8 text-gray-500">Sin entradas de auditoría.</td></tr>
+                <tr>
+                  <td colSpan={5} className="text-center py-8 text-gray-500">
+                    Sin entradas de auditoría.
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
         </div>
       </div>
     </div>
-  )
+  );
 }

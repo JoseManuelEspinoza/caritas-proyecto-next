@@ -1,4 +1,4 @@
-import { PrismaCatalogoRepository } from '../database/PrismaCatalogoRepository'
+import { PrismaCatalogoRepository } from "../database/PrismaCatalogoRepository";
 import {
   CrearCatalogoUseCase,
   ListarCatalogosUseCase,
@@ -6,11 +6,11 @@ import {
   AgregarDetalleUseCase,
   EditarDetalleUseCase,
   ToggleDetalleUseCase,
-} from '../../application/use-cases/catalogos/GestionarCatalogos.usecase'
+} from "../../application/use-cases/catalogos/GestionarCatalogos.usecase";
 
 /** Composition root del módulo de Catálogos. */
 export function makeCatalogoUseCases() {
-  const repo = new PrismaCatalogoRepository()
+  const repo = new PrismaCatalogoRepository();
   return {
     crearCatalogo: new CrearCatalogoUseCase(repo),
     listarCatalogos: new ListarCatalogosUseCase(repo),
@@ -18,5 +18,5 @@ export function makeCatalogoUseCases() {
     agregarDetalle: new AgregarDetalleUseCase(repo),
     editarDetalle: new EditarDetalleUseCase(repo),
     toggleDetalle: new ToggleDetalleUseCase(repo),
-  }
+  };
 }
