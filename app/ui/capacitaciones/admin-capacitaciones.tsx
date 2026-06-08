@@ -13,14 +13,18 @@ import {
   ChevronRight,
   FileText,
   X,
+  ClipboardList,
 } from "lucide-react";
+import { CuestionarioModal } from "@/app/ui/capacitaciones/cuestionario-modal";
 import { toast } from "sonner";
 import {
   crearCurso,
   editarCurso,
   cambiarEstadoCurso,
   crearSesion,
+  obtenerCuestionarioCurso,
 } from "@/app/actions/capacitaciones";
+import type { CuestionarioDetalle } from "@/app/actions/capacitaciones";
 import type { CursoDetalle } from "@/app/actions/capacitaciones";
 
 type Especialista = { id: string; nombre: string };
@@ -66,6 +70,8 @@ export function AdminCapacitaciones({
   const [showCrear, setShowCrear] = useState(false);
   const [showEditar, setShowEditar] = useState(false);
   const [showSesion, setShowSesion] = useState(false);
+  const [showCuestionario, setShowCuestionario] = useState(false);
+  const [cuestionarioEditar, setCuestionarioEditar] = useState<CuestionarioDetalle | null>(null);
 
   const [crearForm, setCrearForm] = useState({
     nombreCurso: "",
@@ -260,6 +266,59 @@ export function AdminCapacitaciones({
                 )}
               </div>
 
+              {/* Cuestionario */}
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-[var(--caritas-text)]">
+                    Cuestionario Final
+                  </h3>
+                  {!current.cuestionario && (
+                    <button
+                      onClick={() => setShowCuestionario(true)}
+                      className="flex items-center gap-1 text-xs text-[var(--caritas-green)] hover:underline"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Crear cuestionario
+                    </button>
+                  )}
+                </div>
+                {current.cuestionario ? (
+                  <div className="flex items-center justify-between gap-3 border border-[var(--caritas-border)] rounded-lg p-3 bg-gray-50">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-[var(--caritas-green)]/10 flex items-center justify-center shrink-0">
+                        <ClipboardList className="w-4 h-4 text-[var(--caritas-green)]" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-[var(--caritas-text)]">
+                          {current.cuestionario.titulo}
+                        </p>
+                        <p className="text-xs text-gray-400">
+                          {current.cuestionario.totalPreguntas} preguntas · Nota mín:{" "}
+                          {current.cuestionario.notaAprobatoria}/20
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={async () => {
+                          const detalle = await obtenerCuestionarioCurso(current.id);
+                          if (detalle) { setCuestionarioEditar(detalle); setShowCuestionario(true); }
+                        }}
+                        className="flex items-center gap-1 px-2.5 py-1 text-xs border border-[var(--caritas-border)] rounded-lg hover:bg-white transition-colors"
+                      >
+                        <Pencil className="w-3 h-3" /> Editar
+                      </button>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200 font-medium">
+                        ACTIVO
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-400">
+                    Este curso no tiene cuestionario aún.
+                  </p>
+                )}
+              </div>
+
               {/* Participants */}
               <div className="flex items-center gap-2 pt-4 border-t border-[var(--caritas-border)]">
                 <Users className="w-4 h-4 text-gray-400" />
@@ -421,6 +480,16 @@ export function AdminCapacitaciones({
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* Modal: Crear / Editar cuestionario */}
+      {showCuestionario && current && (
+        <CuestionarioModal
+          idCurso={current.id}
+          idCuestionario={cuestionarioEditar?.id}
+          inicial={cuestionarioEditar ?? undefined}
+          onClose={() => { setShowCuestionario(false); setCuestionarioEditar(null); }}
+        />
       )}
 
       {/* Modal: Agregar sesión */}

@@ -14,10 +14,12 @@ import {
   FileText,
   Users,
   Calendar,
+  ClipboardList,
 } from "lucide-react";
 import { toast } from "sonner";
 import { inscribirme } from "@/app/actions/capacitaciones";
 import type { CursoInscrito, CursoDisponible } from "@/app/actions/capacitaciones";
+import { RendirExamenModal } from "@/app/ui/capacitaciones/rendir-examen-modal";
 
 function fmtDate(iso: string | null) {
   if (!iso) return "—";
@@ -46,7 +48,10 @@ function DetalleInscrito({
   curso: CursoInscrito;
   onVolver: () => void;
 }) {
+  const [showExamen, setShowExamen] = useState(false);
+
   return (
+    <>
     <div>
       <button
         onClick={onVolver}
@@ -109,6 +114,39 @@ function DetalleInscrito({
           </div>
         </div>
 
+        {/* Examen */}
+        {curso.cuestionario && (
+          <div className="mb-6">
+            <div className="flex items-center justify-between p-4 border border-[var(--caritas-border)] rounded-xl bg-gray-50">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-[var(--caritas-green)]/10 flex items-center justify-center shrink-0">
+                  <ClipboardList className="w-4 h-4 text-[var(--caritas-green)]" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-[var(--caritas-text)]">
+                    {curso.cuestionario.titulo}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    {curso.cuestionario.totalPreguntas} preguntas · Nota mín: {curso.cuestionario.notaAprobatoria}/20
+                    {" · "}
+                    <span className={curso.cuestionario.intentosUsados >= curso.cuestionario.maxIntentos ? "text-red-500" : "text-[var(--caritas-green)]"}>
+                      {curso.cuestionario.maxIntentos - curso.cuestionario.intentosUsados} intento(s) restante(s)
+                    </span>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowExamen(true)}
+                disabled={curso.cuestionario.intentosUsados >= curso.cuestionario.maxIntentos}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm bg-[var(--caritas-green)] text-white rounded-lg hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shrink-0"
+              >
+                <ClipboardList className="w-3.5 h-3.5" />
+                {curso.cuestionario.intentosUsados > 0 ? "Reintentar" : "Rendir examen"}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Materials by session */}
         <div>
           <h3 className="text-sm font-semibold text-[var(--caritas-text)] mb-3">
@@ -170,6 +208,16 @@ function DetalleInscrito({
         </div>
       </div>
     </div>
+
+    {/* Modal examen */}
+    {showExamen && curso.cuestionario && (
+      <RendirExamenModal
+        idInscripcion={curso.idInscripcion}
+        cuestionario={curso.cuestionario}
+        onClose={() => setShowExamen(false)}
+      />
+    )}
+    </>
   );
 }
 

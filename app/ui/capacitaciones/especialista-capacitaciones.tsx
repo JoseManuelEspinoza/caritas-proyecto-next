@@ -21,9 +21,12 @@ import {
   CheckCircle2,
   Clock,
   Archive,
+  ClipboardList,
 } from "lucide-react";
 import { toast } from "sonner";
-import { cambiarEstadoCurso, crearSesion, agregarMaterial } from "@/app/actions/capacitaciones";
+import { cambiarEstadoCurso, crearSesion, agregarMaterial, obtenerCuestionarioCurso } from "@/app/actions/capacitaciones";
+import type { CuestionarioDetalle } from "@/app/actions/capacitaciones";
+import { CuestionarioModal } from "@/app/ui/capacitaciones/cuestionario-modal";
 import type { CursoDetalle } from "@/app/actions/capacitaciones";
 
 const TIPOS_MATERIAL = [
@@ -157,6 +160,8 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
   const [filtro, setFiltro] = useState<FiltroEstado>("todos");
   const [showSesion, setShowSesion] = useState(false);
   const [sesionTitulo, setSesionTitulo] = useState("");
+  const [showCuestionario, setShowCuestionario] = useState(false);
+  const [cuestionarioEditar, setCuestionarioEditar] = useState<CuestionarioDetalle | null>(null);
   const [materialModal, setMaterialModal] = useState<{ idSesion: string; idCurso: string } | null>(null);
   const [materialForm, setMaterialForm] = useState({
     titulo: "",
@@ -309,6 +314,73 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
               />
             ))}
           </div>
+        )}
+
+        {/* Cuestionario */}
+        <div className="mt-5">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-base font-semibold text-[var(--caritas-text)]">
+              Cuestionario Final
+            </h2>
+            {!curso.cuestionario && (
+              <button
+                onClick={() => setShowCuestionario(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-[var(--caritas-green)] border border-[var(--caritas-green)]/30 rounded-lg hover:bg-[var(--caritas-green)]/5 transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" /> Crear cuestionario
+              </button>
+            )}
+          </div>
+          {curso.cuestionario ? (
+            <div className="flex items-center justify-between gap-3 border border-[var(--caritas-border)] rounded-xl p-4 bg-gray-50">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-[var(--caritas-green)]/10 flex items-center justify-center shrink-0">
+                  <ClipboardList className="w-4 h-4 text-[var(--caritas-green)]" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-[var(--caritas-text)]">
+                    {curso.cuestionario.titulo}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    {curso.cuestionario.totalPreguntas} preguntas · Nota mín:{" "}
+                    {curso.cuestionario.notaAprobatoria}/20
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={async () => {
+                    const detalle = await obtenerCuestionarioCurso(curso.id);
+                    if (detalle) { setCuestionarioEditar(detalle); setShowCuestionario(true); }
+                  }}
+                  className="flex items-center gap-1 px-2.5 py-1 text-xs border border-[var(--caritas-border)] rounded-lg hover:bg-white transition-colors"
+                >
+                  <BookOpen className="w-3 h-3" /> Editar
+                </button>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200 font-medium">
+                  ACTIVO
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div
+              onClick={() => setShowCuestionario(true)}
+              className="flex flex-col items-center justify-center py-8 border-2 border-dashed border-gray-300 rounded-xl text-gray-400 gap-2 cursor-pointer hover:border-[var(--caritas-green)]/40 hover:bg-[var(--caritas-green)]/5 transition-colors"
+            >
+              <ClipboardList className="w-7 h-7" />
+              <p className="text-sm">Aún no hay cuestionario. Haz clic para crear uno.</p>
+            </div>
+          )}
+        </div>
+
+        {/* Modal: Crear / Editar cuestionario */}
+        {showCuestionario && (
+          <CuestionarioModal
+            idCurso={curso.id}
+            idCuestionario={cuestionarioEditar?.id}
+            inicial={cuestionarioEditar ?? undefined}
+            onClose={() => { setShowCuestionario(false); setCuestionarioEditar(null); }}
+          />
         )}
 
         {/* Modal: Nueva sesión */}

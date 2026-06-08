@@ -46,6 +46,13 @@ export type CursoDetalle = {
   idResponsable: string;
   totalInscritos: number;
   sesiones: Sesion[];
+  cuestionario: {
+    id: string;
+    titulo: string;
+    totalPreguntas: number;
+    notaAprobatoria: number;
+    estado: string;
+  } | null;
 };
 
 export type CursoInscrito = {
@@ -65,6 +72,14 @@ export type CursoInscrito = {
   resultado: string | null;
   certificado: boolean;
   sesiones: Sesion[];
+  cuestionario: {
+    id: string;
+    titulo: string;
+    notaAprobatoria: number;
+    maxIntentos: number;
+    totalPreguntas: number;
+    intentosUsados: number;
+  } | null;
 };
 
 export type CursoDisponible = {
@@ -109,6 +124,11 @@ export async function listarCursosConSesiones(idResponsable?: string): Promise<C
           },
         },
       },
+      cuestionarios: {
+        where: { estado: "ACTIVO" },
+        take: 1,
+        include: { _count: { select: { preguntas: true } } },
+      },
       _count: { select: { inscripciones: true } },
     },
   });
@@ -135,6 +155,15 @@ export async function listarCursosConSesiones(idResponsable?: string): Promise<C
         enlaceMaterial: m.enlaceMaterial,
       })),
     })),
+    cuestionario: r.cuestionarios[0]
+      ? {
+          id: r.cuestionarios[0].idCuestionarioCurso,
+          titulo: r.cuestionarios[0].titulo,
+          totalPreguntas: r.cuestionarios[0]._count.preguntas,
+          notaAprobatoria: Number(r.cuestionarios[0].notaAprobatoria),
+          estado: r.cuestionarios[0].estado,
+        }
+      : null,
   }));
 }
 
@@ -178,6 +207,11 @@ export async function listarMisCursos(): Promise<CursoInscrito[]> {
               },
             },
           },
+          cuestionarios: {
+            where: { estado: "ACTIVO" },
+            take: 1,
+            include: { _count: { select: { preguntas: true } } },
+          },
         },
       },
       evaluaciones: { orderBy: { fechaEvaluacion: "asc" } },
@@ -206,6 +240,16 @@ export async function listarMisCursos(): Promise<CursoInscrito[]> {
           : null,
       resultado: evals.length > 0 ? (evals[evals.length - 1].resultado ?? null) : null,
       certificado: i.certificacion !== null,
+      cuestionario: i.curso.cuestionarios[0]
+        ? {
+            id: i.curso.cuestionarios[0].idCuestionarioCurso,
+            titulo: i.curso.cuestionarios[0].titulo,
+            notaAprobatoria: Number(i.curso.cuestionarios[0].notaAprobatoria),
+            maxIntentos: i.curso.cuestionarios[0].maxIntentos,
+            totalPreguntas: i.curso.cuestionarios[0]._count.preguntas,
+            intentosUsados: evals.filter((e) => e.idCuestionarioCurso === i.curso.cuestionarios[0]!.idCuestionarioCurso).length,
+          }
+        : null,
       sesiones: i.curso.unidades.map((u) => ({
         id: u.idUnidadContenido,
         numeroOrden: u.numeroOrden,
@@ -516,6 +560,322 @@ export async function registrarEvaluacion(
   } catch (err) {
     return fail(err, "No se pudo registrar la evaluación.");
   }
+}
+
+// ── Cuestionario actions ──────────────────────────────────────────────────────
+
+export type OpcionInput = { textoOpcion: string; esCorrecta: boolean };
+export type PreguntaInput = {
+  enunciado: string;
+  tipoPregunta: "OPCION_UNICA" | "VERDADERO_FALSO";
+  puntaje: number;
+  opciones: OpcionInput[];
+};
+
+export type CuestionarioDetalle = {
+  id: string;
+  titulo: string;
+  descripcion: string | null;
+  tipoCuestionario: string;
+  notaAprobatoria: number;
+  maxIntentos: number;
+  estado: string;
+  preguntas: {
+    id: string;
+    enunciado: string;
+    tipoPregunta: string;
+    puntaje: number;
+    orden: number;
+    opciones: { id: string; textoOpcion: string; esCorrecta: boolean; orden: number }[];
+  }[];
+};
+
+export async function obtenerCuestionarioPorId(
+  idCuestionario: string
+): Promise<CuestionarioDetalle | null> {
+  await verifySession();
+  const c = await prisma.cuestionarioCurso.findUnique({
+    where: { idCuestionarioCurso: idCuestionario },
+    include: {
+      preguntas: {
+        where: { estado: "ACTIVO" },
+        orderBy: { orden: "asc" },
+        include: {
+          opciones: { where: { estado: "ACTIVO" }, orderBy: { orden: "asc" } },
+        },
+      },
+    },
+  });
+  if (!c) return null;
+  return {
+    id: c.idCuestionarioCurso,
+    titulo: c.titulo,
+    descripcion: c.descripcion,
+    tipoCuestionario: c.tipoCuestionario,
+    notaAprobatoria: Number(c.notaAprobatoria),
+    maxIntentos: c.maxIntentos,
+    estado: c.estado,
+    preguntas: c.preguntas.map((p) => ({
+      id: p.idPreguntaCuestionario,
+      enunciado: p.enunciado,
+      tipoPregunta: p.tipoPregunta,
+      puntaje: Number(p.puntaje),
+      orden: p.orden,
+      opciones: p.opciones.map((o) => ({
+        id: o.idOpcionPregunta,
+        textoOpcion: o.textoOpcion,
+        esCorrecta: o.esCorrecta,
+        orden: o.orden,
+      })),
+    })),
+  };
+}
+
+export async function obtenerCuestionarioCurso(
+  idCurso: string
+): Promise<CuestionarioDetalle | null> {
+  await verifySession();
+  const c = await prisma.cuestionarioCurso.findFirst({
+    where: { idCursoCapacitacion: idCurso, estado: "ACTIVO" },
+    include: {
+      preguntas: {
+        where: { estado: "ACTIVO" },
+        orderBy: { orden: "asc" },
+        include: {
+          opciones: { where: { estado: "ACTIVO" }, orderBy: { orden: "asc" } },
+        },
+      },
+    },
+  });
+  if (!c) return null;
+  return {
+    id: c.idCuestionarioCurso,
+    titulo: c.titulo,
+    descripcion: c.descripcion,
+    tipoCuestionario: c.tipoCuestionario,
+    notaAprobatoria: Number(c.notaAprobatoria),
+    maxIntentos: c.maxIntentos,
+    estado: c.estado,
+    preguntas: c.preguntas.map((p) => ({
+      id: p.idPreguntaCuestionario,
+      enunciado: p.enunciado,
+      tipoPregunta: p.tipoPregunta,
+      puntaje: Number(p.puntaje),
+      orden: p.orden,
+      opciones: p.opciones.map((o) => ({
+        id: o.idOpcionPregunta,
+        textoOpcion: o.textoOpcion,
+        esCorrecta: o.esCorrecta,
+        orden: o.orden,
+      })),
+    })),
+  };
+}
+
+export async function crearCuestionario(
+  idCurso: string,
+  data: {
+    titulo: string;
+    descripcion?: string;
+    notaAprobatoria: number;
+    maxIntentos: number;
+    preguntas: PreguntaInput[];
+  }
+): Promise<void | { message: string }> {
+  const session = await verifySession();
+  if (!data.titulo.trim()) return { message: "El título del cuestionario es obligatorio." };
+  if (data.preguntas.length === 0) return { message: "Agrega al menos una pregunta." };
+  for (const p of data.preguntas) {
+    if (!p.enunciado.trim()) return { message: "Todas las preguntas deben tener enunciado." };
+    if (p.opciones.length < 2) return { message: "Cada pregunta debe tener al menos 2 opciones." };
+    if (!p.opciones.some((o) => o.esCorrecta)) return { message: "Cada pregunta debe tener una opción correcta." };
+  }
+  try {
+    const existing = await prisma.cuestionarioCurso.findFirst({
+      where: { idCursoCapacitacion: idCurso, estado: "ACTIVO" },
+      select: { idCuestionarioCurso: true },
+    });
+    if (existing) return { message: "Este curso ya tiene un cuestionario activo." };
+
+    await prisma.cuestionarioCurso.create({
+      data: {
+        idCursoCapacitacion: idCurso,
+        titulo: data.titulo.trim(),
+        descripcion: data.descripcion?.trim() || null,
+        notaAprobatoria: data.notaAprobatoria,
+        maxIntentos: data.maxIntentos,
+        preguntas: {
+          create: data.preguntas.map((p, pi) => ({
+            enunciado: p.enunciado.trim(),
+            tipoPregunta: p.tipoPregunta,
+            puntaje: p.puntaje,
+            orden: pi + 1,
+            opciones: {
+              create: p.opciones.map((o, oi) => ({
+                textoOpcion: o.textoOpcion.trim(),
+                esCorrecta: o.esCorrecta,
+                orden: oi + 1,
+              })),
+            },
+          })),
+        },
+      },
+    });
+    await logGRDAction({
+      userId: session.userId,
+      action: "CREAR",
+      entity: "Cuestionario",
+      entityId: idCurso,
+      entityName: data.titulo,
+      module: "Capacitaciones",
+    });
+  } catch (err) {
+    return fail(err, "No se pudo crear el cuestionario.");
+  }
+  revalidatePath(REVALIDATE);
+}
+
+export async function enviarRespuestasExamen(
+  idInscripcion: string,
+  idCuestionario: string,
+  respuestas: Record<string, string> // { idPregunta: idOpcion }
+): Promise<
+  | { resultado: { nota: number; puntajeObtenido: number; puntajeTotal: number; porcentaje: number; aprobado: boolean } }
+  | { message: string }
+> {
+  await verifySession();
+  try {
+    // Verificar intentos
+    const cuestionario = await prisma.cuestionarioCurso.findUnique({
+      where: { idCuestionarioCurso: idCuestionario },
+      include: {
+        preguntas: {
+          where: { estado: "ACTIVO" },
+          include: { opciones: { where: { estado: "ACTIVO" } } },
+        },
+      },
+    });
+    if (!cuestionario) return { message: "Cuestionario no encontrado." };
+
+    const intentosUsados = await prisma.evaluacionCurso.count({
+      where: { idInscripcionCurso: idInscripcion, idCuestionarioCurso: idCuestionario },
+    });
+    if (intentosUsados >= cuestionario.maxIntentos)
+      return { message: "Has agotado todos tus intentos." };
+
+    // Calcular puntaje
+    let puntajeObtenido = 0;
+    const puntajeTotal = cuestionario.preguntas.reduce((s, p) => s + Number(p.puntaje), 0);
+
+    const respuestasData = cuestionario.preguntas.map((p) => {
+      const idOpcionElegida = respuestas[p.idPreguntaCuestionario];
+      const opcionElegida = p.opciones.find((o) => o.idOpcionPregunta === idOpcionElegida);
+      const esCorrecta = opcionElegida?.esCorrecta ?? false;
+      const pts = esCorrecta ? Number(p.puntaje) : 0;
+      puntajeObtenido += pts;
+      return {
+        idPreguntaCuestionario: p.idPreguntaCuestionario,
+        idOpcionPregunta: idOpcionElegida ?? null,
+        esCorrecta,
+        puntajeObtenido: pts,
+      };
+    });
+
+    const porcentaje = puntajeTotal > 0 ? (puntajeObtenido / puntajeTotal) * 100 : 0;
+    const nota = (puntajeObtenido / puntajeTotal) * 20;
+    const aprobado = nota >= Number(cuestionario.notaAprobatoria);
+    const resultado = aprobado ? "APROBADO" : "DESAPROBADO";
+
+    // Guardar evaluación + respuestas
+    await prisma.evaluacionCurso.create({
+      data: {
+        idInscripcionCurso: idInscripcion,
+        idCuestionarioCurso: idCuestionario,
+        tipoEvaluacion: "FINAL",
+        numeroIntento: intentosUsados + 1,
+        nota,
+        puntajeObtenido,
+        puntajeTotal,
+        porcentajeObtenido: porcentaje,
+        resultado,
+        fechaEvaluacion: new Date(),
+        respuestas: {
+          create: respuestasData,
+        },
+      },
+    });
+
+    revalidatePath(REVALIDATE);
+    return { resultado: { nota, puntajeObtenido, puntajeTotal, porcentaje, aprobado } };
+  } catch (err) {
+    return fail(err, "No se pudo registrar el examen.");
+  }
+}
+
+export async function editarCuestionario(
+  idCuestionario: string,
+  data: {
+    titulo: string;
+    descripcion?: string;
+    notaAprobatoria: number;
+    maxIntentos: number;
+    preguntas: PreguntaInput[];
+  }
+): Promise<void | { message: string }> {
+  const session = await verifySession();
+  if (!data.titulo.trim()) return { message: "El título del cuestionario es obligatorio." };
+  if (data.preguntas.length === 0) return { message: "Agrega al menos una pregunta." };
+  for (const p of data.preguntas) {
+    if (!p.enunciado.trim()) return { message: "Todas las preguntas deben tener enunciado." };
+    if (p.opciones.length < 2) return { message: "Cada pregunta debe tener al menos 2 opciones." };
+    if (!p.opciones.some((o) => o.esCorrecta)) return { message: "Cada pregunta debe tener una opción correcta." };
+  }
+  try {
+    // Eliminar preguntas y opciones anteriores y recrear
+    const preguntasExistentes = await prisma.preguntaCuestionario.findMany({
+      where: { idCuestionarioCurso: idCuestionario },
+      select: { idPreguntaCuestionario: true },
+    });
+    const idPreguntas = preguntasExistentes.map((p) => p.idPreguntaCuestionario);
+    await prisma.opcionPregunta.deleteMany({ where: { idPreguntaCuestionario: { in: idPreguntas } } });
+    await prisma.preguntaCuestionario.deleteMany({ where: { idCuestionarioCurso: idCuestionario } });
+
+    await prisma.cuestionarioCurso.update({
+      where: { idCuestionarioCurso: idCuestionario },
+      data: {
+        titulo: data.titulo.trim(),
+        descripcion: data.descripcion?.trim() || null,
+        notaAprobatoria: data.notaAprobatoria,
+        maxIntentos: data.maxIntentos,
+        preguntas: {
+          create: data.preguntas.map((p, pi) => ({
+            enunciado: p.enunciado.trim(),
+            tipoPregunta: p.tipoPregunta,
+            puntaje: p.puntaje,
+            orden: pi + 1,
+            opciones: {
+              create: p.opciones.map((o, oi) => ({
+                textoOpcion: o.textoOpcion.trim(),
+                esCorrecta: o.esCorrecta,
+                orden: oi + 1,
+              })),
+            },
+          })),
+        },
+      },
+    });
+    await logGRDAction({
+      userId: session.userId,
+      action: "EDITAR",
+      entity: "Cuestionario",
+      entityId: idCuestionario,
+      entityName: data.titulo,
+      module: "Capacitaciones",
+    });
+  } catch (err) {
+    return fail(err, "No se pudo editar el cuestionario.");
+  }
+  revalidatePath(REVALIDATE);
 }
 
 export async function certificarParticipante(idInscripcion: string, constanciaUrl?: string) {
