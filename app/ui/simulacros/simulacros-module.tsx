@@ -124,28 +124,151 @@ export function SimulacrosModule({
   const visibleFrom = filtered.length === 0 ? 0 : startIndex + 1;
   const visibleTo = Math.min(startIndex + PAGE_SIZE, filtered.length);
 
+
+ function hoyLocalISO(): string {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().slice(0, 10);
+  }
+
+  function validarProgramacion(): string | null {
+    const nombre = form.nombreActividad.trim();
+    const lugar = form.lugarActividad.trim();
+    const participantes = Number(form.numeroParticipantesEstimado);
+
+    if (!form.idParroquia?.trim()) {
+      return "Selecciona la parroquia.";
+    }
+
+    if (!form.idTipoActividadPreventiva?.trim()) {
+      return "Selecciona el tipo de actividad.";
+    }
+
+    if (!TIPOS.includes(form.idTipoActividadPreventiva)) {
+      return "Selecciona un tipo de actividad válido.";
+    }
+
+    if (!nombre) {
+      return "Ingresa el nombre de la actividad.";
+    }
+
+    if (nombre.length < 3) {
+      return "El nombre de la actividad debe tener al menos 3 caracteres.";
+    }
+
+    if (!form.fechaProgramada) {
+      return "Selecciona la fecha programada.";
+    }
+
+    if (form.fechaProgramada < hoyLocalISO()) {
+      return "La fecha programada no puede ser anterior a hoy.";
+    }
+
+    if (!lugar) {
+      return "Ingresa el lugar de la actividad.";
+    }
+
+    if (lugar.length < 3) {
+      return "El lugar debe tener al menos 3 caracteres.";
+    }
+
+    if (!Number.isFinite(participantes)) {
+      return "El número de participantes estimados debe ser válido.";
+    }
+
+    if (!Number.isInteger(participantes)) {
+      return "El número de participantes estimados debe ser entero.";
+    }
+
+    if (participantes < 0) {
+      return "El número de participantes estimados no puede ser negativo.";
+    }
+
+    if (form.descripcionActividad.trim() && form.descripcionActividad.trim().length < 5) {
+      return "La descripción debe tener al menos 5 caracteres si se ingresa.";
+    }
+
+    return null;
+  }
+
+  function validarEjecucion(): string | null {
+    const resultado = ejec.resultadoGeneral.trim();
+    const participantes = Number(ejec.numeroParticipantesReal);
+
+    if (!resultado) {
+      return "Indica el resultado general.";
+    }
+
+    if (resultado.length < 5) {
+      return "El resultado general debe tener al menos 5 caracteres.";
+    }
+
+    if (!Number.isFinite(participantes)) {
+      return "El número de participantes reales debe ser válido.";
+    }
+
+    if (!Number.isInteger(participantes)) {
+      return "El número de participantes reales debe ser entero.";
+    }
+
+    if (participantes < 0) {
+      return "El número de participantes reales no puede ser negativo.";
+    }
+
+    if (ejec.recomendaciones.trim() && ejec.recomendaciones.trim().length < 5) {
+      return "Las recomendaciones deben tener al menos 5 caracteres si se ingresan.";
+    }
+
+    return null;
+  }
+  
+  
   const submitNew = () => {
-    if (!form.nombreActividad.trim() || !form.idParroquia) {
-      toast.error("Completa parroquia y nombre.");
+    const errorValidacion = validarProgramacion();
+
+    if (errorValidacion) {
+      toast.error(errorValidacion);
       return;
     }
+
     run(
-      () => programarSimulacro(form),
+      () =>
+        programarSimulacro({
+          ...form,
+          nombreActividad: form.nombreActividad.trim(),
+          lugarActividad: form.lugarActividad.trim(),
+          descripcionActividad: form.descripcionActividad.trim(),
+          numeroParticipantesEstimado: Number(form.numeroParticipantesEstimado),
+        }),
       "Simulacro programado.",
       () => {
         setShowForm(false);
-        setForm({ ...form, nombreActividad: "", lugarActividad: "", descripcionActividad: "" });
+        setForm({
+          ...form,
+          nombreActividad: "",
+          lugarActividad: "",
+          descripcionActividad: "",
+          numeroParticipantesEstimado: 0,
+        });
       }
     );
   };
 
   const submitEjecutar = (id: string) => {
-    if (!ejec.resultadoGeneral.trim()) {
-      toast.error("Indica el resultado.");
+    const errorValidacion = validarEjecucion();
+
+    if (errorValidacion) {
+      toast.error(errorValidacion);
       return;
     }
+
     run(
-      () => ejecutarSimulacro(id, ejec),
+      () =>
+        ejecutarSimulacro(id, {
+          resultadoGeneral: ejec.resultadoGeneral.trim(),
+          numeroParticipantesReal: Number(ejec.numeroParticipantesReal),
+          recomendaciones: ejec.recomendaciones.trim(),
+        }),
       "Ejecución registrada.",
       () => {
         setEjecutando(null);
