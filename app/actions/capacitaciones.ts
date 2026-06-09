@@ -118,7 +118,14 @@ export type CursoDetalle = {
   idResponsable: string;
   totalInscritos: number;
   sesiones: Sesion[];
-  cuestionario: {
+  cuestionarioInicial: {
+    id: string;
+    titulo: string;
+    totalPreguntas: number;
+    notaAprobatoria: number;
+    estado: string;
+  } | null;
+  cuestionarioFinal: {
     id: string;
     titulo: string;
     totalPreguntas: number;
@@ -144,7 +151,15 @@ export type CursoInscrito = {
   resultado: string | null;
   certificado: boolean;
   sesiones: Sesion[];
-  cuestionario: {
+  cuestionarioInicial: {
+    id: string;
+    titulo: string;
+    notaAprobatoria: number;
+    maxIntentos: number;
+    totalPreguntas: number;
+    intentosUsados: number;
+  } | null;
+  cuestionarioFinal: {
     id: string;
     titulo: string;
     notaAprobatoria: number;
@@ -198,7 +213,6 @@ export async function listarCursosConSesiones(idResponsable?: string): Promise<C
       },
       cuestionarios: {
         where: { estado: "ACTIVO" },
-        take: 1,
         include: { _count: { select: { preguntas: true } } },
       },
       _count: { select: { inscripciones: true } },
@@ -227,15 +241,14 @@ export async function listarCursosConSesiones(idResponsable?: string): Promise<C
         enlaceMaterial: m.enlaceMaterial,
       })),
     })),
-    cuestionario: r.cuestionarios[0]
-      ? {
-          id: r.cuestionarios[0].idCuestionarioCurso,
-          titulo: r.cuestionarios[0].titulo,
-          totalPreguntas: r.cuestionarios[0]._count.preguntas,
-          notaAprobatoria: Number(r.cuestionarios[0].notaAprobatoria),
-          estado: r.cuestionarios[0].estado,
-        }
-      : null,
+    cuestionarioInicial: (() => {
+      const c = r.cuestionarios.find((q) => q.tipoCuestionario === "INICIAL");
+      return c ? { id: c.idCuestionarioCurso, titulo: c.titulo, totalPreguntas: c._count.preguntas, notaAprobatoria: Number(c.notaAprobatoria), estado: c.estado } : null;
+    })(),
+    cuestionarioFinal: (() => {
+      const c = r.cuestionarios.find((q) => q.tipoCuestionario === "FINAL" || q.tipoCuestionario === "UNICO");
+      return c ? { id: c.idCuestionarioCurso, titulo: c.titulo, totalPreguntas: c._count.preguntas, notaAprobatoria: Number(c.notaAprobatoria), estado: c.estado } : null;
+    })(),
   }));
 }
 
@@ -281,7 +294,6 @@ export async function listarMisCursos(): Promise<CursoInscrito[]> {
           },
           cuestionarios: {
             where: { estado: "ACTIVO" },
-            take: 1,
             include: { _count: { select: { preguntas: true } } },
           },
         },
@@ -312,16 +324,14 @@ export async function listarMisCursos(): Promise<CursoInscrito[]> {
           : null,
       resultado: evals.length > 0 ? (evals[evals.length - 1].resultado ?? null) : null,
       certificado: i.certificacion !== null,
-      cuestionario: i.curso.cuestionarios[0]
-        ? {
-            id: i.curso.cuestionarios[0].idCuestionarioCurso,
-            titulo: i.curso.cuestionarios[0].titulo,
-            notaAprobatoria: Number(i.curso.cuestionarios[0].notaAprobatoria),
-            maxIntentos: i.curso.cuestionarios[0].maxIntentos,
-            totalPreguntas: i.curso.cuestionarios[0]._count.preguntas,
-            intentosUsados: evals.filter((e) => e.idCuestionarioCurso === i.curso.cuestionarios[0]!.idCuestionarioCurso).length,
-          }
-        : null,
+      cuestionarioInicial: (() => {
+        const c = i.curso.cuestionarios.find((q) => q.tipoCuestionario === "INICIAL");
+        return c ? { id: c.idCuestionarioCurso, titulo: c.titulo, notaAprobatoria: Number(c.notaAprobatoria), maxIntentos: c.maxIntentos, totalPreguntas: c._count.preguntas, intentosUsados: evals.filter((e: any) => e.idCuestionarioCurso === c.idCuestionarioCurso).length } : null;
+      })(),
+      cuestionarioFinal: (() => {
+        const c = i.curso.cuestionarios.find((q) => q.tipoCuestionario === "FINAL" || q.tipoCuestionario === "UNICO");
+        return c ? { id: c.idCuestionarioCurso, titulo: c.titulo, notaAprobatoria: Number(c.notaAprobatoria), maxIntentos: c.maxIntentos, totalPreguntas: c._count.preguntas, intentosUsados: evals.filter((e: any) => e.idCuestionarioCurso === c.idCuestionarioCurso).length } : null;
+      })(),
       sesiones: i.curso.unidades.map((u) => ({
         id: u.idUnidadContenido,
         numeroOrden: u.numeroOrden,
@@ -857,6 +867,7 @@ export async function crearCuestionario(
   data: {
     titulo: string;
     descripcion?: string;
+    tipoCuestionario: "INICIAL" | "FINAL";
     notaAprobatoria: number;
     maxIntentos: number;
     preguntas: PreguntaInput[];
@@ -872,16 +883,17 @@ export async function crearCuestionario(
   }
   try {
     const existing = await prisma.cuestionarioCurso.findFirst({
-      where: { idCursoCapacitacion: idCurso, estado: "ACTIVO" },
+      where: { idCursoCapacitacion: idCurso, tipoCuestionario: data.tipoCuestionario, estado: "ACTIVO" },
       select: { idCuestionarioCurso: true },
     });
-    if (existing) return { message: "Este curso ya tiene un cuestionario activo." };
+    if (existing) return { message: `Este curso ya tiene un cuestionario ${data.tipoCuestionario === "INICIAL" ? "inicial" : "final"} activo.` };
 
     await prisma.cuestionarioCurso.create({
       data: {
         idCursoCapacitacion: idCurso,
         titulo: data.titulo.trim(),
         descripcion: data.descripcion?.trim() || null,
+        tipoCuestionario: data.tipoCuestionario,
         notaAprobatoria: data.notaAprobatoria,
         maxIntentos: data.maxIntentos,
         preguntas: {

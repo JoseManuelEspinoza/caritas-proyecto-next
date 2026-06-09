@@ -48,7 +48,8 @@ function DetalleInscrito({
   curso: CursoInscrito;
   onVolver: () => void;
 }) {
-  const [showExamen, setShowExamen] = useState(false);
+  const [showExamenInicial, setShowExamenInicial] = useState(false);
+  const [showExamenFinal, setShowExamenFinal] = useState(false);
 
   return (
     <>
@@ -114,36 +115,72 @@ function DetalleInscrito({
           </div>
         </div>
 
-        {/* Examen */}
-        {curso.cuestionario && (
-          <div className="mb-6">
-            <div className="flex items-center justify-between p-4 border border-[var(--caritas-border)] rounded-xl bg-gray-50">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-[var(--caritas-green)]/10 flex items-center justify-center shrink-0">
-                  <ClipboardList className="w-4 h-4 text-[var(--caritas-green)]" />
+        {/* Evaluaciones */}
+        {(curso.cuestionarioInicial || curso.cuestionarioFinal) && (
+          <div className="mb-6 space-y-3">
+            {/* Examen Inicial */}
+            {curso.cuestionarioInicial && (
+              <div className="flex items-center justify-between p-4 border border-amber-200 rounded-xl bg-amber-50">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+                    <ClipboardList className="w-4 h-4 text-amber-600" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <p className="text-sm font-semibold text-[var(--caritas-text)]">{curso.cuestionarioInicial.titulo}</p>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200 font-medium">INICIAL</span>
+                    </div>
+                    <p className="text-xs text-gray-400">
+                      {curso.cuestionarioInicial.totalPreguntas} preguntas · Nota mín: {curso.cuestionarioInicial.notaAprobatoria}/20
+                      {" · "}
+                      <span className={curso.cuestionarioInicial.intentosUsados >= curso.cuestionarioInicial.maxIntentos ? "text-red-500" : "text-amber-600"}>
+                        {curso.cuestionarioInicial.maxIntentos - curso.cuestionarioInicial.intentosUsados} intento(s) restante(s)
+                      </span>
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-semibold text-[var(--caritas-text)]">
-                    {curso.cuestionario.titulo}
-                  </p>
-                  <p className="text-xs text-gray-400">
-                    {curso.cuestionario.totalPreguntas} preguntas · Nota mín: {curso.cuestionario.notaAprobatoria}/20
-                    {" · "}
-                    <span className={curso.cuestionario.intentosUsados >= curso.cuestionario.maxIntentos ? "text-red-500" : "text-[var(--caritas-green)]"}>
-                      {curso.cuestionario.maxIntentos - curso.cuestionario.intentosUsados} intento(s) restante(s)
-                    </span>
-                  </p>
-                </div>
+                <button
+                  onClick={() => setShowExamenInicial(true)}
+                  disabled={curso.cuestionarioInicial.intentosUsados >= curso.cuestionarioInicial.maxIntentos}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm bg-amber-500 text-white rounded-lg hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shrink-0"
+                >
+                  <ClipboardList className="w-3.5 h-3.5" />
+                  {curso.cuestionarioInicial.intentosUsados > 0 ? "Reintentar" : "Rendir"}
+                </button>
               </div>
-              <button
-                onClick={() => setShowExamen(true)}
-                disabled={curso.cuestionario.intentosUsados >= curso.cuestionario.maxIntentos}
-                className="flex items-center gap-1.5 px-4 py-2 text-sm bg-[var(--caritas-green)] text-white rounded-lg hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shrink-0"
-              >
-                <ClipboardList className="w-3.5 h-3.5" />
-                {curso.cuestionario.intentosUsados > 0 ? "Reintentar" : "Rendir examen"}
-              </button>
-            </div>
+            )}
+
+            {/* Examen Final */}
+            {curso.cuestionarioFinal && (
+              <div className="flex items-center justify-between p-4 border border-[var(--caritas-border)] rounded-xl bg-gray-50">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-[var(--caritas-green)]/10 flex items-center justify-center shrink-0">
+                    <ClipboardList className="w-4 h-4 text-[var(--caritas-green)]" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <p className="text-sm font-semibold text-[var(--caritas-text)]">{curso.cuestionarioFinal.titulo}</p>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 border border-green-200 font-medium">FINAL</span>
+                    </div>
+                    <p className="text-xs text-gray-400">
+                      {curso.cuestionarioFinal.totalPreguntas} preguntas · Nota mín: {curso.cuestionarioFinal.notaAprobatoria}/20
+                      {" · "}
+                      <span className={curso.cuestionarioFinal.intentosUsados >= curso.cuestionarioFinal.maxIntentos ? "text-red-500" : "text-[var(--caritas-green)]"}>
+                        {curso.cuestionarioFinal.maxIntentos - curso.cuestionarioFinal.intentosUsados} intento(s) restante(s)
+                      </span>
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowExamenFinal(true)}
+                  disabled={curso.cuestionarioFinal.intentosUsados >= curso.cuestionarioFinal.maxIntentos}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm bg-[var(--caritas-green)] text-white rounded-lg hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shrink-0"
+                >
+                  <ClipboardList className="w-3.5 h-3.5" />
+                  {curso.cuestionarioFinal.intentosUsados > 0 ? "Reintentar" : "Rendir examen"}
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -209,12 +246,21 @@ function DetalleInscrito({
       </div>
     </div>
 
-    {/* Modal examen */}
-    {showExamen && curso.cuestionario && (
+    {/* Modal examen inicial */}
+    {showExamenInicial && curso.cuestionarioInicial && (
       <RendirExamenModal
         idInscripcion={curso.idInscripcion}
-        cuestionario={curso.cuestionario}
-        onClose={() => setShowExamen(false)}
+        cuestionario={curso.cuestionarioInicial}
+        onClose={() => setShowExamenInicial(false)}
+      />
+    )}
+
+    {/* Modal examen final */}
+    {showExamenFinal && curso.cuestionarioFinal && (
+      <RendirExamenModal
+        idInscripcion={curso.idInscripcion}
+        cuestionario={curso.cuestionarioFinal}
+        onClose={() => setShowExamenFinal(false)}
       />
     )}
     </>

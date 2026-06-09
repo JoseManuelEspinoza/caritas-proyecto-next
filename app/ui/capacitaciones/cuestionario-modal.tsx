@@ -53,19 +53,27 @@ function fromDetalle(detalle: CuestionarioDetalle): PreguntaInput[] {
 export function CuestionarioModal({
   idCurso,
   idCuestionario,
+  tipoPredefinido,
   inicial,
   onClose,
 }: {
   idCurso: string;
-  idCuestionario?: string;        // si viene → modo edición
-  inicial?: CuestionarioDetalle;  // datos precargados para editar
+  idCuestionario?: string;
+  tipoPredefinido?: "INICIAL" | "FINAL";
+  inicial?: CuestionarioDetalle;
   onClose: () => void;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const esEdicion = !!idCuestionario;
 
-  const [titulo, setTitulo] = useState(inicial?.titulo ?? "Evaluación Final");
+  const tipoDefault: "INICIAL" | "FINAL" =
+    (inicial?.tipoCuestionario as "INICIAL" | "FINAL") ?? tipoPredefinido ?? "FINAL";
+
+  const [tipo, setTipo] = useState<"INICIAL" | "FINAL">(tipoDefault);
+  const [titulo, setTitulo] = useState(
+    inicial?.titulo ?? (tipoDefault === "INICIAL" ? "Evaluación Inicial" : "Evaluación Final")
+  );
   const [descripcion, setDescripcion] = useState(inicial?.descripcion ?? "");
   const [notaAprobatoria, setNotaAprobatoria] = useState(inicial?.notaAprobatoria ?? 11);
   const [maxIntentos, setMaxIntentos] = useState(inicial?.maxIntentos ?? 3);
@@ -109,7 +117,7 @@ export function CuestionarioModal({
 
   const guardar = () => {
     startTransition(async () => {
-      const payload = { titulo, descripcion: descripcion || undefined, notaAprobatoria, maxIntentos, preguntas };
+      const payload = { tipoCuestionario: tipo, titulo, descripcion: descripcion || undefined, notaAprobatoria, maxIntentos, preguntas };
       const res = esEdicion
         ? await editarCuestionario(idCuestionario!, payload)
         : await crearCuestionario(idCurso, payload);
@@ -127,6 +135,33 @@ export function CuestionarioModal({
   return (
     <Modal title={esEdicion ? "Editar Cuestionario" : "Crear Cuestionario"} onClose={onClose}>
       <div className="space-y-5">
+        {/* Tipo de cuestionario */}
+        {!esEdicion && (
+          <div className="flex rounded-lg border border-[var(--caritas-border)] overflow-hidden">
+            {(["INICIAL", "FINAL"] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => {
+                  setTipo(t);
+                  setTitulo(t === "INICIAL" ? "Evaluación Inicial" : "Evaluación Final");
+                }}
+                className={`flex-1 py-2 text-sm font-medium transition-colors ${
+                  tipo === t
+                    ? "bg-[var(--caritas-green)] text-white"
+                    : "bg-white text-gray-500 hover:bg-gray-50"
+                }`}
+              >
+                {t === "INICIAL" ? "🟡 Examen Inicial" : "🟢 Examen Final"}
+              </button>
+            ))}
+          </div>
+        )}
+        {esEdicion && (
+          <div className={`text-xs font-semibold px-3 py-1.5 rounded-full inline-block ${tipo === "INICIAL" ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700"}`}>
+            {tipo === "INICIAL" ? "🟡 Examen Inicial" : "🟢 Examen Final"}
+          </div>
+        )}
+
         {/* Info general */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="sm:col-span-2">

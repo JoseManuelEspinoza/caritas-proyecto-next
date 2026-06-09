@@ -22,7 +22,7 @@ import {
   editarCurso,
   cambiarEstadoCurso,
   crearSesion,
-  obtenerCuestionarioCurso,
+  obtenerCuestionarioPorId,
 } from "@/app/actions/capacitaciones";
 import type { CuestionarioDetalle } from "@/app/actions/capacitaciones";
 import type { CursoDetalle } from "@/app/actions/capacitaciones";
@@ -72,6 +72,7 @@ export function AdminCapacitaciones({
   const [showSesion, setShowSesion] = useState(false);
   const [showCuestionario, setShowCuestionario] = useState(false);
   const [cuestionarioEditar, setCuestionarioEditar] = useState<CuestionarioDetalle | null>(null);
+  const [tipoCuestionarioActivo, setTipoCuestionarioActivo] = useState<"INICIAL" | "FINAL">("FINAL");
 
   const [crearForm, setCrearForm] = useState({
     nombreCurso: "",
@@ -361,56 +362,76 @@ export function AdminCapacitaciones({
                 )}
               </div>
 
-              {/* Cuestionario */}
-              <div className="mb-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold text-[var(--caritas-text)]">
-                    Cuestionario Final
-                  </h3>
-                  {!current.cuestionario && (
+              {/* Cuestionarios */}
+              <div className="mb-4 space-y-3">
+                <h3 className="text-sm font-semibold text-[var(--caritas-text)]">Evaluaciones del Curso</h3>
+
+                {/* Examen Inicial */}
+                {current.cuestionarioInicial ? (
+                  <div className="flex items-center justify-between gap-3 border border-amber-200 rounded-lg p-3 bg-amber-50">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+                        <ClipboardList className="w-4 h-4 text-amber-600" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium text-[var(--caritas-text)]">{current.cuestionarioInicial.titulo}</p>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200 font-medium">INICIAL</span>
+                        </div>
+                        <p className="text-xs text-gray-400">{current.cuestionarioInicial.totalPreguntas} preguntas · Nota mín: {current.cuestionarioInicial.notaAprobatoria}/20</p>
+                      </div>
+                    </div>
                     <button
-                      onClick={() => setShowCuestionario(true)}
-                      className="flex items-center gap-1 text-xs text-[var(--caritas-green)] hover:underline"
+                      onClick={async () => {
+                        const detalle = await obtenerCuestionarioPorId(current.cuestionarioInicial!.id);
+                        if (detalle) { setCuestionarioEditar(detalle); setTipoCuestionarioActivo("INICIAL"); setShowCuestionario(true); }
+                      }}
+                      className="flex items-center gap-1 px-2.5 py-1 text-xs border border-[var(--caritas-border)] rounded-lg hover:bg-white transition-colors shrink-0"
                     >
-                      <Plus className="w-3.5 h-3.5" /> Crear cuestionario
+                      <Pencil className="w-3 h-3" /> Editar
                     </button>
-                  )}
-                </div>
-                {current.cuestionario ? (
-                  <div className="flex items-center justify-between gap-3 border border-[var(--caritas-border)] rounded-lg p-3 bg-gray-50">
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => { setTipoCuestionarioActivo("INICIAL"); setCuestionarioEditar(null); setShowCuestionario(true); }}
+                    className="w-full flex items-center gap-2 px-3 py-2.5 border border-dashed border-amber-300 rounded-lg text-sm text-amber-600 hover:bg-amber-50 transition-colors"
+                  >
+                    <Plus className="w-4 h-4" /> Crear examen inicial
+                  </button>
+                )}
+
+                {/* Examen Final */}
+                {current.cuestionarioFinal ? (
+                  <div className="flex items-center justify-between gap-3 border border-green-200 rounded-lg p-3 bg-green-50">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-lg bg-[var(--caritas-green)]/10 flex items-center justify-center shrink-0">
                         <ClipboardList className="w-4 h-4 text-[var(--caritas-green)]" />
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-[var(--caritas-text)]">
-                          {current.cuestionario.titulo}
-                        </p>
-                        <p className="text-xs text-gray-400">
-                          {current.cuestionario.totalPreguntas} preguntas · Nota mín:{" "}
-                          {current.cuestionario.notaAprobatoria}/20
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium text-[var(--caritas-text)]">{current.cuestionarioFinal.titulo}</p>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 border border-green-200 font-medium">FINAL</span>
+                        </div>
+                        <p className="text-xs text-gray-400">{current.cuestionarioFinal.totalPreguntas} preguntas · Nota mín: {current.cuestionarioFinal.notaAprobatoria}/20</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        onClick={async () => {
-                          const detalle = await obtenerCuestionarioCurso(current.id);
-                          if (detalle) { setCuestionarioEditar(detalle); setShowCuestionario(true); }
-                        }}
-                        className="flex items-center gap-1 px-2.5 py-1 text-xs border border-[var(--caritas-border)] rounded-lg hover:bg-white transition-colors"
-                      >
-                        <Pencil className="w-3 h-3" /> Editar
-                      </button>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200 font-medium">
-                        ACTIVO
-                      </span>
-                    </div>
+                    <button
+                      onClick={async () => {
+                        const detalle = await obtenerCuestionarioPorId(current.cuestionarioFinal!.id);
+                        if (detalle) { setCuestionarioEditar(detalle); setTipoCuestionarioActivo("FINAL"); setShowCuestionario(true); }
+                      }}
+                      className="flex items-center gap-1 px-2.5 py-1 text-xs border border-[var(--caritas-border)] rounded-lg hover:bg-white transition-colors shrink-0"
+                    >
+                      <Pencil className="w-3 h-3" /> Editar
+                    </button>
                   </div>
                 ) : (
-                  <p className="text-sm text-gray-400">
-                    Este curso no tiene cuestionario aún.
-                  </p>
+                  <button
+                    onClick={() => { setTipoCuestionarioActivo("FINAL"); setCuestionarioEditar(null); setShowCuestionario(true); }}
+                    className="w-full flex items-center gap-2 px-3 py-2.5 border border-dashed border-[var(--caritas-green)]/40 rounded-lg text-sm text-[var(--caritas-green)] hover:bg-[var(--caritas-green)]/5 transition-colors"
+                  >
+                    <Plus className="w-4 h-4" /> Crear examen final
+                  </button>
                 )}
               </div>
 
@@ -567,6 +588,7 @@ export function AdminCapacitaciones({
         <CuestionarioModal
           idCurso={current.id}
           idCuestionario={cuestionarioEditar?.id}
+          tipoPredefinido={tipoCuestionarioActivo}
           inicial={cuestionarioEditar ?? undefined}
           onClose={() => { setShowCuestionario(false); setCuestionarioEditar(null); }}
         />
