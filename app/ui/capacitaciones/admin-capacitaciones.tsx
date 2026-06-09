@@ -98,7 +98,102 @@ export function AdminCapacitaciones({
         router.refresh();
       }
     });
+  function validarCursoForm(form: {
+    nombreCurso: string;
+    descripcion?: string;
+    idResponsable: string;
+  }): string | null {
+    const nombre = form.nombreCurso.trim();
+    const descripcion = form.descripcion?.trim() ?? "";
 
+    if (!nombre) return "Ingresa el nombre del curso.";
+    if (nombre.length < 3) return "El nombre del curso debe tener al menos 3 caracteres.";
+
+    if (!form.idResponsable.trim()) return "Selecciona el responsable del curso.";
+
+    if (descripcion && descripcion.length < 5) {
+      return "La descripción del curso debe tener al menos 5 caracteres si se ingresa.";
+    }
+
+    return null;
+  }
+
+  function validarSesionTitulo(titulo: string): string | null {
+    const limpio = titulo.trim();
+
+    if (!limpio) return "Ingresa el título de la sesión.";
+    if (limpio.length < 3) return "El título de la sesión debe tener al menos 3 caracteres.";
+
+    return null;
+  }
+
+  function handleCrearCurso() {
+    const error = validarCursoForm(crearForm);
+    if (error) {
+      toast.error(error);
+      return;
+    }
+
+    run(
+      () =>
+        crearCurso({
+          nombreCurso: crearForm.nombreCurso.trim(),
+          descripcion: crearForm.descripcion.trim() || undefined,
+          idResponsable: crearForm.idResponsable,
+        }),
+      "Curso creado.",
+      () => {
+        setShowCrear(false);
+        setCrearForm({
+          nombreCurso: "",
+          descripcion: "",
+          idResponsable: especialistas[0]?.id ?? "",
+        });
+      }
+    );
+  }
+
+  function handleEditarCurso() {
+    if (!current) return;
+
+    const error = validarCursoForm(editarForm);
+    if (error) {
+      toast.error(error);
+      return;
+    }
+
+    run(
+      () =>
+        editarCurso(current.id, {
+          nombreCurso: editarForm.nombreCurso.trim(),
+          descripcion: editarForm.descripcion.trim() || undefined,
+          idResponsable: editarForm.idResponsable,
+        }),
+      "Curso actualizado.",
+      () => {
+        setShowEditar(false);
+      }
+    );
+  }
+
+  function handleCrearSesion() {
+    if (!current) return;
+
+    const error = validarSesionTitulo(sesionTitulo);
+    if (error) {
+      toast.error(error);
+      return;
+    }
+
+    run(
+      () => crearSesion(current.id, { tituloUnidad: sesionTitulo.trim() }),
+      "Sesión creada.",
+      () => {
+        setShowSesion(false);
+        setSesionTitulo("");
+      }
+    );
+  }
   const abrirEditar = () => {
     if (!current) return;
     const responsableValido = especialistas.some((e) => e.id === current.idResponsable);
@@ -386,22 +481,13 @@ export function AdminCapacitaciones({
                 Cancelar
               </button>
               <button
-                disabled={pending || !crearForm.nombreCurso.trim() || !crearForm.idResponsable}
-                onClick={() =>
-                  run(
-                    () =>
-                      crearCurso({
-                        nombreCurso: crearForm.nombreCurso,
-                        descripcion: crearForm.descripcion || undefined,
-                        idResponsable: crearForm.idResponsable,
-                      }),
-                    "Curso creado.",
-                    () => {
-                      setShowCrear(false);
-                      setCrearForm({ nombreCurso: "", descripcion: "", idResponsable: especialistas[0]?.id ?? "" });
-                    }
-                  )
+                disabled={
+                  pending ||
+                  crearForm.nombreCurso.trim().length < 3 ||
+                  !crearForm.idResponsable.trim() ||
+                  (!!crearForm.descripcion.trim() && crearForm.descripcion.trim().length < 5)
                 }
+                onClick={handleCrearCurso}
                 className="px-4 py-2 text-sm bg-[var(--caritas-green)] text-white rounded-lg disabled:opacity-50 hover:opacity-90 transition-opacity"
               >
                 Crear Curso
@@ -460,19 +546,13 @@ export function AdminCapacitaciones({
                 Cancelar
               </button>
               <button
-                disabled={pending || !editarForm.nombreCurso.trim() || !editarForm.idResponsable}
-                onClick={() =>
-                  run(
-                    () =>
-                      editarCurso(current.id, {
-                        nombreCurso: editarForm.nombreCurso,
-                        descripcion: editarForm.descripcion || undefined,
-                        idResponsable: editarForm.idResponsable,
-                      }),
-                    "Cambios guardados.",
-                    () => setShowEditar(false)
-                  )
+                disabled={
+                  pending ||
+                  editarForm.nombreCurso.trim().length < 3 ||
+                  !editarForm.idResponsable ||
+                  (!!editarForm.descripcion.trim() && editarForm.descripcion.trim().length < 5)
                 }
+                onClick={handleEditarCurso}
                 className="px-4 py-2 text-sm bg-[var(--caritas-green)] text-white rounded-lg disabled:opacity-50 hover:opacity-90 transition-opacity"
               >
                 Guardar Cambios
@@ -520,14 +600,8 @@ export function AdminCapacitaciones({
                 Cancelar
               </button>
               <button
-                disabled={pending || !sesionTitulo.trim()}
-                onClick={() =>
-                  run(
-                    () => crearSesion(current.id, { tituloUnidad: sesionTitulo }),
-                    "Sesión creada.",
-                    () => { setShowSesion(false); setSesionTitulo(""); }
-                  )
-                }
+                disabled={pending || sesionTitulo.trim().length < 3}
+                onClick={handleCrearSesion}
                 className="px-4 py-2 text-sm bg-[var(--caritas-green)] text-white rounded-lg disabled:opacity-50 hover:opacity-90 transition-opacity"
               >
                 Agregar Sesión

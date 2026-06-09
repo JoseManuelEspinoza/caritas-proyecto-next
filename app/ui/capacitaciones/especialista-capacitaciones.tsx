@@ -180,7 +180,90 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
         router.refresh();
       }
     });
+  function validarSesionTitulo(titulo: string): string | null {
+    const limpio = titulo.trim();
 
+    if (!limpio) return "Ingresa el título de la sesión.";
+    if (limpio.length < 3) return "El título de la sesión debe tener al menos 3 caracteres.";
+
+    return null;
+  }
+
+  function validarUrlOpcional(value: string): string | null {
+    const limpio = value.trim();
+    if (!limpio) return null;
+
+    try {
+      const url = new URL(limpio);
+      if (!["http:", "https:"].includes(url.protocol)) {
+        return "El enlace del material debe iniciar con http:// o https://.";
+      }
+      return null;
+    } catch {
+      return "El enlace del material no tiene un formato válido.";
+    }
+  }
+
+  function validarMaterialForm(): string | null {
+    const titulo = materialForm.titulo.trim();
+    const tipo = materialForm.tipoMaterial.trim();
+
+    if (!titulo) return "Ingresa el título del material.";
+    if (titulo.length < 3) return "El título del material debe tener al menos 3 caracteres.";
+
+    if (!tipo) return "Selecciona el tipo de material.";
+    if (!TIPOS_MATERIAL.includes(tipo)) return "Selecciona un tipo de material válido.";
+
+    const errorUrl = validarUrlOpcional(materialForm.enlaceMaterial);
+    if (errorUrl) return errorUrl;
+
+    return null;
+  }
+
+  function handleCrearSesion(idCurso: string) {
+    const error = validarSesionTitulo(sesionTitulo);
+    if (error) {
+      toast.error(error);
+      return;
+    }
+
+    run(
+      () => crearSesion(idCurso, { tituloUnidad: sesionTitulo.trim() }),
+      "Sesión creada.",
+      () => {
+        setShowSesion(false);
+        setSesionTitulo("");
+      }
+    );
+  }
+
+  function handleAgregarMaterial() {
+    if (!materialModal) return;
+
+    const error = validarMaterialForm();
+    if (error) {
+      toast.error(error);
+      return;
+    }
+
+    run(
+      () =>
+        agregarMaterial(materialModal.idCurso, materialModal.idSesion, {
+          titulo: materialForm.titulo.trim(),
+          tipoMaterial: materialForm.tipoMaterial.trim(),
+          enlaceMaterial: materialForm.enlaceMaterial.trim(),
+        }),
+      "Material agregado.",
+      () => {
+        setMaterialModal(null);
+        setMaterialForm({
+          titulo: "",
+          tipoMaterial: TIPOS_MATERIAL[0],
+          enlaceMaterial: "",
+        });
+      }
+    );
+  }
   const cursosFiltrados = useMemo(() => {
     return cursos.filter((c) => {
       const coincideBusqueda =
@@ -408,14 +491,8 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
                   Cancelar
                 </button>
                 <button
-                  disabled={pending || !sesionTitulo.trim()}
-                  onClick={() =>
-                    run(
-                      () => crearSesion(curso.id, { tituloUnidad: sesionTitulo }),
-                      "Sesión creada.",
-                      () => { setShowSesion(false); setSesionTitulo(""); }
-                    )
-                  }
+                  disabled={pending || sesionTitulo.trim().length < 3}
+                  onClick={() => handleCrearSesion(curso.id)}
                   className="px-4 py-2 text-sm bg-[var(--caritas-green)] text-white rounded-lg disabled:opacity-50"
                 >
                   Crear Unidad
@@ -474,14 +551,12 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
                   Cancelar
                 </button>
                 <button
-                  disabled={pending || !materialForm.titulo.trim()}
-                  onClick={() =>
-                    run(
-                      () => agregarMaterial(materialModal.idCurso, materialModal.idSesion, materialForm),
-                      "Material agregado.",
-                      () => setMaterialModal(null)
-                    )
+                  disabled={
+                    pending ||
+                    materialForm.titulo.trim().length < 3 ||
+                    !materialForm.tipoMaterial.trim()
                   }
+                  onClick={handleAgregarMaterial}
                   className="flex items-center gap-2 px-4 py-2 text-sm bg-[var(--caritas-green)] text-white rounded-lg disabled:opacity-50"
                 >
                   <Upload className="w-3.5 h-3.5" /> Agregar

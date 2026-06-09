@@ -38,9 +38,96 @@ async function cargar(repo: ICursoRepository, id: string): Promise<Curso> {
   return c;
 }
 
+const TIPOS_EVALUACION_VALIDOS = ["INICIAL", "FINAL", "UNICO"];
+
+function texto(value?: string | null): string {
+  return value?.trim() ?? "";
+}
+
+function validarTextoMinimo(
+  value: string | undefined | null,
+  campo: string,
+  min: number,
+  obligatorio = true
+): void {
+  const limpio = texto(value);
+
+  if (!limpio && obligatorio) {
+    throw new ValidationError(`${campo} es obligatorio.`);
+  }
+
+  if (limpio && limpio.length < min) {
+    throw new ValidationError(`${campo} debe tener al menos ${min} caracteres.`);
+  }
+}
+
+function validarEnteroPositivo(value: number | undefined | null, campo: string): void {
+  if (value == null) return;
+
+  if (!Number.isFinite(value)) {
+    throw new ValidationError(`${campo} debe ser un número válido.`);
+  }
+
+  if (!Number.isInteger(value)) {
+    throw new ValidationError(`${campo} debe ser un número entero.`);
+  }
+
+  if (value <= 0) {
+    throw new ValidationError(`${campo} debe ser mayor que cero.`);
+  }
+}
+
+function validarCursoInput(input: {
+  idUsuarioResponsableGRD: string;
+  nombreCurso: string;
+  descripcion?: string;
+  idInstitucionAliada?: string;
+  duracionEstimadaHoras?: number;
+}): void {
+  if (!texto(input.idUsuarioResponsableGRD)) {
+    throw new ValidationError("Selecciona el responsable del curso.");
+  }
+
+  validarTextoMinimo(input.nombreCurso, "El nombre del curso", 3);
+
+  validarTextoMinimo(input.descripcion, "La descripción del curso", 5, false);
+
+  validarEnteroPositivo(input.duracionEstimadaHoras, "La duración estimada");
+}
+
+function validarEvaluacionInput(
+  idInscripcion: string,
+  nota: number,
+  opts?: { tipoEvaluacion?: string; numeroIntento?: number }
+): void {
+  if (!texto(idInscripcion)) {
+    throw new ValidationError("No se encontró la inscripción.");
+  }
+
+  if (!Number.isFinite(nota)) {
+    throw new ValidationError("La nota debe ser un número válido.");
+  }
+
+  if (nota < 0 || nota > 20) {
+    throw new ValidationError("La nota debe estar entre 0 y 20.");
+  }
+
+  if (opts?.numeroIntento != null) {
+    if (!Number.isInteger(opts.numeroIntento) || opts.numeroIntento <= 0) {
+      throw new ValidationError("El número de intento debe ser un entero positivo.");
+    }
+  }
+  const tipoEvaluacion = texto(opts?.tipoEvaluacion);
+
+  if (tipoEvaluacion && !TIPOS_EVALUACION_VALIDOS.includes(tipoEvaluacion)) {
+    throw new ValidationError("Selecciona un tipo de evaluación válido.");
+  }
+}
+
 /** Crea un curso de capacitación (código CAP-YYYY-NNNN, estado BORRADOR). */
 export class CrearCursoUseCase {
   constructor(private readonly repo: ICursoRepository) {}
+
   async execute(input: {
     idUsuarioResponsableGRD: string;
     nombreCurso: string;
@@ -48,8 +135,19 @@ export class CrearCursoUseCase {
     idInstitucionAliada?: string;
     duracionEstimadaHoras?: number;
   }): Promise<CursoOutput> {
+    validarCursoInput(input);
+
     const codigoCurso = await this.repo.nextCodigo();
-    const curso = Curso.crear({ id: randomUUID(), codigoCurso, ...input });
+    const curso = Curso.crear({
+      id: randomUUID(),
+      codigoCurso,
+      ...input,
+      idUsuarioResponsableGRD: input.idUsuarioResponsableGRD.trim(),
+      nombreCurso: input.nombreCurso.trim(),
+      descripcion: texto(input.descripcion) || undefined,
+      idInstitucionAliada: texto(input.idInstitucionAliada) || undefined,
+    });
+
     await this.repo.crearCurso(curso);
     return toOutput(curso);
   }
@@ -105,21 +203,27 @@ export class InscribirParticipanteUseCase {
 /** Registra una evaluación; el resultado (APROBADO/DESAPROBADO) se deriva de la nota. */
 export class RegistrarEvaluacionUseCase {
   constructor(private readonly repo: ICursoRepository) {}
+
   async execute(
     idInscripcion: string,
     nota: number,
     opts?: { tipoEvaluacion?: string; numeroIntento?: number }
   ): Promise<{ resultado: string }> {
-    if (nota < 0 || nota > 20) throw new ValidationError("La nota debe estar entre 0 y 20.");
-    if (!(await this.repo.existsInscripcionId(idInscripcion)))
+    validarEvaluacionInput(idInscripcion, nota, opts);
+
+    if (!(await this.repo.existsInscripcionId(idInscripcion))) {
       throw new NotFoundError("Inscripción no encontrada.");
+    }
+
     const resultado = resultadoPorNota(nota);
+
     await this.repo.crearEvaluacion(idInscripcion, {
-      tipoEvaluacion: opts?.tipoEvaluacion,
+      tipoEvaluacion: texto(opts?.tipoEvaluacion) || undefined,
       numeroIntento: opts?.numeroIntento ?? 1,
       nota,
       resultado,
     });
+
     return { resultado };
   }
 }
