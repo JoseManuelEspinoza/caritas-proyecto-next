@@ -4,4 +4,6 @@
 services:
   db:
     ports:
-      - "5433:5433"
+      - "5433:5432"
+  web:
+    command: sh -c "npm install && npm install lightningcss-linux-arm64-gnu @tailwindcss/oxide-linux-arm64-gnu --no-save 2>/dev/null || true && ln -sf /app/node_modules/lightningcss-linux-arm64-gnu/lightningcss.linux-arm64-gnu.node /app/node_modules/lightningcss/lightningcss.linux-arm64-gnu.node 2>/dev/null || true && ln -sf /app/node_modules/@tailwindcss/oxide-linux-arm64-gnu/tailwindcss-oxide.linux-arm64-gnu.node /app/node_modules/@tailwindcss/oxide/tailwindcss-oxide.linux-arm64-gnu.node 2>/dev/null || true && npx prisma generate && npm run dev"

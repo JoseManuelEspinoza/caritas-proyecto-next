@@ -11,7 +11,6 @@ import {
   Plus,
   Link as LinkIcon,
   X,
-  Upload,
   Search,
   ArrowLeft,
   Users,
@@ -22,11 +21,15 @@ import {
   Clock,
   Archive,
   ClipboardList,
+  Pencil,
+  Trash2,
+  MoreVertical,
 } from "lucide-react";
 import { toast } from "sonner";
-import { cambiarEstadoCurso, crearSesion, agregarMaterial, obtenerCuestionarioCurso } from "@/app/actions/capacitaciones";
-import type { CuestionarioDetalle } from "@/app/actions/capacitaciones";
+import { cambiarEstadoCurso, crearSesion, agregarMaterial, editarSesion, eliminarSesion, editarMaterial, eliminarMaterial, moverMaterial, obtenerCuestionarioCurso, listarParticipantesCurso, actualizarConstancia } from "@/app/actions/capacitaciones";
+import type { CuestionarioDetalle, ParticipanteCurso } from "@/app/actions/capacitaciones";
 import { CuestionarioModal } from "@/app/ui/capacitaciones/cuestionario-modal";
+import { MaterialModal } from "@/app/ui/capacitaciones/MaterialModal";
 import type { CursoDetalle } from "@/app/actions/capacitaciones";
 
 const TIPOS_MATERIAL = [
@@ -81,70 +84,141 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 
 function SesionCard({
   sesion,
+  todasLasSesiones,
   onAgregarMaterial,
+  onEditarMaterial,
+  onRefresh,
 }: {
   sesion: CursoDetalle["sesiones"][number];
+  todasLasSesiones: CursoDetalle["sesiones"];
   onAgregarMaterial: (idSesion: string) => void;
+  onEditarMaterial: (m: { id: string; titulo: string; tipoMaterial: string; enlaceMaterial: string }) => void;
+  onRefresh: () => void;
 }) {
   const [expandida, setExpandida] = useState(true);
+  const [editandoUnidad, setEditandoUnidad] = useState(false);
+  const [tituloUnidad, setTituloUnidad] = useState(sesion.tituloUnidad);
+  const [menuAbierto, setMenuAbierto] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const guardarTituloUnidad = () => {
+    if (!tituloUnidad.trim()) return;
+    startTransition(async () => {
+      await editarSesion(sesion.id, { tituloUnidad });
+      setEditandoUnidad(false);
+      onRefresh();
+    });
+  };
+
+  const handleEliminarUnidad = () => {
+    if (!confirm(`¿Eliminar la unidad "${sesion.tituloUnidad}" y todos sus materiales?`)) return;
+    startTransition(async () => {
+      await eliminarSesion(sesion.id);
+      onRefresh();
+    });
+  };
+
+  const handleEliminarMaterial = (idMaterial: string, titulo: string) => {
+    if (!confirm(`¿Eliminar el material "${titulo}"?`)) return;
+    startTransition(async () => {
+      await eliminarMaterial(idMaterial);
+      onRefresh();
+    });
+  };
 
   return (
-    <div className="border border-[var(--caritas-border)] rounded-xl overflow-hidden">
-      <button
-        onClick={() => setExpandida(!expandida)}
-        className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
-      >
-        <div className="flex items-center gap-3">
-          <span className="w-7 h-7 rounded-full bg-[var(--caritas-green)]/10 text-[var(--caritas-green)] text-xs font-bold flex items-center justify-center shrink-0">
-            {sesion.numeroOrden}
-          </span>
-          <span className="text-sm font-semibold text-[var(--caritas-text)]">{sesion.tituloUnidad}</span>
-          <span className="text-xs text-gray-400 bg-white border border-[var(--caritas-border)] px-2 py-0.5 rounded-full">
-            {sesion.materiales.length} material{sesion.materiales.length !== 1 ? "es" : ""}
-          </span>
-        </div>
-        {expandida ? (
-          <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
+    <div className="border border-[var(--caritas-border)] rounded-lg">
+      {/* Header */}
+      <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-l-4 border-[var(--caritas-green)]">
+        <button onClick={() => setExpandida(!expandida)} className="shrink-0">
+          <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${expandida ? "" : "-rotate-90"}`} />
+        </button>
+        {editandoUnidad ? (
+          <input
+            value={tituloUnidad}
+            onChange={(e) => setTituloUnidad(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") guardarTituloUnidad(); if (e.key === "Escape") { setEditandoUnidad(false); setTituloUnidad(sesion.tituloUnidad); } }}
+            className="flex-1 text-sm font-semibold px-2 py-0.5 border border-[var(--caritas-green)] rounded focus:outline-none"
+            autoFocus
+          />
         ) : (
-          <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />
+          <span className="text-sm font-semibold text-[var(--caritas-text)] flex-1 truncate">{sesion.tituloUnidad}</span>
         )}
-      </button>
+        <span className="text-xs text-gray-400 bg-white border border-[var(--caritas-border)] px-2 py-0.5 rounded-full shrink-0">
+          {sesion.materiales.length} material{sesion.materiales.length !== 1 ? "es" : ""}
+        </span>
+        {editandoUnidad ? (
+          <>
+            <button onClick={guardarTituloUnidad} disabled={pending} className="text-xs text-[var(--caritas-green)] font-medium hover:underline shrink-0">Guardar</button>
+            <button onClick={() => { setEditandoUnidad(false); setTituloUnidad(sesion.tituloUnidad); }} className="text-xs text-gray-400 hover:text-gray-600 shrink-0">Cancelar</button>
+          </>
+        ) : (
+          <div className="flex items-center gap-1 shrink-0">
+            <button onClick={() => setEditandoUnidad(true)} className="p-1 text-gray-400 hover:text-[var(--caritas-green)] rounded transition-colors">
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+            <button onClick={handleEliminarUnidad} disabled={pending} className="p-1 text-gray-400 hover:text-red-500 rounded transition-colors">
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+      </div>
 
       {expandida && (
-        <div className="px-4 py-3 space-y-2">
+        <div className="divide-y divide-gray-100">
           {sesion.materiales.length === 0 ? (
-            <p className="text-xs text-gray-400 py-1">Sin materiales en esta sesión.</p>
+            <p className="text-xs text-gray-400 px-4 py-3 pl-11">Sin materiales en esta unidad.</p>
           ) : (
             sesion.materiales.map((m) => (
-              <div
-                key={m.id}
-                className="flex items-center gap-3 p-2.5 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors"
-              >
+              <div key={m.id} className="relative flex items-center gap-3 px-4 py-2.5 pl-11 bg-white hover:bg-gray-50 transition-colors border-l-4 border-[var(--caritas-green)]/20">
                 <FileText className="w-4 h-4 text-[var(--caritas-green)] shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-[var(--caritas-text)] truncate">{m.titulo}</p>
-                  {m.tipoMaterial && (
-                    <p className="text-[11px] text-gray-400">{m.tipoMaterial}</p>
-                  )}
+                  <p className="text-sm text-[var(--caritas-text)] truncate">{m.titulo}</p>
+                  {m.tipoMaterial && <p className="text-[11px] text-gray-400">{m.tipoMaterial}</p>}
                 </div>
-                {m.enlaceMaterial && (
-                  <a
-                    href={m.enlaceMaterial}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-[var(--caritas-green)] hover:underline shrink-0 flex items-center gap-1"
-                  >
-                    <LinkIcon className="w-3 h-3" /> Ver
-                  </a>
-                )}
+                <div className="flex items-center gap-2 shrink-0">
+                  {m.enlaceMaterial && (
+                    <a href={m.enlaceMaterial} target="_blank" rel="noopener noreferrer"
+                      className="text-xs text-[var(--caritas-green)] hover:underline flex items-center gap-1">
+                      <LinkIcon className="w-3 h-3" /> Ver
+                    </a>
+                  )}
+                  {/* Menú ⋮ */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setMenuAbierto(menuAbierto === m.id ? null : m.id)}
+                      className="p-1 text-gray-400 hover:text-gray-600 rounded transition-colors"
+                    >
+                      <MoreVertical className="w-3.5 h-3.5" />
+                    </button>
+                    {menuAbierto === m.id && (
+                      <div className="absolute right-0 bottom-full mb-1 bg-white border border-[var(--caritas-border)] rounded-xl shadow-xl z-30 w-56 overflow-hidden">
+                        {/* Editar */}
+                        <button
+                          onClick={() => { setMenuAbierto(null); onEditarMaterial({ id: m.id, titulo: m.titulo, tipoMaterial: m.tipoMaterial ?? TIPOS_MATERIAL[0], enlaceMaterial: m.enlaceMaterial ?? "" }); }}
+                          className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                          <Pencil className="w-3.5 h-3.5 text-gray-400" /> Editar
+                        </button>
+                        <div className="border-t border-gray-100 mx-2" />
+                        <button
+                          onClick={() => { setMenuAbierto(null); handleEliminarMaterial(m.id, m.titulo); }}
+                          className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" /> Eliminar
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             ))
           )}
           <button
             onClick={() => onAgregarMaterial(sesion.id)}
-            className="flex items-center gap-1.5 text-xs text-[var(--caritas-green)] border border-dashed border-[var(--caritas-green)]/40 rounded-lg px-3 py-2 w-full justify-center hover:bg-[var(--caritas-green)]/5 transition-colors mt-1"
+            className="flex items-center gap-1.5 text-xs text-[var(--caritas-green)] px-4 py-2.5 pl-11 w-full hover:bg-gray-50 transition-colors"
           >
-            <Plus className="w-3.5 h-3.5" /> Agregar Material
+            <Plus className="w-3.5 h-3.5" /> Agregar material
           </button>
         </div>
       )}
@@ -163,11 +237,11 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
   const [showCuestionario, setShowCuestionario] = useState(false);
   const [cuestionarioEditar, setCuestionarioEditar] = useState<CuestionarioDetalle | null>(null);
   const [materialModal, setMaterialModal] = useState<{ idSesion: string; idCurso: string } | null>(null);
-  const [materialForm, setMaterialForm] = useState({
-    titulo: "",
-    tipoMaterial: TIPOS_MATERIAL[0],
-    enlaceMaterial: "",
-  });
+  const [editarMaterialModal, setEditarMaterialModal] = useState<{ id: string; titulo: string; tipoMaterial: string; enlaceMaterial: string } | null>(null);
+  const [participantes, setParticipantes] = useState<ParticipanteCurso[]>([]);
+  const [loadingParticipantes, setLoadingParticipantes] = useState(false);
+  const [showParticipantes, setShowParticipantes] = useState(false);
+  const [constanciaInput, setConstanciaInput] = useState<Record<string, string>>({});
 
   const run = (fn: () => Promise<{ message?: string } | void>, ok: string, after?: () => void) =>
     startTransition(async () => {
@@ -181,15 +255,19 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
       }
     });
 
+  const ORDEN_ESTADO: Record<string, number> = { PUBLICADO: 0, BORRADOR: 1, CERRADO: 2 };
+
   const cursosFiltrados = useMemo(() => {
-    return cursos.filter((c) => {
-      const coincideBusqueda =
-        busqueda === "" ||
-        c.nombreCurso.toLowerCase().includes(busqueda.toLowerCase()) ||
-        (c.codigoCurso ?? "").toLowerCase().includes(busqueda.toLowerCase());
-      const coincideFiltro = filtro === "todos" || c.estadoCurso === filtro;
-      return coincideBusqueda && coincideFiltro;
-    });
+    return cursos
+      .filter((c) => {
+        const coincideBusqueda =
+          busqueda === "" ||
+          c.nombreCurso.toLowerCase().includes(busqueda.toLowerCase()) ||
+          (c.codigoCurso ?? "").toLowerCase().includes(busqueda.toLowerCase());
+        const coincideFiltro = filtro === "todos" || c.estadoCurso === filtro;
+        return coincideBusqueda && coincideFiltro;
+      })
+      .sort((a, b) => (ORDEN_ESTADO[a.estadoCurso] ?? 99) - (ORDEN_ESTADO[b.estadoCurso] ?? 99));
   }, [cursos, busqueda, filtro]);
 
   const stats = useMemo(() => ({
@@ -205,7 +283,7 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
     const estadoConf = ESTADO_CONFIG[curso.estadoCurso] ?? ESTADO_CONFIG.BORRADOR;
 
     return (
-      <div className="p-4 md:p-6 max-w-4xl mx-auto">
+      <div className="p-4 md:p-6 max-w-7xl mx-auto">
         {/* Back + header */}
         <div className="flex items-center gap-3 mb-6">
           <button
@@ -307,10 +385,12 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
               <SesionCard
                 key={s.id}
                 sesion={s}
+                todasLasSesiones={curso.sesiones}
                 onAgregarMaterial={(idSesion) => {
-                  setMaterialForm({ titulo: "", tipoMaterial: TIPOS_MATERIAL[0], enlaceMaterial: "" });
                   setMaterialModal({ idSesion, idCurso: curso.id });
                 }}
+                onEditarMaterial={(m) => setEditarMaterialModal(m)}
+                onRefresh={() => router.refresh()}
               />
             ))}
           </div>
@@ -373,6 +453,121 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
           )}
         </div>
 
+        {/* Participantes */}
+        <div className="mt-6">
+          <button
+            onClick={async () => {
+              if (!showParticipantes) {
+                setLoadingParticipantes(true);
+                const data = await listarParticipantesCurso(curso.id);
+                setParticipantes(data);
+                setLoadingParticipantes(false);
+              }
+              setShowParticipantes((s) => !s);
+            }}
+            className="flex items-center gap-2 w-full px-4 py-3 bg-gray-50 hover:bg-gray-100 border border-[var(--caritas-border)] rounded-xl transition-colors text-left"
+          >
+            <Users className="w-4 h-4 text-gray-400" />
+            <span className="text-sm font-semibold text-[var(--caritas-text)] flex-1">
+              Participantes inscritos
+              <span className="ml-2 text-xs font-normal text-gray-400">({curso.totalInscritos})</span>
+            </span>
+            <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showParticipantes ? "" : "-rotate-90"}`} />
+          </button>
+
+          {showParticipantes && (
+            <div className="mt-2 border border-[var(--caritas-border)] rounded-xl overflow-hidden">
+              {loadingParticipantes ? (
+                <p className="text-sm text-gray-400 p-4 text-center">Cargando...</p>
+              ) : participantes.length === 0 ? (
+                <p className="text-sm text-gray-400 p-4 text-center">Sin participantes inscritos.</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-[var(--caritas-border)]">
+                      <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500">Participante</th>
+                      <th className="text-center px-3 py-2.5 text-xs font-semibold text-gray-500">Nota</th>
+                      <th className="text-center px-3 py-2.5 text-xs font-semibold text-gray-500">Estado</th>
+                      <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500">Constancia</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {participantes.map((p) => (
+                      <tr key={p.idInscripcion} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-4 py-3">
+                          <p className="font-medium text-[var(--caritas-text)]">{p.nombre}</p>
+                          {p.documento && <p className="text-xs text-gray-400">{p.documento}</p>}
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          <span className={`text-sm font-bold ${p.resultado === "APROBADO" ? "text-green-700" : p.nota != null ? "text-red-500" : "text-gray-400"}`}>
+                            {p.nota != null ? `${p.nota.toFixed(1)}/20` : "—"}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          {p.certificado ? (
+                            <span className="inline-flex items-center gap-1 text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-full font-medium">
+                              <CheckCircle2 className="w-3 h-3" /> Certificado
+                            </span>
+                          ) : p.resultado === "APROBADO" ? (
+                            <span className="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full">
+                              Aprobado
+                            </span>
+                          ) : p.nota != null ? (
+                            <span className="inline-flex items-center gap-1 text-xs bg-red-50 text-red-600 border border-red-200 px-2 py-0.5 rounded-full">
+                              Desaprobado
+                            </span>
+                          ) : (
+                            <span className="text-xs text-gray-400">Sin evaluar</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          {p.certificado ? (
+                            <div className="flex items-center gap-2">
+                              {p.constanciaUrl ? (
+                                <a href={p.constanciaUrl} target="_blank" rel="noopener noreferrer"
+                                  className="text-xs text-[var(--caritas-green)] hover:underline flex items-center gap-1">
+                                  <LinkIcon className="w-3 h-3" /> Ver constancia
+                                </a>
+                              ) : (
+                                <div className="flex items-center gap-1.5">
+                                  <input
+                                    value={constanciaInput[p.idInscripcion] ?? ""}
+                                    onChange={(e) => setConstanciaInput((s) => ({ ...s, [p.idInscripcion]: e.target.value }))}
+                                    placeholder="URL del PDF..."
+                                    className="text-xs px-2 py-1 border border-[var(--caritas-border)] rounded w-40 focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]"
+                                  />
+                                  <button
+                                    disabled={!constanciaInput[p.idInscripcion]?.trim() || pending}
+                                    onClick={() => startTransition(async () => {
+                                      const res = await actualizarConstancia(p.idInscripcion, constanciaInput[p.idInscripcion] ?? "");
+                                      if (res?.message) toast.error(res.message);
+                                      else {
+                                        toast.success("Constancia guardada.");
+                                        const data = await listarParticipantesCurso(curso.id);
+                                        setParticipantes(data);
+                                        setConstanciaInput((s) => { const n = { ...s }; delete n[p.idInscripcion]; return n; });
+                                      }
+                                    })}
+                                    className="text-xs px-2 py-1 bg-[var(--caritas-green)] text-white rounded disabled:opacity-40"
+                                  >
+                                    Guardar
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-gray-300">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Modal: Crear / Editar cuestionario */}
         {showCuestionario && (
           <CuestionarioModal
@@ -412,7 +607,7 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
                   onClick={() =>
                     run(
                       () => crearSesion(curso.id, { tituloUnidad: sesionTitulo }),
-                      "Sesión creada.",
+                      "Unidad creada.",
                       () => { setShowSesion(false); setSesionTitulo(""); }
                     )
                   }
@@ -427,68 +622,34 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
 
         {/* Modal: Agregar material */}
         {materialModal && (
-          <Modal title="Agregar Material" onClose={() => setMaterialModal(null)}>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Tipo de material *</label>
-                <select
-                  value={materialForm.tipoMaterial}
-                  onChange={(e) => setMaterialForm({ ...materialForm, tipoMaterial: e.target.value })}
-                  className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]"
-                >
-                  {TIPOS_MATERIAL.map((t) => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Título *</label>
-                <input
-                  value={materialForm.titulo}
-                  onChange={(e) => setMaterialForm({ ...materialForm, titulo: e.target.value })}
-                  placeholder="Ej. Presentación - Introducción GRD"
-                  className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]"
-                  autoFocus
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Enlace al material</label>
-                <div className="relative">
-                  <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-                  <input
-                    value={materialForm.enlaceMaterial}
-                    onChange={(e) => setMaterialForm({ ...materialForm, enlaceMaterial: e.target.value })}
-                    placeholder="https://drive.google.com/..."
-                    className="w-full pl-8 pr-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]"
-                  />
-                </div>
-                <p className="text-[11px] text-gray-400 mt-1">Google Drive, Dropbox u otro enlace externo.</p>
-              </div>
-              <div className="flex items-center gap-3 p-3 border border-dashed border-gray-300 rounded-lg bg-gray-50">
-                <Upload className="w-5 h-5 text-gray-400 shrink-0" />
-                <p className="text-xs text-gray-500">Subida directa de archivos disponible próximamente.</p>
-              </div>
-              <div className="flex justify-end gap-2 pt-1">
-                <button
-                  onClick={() => setMaterialModal(null)}
-                  className="px-4 py-2 text-sm border border-[var(--caritas-border)] rounded-lg hover:bg-gray-50"
-                >
-                  Cancelar
-                </button>
-                <button
-                  disabled={pending || !materialForm.titulo.trim()}
-                  onClick={() =>
-                    run(
-                      () => agregarMaterial(materialModal.idCurso, materialModal.idSesion, materialForm),
-                      "Material agregado.",
-                      () => setMaterialModal(null)
-                    )
-                  }
-                  className="flex items-center gap-2 px-4 py-2 text-sm bg-[var(--caritas-green)] text-white rounded-lg disabled:opacity-50"
-                >
-                  <Upload className="w-3.5 h-3.5" /> Agregar
-                </button>
-              </div>
-            </div>
-          </Modal>
+          <MaterialModal
+            onClose={() => setMaterialModal(null)}
+            loading={pending}
+            onConfirm={async (data) => {
+              run(
+                () => agregarMaterial(materialModal.idCurso, materialModal.idSesion, data),
+                "Material agregado.",
+                () => setMaterialModal(null)
+              );
+            }}
+          />
+        )}
+
+        {/* Modal: Editar material */}
+        {editarMaterialModal && (
+          <MaterialModal
+            title="Editar Material"
+            inicial={editarMaterialModal}
+            onClose={() => setEditarMaterialModal(null)}
+            loading={pending}
+            onConfirm={async (data) => {
+              run(
+                () => editarMaterial(editarMaterialModal.id, data),
+                "Material actualizado.",
+                () => setEditarMaterialModal(null)
+              );
+            }}
+          />
         )}
       </div>
     );
@@ -560,11 +721,21 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
               {cursosFiltrados.map((c) => {
                 const conf = ESTADO_CONFIG[c.estadoCurso] ?? ESTADO_CONFIG.BORRADOR;
+                const esPublicado = c.estadoCurso === "PUBLICADO";
+                const esBorrador = c.estadoCurso === "BORRADOR";
+                const esCerrado = c.estadoCurso === "CERRADO";
+
+                const cardStyle = esPublicado
+                  ? "bg-white border-[var(--caritas-border)] hover:border-[var(--caritas-green)]/50 hover:shadow-md"
+                  : esBorrador
+                  ? "bg-amber-50/60 border-amber-200 border-dashed opacity-80 hover:opacity-100"
+                  : "bg-gray-50 border-gray-200 opacity-50 hover:opacity-70";
+
                 return (
                   <button
                     key={c.id}
                     onClick={() => setDetalle(c)}
-                    className="text-left bg-white border border-[var(--caritas-border)] rounded-xl p-5 hover:border-[var(--caritas-green)]/50 hover:shadow-md transition-all group"
+                    className={`text-left border rounded-xl p-5 transition-all group ${cardStyle}`}
                   >
                     {/* Top row */}
                     <div className="flex items-center justify-between gap-2 mb-3">
@@ -575,17 +746,21 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
                     </div>
 
                     {/* Title */}
-                    <h3 className="text-sm font-semibold text-[var(--caritas-text)] line-clamp-2 mb-3 group-hover:text-[var(--caritas-green)] transition-colors">
+                    <h3 className={`text-sm font-semibold line-clamp-2 mb-3 transition-colors ${
+                      esPublicado
+                        ? "text-[var(--caritas-text)] group-hover:text-[var(--caritas-green)]"
+                        : "text-gray-500"
+                    }`}>
                       {c.nombreCurso}
                     </h3>
 
                     {/* Description */}
                     {c.descripcion && (
-                      <p className="text-xs text-gray-500 line-clamp-2 mb-3">{c.descripcion}</p>
+                      <p className="text-xs text-gray-400 line-clamp-2 mb-3">{c.descripcion}</p>
                     )}
 
                     {/* Footer */}
-                    <div className="flex items-center justify-between pt-3 border-t border-[var(--caritas-border)] mt-auto">
+                    <div className="flex items-center justify-between pt-3 border-t border-gray-200 mt-auto">
                       <div className="flex gap-3 text-xs text-gray-400">
                         <span className="flex items-center gap-1">
                           <BookOpen className="w-3 h-3" /> {c.sesiones.length} unidades
@@ -594,10 +769,13 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
                           <Users className="w-3 h-3" /> {c.totalInscritos}
                         </span>
                       </div>
-                      {c.estadoCurso === "BORRADOR" && (
-                        <span className="text-[10px] text-amber-600 font-medium">Pendiente de publicar</span>
+                      {esBorrador && (
+                        <span className="text-[10px] text-amber-600 font-medium">No visible para brigadistas</span>
                       )}
-                      {c.fechaCierre && c.estadoCurso === "PUBLICADO" && (
+                      {esCerrado && (
+                        <span className="text-[10px] text-gray-400 font-medium">Cerrado</span>
+                      )}
+                      {esPublicado && c.fechaCierre && (
                         <span className="text-[10px] text-gray-400 flex items-center gap-1">
                           <Calendar className="w-3 h-3" /> Cierra {fmtDate(c.fechaCierre)}
                         </span>
