@@ -135,32 +135,10 @@ export function CuestionarioModal({
   return (
     <Modal title={esEdicion ? "Editar Cuestionario" : "Crear Cuestionario"} onClose={onClose}>
       <div className="space-y-5">
-        {/* Tipo de cuestionario */}
-        {!esEdicion && (
-          <div className="flex rounded-lg border border-[var(--caritas-border)] overflow-hidden">
-            {(["INICIAL", "FINAL"] as const).map((t) => (
-              <button
-                key={t}
-                onClick={() => {
-                  setTipo(t);
-                  setTitulo(t === "INICIAL" ? "Evaluación Inicial" : "Evaluación Final");
-                }}
-                className={`flex-1 py-2 text-sm font-medium transition-colors ${
-                  tipo === t
-                    ? "bg-[var(--caritas-green)] text-white"
-                    : "bg-white text-gray-500 hover:bg-gray-50"
-                }`}
-              >
-                {t === "INICIAL" ? "🟡 Examen Inicial" : "🟢 Examen Final"}
-              </button>
-            ))}
-          </div>
-        )}
-        {esEdicion && (
-          <div className={`text-xs font-semibold px-3 py-1.5 rounded-full inline-block ${tipo === "INICIAL" ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700"}`}>
-            {tipo === "INICIAL" ? "🟡 Examen Inicial" : "🟢 Examen Final"}
-          </div>
-        )}
+        {/* Tipo de cuestionario — solo informativo, no editable */}
+        <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold ${tipo === "INICIAL" ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700"}`}>
+          {tipo === "INICIAL" ? "🟡 Examen Inicial" : "🟢 Examen Final"}
+        </div>
 
         {/* Info general */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
