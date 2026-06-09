@@ -34,7 +34,21 @@ export interface ActividadProps {
  */
 export class ActividadPreventiva {
   private constructor(private props: ActividadProps) {}
+  private static assertEnteroNoNegativo(value: number | null | undefined, campo: string): void {
+    if (value == null) return;
 
+    if (!Number.isFinite(value)) {
+      throw new BusinessRuleError(`${campo} debe ser un número válido.`);
+    }
+
+    if (!Number.isInteger(value)) {
+      throw new BusinessRuleError(`${campo} debe ser un número entero.`);
+    }
+
+    if (value < 0) {
+      throw new BusinessRuleError(`${campo} no puede ser negativo.`);
+    }
+  }
   static crear(input: {
     id: string;
     idParroquia: string;
@@ -54,6 +68,10 @@ export class ActividadPreventiva {
     Guard.required(input.idUsuarioRegistroGRD, "idUsuarioRegistroGRD");
     Guard.required(input.idTipoActividadPreventiva, "idTipoActividadPreventiva");
     Guard.minLength(input.nombreActividad, 3, "nombreActividad");
+    ActividadPreventiva.assertEnteroNoNegativo(
+      input.numeroParticipantesEstimado,
+  "numeroParticipantesEstimado"
+    );
     return new ActividadPreventiva({
       id: input.id,
       idParroquia: input.idParroquia,
@@ -65,11 +83,11 @@ export class ActividadPreventiva {
       nombreActividad: input.nombreActividad.trim(),
       fechaProgramada: input.fechaProgramada ?? null,
       fechaEjecucion: null,
-      lugarActividad: input.lugarActividad ?? null,
-      publicoObjetivo: input.publicoObjetivo ?? null,
+      lugarActividad: input.lugarActividad?.trim() || null,
+      publicoObjetivo: input.publicoObjetivo?.trim() || null,
       numeroParticipantesEstimado: input.numeroParticipantesEstimado ?? null,
       numeroParticipantesReal: null,
-      descripcionActividad: input.descripcionActividad ?? null,
+      descripcionActividad: input.descripcionActividad?.trim() || null,
       resultadoGeneral: null,
       recomendaciones: null,
       observaciones: null,
@@ -82,6 +100,7 @@ export class ActividadPreventiva {
   }
 
   asignarResponsable(idBrigadista: string): void {
+    Guard.required(idBrigadista, "idBrigadista");
     if (this.props.estadoActividad !== "PROGRAMADA") {
       throw new BusinessRuleError("Solo se puede asignar responsable a una actividad PROGRAMADA.");
     }
@@ -99,11 +118,16 @@ export class ActividadPreventiva {
         `No se puede ejecutar una actividad en estado ${this.props.estadoActividad}.`
       );
     }
+    Guard.minLength(datos.resultadoGeneral, 5, "resultadoGeneral");
+    ActividadPreventiva.assertEnteroNoNegativo(
+    datos.numeroParticipantesReal,
+    "numeroParticipantesReal"
+    );
     this.props.estadoActividad = "EJECUTADA";
     this.props.fechaEjecucion = new Date().toISOString();
-    this.props.resultadoGeneral = datos.resultadoGeneral;
+    this.props.resultadoGeneral = datos.resultadoGeneral.trim();
     this.props.numeroParticipantesReal = datos.numeroParticipantesReal ?? null;
-    this.props.recomendaciones = datos.recomendaciones ?? null;
+    this.props.recomendaciones = datos.recomendaciones?.trim() || null;
   }
 
   /** PROGRAMADA → CANCELADA. */
@@ -111,8 +135,10 @@ export class ActividadPreventiva {
     if (this.props.estadoActividad !== "PROGRAMADA") {
       throw new BusinessRuleError("Solo se puede cancelar una actividad PROGRAMADA.");
     }
+
+    Guard.minLength(motivo, 5, "motivoCancelacion");
     this.props.estadoActividad = "CANCELADA";
-    this.props.observaciones = motivo;
+    this.props.observaciones = motivo.trim();
   }
 
   get id(): string {

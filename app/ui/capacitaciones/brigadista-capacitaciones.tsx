@@ -191,6 +191,14 @@ function DetalleInscrito({ curso, onVolver }: { curso: CursoInscrito; onVolver: 
                     {curso.cuestionario.maxIntentos - curso.cuestionario.intentosUsados} intento(s) restante(s) de {curso.cuestionario.maxIntentos}
                   </p>
                 </div>
+                <button
+                  onClick={() => setShowExamenFinal(true)}
+                  disabled={curso.cuestionarioFinal.intentosUsados >= curso.cuestionarioFinal.maxIntentos}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm bg-[var(--caritas-green)] text-white rounded-lg hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shrink-0"
+                >
+                  <ClipboardList className="w-3.5 h-3.5" />
+                  {curso.cuestionarioFinal.intentosUsados > 0 ? "Reintentar" : "Rendir examen"}
+                </button>
               </div>
               <button
                 onClick={() => setShowExamen(true)}

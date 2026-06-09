@@ -236,6 +236,7 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
   const [sesionTitulo, setSesionTitulo] = useState("");
   const [showCuestionario, setShowCuestionario] = useState(false);
   const [cuestionarioEditar, setCuestionarioEditar] = useState<CuestionarioDetalle | null>(null);
+  const [tipoCuestionarioActivo, setTipoCuestionarioActivo] = useState<"INICIAL" | "FINAL">("FINAL");
   const [materialModal, setMaterialModal] = useState<{ idSesion: string; idCurso: string } | null>(null);
   const [editarMaterialModal, setEditarMaterialModal] = useState<{ id: string; titulo: string; tipoMaterial: string; enlaceMaterial: string } | null>(null);
   const [participantes, setParticipantes] = useState<ParticipanteCurso[]>([]);
@@ -254,6 +255,8 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
         router.refresh();
       }
     });
+  function validarSesionTitulo(titulo: string): string | null {
+    const limpio = titulo.trim();
 
   const ORDEN_ESTADO: Record<string, number> = { PUBLICADO: 0, BORRADOR: 1, CERRADO: 2 };
 
@@ -396,61 +399,85 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
           </div>
         )}
 
-        {/* Cuestionario */}
+        {/* Evaluaciones */}
         <div className="mt-5">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-base font-semibold text-[var(--caritas-text)]">
-              Cuestionario Final
-            </h2>
-            {!curso.cuestionario && (
-              <button
-                onClick={() => setShowCuestionario(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-[var(--caritas-green)] border border-[var(--caritas-green)]/30 rounded-lg hover:bg-[var(--caritas-green)]/5 transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5" /> Crear cuestionario
-              </button>
-            )}
-          </div>
-          {curso.cuestionario ? (
-            <div className="flex items-center justify-between gap-3 border border-[var(--caritas-border)] rounded-xl p-4 bg-gray-50">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-[var(--caritas-green)]/10 flex items-center justify-center shrink-0">
-                  <ClipboardList className="w-4 h-4 text-[var(--caritas-green)]" />
+          <h2 className="text-base font-semibold text-[var(--caritas-text)] mb-3">Evaluaciones del Curso</h2>
+          <div className="space-y-3">
+            {/* Examen Inicial */}
+            {curso.cuestionarioInicial ? (
+              <div className="flex items-center justify-between gap-3 border border-amber-200 rounded-xl p-4 bg-amber-50">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                    <ClipboardList className="w-4 h-4 text-amber-600" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-[var(--caritas-text)]">{curso.cuestionarioInicial.titulo}</p>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200 font-medium">INICIAL</span>
+                    </div>
+                    <p className="text-xs text-gray-400">{curso.cuestionarioInicial.totalPreguntas} preguntas · Nota mín: {curso.cuestionarioInicial.notaAprobatoria}/20</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-semibold text-[var(--caritas-text)]">
-                    {curso.cuestionario.titulo}
-                  </p>
-                  <p className="text-xs text-gray-400">
-                    {curso.cuestionario.totalPreguntas} preguntas · Nota mín:{" "}
-                    {curso.cuestionario.notaAprobatoria}/20
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
                 <button
                   onClick={async () => {
-                    const detalle = await obtenerCuestionarioCurso(curso.id);
-                    if (detalle) { setCuestionarioEditar(detalle); setShowCuestionario(true); }
+                    const detalle = await obtenerCuestionarioPorId(curso.cuestionarioInicial!.id);
+                    if (detalle) { setCuestionarioEditar(detalle); setTipoCuestionarioActivo("INICIAL"); setShowCuestionario(true); }
                   }}
-                  className="flex items-center gap-1 px-2.5 py-1 text-xs border border-[var(--caritas-border)] rounded-lg hover:bg-white transition-colors"
+                  className="flex items-center gap-1 px-2.5 py-1 text-xs border border-[var(--caritas-border)] rounded-lg hover:bg-white transition-colors shrink-0"
                 >
                   <BookOpen className="w-3 h-3" /> Editar
                 </button>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200 font-medium">
-                  ACTIVO
-                </span>
               </div>
-            </div>
-          ) : (
-            <div
-              onClick={() => setShowCuestionario(true)}
-              className="flex flex-col items-center justify-center py-8 border-2 border-dashed border-gray-300 rounded-xl text-gray-400 gap-2 cursor-pointer hover:border-[var(--caritas-green)]/40 hover:bg-[var(--caritas-green)]/5 transition-colors"
-            >
-              <ClipboardList className="w-7 h-7" />
-              <p className="text-sm">Aún no hay cuestionario. Haz clic para crear uno.</p>
-            </div>
-          )}
+            ) : (
+              <div
+                onClick={() => { setTipoCuestionarioActivo("INICIAL"); setCuestionarioEditar(null); setShowCuestionario(true); }}
+                className="flex items-center gap-3 py-4 px-4 border-2 border-dashed border-amber-300 rounded-xl text-amber-500 cursor-pointer hover:bg-amber-50 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                <p className="text-sm">Crear examen inicial</p>
+              </div>
+            )}
+
+            {/* Examen Final */}
+            {curso.cuestionarioFinal ? (
+              <div className="flex items-center justify-between gap-3 border border-[var(--caritas-border)] rounded-xl p-4 bg-gray-50">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-[var(--caritas-green)]/10 flex items-center justify-center shrink-0">
+                    <ClipboardList className="w-4 h-4 text-[var(--caritas-green)]" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-[var(--caritas-text)]">{curso.cuestionarioFinal.titulo}</p>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 border border-green-200 font-medium">FINAL</span>
+                    </div>
+                    <p className="text-xs text-gray-400">{curso.cuestionarioFinal.totalPreguntas} preguntas · Nota mín: {curso.cuestionarioFinal.notaAprobatoria}/20</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={async () => {
+                      const detalle = await obtenerCuestionarioPorId(curso.cuestionarioFinal!.id);
+                      if (detalle) { setCuestionarioEditar(detalle); setTipoCuestionarioActivo("FINAL"); setShowCuestionario(true); }
+                    }}
+                    className="flex items-center gap-1 px-2.5 py-1 text-xs border border-[var(--caritas-border)] rounded-lg hover:bg-white transition-colors"
+                  >
+                    <BookOpen className="w-3 h-3" /> Editar
+                  </button>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200 font-medium">
+                    ACTIVO
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div
+                onClick={() => { setTipoCuestionarioActivo("FINAL"); setCuestionarioEditar(null); setShowCuestionario(true); }}
+                className="flex flex-col items-center justify-center py-6 border-2 border-dashed border-gray-300 rounded-xl text-gray-400 gap-2 cursor-pointer hover:border-[var(--caritas-green)]/40 hover:bg-[var(--caritas-green)]/5 transition-colors"
+              >
+                <ClipboardList className="w-7 h-7" />
+                <p className="text-sm">Crear examen final</p>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Participantes */}
@@ -573,6 +600,7 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
           <CuestionarioModal
             idCurso={curso.id}
             idCuestionario={cuestionarioEditar?.id}
+            tipoPredefinido={tipoCuestionarioActivo}
             inicial={cuestionarioEditar ?? undefined}
             onClose={() => { setShowCuestionario(false); setCuestionarioEditar(null); }}
           />
