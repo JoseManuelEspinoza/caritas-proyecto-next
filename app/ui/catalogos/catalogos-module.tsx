@@ -1,70 +1,87 @@
-'use client'
+"use client";
 
-import { useState, useTransition } from 'react'
-import { useRouter } from 'next/navigation'
-import { Database, Plus, Pencil, Power, FolderPlus } from 'lucide-react'
-import { toast } from 'sonner'
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { Database, Plus, Pencil, Power, FolderPlus } from "lucide-react";
+import { toast } from "sonner";
 import {
   crearCatalogo,
   agregarItemCatalogo,
   editarItemCatalogo,
   toggleItemCatalogo,
-} from '@/app/actions/catalogos'
+} from "@/app/actions/catalogos";
 
-type Detalle = { id: string; codigo: string; valor: string; descripcion: string | null; estado: string }
-type Catalogo = { id: string; nombreCatalogo: string; descripcion: string | null; estado: string }
+type Detalle = {
+  id: string;
+  codigo: string;
+  valor: string;
+  descripcion: string | null;
+  estado: string;
+};
+type Catalogo = { id: string; nombreCatalogo: string; descripcion: string | null; estado: string };
 
 interface Props {
-  catalogos: Catalogo[]
-  detallesByCatalogo: Record<string, Detalle[]>
+  catalogos: Catalogo[];
+  detallesByCatalogo: Record<string, Detalle[]>;
 }
 
 /** Genera un código corto a partir del valor (el DER exige código en cada detalle). */
 function slugCodigo(valor: string): string {
-  return valor.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 30) || `IT_${Date.now()}`
+  return (
+    valor
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 30) || `IT_${Date.now()}`
+  );
 }
 
 export function CatalogosModule({ catalogos, detallesByCatalogo }: Props) {
-  const router = useRouter()
-  const [pending, startTransition] = useTransition()
-  const [activeId, setActiveId] = useState<string | null>(catalogos[0]?.id ?? null)
-  const [newValue, setNewValue] = useState('')
-  const [newCatalog, setNewCatalog] = useState('')
-  const [showNewCatalog, setShowNewCatalog] = useState(false)
-  const [editing, setEditing] = useState<{ id: string; value: string } | null>(null)
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [activeId, setActiveId] = useState<string | null>(catalogos[0]?.id ?? null);
+  const [newValue, setNewValue] = useState("");
+  const [newCatalog, setNewCatalog] = useState("");
+  const [showNewCatalog, setShowNewCatalog] = useState(false);
+  const [editing, setEditing] = useState<{ id: string; value: string } | null>(null);
 
-  const items = activeId ? detallesByCatalogo[activeId] ?? [] : []
-  const activeCatalogo = catalogos.find((c) => c.id === activeId) ?? null
+  const items = activeId ? (detallesByCatalogo[activeId] ?? []) : [];
+  const activeCatalogo = catalogos.find((c) => c.id === activeId) ?? null;
 
   const run = (fn: () => Promise<{ message?: string } | void>, ok: string) =>
     startTransition(async () => {
-      const res = await fn()
-      if (res?.message && /no se pudo|ya existe|obligatori|no tiene/i.test(res.message)) toast.error(res.message)
-      else toast.success(ok)
-      router.refresh()
-    })
+      const res = await fn();
+      if (res?.message && /no se pudo|ya existe|obligatori|no tiene/i.test(res.message))
+        toast.error(res.message);
+      else toast.success(ok);
+      router.refresh();
+    });
 
   const submitNew = () => {
-    if (!newValue.trim() || !activeId) return
-    const valor = newValue.trim()
-    setNewValue('')
-    run(() => agregarItemCatalogo({ idCatalogoGRD: activeId, codigo: slugCodigo(valor), valor }), 'Ítem agregado.')
-  }
+    if (!newValue.trim() || !activeId) return;
+    const valor = newValue.trim();
+    setNewValue("");
+    run(
+      () => agregarItemCatalogo({ idCatalogoGRD: activeId, codigo: slugCodigo(valor), valor }),
+      "Ítem agregado."
+    );
+  };
 
   const submitEdit = () => {
-    if (!editing || !editing.value.trim()) return
-    const { id, value } = editing
-    setEditing(null)
-    run(() => editarItemCatalogo(id, value.trim()), 'Ítem actualizado.')
-  }
+    if (!editing || !editing.value.trim()) return;
+    const { id, value } = editing;
+    setEditing(null);
+    run(() => editarItemCatalogo(id, value.trim()), "Ítem actualizado.");
+  };
 
   const submitNewCatalog = () => {
-    if (!newCatalog.trim()) return
-    const nombre = newCatalog.trim()
-    setNewCatalog('')
-    setShowNewCatalog(false)
-    run(() => crearCatalogo(nombre), 'Catálogo creado.')
-  }
+    if (!newCatalog.trim()) return;
+    const nombre = newCatalog.trim();
+    setNewCatalog("");
+    setShowNewCatalog(false);
+    run(() => crearCatalogo(nombre), "Catálogo creado.");
+  };
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
@@ -94,7 +111,11 @@ export function CatalogosModule({ catalogos, detallesByCatalogo }: Props) {
             placeholder="Nombre del nuevo catálogo (ej. Tipos de Evento)"
             className="flex-1 min-w-[220px] px-3 py-2 border border-[var(--caritas-border)] rounded text-sm"
           />
-          <button onClick={submitNewCatalog} disabled={pending} className="px-4 py-2 bg-[var(--caritas-green)] text-white rounded text-sm disabled:opacity-50">
+          <button
+            onClick={submitNewCatalog}
+            disabled={pending}
+            className="px-4 py-2 bg-[var(--caritas-green)] text-white rounded text-sm disabled:opacity-50"
+          >
             Crear
           </button>
         </div>
@@ -111,7 +132,7 @@ export function CatalogosModule({ catalogos, detallesByCatalogo }: Props) {
               <button
                 key={c.id}
                 onClick={() => setActiveId(c.id)}
-                className={`px-3 py-1.5 text-sm rounded ${activeId === c.id ? 'bg-[var(--caritas-green)] text-white' : 'bg-white border border-[var(--caritas-border)] text-gray-700 hover:bg-gray-50'}`}
+                className={`px-3 py-1.5 text-sm rounded ${activeId === c.id ? "bg-[var(--caritas-green)] text-white" : "bg-white border border-[var(--caritas-border)] text-gray-700 hover:bg-gray-50"}`}
               >
                 {c.nombreCatalogo}
               </button>
@@ -123,11 +144,19 @@ export function CatalogosModule({ catalogos, detallesByCatalogo }: Props) {
               <input
                 value={newValue}
                 onChange={(e) => setNewValue(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && submitNew()}
-                placeholder={activeCatalogo ? `Nuevo valor para ${activeCatalogo.nombreCatalogo}` : 'Nuevo valor'}
+                onKeyDown={(e) => e.key === "Enter" && submitNew()}
+                placeholder={
+                  activeCatalogo
+                    ? `Nuevo valor para ${activeCatalogo.nombreCatalogo}`
+                    : "Nuevo valor"
+                }
                 className="flex-1 min-w-[200px] px-3 py-2 border border-[var(--caritas-border)] rounded text-sm"
               />
-              <button onClick={submitNew} disabled={pending} className="flex items-center gap-2 px-4 py-2 bg-[var(--caritas-green)] text-white rounded text-sm disabled:opacity-50">
+              <button
+                onClick={submitNew}
+                disabled={pending}
+                className="flex items-center gap-2 px-4 py-2 bg-[var(--caritas-green)] text-white rounded text-sm disabled:opacity-50"
+              >
                 <Plus className="w-4 h-4" /> Agregar
               </button>
             </div>
@@ -142,17 +171,30 @@ export function CatalogosModule({ catalogos, detallesByCatalogo }: Props) {
                         onChange={(e) => setEditing({ ...editing, value: e.target.value })}
                         className="flex-1 px-2 py-1 border border-[var(--caritas-border)] rounded text-sm"
                       />
-                      <button onClick={submitEdit} className="text-sm text-[var(--caritas-green)]">Guardar</button>
-                      <button onClick={() => setEditing(null)} className="text-sm text-gray-500">Cancelar</button>
+                      <button onClick={submitEdit} className="text-sm text-[var(--caritas-green)]">
+                        Guardar
+                      </button>
+                      <button onClick={() => setEditing(null)} className="text-sm text-gray-500">
+                        Cancelar
+                      </button>
                     </>
                   ) : (
                     <>
-                      <span className={`flex-1 text-sm ${it.estado === 'ACTIVO' ? 'text-[var(--caritas-text)]' : 'text-gray-400 line-through'}`}>{it.valor}</span>
+                      <span
+                        className={`flex-1 text-sm ${it.estado === "ACTIVO" ? "text-[var(--caritas-text)]" : "text-gray-400 line-through"}`}
+                      >
+                        {it.valor}
+                      </span>
                       <span className="text-xs text-gray-400">{it.codigo}</span>
-                      <button onClick={() => setEditing({ id: it.id, value: it.valor })} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"><Pencil className="w-4 h-4" /></button>
                       <button
-                        onClick={() => run(() => toggleItemCatalogo(it.id), 'Estado actualizado.')}
-                        className={`p-1.5 rounded ${it.estado === 'ACTIVO' ? 'text-gray-500 hover:bg-gray-100' : 'text-green-600 hover:bg-green-50'}`}
+                        onClick={() => setEditing({ id: it.id, value: it.valor })}
+                        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => run(() => toggleItemCatalogo(it.id), "Estado actualizado.")}
+                        className={`p-1.5 rounded ${it.estado === "ACTIVO" ? "text-gray-500 hover:bg-gray-100" : "text-green-600 hover:bg-green-50"}`}
                       >
                         <Power className="w-4 h-4" />
                       </button>
@@ -160,11 +202,13 @@ export function CatalogosModule({ catalogos, detallesByCatalogo }: Props) {
                   )}
                 </li>
               ))}
-              {items.length === 0 && <li className="py-3 text-sm text-gray-500">Sin ítems en este catálogo.</li>}
+              {items.length === 0 && (
+                <li className="py-3 text-sm text-gray-500">Sin ítems en este catálogo.</li>
+              )}
             </ul>
           </div>
         </>
       )}
     </div>
-  )
+  );
 }

@@ -1,4 +1,4 @@
-import { ValidationError } from '../errors/DomainError'
+import { ValidationError } from "../errors/DomainError";
 
 /**
  * Value Object: DNI peruano.
@@ -10,21 +10,21 @@ import { ValidationError } from '../errors/DomainError'
  * Dos DNIs son iguales si su valor es igual (no por identidad de referencia).
  */
 export class Dni {
-  private readonly value: string
+  private readonly value: string;
 
   constructor(value: string) {
-    const clean = value.trim()
+    const clean = value.trim();
     if (!/^\d{8}$/.test(clean)) {
-      throw new ValidationError('El DNI debe tener exactamente 8 dígitos numéricos.')
+      throw new ValidationError("El DNI debe tener exactamente 8 dígitos numéricos.");
     }
-    this.value = clean
+    this.value = clean;
   }
 
   toString(): string {
-    return this.value
+    return this.value;
   }
 
   equals(other: Dni): boolean {
-    return this.value === other.value
+    return this.value === other.value;
   }
 }

@@ -10,9 +10,12 @@ services:
       - SESSION_SECRET=dev-secret-minimo-32-caracteres-cambiar-en-prod
       - APP_URL=http://localhost:3000
       - NODE_ENV=development
+      # Limit Node.js heap to 4 GB — prevents unbounded growth that caused ~60 GB RAM usage.
+      - NODE_OPTIONS=--max-old-space-size=4096
       - WATCHPACK_POLLING=true
       - CHOKIDAR_USEPOLLING=true
-      - CHOKIDAR_INTERVAL=300
+      # 300 ms was polling 1 GB of node_modules thousands of times/sec; 3 s is sufficient.
+      - CHOKIDAR_INTERVAL=3000
       # ─── Auth.js v5 + Keycloak (OIDC) ──────────────────────────────────────
       # ISSUER = URL pública (navegador). INTERNAL = red Docker (callback/token).
       - AUTH_SECRET=dev-auth-secret-cambiar-en-produccion-min-32-chars
@@ -28,6 +31,19 @@ services:
       - SMTP_USER=${SMTP_USER:-}
       - SMTP_PASS=${SMTP_PASS:-}
       - SMTP_FROM=${SMTP_FROM:-no-reply@caritas-lima.pe}
+      # ─── Amazon S3 (evidencias) — se leen desde .env ───────────────────────
+      - AWS_REGION=${AWS_REGION:-}
+      - AWS_S3_BUCKET=${AWS_S3_BUCKET:-}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AWS_S3_ENDPOINT=${AWS_S3_ENDPOINT:-}
+      - AWS_S3_FORCE_PATH_STYLE=${AWS_S3_FORCE_PATH_STYLE:-}
+      - AWS_S3_PUBLIC_BASE_URL=${AWS_S3_PUBLIC_BASE_URL:-}
+      # ─── Consulta de DNI (RENIEC) — se leen desde .env ─────────────────────
+      - RENIEC_API_URL=${RENIEC_API_URL:-}
+      - RENIEC_AUTH_MODE=${RENIEC_AUTH_MODE:-}
+      - RENIEC_API_TOKEN=${RENIEC_API_TOKEN:-}
+
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -36,7 +52,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    command: sh -c "npm install && npx prisma generate && npx prisma db push && npm run dev"
+    command: sh -c "npm install && npm install lightningcss-linux-arm64-gnu @tailwindcss/oxide-linux-arm64-gnu --no-save 2>/dev/null || true && ln -sf /app/node_modules/lightningcss-linux-arm64-gnu/lightningcss.linux-arm64-gnu.node /app/node_modules/lightningcss/lightningcss.linux-arm64-gnu.node 2>/dev/null || true && ln -sf /app/node_modules/@tailwindcss/oxide-linux-arm64-gnu/tailwindcss-oxide.linux-arm64-gnu.node /app/node_modules/@tailwindcss/oxide/tailwindcss-oxide.linux-arm64-gnu.node 2>/dev/null || true && npx prisma generate && npx prisma db push --accept-data-loss && npm run dev"
 
   # ─── Base de datos de la APLICACIÓN ──────────────────────────────────────────
   db:
@@ -85,8 +101,8 @@ services:
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
       # HTTP local (sin TLS en dev) + health
       KC_HTTP_ENABLED: "true"
-      KC_HOSTNAME: localhost
-      KC_HOSTNAME_PORT: "8080"
+      # URL pública del IdP: debe coincidir con el issuer que usa la app.
+      KC_HOSTNAME: http://host.docker.internal:8090
       KC_HOSTNAME_STRICT: "false"
       KC_HEALTH_ENABLED: "true"
     ports:

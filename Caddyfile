@@ -1,0 +1,12 @@
+# Reemplaza los dominios por los tuyos. Caddy obtiene certificados TLS
+# automáticamente (Let's Encrypt) si el DNS apunta al servidor y 80/443 están abiertos.
+
+app.tudominio.com {
+	encode gzip
+	reverse_proxy web:3000
+}
+
+auth.tudominio.com {
+	encode gzip
+	reverse_proxy keycloak:8080
+}

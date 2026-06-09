@@ -1,4 +1,4 @@
-import { PrismaCursoRepository } from '../database/PrismaCursoRepository'
+import { PrismaCursoRepository } from "../database/PrismaCursoRepository";
 import {
   CrearCursoUseCase,
   ListarCursosUseCase,
@@ -7,11 +7,11 @@ import {
   InscribirParticipanteUseCase,
   RegistrarEvaluacionUseCase,
   CertificarUseCase,
-} from '../../application/use-cases/capacitaciones/GestionarCapacitaciones.usecase'
+} from "../../application/use-cases/capacitaciones/GestionarCapacitaciones.usecase";
 
 /** Composition root del módulo de Capacitaciones. */
 export function makeCursoUseCases() {
-  const repo = new PrismaCursoRepository()
+  const repo = new PrismaCursoRepository();
   return {
     crear: new CrearCursoUseCase(repo),
     listar: new ListarCursosUseCase(repo),
@@ -20,5 +20,5 @@ export function makeCursoUseCases() {
     inscribir: new InscribirParticipanteUseCase(repo),
     evaluar: new RegistrarEvaluacionUseCase(repo),
     certificar: new CertificarUseCase(repo),
-  }
+  };
 }

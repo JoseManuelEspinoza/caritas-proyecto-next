@@ -22,8 +22,7 @@ export const initialIncidents: Incident[] = [
     distrito: "Independencia",
     parroquia: "Parroquia Cristo Salvador",
     direccion: "AA.HH. El Ermitaño, Zona C, Mz. K Lt. 3",
-    referencia:
-      "Subiendo por la escalera de cemento hasta el nivel 4 del asentamiento",
+    referencia: "Subiendo por la escalera de cemento hasta el nivel 4 del asentamiento",
     nivelAfectacion: "Severo",
     numFamiliasAfectadas: 4,
     gruposVulnerables: ["Adultos mayores (60+)", "Personas con discapacidad"],
@@ -84,8 +83,7 @@ export const initialIncidents: Incident[] = [
       fechaVisita: "2026-04-21",
       responsable: "Ana Torres",
       motivoVisita: "Levantamiento de información por deslizamiento de ladera",
-      objetivos:
-        "Empadronar familias afectadas y evaluar condiciones de habitabilidad",
+      objetivos: "Empadronar familias afectadas y evaluar condiciones de habitabilidad",
       descripcionEvento:
         "Cuatro viviendas afectadas en ladera pronunciada. Dos viviendas con daño estructural severo e inhabitable. Dos viviendas con daño parcial. Acceso bloqueado por material deslizado.",
       condHabitabilidad: {
@@ -96,15 +94,9 @@ export const initialIncidents: Incident[] = [
         acceso: false,
       },
       nivelVulnerabilidad: "Crítico",
-      necesidadesPrioritarias: [
-        "Refugio temporal urgente",
-        "Alimentación",
-        "Agua potable",
-      ],
-      recomendacion:
-        "Las dos familias más afectadas requieren albergue inmediato.",
-      observaciones:
-        "Adultos mayores de 68 y 71 años sin familiares en Lima. Alta vulnerabilidad.",
+      necesidadesPrioritarias: ["Refugio temporal urgente", "Alimentación", "Agua potable"],
+      recomendacion: "Las dos familias más afectadas requieren albergue inmediato.",
+      observaciones: "Adultos mayores de 68 y 71 años sin familiares en Lima. Alta vulnerabilidad.",
     },
     informeEvaluacion: {
       fecha: "2026-04-22",
@@ -114,8 +106,7 @@ export const initialIncidents: Incident[] = [
       oficina: "Oficina de Gestión Pastoral / GRD",
       motivo:
         "Deslizamiento de ladera con daño habitacional severo en dos viviendas y adultos mayores sin red de apoyo familiar.",
-      objetivoGeneral:
-        "Brindar asistencia humanitaria de emergencia a la Familia Mamani Quispe.",
+      objetivoGeneral: "Brindar asistencia humanitaria de emergencia a la Familia Mamani Quispe.",
       objetivosEspecificos: [
         "Proveer alimentos básicos para 14 días ante el bloqueo de acceso.",
         "Suministrar artículos de higiene esencial para los adultos mayores.",
@@ -147,8 +138,7 @@ export const initialIncidents: Incident[] = [
         {
           familiaId: "fam-mamani-8",
           familiaNombre: "Familia Mamani Quispe",
-          observacionesEspecialista:
-            "Adultos mayores sin red de apoyo. Prioridad máxima.",
+          observacionesEspecialista: "Adultos mayores sin red de apoyo. Prioridad máxima.",
           kits: [
             {
               id: "k-vv-8-1",
@@ -229,8 +219,7 @@ export const initialIncidents: Incident[] = [
         action: "campo",
         prevStatus: "ASIGNADO",
         newStatus: "DATA RECOPILADA",
-        notes:
-          "Levantamiento completado. 2 personas empadronadas. 3 evidencias adjuntas.",
+        notes: "Levantamiento completado. 2 personas empadronadas. 3 evidencias adjuntas.",
       },
       {
         id: "h4",
@@ -305,13 +294,8 @@ export const initialIncidents: Incident[] = [
         acceso: true,
       },
       nivelVulnerabilidad: "Medio",
-      necesidadesPrioritarias: [
-        "Agua potable",
-        "Alimentación",
-        "Kits de higiene",
-      ],
-      recomendacion:
-        "Entrega de kits de higiene y alimentos básicos para 5 familias.",
+      necesidadesPrioritarias: ["Agua potable", "Alimentación", "Kits de higiene"],
+      recomendacion: "Entrega de kits de higiene y alimentos básicos para 5 familias.",
     },
     informeEvaluacion: {
       fecha: "2026-04-24",
@@ -319,8 +303,7 @@ export const initialIncidents: Incident[] = [
       emitidoPor: "Carlos Méndez — Especialista GRD",
       dirigidoA: ["Comité de donaciones"],
       oficina: "Oficina de Gestión Pastoral / GRD",
-      motivo:
-        "Inundación de viviendas por crecida del río Rímac con cinco familias afectadas.",
+      motivo: "Inundación de viviendas por crecida del río Rímac con cinco familias afectadas.",
       objetivoGeneral:
         "Atender las necesidades básicas de higiene y alimentación de las cinco familias afectadas.",
       analisisSituacion:
@@ -335,10 +318,7 @@ export const initialIncidents: Incident[] = [
       tipoIntervencion: "Donación en especie",
       descripcionAyuda:
         "Kits de higiene (5 kits) + canastas de alimentos básicos (5 canastas, 7 días).",
-      criteriosPriorizacion: [
-        "Niños o adolescentes en el hogar",
-        "Adultos mayores",
-      ],
+      criteriosPriorizacion: ["Niños o adolescentes en el hogar", "Adultos mayores"],
       recomendacionComite:
         "Se recomienda aprobar la donación de kits de higiene y alimentos básicos para las 5 familias.",
       observacionesComite:
@@ -424,11 +404,7 @@ export const initialIncidents: Incident[] = [
     nivelAfectacion: "Moderado",
     numFamiliasAfectadas: 2,
     gruposVulnerables: ["Niños (0–12 años)", "Gestantes / Madres lactantes"],
-    necesidadesUrgentes: [
-      "Materiales de construcción",
-      "Abrigo / Ropa",
-      "Alimentación",
-    ],
+    necesidadesUrgentes: ["Materiales de construcción", "Abrigo / Ropa", "Alimentación"],
     affectedPeople: [
       {
         id: "p1",
@@ -503,8 +479,7 @@ export const initialIncidents: Incident[] = [
         timestamp: "2026-04-15T10:00:00.000Z",
         action: "creación",
         newStatus: "ABIERTO",
-        notes:
-          "Registro inicial — vendaval reportado por brigadista parroquial",
+        notes: "Registro inicial — vendaval reportado por brigadista parroquial",
       },
       {
         id: "h2",
@@ -534,8 +509,7 @@ export const initialIncidents: Incident[] = [
         action: "informe_evaluacion",
         prevStatus: "DATA RECOPILADA",
         newStatus: "EN EVALUACION",
-        notes:
-          "Informe elaborado. Donación en especie recomendada. Enviado al Comité.",
+        notes: "Informe elaborado. Donación en especie recomendada. Enviado al Comité.",
       },
       {
         id: "h5",
@@ -545,8 +519,7 @@ export const initialIncidents: Incident[] = [
         action: "aprobacion",
         prevStatus: "EN EVALUACION",
         newStatus: "APROBADO",
-        notes:
-          "Donación aprobada. Kit de materiales y abrigo aprobado para entrega.",
+        notes: "Donación aprobada. Kit de materiales y abrigo aprobado para entrega.",
       },
     ],
   },
@@ -674,8 +647,7 @@ export const initialIncidents: Incident[] = [
         action: "atencion",
         prevStatus: "APROBADO",
         newStatus: "ATENDIDO",
-        notes:
-          "Donación entregada. 12 familias atendidas en Parroquia Santa Rosa.",
+        notes: "Donación entregada. 12 familias atendidas en Parroquia Santa Rosa.",
       },
     ],
   },
@@ -725,8 +697,7 @@ export const initialIncidents: Incident[] = [
         "Afectación leve: daños menores en fachada y un miembro con síntomas respiratorios por inhalación.",
       nivelUrgencia: "Media",
       tipoIntervencion: "Donación en especie",
-      descripcionAyuda:
-        "Kit de higiene completo (1 kit) + coordinación con Centro de Salud.",
+      descripcionAyuda: "Kit de higiene completo (1 kit) + coordinación con Centro de Salud.",
       criteriosPriorizacion: ["Niños o adolescentes en el hogar"],
       recomendacionComite:
         "Aprobar donación del kit de higiene. Costo mínimo e impacto significativo.",
@@ -941,11 +912,7 @@ export const initialIncidents: Incident[] = [
         parentesco: "Propietaria",
       },
     ],
-    uploadedFiles: [
-      "informe_sismo_brena.pdf",
-      "acta_donacion_brena.pdf",
-      "acta_cierre_brena.pdf",
-    ],
+    uploadedFiles: ["informe_sismo_brena.pdf", "acta_donacion_brena.pdf", "acta_cierre_brena.pdf"],
     createdBy: "brigadista",
     createdAt: "2026-03-10T09:00:00.000Z",
     updatedAt: "2026-04-01T11:00:00.000Z",
@@ -957,8 +924,7 @@ export const initialIncidents: Incident[] = [
         "Adulta mayor de 72 años sin red de apoyo familiar. Vivienda con habitabilidad condicionada.",
       nivelUrgencia: "Alta",
       tipoIntervencion: "Donación en especie",
-      descripcionAyuda:
-        "Kit de materiales de reforzamiento (malla metálica, cemento, arena).",
+      descripcionAyuda: "Kit de materiales de reforzamiento (malla metálica, cemento, arena).",
       criteriosPriorizacion: [
         "Adultos mayores",
         "Sin redes de apoyo familiar",
@@ -970,13 +936,8 @@ export const initialIncidents: Incident[] = [
     informeAtencion: {
       fecha: "2026-03-22",
       elaboradoPor: "especialistaGRD",
-      descripcionEntrega:
-        "Entrega de materiales de reforzamiento en domicilio.",
-      itemsEntregados: [
-        "20m² de malla metálica",
-        "5 bolsas de cemento",
-        "Arena fina (1/4 m³)",
-      ],
+      descripcionEntrega: "Entrega de materiales de reforzamiento en domicilio.",
+      itemsEntregados: ["20m² de malla metálica", "5 bolsas de cemento", "Arena fina (1/4 m³)"],
       beneficiariosAtendidos: 1,
     },
     history: [

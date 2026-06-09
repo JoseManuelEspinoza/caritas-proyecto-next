@@ -1,8 +1,8 @@
-import { Prisma } from '@prisma/client'
-import type { PlanTrabajoGRD as PlanRow } from '@prisma/client'
-import { PlanTrabajo, EstadoAprobacion } from '../../domain/entities/plan/PlanTrabajo'
+import { Prisma } from "@prisma/client";
+import type { PlanTrabajoGRD as PlanRow } from "@prisma/client";
+import { PlanTrabajo, EstadoAprobacion } from "../../domain/entities/plan/PlanTrabajo";
 
-const iso = (d: Date | null) => (d ? d.toISOString() : null)
+const iso = (d: Date | null) => (d ? d.toISOString() : null);
 
 export const PlanMapper = {
   toDomain(row: PlanRow): PlanTrabajo {
@@ -21,11 +21,11 @@ export const PlanMapper = {
       zonasSeguras: row.zonasSeguras,
       estadoAprobacion: row.estadoAprobacion as EstadoAprobacion,
       observaciones: row.observaciones,
-    })
+    });
   },
 
   toPersistence(p: PlanTrabajo): Prisma.PlanTrabajoGRDUncheckedCreateInput {
-    const s = p.snapshot
+    const s = p.snapshot;
     return {
       idPlanTrabajoGRD: s.id,
       idParroquia: s.idParroquia,
@@ -41,6 +41,6 @@ export const PlanMapper = {
       zonasSeguras: s.zonasSeguras ?? undefined,
       estadoAprobacion: s.estadoAprobacion,
       observaciones: s.observaciones ?? undefined,
-    }
+    };
   },
-}
+};

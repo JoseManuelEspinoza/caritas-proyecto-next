@@ -1,5 +1,5 @@
-import { Incidencia } from '../entities/incidencia/Incidencia'
-import { CreateIncidenteData } from '../../application/dtos/IncidenciaDTO'
+import { Incidencia } from "../entities/incidencia/Incidencia";
+import { CreateIncidenteData } from "../../application/dtos/IncidenciaDTO";
 
 /**
  * Contrato de persistencia del flujo de Incidencias.
@@ -10,22 +10,26 @@ import { CreateIncidenteData } from '../../application/dtos/IncidenciaDTO'
  */
 export interface IIncidenciaRepository {
   /** Genera el siguiente código GRD-YYYY-NNNN. */
-  nextCodigo(): Promise<string>
+  nextCodigo(): Promise<string>;
 
   /** Crea Aviso + Incidencia + grupos + personas + historial inicial. Devuelve idIncidencia. */
-  crear(codigo: string, data: CreateIncidenteData): Promise<string>
+  crear(codigo: string, data: CreateIncidenteData): Promise<string>;
 
   /** Recupera el agregado (estado) para validar transiciones. */
-  findById(id: string): Promise<Incidencia | null>
+  findById(id: string): Promise<Incidencia | null>;
 
   /** Reemplaza los datos del incidente (incidencia + aviso + grupos/personas). */
-  actualizarDatos(id: string, data: CreateIncidenteData): Promise<void>
+  actualizarDatos(id: string, data: CreateIncidenteData): Promise<void>;
 
   /** Persiste el nuevo estado del agregado + entrada en el historial. */
-  guardarTransicion(incidencia: Incidencia, motivo?: string, observaciones?: string): Promise<void>
+  guardarTransicion(incidencia: Incidencia, motivo?: string, observaciones?: string): Promise<void>;
 
   /** Crea la asignación de un brigadista (si no existe) y lo marca EN CAMPO. */
-  registrarAsignacion(idIncidencia: string, idBrigadista: string, instrucciones?: string): Promise<void>
+  registrarAsignacion(
+    idIncidencia: string,
+    idBrigadista: string,
+    instrucciones?: string
+  ): Promise<void>;
 
   /**
    * Reemplaza el equipo de brigadistas: un responsable y opcionalmente más integrantes.
@@ -34,37 +38,102 @@ export interface IIncidenciaRepository {
   asignarEquipo(
     idIncidencia: string,
     data: {
-      idResponsableBrigadista: string
-      idsEquipo: string[]
-      instrucciones?: string
-      idUsuarioAsignador?: string
-    },
-  ): Promise<void>
+      idResponsableBrigadista: string;
+      idsEquipo: string[];
+      instrucciones?: string;
+      idUsuarioAsignador?: string;
+    }
+  ): Promise<void>;
 
   /** Autoasignación: especialista GRD único responsable; libera brigadistas previos. */
-  asignarResponsable(idIncidencia: string, idUsuarioGRD: string, instrucciones?: string): Promise<void>
+  asignarResponsable(
+    idIncidencia: string,
+    idUsuarioGRD: string,
+    instrucciones?: string
+  ): Promise<void>;
 
   /** Inserta un informe (CAMPO / EVALUACION) con contenido JSON. */
-  guardarInforme(idIncidencia: string, informe: {
-    titulo: string
-    tipo: string
-    resumen: string
-    contenido: string
-    estado: string
-  }): Promise<void>
+  guardarInforme(
+    idIncidencia: string,
+    informe: {
+      titulo: string;
+      tipo: string;
+      resumen: string;
+      contenido: string;
+      estado: string;
+    }
+  ): Promise<void>;
 
   /** Crea o reabre la solicitud de ayuda humanitaria en evaluación. */
-  upsertSolicitudEnEvaluacion(idIncidencia: string, data: { motivo: string; descripcion: string; tipoAyuda: string }): Promise<void>
+  upsertSolicitudEnEvaluacion(
+    idIncidencia: string,
+    data: { motivo: string; descripcion: string; tipoAyuda: string }
+  ): Promise<void>;
 
   /** Aplica la decisión del Comité sobre la solicitud en evaluación. */
-  resolverSolicitud(idIncidencia: string, decision: 'APROBADA' | 'EN_EVALUACION' | 'RECHAZADA', observaciones?: string): Promise<void>
+  resolverSolicitud(
+    idIncidencia: string,
+    decision: "APROBADA" | "EN_EVALUACION" | "RECHAZADA",
+    observaciones?: string
+  ): Promise<void>;
 
   /** Registra la entrega de ayuda humanitaria. */
-  registrarEntrega(idIncidencia: string, data: { tipoAyuda: string; descripcionAyuda: string; lugarEntrega: string; observaciones?: string }): Promise<void>
+  registrarEntrega(
+    idIncidencia: string,
+    data: {
+      tipoAyuda: string;
+      descripcionAyuda: string;
+      lugarEntrega: string;
+      observaciones?: string;
+    }
+  ): Promise<void>;
 
   /** Registra una visita de seguimiento. */
-  agregarSeguimiento(idIncidencia: string, data: { situacion: string; descripcion: string; necesidadesPendientes?: string; recomendaciones?: string }): Promise<void>
+  agregarSeguimiento(
+    idIncidencia: string,
+    data: {
+      situacion: string;
+      descripcion: string;
+      necesidadesPendientes?: string;
+      recomendaciones?: string;
+    }
+  ): Promise<void>;
 
   /** Libera a los brigadistas asignados y cierra sus asignaciones. */
-  liberarBrigadistas(idIncidencia: string): Promise<void>
+  liberarBrigadistas(idIncidencia: string): Promise<void>;
+
+  /**
+   * Agrega una persona afectada durante el levantamiento de campo.
+   * Si `familiaNombre` coincide con un grupo existente lo usa; si no, crea/usa
+   * un grupo por defecto para la incidencia.
+   */
+  agregarPersona(
+    idIncidencia: string,
+    persona: {
+      nombres: string;
+      apellidos?: string | null;
+      edad?: number | null;
+      sexo?: string | null;
+      tipoDocumento?: string | null;
+      numeroDocumento?: string | null;
+      parentesco?: string | null;
+      familiaNombre?: string | null;
+    }
+  ): Promise<void>;
+
+  /**
+   * Persiste evidencias (ya subidas a S3) asociadas a la incidencia.
+   * `idUsuarioCargaGRD` identifica a quién las cargó.
+   */
+  guardarEvidencias(
+    idIncidencia: string,
+    idUsuarioCargaGRD: string,
+    evidencias: {
+      key: string;
+      nombreArchivo: string;
+      formato: string | null;
+      tamano: number | null;
+      descripcion?: string | null;
+    }[]
+  ): Promise<void>;
 }

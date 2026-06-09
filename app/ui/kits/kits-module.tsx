@@ -1,114 +1,219 @@
-'use client'
+"use client";
 
-import { useEffect, useState, useTransition } from 'react'
-import { useRouter } from 'next/navigation'
-import { Package, Plus, ArrowDownCircle, ArrowUpCircle, RefreshCw } from 'lucide-react'
-import { toast } from 'sonner'
-import { crearKit, registrarMovimientoKit, listarMovimientosKit } from '@/app/actions/kits'
-import { PaginationControls } from '@/app/ui/shared/pagination-controls'
+import { useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { Package, Plus, ArrowDownCircle, ArrowUpCircle, RefreshCw } from "lucide-react";
+import { toast } from "sonner";
+import { crearKit, registrarMovimientoKit, listarMovimientosKit } from "@/app/actions/kits";
+import { PaginationControls } from "@/app/ui/shared/pagination-controls";
 
-type Kit = { id: string; tipoKit: string; descripcion: string | null; stockActual: number; estadoKit: string }
-type Parroquia = { id: string; nombre: string }
-type Movimiento = { id: string; tipo: string; cantidad: number; fecha: string; responsable: string | null; motivoMovimiento: string | null; observaciones: string | null }
+type Kit = {
+  id: string;
+  tipoKit: string;
+  descripcion: string | null;
+  stockActual: number;
+  estadoKit: string;
+};
+type Parroquia = { id: string; nombre: string };
+type Movimiento = {
+  id: string;
+  tipo: string;
+  cantidad: number;
+  fecha: string;
+  responsable: string | null;
+  motivoMovimiento: string | null;
+  observaciones: string | null;
+};
 
-const TIPOS = ['INGRESO', 'ENTREGA', 'REPOSICION'] as const
-const KIT_PAGE_SIZE = 5
-const MOV_PAGE_SIZE = 5
+const TIPOS = ["INGRESO", "ENTREGA", "REPOSICION"] as const;
+const KIT_PAGE_SIZE = 5;
+const MOV_PAGE_SIZE = 5;
 
 export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parroquia[] }) {
-  const router = useRouter()
-  const [pending, startTransition] = useTransition()
-  const [selected, setSelected] = useState<string | null>(kits[0]?.id ?? null)
-  const [movimientos, setMovimientos] = useState<Movimiento[]>([])
-  const [showKitForm, setShowKitForm] = useState(false)
-  const [showMovForm, setShowMovForm] = useState(false)
-  const [kitPage, setKitPage] = useState(1)
-  const [movementPage, setMovementPage] = useState(1)
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [selected, setSelected] = useState<string | null>(kits[0]?.id ?? null);
+  const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
+  const [showKitForm, setShowKitForm] = useState(false);
+  const [showMovForm, setShowMovForm] = useState(false);
+  const [kitPage, setKitPage] = useState(1);
+  const [movementPage, setMovementPage] = useState(1);
 
-  const [kitForm, setKitForm] = useState({ tipoKit: '', descripcion: '', stockInicial: 0 })
-  const [movForm, setMovForm] = useState({ tipo: 'ENTREGA' as (typeof TIPOS)[number], cantidad: 1, idParroquiaDestino: parroquias[0]?.id ?? '', motivoMovimiento: '', observaciones: '' })
+  const [kitForm, setKitForm] = useState({ tipoKit: "", descripcion: "", stockInicial: 0 });
+  const [movForm, setMovForm] = useState({
+    tipo: "ENTREGA" as (typeof TIPOS)[number],
+    cantidad: 1,
+    idParroquiaDestino: parroquias[0]?.id ?? "",
+    motivoMovimiento: "",
+    observaciones: "",
+  });
 
-  const current = kits.find((k) => k.id === selected) ?? null
+  const current = kits.find((k) => k.id === selected) ?? null;
 
-  const totalKitPages = Math.max(1, Math.ceil(kits.length / KIT_PAGE_SIZE))
-  const safeKitPage = Math.min(kitPage, totalKitPages)
-  const kitStart = (safeKitPage - 1) * KIT_PAGE_SIZE
-  const visibleKits = kits.slice(kitStart, kitStart + KIT_PAGE_SIZE)
-  const kitFrom = kits.length === 0 ? 0 : kitStart + 1
-  const kitTo = Math.min(kitStart + KIT_PAGE_SIZE, kits.length)
+  const totalKitPages = Math.max(1, Math.ceil(kits.length / KIT_PAGE_SIZE));
+  const safeKitPage = Math.min(kitPage, totalKitPages);
+  const kitStart = (safeKitPage - 1) * KIT_PAGE_SIZE;
+  const visibleKits = kits.slice(kitStart, kitStart + KIT_PAGE_SIZE);
+  const kitFrom = kits.length === 0 ? 0 : kitStart + 1;
+  const kitTo = Math.min(kitStart + KIT_PAGE_SIZE, kits.length);
 
-  const totalMovementPages = Math.max(1, Math.ceil(movimientos.length / MOV_PAGE_SIZE))
-  const safeMovementPage = Math.min(movementPage, totalMovementPages)
-  const movementStart = (safeMovementPage - 1) * MOV_PAGE_SIZE
-  const visibleMovimientos = movimientos.slice(movementStart, movementStart + MOV_PAGE_SIZE)
-  const movementFrom = movimientos.length === 0 ? 0 : movementStart + 1
-  const movementTo = Math.min(movementStart + MOV_PAGE_SIZE, movimientos.length)
+  const totalMovementPages = Math.max(1, Math.ceil(movimientos.length / MOV_PAGE_SIZE));
+  const safeMovementPage = Math.min(movementPage, totalMovementPages);
+  const movementStart = (safeMovementPage - 1) * MOV_PAGE_SIZE;
+  const visibleMovimientos = movimientos.slice(movementStart, movementStart + MOV_PAGE_SIZE);
+  const movementFrom = movimientos.length === 0 ? 0 : movementStart + 1;
+  const movementTo = Math.min(movementStart + MOV_PAGE_SIZE, movimientos.length);
 
   useEffect(() => {
-    if (kitPage > totalKitPages) setKitPage(totalKitPages)
-  }, [kitPage, totalKitPages])
+    if (kitPage > totalKitPages) setKitPage(totalKitPages);
+  }, [kitPage, totalKitPages]);
 
   useEffect(() => {
-    if (movementPage > totalMovementPages) setMovementPage(totalMovementPages)
-  }, [movementPage, totalMovementPages])
+    if (movementPage > totalMovementPages) setMovementPage(totalMovementPages);
+  }, [movementPage, totalMovementPages]);
 
   const selectKit = (id: string) => {
-    setSelected(id)
-    setShowMovForm(false)
-    setMovementPage(1)
-  }
+    setSelected(id);
+    setShowMovForm(false);
+    setMovementPage(1);
+  };
 
   useEffect(() => {
-    let active = true
+    let active = true;
 
     if (!selected) {
-      setMovimientos([])
+      setMovimientos([]);
       return () => {
-        active = false
-      }
+        active = false;
+      };
     }
 
     listarMovimientosKit(selected)
       .then((items) => {
-        if (active) setMovimientos(items)
+        if (active) setMovimientos(items);
       })
       .catch(() => {
-        if (active) setMovimientos([])
-      })
+        if (active) setMovimientos([]);
+      });
 
     return () => {
-      active = false
-    }
-  }, [selected])
+      active = false;
+    };
+  }, [selected]);
 
-  const submitKit = () => {
-    if (!kitForm.tipoKit.trim()) { toast.error('Indica el tipo de kit.'); return }
-    startTransition(async () => {
-      const res = await crearKit(kitForm)
-      if (res?.message) toast.error(res.message)
-      else { toast.success('Kit creado.'); setShowKitForm(false); setKitForm({ tipoKit: '', descripcion: '', stockInicial: 0 }); router.refresh() }
-    })
+  function validarKitForm(): string | null {
+    const tipoKit = kitForm.tipoKit.trim();
+    const stockInicial = Number(kitForm.stockInicial);
+
+    if (!tipoKit) return "Indica el tipo de kit.";
+    if (tipoKit.length < 3) return "El tipo de kit debe tener al menos 3 caracteres.";
+
+    if (!Number.isFinite(stockInicial)) {
+      return "El stock inicial debe ser un número válido.";
+    }
+
+    if (!Number.isInteger(stockInicial)) {
+      return "El stock inicial debe ser un número entero.";
+    }
+
+    if (stockInicial < 0) {
+      return "El stock inicial no puede ser negativo.";
+    }
+
+    return null;
   }
 
+  function validarMovimientoForm(): string | null {
+    if (!current) return "Selecciona un kit.";
+
+    const cantidad = Number(movForm.cantidad);
+
+    if (!TIPOS.includes(movForm.tipo)) {
+      return "Selecciona un tipo de movimiento válido.";
+    }
+
+    if (!Number.isFinite(cantidad)) {
+      return "La cantidad debe ser un número válido.";
+    }
+
+    if (!Number.isInteger(cantidad)) {
+      return "La cantidad debe ser un número entero.";
+    }
+
+    if (cantidad <= 0) {
+      return "La cantidad debe ser mayor que cero.";
+    }
+
+    if (movForm.tipo === "ENTREGA" && !movForm.idParroquiaDestino.trim()) {
+      return "Selecciona la parroquia destino para la entrega.";
+    }
+
+    if (movForm.tipo === "ENTREGA" && cantidad > current.stockActual) {
+      return `Stock insuficiente: hay ${current.stockActual} y se intentan entregar ${cantidad}.`;
+    }
+
+    return null;
+  }
+
+  const submitKit = () => {
+    const errorValidacion = validarKitForm();
+
+    if (errorValidacion) {
+      toast.error(errorValidacion);
+      return;
+    }
+
+    startTransition(async () => {
+      const res = await crearKit({
+        ...kitForm,
+        tipoKit: kitForm.tipoKit.trim(),
+        descripcion: kitForm.descripcion.trim(),
+        stockInicial: Number(kitForm.stockInicial),
+      });
+
+      if (res?.message) toast.error(res.message);
+      else {
+        toast.success("Kit creado.");
+        setShowKitForm(false);
+        setKitForm({ tipoKit: "", descripcion: "", stockInicial: 0 });
+        router.refresh();
+      }
+    });
+  };
+
   const submitMov = () => {
-    if (!current) return
+    const errorValidacion = validarMovimientoForm();
+
+    if (errorValidacion) {
+      toast.error(errorValidacion);
+      return;
+    }
+
+    if (!current) return;
+
     startTransition(async () => {
       const res = await registrarMovimientoKit(current.id, {
         tipo: movForm.tipo,
-        cantidad: movForm.cantidad,
-        idParroquiaDestino: movForm.tipo === 'ENTREGA' ? movForm.idParroquiaDestino || undefined : undefined,
-        motivoMovimiento: movForm.motivoMovimiento || undefined,
-        observaciones: movForm.observaciones || undefined,
-      })
-      if (res?.message && /insuficiente|no se pudo|no tiene/i.test(res.message)) { toast.error(res.message); return }
-      toast.success(res?.message ?? 'Movimiento registrado.')
-      setShowMovForm(false)
-      setMovForm({ ...movForm, cantidad: 1, motivoMovimiento: '', observaciones: '' })
-      const movs = await listarMovimientosKit(current.id)
-      setMovimientos(movs)
-      router.refresh()
-    })
-  }
+        cantidad: Number(movForm.cantidad),
+        idParroquiaDestino:
+          movForm.tipo === "ENTREGA" ? movForm.idParroquiaDestino || undefined : undefined,
+        motivoMovimiento: movForm.motivoMovimiento.trim() || undefined,
+        observaciones: movForm.observaciones.trim() || undefined,
+      });
+
+      if (res?.message && /insuficiente|no se pudo|no tiene|válid|obligatori|selecciona/i.test(res.message)) {
+        toast.error(res.message);
+        return;
+      }
+
+      toast.success(res?.message ?? "Movimiento registrado.");
+      setShowMovForm(false);
+      setMovForm({ ...movForm, cantidad: 1, motivoMovimiento: "", observaciones: "" });
+      const movs = await listarMovimientosKit(current.id);
+      setMovimientos(movs);
+      router.refresh();
+    });
+  };
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
@@ -122,22 +227,50 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
             <p className="text-sm text-gray-600">Logística · control de stock</p>
           </div>
         </div>
-        <button onClick={() => setShowKitForm((s) => !s)} className="flex items-center gap-2 px-4 py-2 bg-[var(--caritas-green)] text-white rounded">
+        <button
+          onClick={() => setShowKitForm((s) => !s)}
+          className="flex items-center gap-2 px-4 py-2 bg-[var(--caritas-green)] text-white rounded"
+        >
           <Plus className="w-4 h-4" /> Nuevo kit
         </button>
       </div>
 
       {showKitForm && (
         <div className="bg-white border border-[var(--caritas-border)] rounded-xl p-5 mb-5 grid grid-cols-1 md:grid-cols-2 gap-3">
-          <Input label="Tipo de kit" value={kitForm.tipoKit} onChange={(v) => setKitForm({ ...kitForm, tipoKit: v })} />
-          <Input label="Stock inicial" type="number" value={String(kitForm.stockInicial)} onChange={(v) => setKitForm({ ...kitForm, stockInicial: Number(v) })} />
+          <Input
+            label="Tipo de kit"
+            value={kitForm.tipoKit}
+            onChange={(v) => setKitForm({ ...kitForm, tipoKit: v })}
+          />
+          <Input
+            label="Stock inicial"
+            type="number"
+            value={String(kitForm.stockInicial)}
+            onChange={(v) => setKitForm({ ...kitForm, stockInicial: Number(v) })}
+          />
           <label className="block md:col-span-2">
             <span className="text-xs text-gray-600">Contenido / descripción</span>
-            <textarea value={kitForm.descripcion} onChange={(e) => setKitForm({ ...kitForm, descripcion: e.target.value })} rows={2} className="mt-1 w-full px-3 py-2 border border-[var(--caritas-border)] rounded text-sm" />
+            <textarea
+              value={kitForm.descripcion}
+              onChange={(e) => setKitForm({ ...kitForm, descripcion: e.target.value })}
+              rows={2}
+              className="mt-1 w-full px-3 py-2 border border-[var(--caritas-border)] rounded text-sm"
+            />
           </label>
           <div className="md:col-span-2 flex justify-end gap-2">
-            <button onClick={() => setShowKitForm(false)} className="px-4 py-2 border border-[var(--caritas-border)] rounded">Cancelar</button>
-            <button onClick={submitKit} disabled={pending} className="px-4 py-2 bg-[var(--caritas-green)] text-white rounded disabled:opacity-50">Guardar</button>
+            <button
+              onClick={() => setShowKitForm(false)}
+              className="px-4 py-2 border border-[var(--caritas-border)] rounded"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={submitKit}
+              disabled={pending}
+              className="px-4 py-2 bg-[var(--caritas-green)] text-white rounded disabled:opacity-50"
+            >
+              Guardar
+            </button>
           </div>
         </div>
       )}
@@ -146,9 +279,20 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
         <div className="lg:col-span-1 space-y-3">
           {kits.length === 0 && <p className="text-sm text-gray-500">No hay kits registrados.</p>}
           {visibleKits.map((k) => (
-            <button key={k.id} onClick={() => selectKit(k.id)} className={`w-full text-left p-4 border rounded-xl transition-colors ${selected === k.id ? 'border-[var(--caritas-green)] bg-[var(--caritas-green)]/5' : 'border-[var(--caritas-border)] hover:bg-gray-50'}`}>
+            <button
+              key={k.id}
+              onClick={() => selectKit(k.id)}
+              className={`w-full text-left p-4 border rounded-xl transition-colors ${selected === k.id ? "border-[var(--caritas-green)] bg-[var(--caritas-green)]/5" : "border-[var(--caritas-border)] hover:bg-gray-50"}`}
+            >
               <div className="text-sm font-medium text-[var(--caritas-text)]">{k.tipoKit}</div>
-              <div className="text-xs text-gray-600 mt-1">Stock: <span className={`font-semibold ${k.stockActual < 5 ? 'text-red-600' : 'text-green-700'}`}>{k.stockActual}</span></div>
+              <div className="text-xs text-gray-600 mt-1">
+                Stock:{" "}
+                <span
+                  className={`font-semibold ${k.stockActual < 5 ? "text-red-600" : "text-green-700"}`}
+                >
+                  {k.stockActual}
+                </span>
+              </div>
             </button>
           ))}
           <PaginationControls
@@ -172,34 +316,79 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
                 <div>
                   <h2 className="text-[var(--caritas-text)]">{current.tipoKit}</h2>
                   <p className="text-sm text-gray-700 mt-1">{current.descripcion}</p>
-                  <p className="text-sm text-gray-600 mt-1">Stock actual: <span className="font-semibold">{current.stockActual}</span></p>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Stock actual: <span className="font-semibold">{current.stockActual}</span>
+                  </p>
                 </div>
-                <button onClick={() => setShowMovForm((s) => !s)} className="flex items-center gap-2 px-3 py-2 bg-[var(--caritas-green)] text-white text-sm rounded">
+                <button
+                  onClick={() => setShowMovForm((s) => !s)}
+                  className="flex items-center gap-2 px-3 py-2 bg-[var(--caritas-green)] text-white text-sm rounded"
+                >
                   <RefreshCw className="w-4 h-4" /> Movimiento
                 </button>
               </div>
 
               {showMovForm && (
                 <div className="bg-gray-50 border border-[var(--caritas-border)] rounded p-4 mb-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <Select label="Tipo" value={movForm.tipo} options={TIPOS as unknown as string[]} onChange={(v) => setMovForm({ ...movForm, tipo: v as (typeof TIPOS)[number] })} />
-                  <Input label="Cantidad" type="number" value={String(movForm.cantidad)} onChange={(v) => setMovForm({ ...movForm, cantidad: Number(v) })} />
-                  {movForm.tipo === 'ENTREGA' && (
+                  <Select
+                    label="Tipo"
+                    value={movForm.tipo}
+                    options={TIPOS as unknown as string[]}
+                    onChange={(v) => setMovForm({ ...movForm, tipo: v as (typeof TIPOS)[number] })}
+                  />
+                  <Input
+                    label="Cantidad"
+                    type="number"
+                    value={String(movForm.cantidad)}
+                    onChange={(v) => setMovForm({ ...movForm, cantidad: Number(v) })}
+                  />
+                  {movForm.tipo === "ENTREGA" && (
                     <label className="block">
                       <span className="text-xs text-gray-600">Parroquia destino</span>
-                      <select value={movForm.idParroquiaDestino} onChange={(e) => setMovForm({ ...movForm, idParroquiaDestino: e.target.value })} className="mt-1 w-full px-3 py-2 border border-[var(--caritas-border)] rounded text-sm bg-white">
+                      <select
+                        value={movForm.idParroquiaDestino}
+                        onChange={(e) =>
+                          setMovForm({ ...movForm, idParroquiaDestino: e.target.value })
+                        }
+                        className="mt-1 w-full px-3 py-2 border border-[var(--caritas-border)] rounded text-sm bg-white"
+                      >
                         <option value="">— Selecciona —</option>
-                        {parroquias.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                        {parroquias.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.nombre}
+                          </option>
+                        ))}
                       </select>
                     </label>
                   )}
-                  <Input label="Motivo" value={movForm.motivoMovimiento} onChange={(v) => setMovForm({ ...movForm, motivoMovimiento: v })} />
+                  <Input
+                    label="Motivo"
+                    value={movForm.motivoMovimiento}
+                    onChange={(v) => setMovForm({ ...movForm, motivoMovimiento: v })}
+                  />
                   <label className="md:col-span-2 block">
                     <span className="text-xs text-gray-600">Notas</span>
-                    <textarea value={movForm.observaciones} onChange={(e) => setMovForm({ ...movForm, observaciones: e.target.value })} rows={2} className="mt-1 w-full px-3 py-2 border border-[var(--caritas-border)] rounded text-sm" />
+                    <textarea
+                      value={movForm.observaciones}
+                      onChange={(e) => setMovForm({ ...movForm, observaciones: e.target.value })}
+                      rows={2}
+                      className="mt-1 w-full px-3 py-2 border border-[var(--caritas-border)] rounded text-sm"
+                    />
                   </label>
                   <div className="md:col-span-2 flex justify-end gap-2">
-                    <button onClick={() => setShowMovForm(false)} className="px-3 py-2 border border-[var(--caritas-border)] rounded">Cancelar</button>
-                    <button onClick={submitMov} disabled={pending} className="px-3 py-2 bg-[var(--caritas-green)] text-white rounded disabled:opacity-50">Registrar</button>
+                    <button
+                      onClick={() => setShowMovForm(false)}
+                      className="px-3 py-2 border border-[var(--caritas-border)] rounded"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={submitMov}
+                      disabled={pending}
+                      className="px-3 py-2 bg-[var(--caritas-green)] text-white rounded disabled:opacity-50"
+                    >
+                      Registrar
+                    </button>
                   </div>
                 </div>
               )}
@@ -207,17 +396,35 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
               <h3 className="text-sm text-gray-600 mb-2">Historial de movimientos</h3>
               <ul className="space-y-2">
                 {visibleMovimientos.map((m) => (
-                  <li key={m.id} className="flex items-start gap-3 p-3 border border-[var(--caritas-border)] rounded">
-                    {m.tipo === 'ENTREGA' ? <ArrowUpCircle className="w-5 h-5 text-red-600" /> : <ArrowDownCircle className="w-5 h-5 text-green-600" />}
+                  <li
+                    key={m.id}
+                    className="flex items-start gap-3 p-3 border border-[var(--caritas-border)] rounded"
+                  >
+                    {m.tipo === "ENTREGA" ? (
+                      <ArrowUpCircle className="w-5 h-5 text-red-600" />
+                    ) : (
+                      <ArrowDownCircle className="w-5 h-5 text-green-600" />
+                    )}
                     <div className="flex-1">
-                      <div className="text-sm text-[var(--caritas-text)]">{m.tipo} · <span className="font-medium">{m.cantidad}</span> unidades</div>
-                      <div className="text-xs text-gray-500">{new Date(m.fecha).toLocaleDateString()} {m.responsable ? `· ${m.responsable}` : ''}</div>
-                      {m.motivoMovimiento && <div className="text-xs text-gray-600">{m.motivoMovimiento}</div>}
-                      {m.observaciones && <div className="text-xs text-gray-500 italic mt-1">{m.observaciones}</div>}
+                      <div className="text-sm text-[var(--caritas-text)]">
+                        {m.tipo} · <span className="font-medium">{m.cantidad}</span> unidades
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {new Date(m.fecha).toLocaleDateString()}{" "}
+                        {m.responsable ? `· ${m.responsable}` : ""}
+                      </div>
+                      {m.motivoMovimiento && (
+                        <div className="text-xs text-gray-600">{m.motivoMovimiento}</div>
+                      )}
+                      {m.observaciones && (
+                        <div className="text-xs text-gray-500 italic mt-1">{m.observaciones}</div>
+                      )}
                     </div>
                   </li>
                 ))}
-                {movimientos.length === 0 && <p className="text-sm text-gray-500">Sin movimientos.</p>}
+                {movimientos.length === 0 && (
+                  <p className="text-sm text-gray-500">Sin movimientos.</p>
+                )}
               </ul>
               <PaginationControls
                 total={movimientos.length}
@@ -234,24 +441,57 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
         </div>
       </div>
     </div>
-  )
+  );
 }
 
-function Input({ label, value, onChange, type = 'text' }: { label: string; value: string; onChange: (v: string) => void; type?: string }) {
+function Input({
+  label,
+  value,
+  onChange,
+  type = "text",
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  type?: string;
+}) {
   return (
     <label className="block">
       <span className="text-xs text-gray-600">{label}</span>
-      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} className="mt-1 w-full px-3 py-2 border border-[var(--caritas-border)] rounded text-sm" />
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="mt-1 w-full px-3 py-2 border border-[var(--caritas-border)] rounded text-sm"
+      />
     </label>
-  )
+  );
 }
-function Select({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (v: string) => void }) {
+function Select({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (v: string) => void;
+}) {
   return (
     <label className="block">
       <span className="text-xs text-gray-600">{label}</span>
-      <select value={value} onChange={(e) => onChange(e.target.value)} className="mt-1 w-full px-3 py-2 border border-[var(--caritas-border)] rounded text-sm bg-white">
-        {options.map((o) => <option key={o} value={o}>{o}</option>)}
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="mt-1 w-full px-3 py-2 border border-[var(--caritas-border)] rounded text-sm bg-white"
+      >
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
       </select>
     </label>
-  )
+  );
 }
