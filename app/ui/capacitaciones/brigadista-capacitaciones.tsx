@@ -26,7 +26,8 @@ import { RendirExamenModal } from "@/app/ui/capacitaciones/rendir-examen-modal";
 
 function fmtDate(iso: string | null) {
   if (!iso) return null;
-  return new Date(iso).toLocaleDateString("es-PE", {
+  const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("es-PE", {
     day: "2-digit",
     month: "short",
     year: "numeric",
