@@ -38,7 +38,13 @@ export interface BrigadistaProps {
  */
 export class BrigadistaParroquial {
   private constructor(private props: BrigadistaProps) {}
+  private static assertDisponibilidadValida(valor: string): void {
+    const validas = Object.values(DISPONIBILIDAD) as string[];
 
+    if (!validas.includes(valor)) {
+      throw new BusinessRuleError("Disponibilidad no válida para el brigadista.");
+    }
+  }
   static crear(input: {
     id: string;
     idParroquia: string;
@@ -50,7 +56,11 @@ export class BrigadistaParroquial {
     disponibilidad?: string;
   }): BrigadistaParroquial {
     Guard.required(input.nombres, "nombres");
+    Guard.required(input.apellidos, "apellidos");
     Guard.required(input.idParroquia, "idParroquia");
+
+    const disponibilidad = input.disponibilidad || DISPONIBILIDAD.DISPONIBLE;
+    BrigadistaParroquial.assertDisponibilidadValida(disponibilidad);
     return new BrigadistaParroquial({
       id: input.id,
       idParroquia: input.idParroquia,
@@ -59,7 +69,7 @@ export class BrigadistaParroquial {
       dni: input.dni?.trim() || null,
       celular: input.celular?.trim() || null,
       correo: input.correo?.trim() || null,
-      disponibilidad: input.disponibilidad || DISPONIBILIDAD.DISPONIBLE,
+      disponibilidad,
       estado: ESTADO.ACTIVO,
       fechaRegistro: new Date(),
     });
@@ -80,6 +90,7 @@ export class BrigadistaParroquial {
     disponibilidad?: string;
   }): void {
     Guard.required(input.nombres, "nombres");
+    Guard.required(input.apellidos, "apellidos");
     Guard.required(input.idParroquia, "idParroquia");
     this.props.idParroquia = input.idParroquia;
     this.props.nombres = input.nombres.trim();
@@ -87,7 +98,7 @@ export class BrigadistaParroquial {
     this.props.dni = input.dni?.trim() || null;
     this.props.celular = input.celular?.trim() || null;
     this.props.correo = input.correo?.trim() || null;
-    if (input.disponibilidad) this.props.disponibilidad = input.disponibilidad;
+    if (input.disponibilidad) this.setDisponibilidad(input.disponibilidad);
   }
 
   /** Alterna ACTIVO ↔ INACTIVO. Al desactivar, deja de estar disponible. */
@@ -110,7 +121,7 @@ export class BrigadistaParroquial {
 
   /** Marca al brigadista como ocupado en campo (al asignarlo a una incidencia). */
   marcarEnCampo(): void {
-    this.props.disponibilidad = DISPONIBILIDAD.EN_CAMPO;
+    this.setDisponibilidad(DISPONIBILIDAD.EN_CAMPO);
   }
 
   /** Libera al brigadista (al cerrar el caso). */
@@ -119,6 +130,7 @@ export class BrigadistaParroquial {
   }
 
   private setDisponibilidad(valor: string): void {
+    BrigadistaParroquial.assertDisponibilidadValida(valor);
     if (valor !== DISPONIBILIDAD.NO_DISPONIBLE && this.props.estado !== ESTADO.ACTIVO) {
       throw new BusinessRuleError(
         "Un brigadista inactivo no puede marcarse como disponible o en campo."

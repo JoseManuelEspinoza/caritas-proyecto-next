@@ -23,7 +23,19 @@ export interface KitProps {
  */
 export class KitEmergencia {
   private constructor(private props: KitProps) {}
+  private static assertTipoMovimientoValido(tipo: string): asserts tipo is TipoMovimiento {
+    const validos: TipoMovimiento[] = ["INGRESO", "ENTREGA", "REPOSICION"];
 
+    if (!validos.includes(tipo as TipoMovimiento)) {
+      throw new BusinessRuleError("Tipo de movimiento no válido para el kit.");
+    }
+  }
+
+  private static assertEntero(value: number, campo: string): void {
+    if (!Number.isInteger(value)) {
+      throw new BusinessRuleError(`${campo} debe ser un número entero.`);
+    }
+  }
   static crear(input: {
     id: string;
     tipoKit: string;
@@ -35,6 +47,7 @@ export class KitEmergencia {
   }): KitEmergencia {
     Guard.required(input.tipoKit, "tipoKit");
     const stock = input.stockInicial ?? 0;
+    KitEmergencia.assertEntero(stock, "stockInicial");
     Guard.nonNegative(stock, "stockInicial");
     return new KitEmergencia({
       id: input.id,
@@ -54,6 +67,8 @@ export class KitEmergencia {
 
   /** Ajusta el stock según el tipo de movimiento. Bloquea entregas sin saldo. */
   aplicarMovimiento(tipo: TipoMovimiento, cantidad: number): void {
+    KitEmergencia.assertTipoMovimientoValido(tipo);
+    KitEmergencia.assertEntero(cantidad, "cantidad");    
     Guard.positive(cantidad, "cantidad");
     const delta = tipo === "ENTREGA" ? -cantidad : cantidad;
     const nuevo = this.props.stockActual + delta;

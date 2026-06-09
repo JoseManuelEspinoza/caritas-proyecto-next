@@ -1349,22 +1349,85 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
     }
   }
 
+  function hoyLocalISO(): string {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().slice(0, 10);
+  }
+
+  function validarFormularioIncidencia(): string | null {
+    const dni = reportaDni.replace(/\D/g, "");
+    const tel = reportaTel.replace(/\D/g, "");
+
+    if (!dni) return "Ingresa el DNI de la persona que reportó.";
+    if (dni.length !== 8) return "El DNI de quien reporta debe tener exactamente 8 dígitos.";
+
+    if (!reportaNombre.trim()) return "Ingresa el nombre completo de quien reportó.";
+    if (reportaNombre.trim().length < 5) {
+      return "El nombre de quien reporta debe tener al menos 5 caracteres.";
+    }
+
+    if (!tel) return "Ingresa el número de celular de quien reportó.";
+
+    if (reportaTelCodigo === "+51" && !/^9\d{8}$/.test(tel)) {
+      return "Para Perú, el celular debe tener 9 dígitos y empezar con 9.";
+    }
+
+    if (reportaTelCodigo !== "+51" && (tel.length < 7 || tel.length > 12)) {
+      return "El número de celular debe tener entre 7 y 12 dígitos.";
+    }
+
+    if (!reportaRol.trim()) return "Selecciona el rol o institución de quien reportó.";
+
+    if (!fechaSuceso) return "Ingresa la fecha del suceso.";
+    if (fechaSuceso > hoyLocalISO()) return "La fecha del suceso no puede ser futura.";
+
+    if (!categoria.trim()) return "Selecciona la categoría del evento.";
+    if (!distrito.trim()) return "Selecciona el distrito del suceso.";
+
+    if (!direccion.trim()) return "Ingresa la dirección del suceso.";
+    if (direccion.trim().length < 5) return "La dirección debe tener al menos 5 caracteres.";
+
+    if (!descripcion.trim()) return "Ingresa una descripción breve del evento.";
+    if (descripcion.trim().length < 10) {
+      return "La descripción del evento debe tener al menos 10 caracteres.";
+    }
+
+    if (!nivelAfectacion) return "Selecciona el nivel de afectación.";
+
+    if (necesidades.includes("Otros") && !necesidadOtra.trim()) {
+      return "Especifica la necesidad adicional en el campo 'Otros'.";
+    }
+
+    if (lat != null && (lat < -90 || lat > 90)) {
+      return "La latitud registrada está fuera del rango válido.";
+    }
+
+    if (lng != null && (lng < -180 || lng > 180)) {
+      return "La longitud registrada está fuera del rango válido.";
+    }
+
+    const archivos = fuentesEvidencia.flatMap((f) => f.archivos);
+
+    if (archivos.some((a) => a.estado === "subiendo")) {
+      return "Espera a que terminen de subirse las evidencias antes de guardar.";
+    }
+
+    if (archivos.some((a) => a.estado === "error")) {
+      return "Hay evidencias con error de subida. Elimínalas o vuelve a subirlas antes de guardar.";
+    }
+
+    return null;
+  }
+
   // ─── Guardar (crear o actualizar) ─────────────────────────────────────────
 
   function handleSave() {
     // Validación de campos obligatorios.
     setIntentoEnvio(true);
-    const faltan =
-      !reportaDni.trim() ||
-      !reportaNombre.trim() ||
-      !reportaTel.trim() ||
-      !reportaRol.trim() ||
-      !fechaSuceso ||
-      !categoria.trim() ||
-      !distrito.trim() ||
-      !direccion.trim();
-    if (faltan) {
-      toast.error("Completa los campos obligatorios marcados en rojo.");
+    const errorValidacion = validarFormularioIncidencia();
+    if (errorValidacion) {
+      toast.error(errorValidacion);
       return;
     }
 
@@ -1745,14 +1808,14 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
                   <div>
                     <label className="text-xs font-semibold text-gray-600 mb-1.5 block">
-                      Descripción breve del evento
+                      Descripción breve del evento <span className="text-red-500">*</span>
                     </label>
                     <textarea
                       rows={5}
                       placeholder="Describe lo que se reportó: tipo de afectación, magnitud aproximada, situación actual..."
                       value={descripcion}
                       onChange={(e) => setDescripcion(e.target.value)}
-                      className={`${inputCls} resize-none`}
+                      className={`${inputCls} resize-none ${errBorde(!descripcion.trim())}`}
                     />
                   </div>
                   <div>
