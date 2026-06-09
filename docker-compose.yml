@@ -6,8 +6,8 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - DATABASE_URL=postgresql://postgres:admin123@db:5432/caritas_db
-      - SESSION_SECRET=dev-secret-minimo-32-caracteres-cambiar-en-prod
+      - DATABASE_URL=${DATABASE_URL}
+      - SESSION_SECRET=${SESSION_SECRET:-dev-secret-minimo-32-caracteres-cambiar-en-prod}
       - APP_URL=http://localhost:3000
       - NODE_ENV=development
       # Limit Node.js heap to 4 GB — prevents unbounded growth that caused ~60 GB RAM usage.
@@ -23,8 +23,8 @@ services:
       - AUTH_URL=http://localhost:3000
       - AUTH_KEYCLOAK_ID=caritas-app
       - AUTH_KEYCLOAK_SECRET=caritas-app-secret-dev
-      - AUTH_KEYCLOAK_ISSUER=http://localhost:8080/realms/caritas
-      - AUTH_KEYCLOAK_INTERNAL_URL=http://keycloak:8080/realms/caritas
+      - AUTH_KEYCLOAK_ISSUER=http://localhost:8085/realms/caritas
+      - AUTH_KEYCLOAK_INTERNAL_URL=http://keycloak:8085/realms/caritas
       # SMTP — se lee desde el archivo .env del proyecto
       - SMTP_HOST=${SMTP_HOST:-mailhog}
       - SMTP_PORT=${SMTP_PORT:-1025}
@@ -49,9 +49,6 @@ services:
     volumes:
       - .:/app
       - node_modules:/app/node_modules
-    depends_on:
-      db:
-        condition: service_healthy
     command: sh -c "npm install && npm install lightningcss-linux-arm64-gnu @tailwindcss/oxide-linux-arm64-gnu --no-save 2>/dev/null || true && ln -sf /app/node_modules/lightningcss-linux-arm64-gnu/lightningcss.linux-arm64-gnu.node /app/node_modules/lightningcss/lightningcss.linux-arm64-gnu.node 2>/dev/null || true && ln -sf /app/node_modules/@tailwindcss/oxide-linux-arm64-gnu/tailwindcss-oxide.linux-arm64-gnu.node /app/node_modules/@tailwindcss/oxide/tailwindcss-oxide.linux-arm64-gnu.node 2>/dev/null || true && npx prisma generate && npx prisma db push --accept-data-loss && npm run dev"
 
   # ─── Base de datos de la APLICACIÓN ──────────────────────────────────────────
@@ -101,12 +98,13 @@ services:
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
       # HTTP local (sin TLS en dev) + health
       KC_HTTP_ENABLED: "true"
+      KC_HTTP_PORT: "8085"
       # URL pública del IdP: debe coincidir con el issuer que usa la app.
-      KC_HOSTNAME: http://host.docker.internal:8090
+      KC_HOSTNAME: http://localhost:8085
       KC_HOSTNAME_STRICT: "false"
       KC_HEALTH_ENABLED: "true"
     ports:
-      - "8080:8080"
+      - "8085:8085"
     volumes:
       # El realm se importa al primer arranque
       - ./keycloak/realm-caritas.json:/opt/keycloak/data/import/realm-caritas.json:ro
