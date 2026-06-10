@@ -8,8 +8,7 @@ export default async function BrigadistasPage() {
   const session = await verifySession();
   const role = toFrontendRole(session.role);
 
-  // Solo admin puede gestionar brigadistas
-  if (role !== "admin") redirect("/dashboard");
+  if (!["admin", "especialistaGRD"].includes(role)) redirect("/dashboard");
 
   const [brigadistas, parroquias] = await Promise.all([
     prisma.brigadistaParroquial.findMany({
@@ -47,6 +46,7 @@ export default async function BrigadistasPage() {
 
   return (
     <BrigadistasList
+      canEdit={role === "admin"}
       brigadistas={brigadistas.map((b) => ({
         id: b.idBrigadistaParroquial,
         nombres: b.nombres,

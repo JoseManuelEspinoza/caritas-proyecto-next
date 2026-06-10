@@ -26,7 +26,6 @@ export default async function GrdPage() {
         };
       }
     }
-    // Si el brigadista no tiene record aún, ve lista vacía (seguro)
   }
 
   const incidencias = await prisma.incidencia.findMany({

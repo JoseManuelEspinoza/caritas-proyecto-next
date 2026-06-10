@@ -28,6 +28,7 @@ export default async function SimulacrosPage() {
         parroquiaNombre: parroquiaNombre.get(a.idParroquia) ?? "—",
       }))}
       parroquias={parroquias.map((p) => ({ id: p.idParroquia, nombre: p.nombre }))}
+      role={role}
     />
   );
 }

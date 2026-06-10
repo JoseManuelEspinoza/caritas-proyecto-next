@@ -52,9 +52,9 @@ function validarCreacion(data: CreateIncidenteData): void {
 
   if (!tel) throw new ValidationError("Ingresa el celular de quien reportó.");
 
-  if (!/^9\d{8}$/.test(tel)) {
-    throw new ValidationError("El celular debe tener 9 dígitos y empezar con 9.");
-  }
+  // if (!/^9\d{8}$/.test(tel)) {
+  //   throw new ValidationError("El celular debe tener 9 dígitos y empezar con 9.");
+  // }
 
   if (!data.reportaRol?.trim()) {
     throw new ValidationError("Selecciona el rol de quien reportó.");
