@@ -1960,6 +1960,35 @@ function Seccion({
   );
 }
 
+// Sección de solo lectura para el informe que revisa el Comité
+function ReadSeccion({
+  letra,
+  titulo,
+  children,
+}: {
+  letra: string;
+  titulo: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <p className="text-[11px] font-bold text-purple-700 uppercase tracking-wider mb-2">
+        {letra}) {titulo}
+      </p>
+      {children}
+    </div>
+  );
+}
+
+function ReadCampo({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="bg-gray-50 rounded-lg border border-gray-100 px-2.5 py-1.5">
+      <p className="text-[10px] text-gray-400 uppercase tracking-wider">{label}</p>
+      <p className="text-xs font-medium text-gray-800">{value}</p>
+    </div>
+  );
+}
+
 /** Lista de inputs editable con agregar/quitar. */
 function ListaEditable({
   label,
@@ -2108,6 +2137,7 @@ function PanelRevisar({ data, onDone }: { data: IncidentData; onDone: () => void
   const [docFile, setDocFile] = useState<File | null>(null);
   const [subiendoDoc, setSubiendoDoc] = useState(false);
   const [savingForPdf, setSavingForPdf] = useState(false);
+  const [descargandoPdf, setDescargandoPdf] = useState(false);
 
   const addKit = (refId: string, tipo: string) =>
     setAsignaciones((p) => ({
@@ -2165,6 +2195,39 @@ function PanelRevisar({ data, onDone }: { data: IncidentData; onDone: () => void
           })),
       }))
       .filter((k) => k.articulos.length);
+  }
+
+  // Nota del brigadista registrada por familia en el levantamiento de campo
+  function notaFamiliaDe(refId: string): string | null {
+    return notasFamiliasRef.find((n) => n.id === refId)?.nota?.trim() || null;
+  }
+
+  // Resumen consolidado de todos los artículos asignados (suma por kit/código)
+  function articulosConsolidados() {
+    const map = new Map<string, { tipoKit: string; codigo: string; descripcion: string; cantidad: number }>();
+    for (const g of targets) {
+      for (const kit of kitsLimpios(g.id)) {
+        for (const a of kit.articulos) {
+          const k = `${kit.tipoKit}||${a.codigo}||${a.descripcion}`;
+          const prev = map.get(k);
+          if (prev) prev.cantidad += a.cantidad;
+          else map.set(k, { tipoKit: kit.tipoKit, codigo: a.codigo, descripcion: a.descripcion, cantidad: a.cantidad });
+        }
+      }
+    }
+    return Array.from(map.values());
+  }
+
+  // Descarga el PDF del informe ya enviado (uso del Comité, sin guardar)
+  async function descargarInforme() {
+    setDescargandoPdf(true);
+    try {
+      await generarPdf();
+    } catch {
+      toast.error("No se pudo generar el PDF.");
+    } finally {
+      setDescargandoPdf(false);
+    }
   }
 
   // Helper: clase de error para campos obligatorios
@@ -2249,6 +2312,7 @@ function PanelRevisar({ data, onDone }: { data: IncidentData; onDone: () => void
         return;
       }
       toast.success("Informe enviado al Comité");
+      setShowDocStep(false);
       onDone();
     });
   }
@@ -2288,7 +2352,11 @@ function PanelRevisar({ data, onDone }: { data: IncidentData; onDone: () => void
       return;
     }
     toast.success("Informe guardado");
+    await generarPdf();
+  }
 
+  // Genera y descarga el PDF con los valores actuales del informe (sin guardar).
+  async function generarPdf() {
     // Determine which images to embed: selected evidence images, or all if none selected
     const isImgEv = (ev: (typeof data.evidencias)[number]) => {
       const fmt = ev.formato ?? "";
@@ -3013,24 +3081,242 @@ function PanelRevisar({ data, onDone }: { data: IncidentData; onDone: () => void
       {/* Vista: Decidir */}
       {view === "decidir" && canDecidir && (
         <div className="space-y-4">
-          {informeEval && (
-            <div className="bg-gray-50 border border-[#DDDDDD] rounded-lg p-4 text-sm space-y-2">
-              <p className="font-medium text-gray-800 text-xs mb-2">
-                Resumen del informe del Especialista
-              </p>
-              <InfoField label="Análisis" value={informeEval.resumen ?? "—"} />
-            </div>
+          {!informeEval ? (
+            <p className="text-sm text-gray-500 text-center py-6">
+              El Especialista GRD aún no ha enviado el informe de evaluación al Comité.
+            </p>
+          ) : (
+            <>
+              {/* Datos del evento */}
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-3">
+                  Datos del evento
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    ["Código", data.codigoCaso ?? "—"],
+                    ["Categoría", data.tipoEvento ?? "—"],
+                    ["Gravedad", data.gravedad ?? "—"],
+                    ["Fecha suceso", fmtDate(data.fechaRegistro)],
+                    ["Distrito", data.parroquia ?? "—"],
+                    ["Familias", String(targets.length)],
+                    ["Personas", String(targets.reduce((n, g) => n + g.personas.length, 0))],
+                    ["Reportado por", data.aviso?.nombreInformante ?? "—"],
+                  ].map(([l, v]) => (
+                    <div key={l} className="bg-white rounded-lg border border-gray-100 px-2.5 py-1.5">
+                      <p className="text-[10px] text-gray-400 uppercase tracking-wider">{l}</p>
+                      <p className="text-xs font-semibold text-gray-800 truncate">{v}</p>
+                    </div>
+                  ))}
+                </div>
+                {data.descripcionEvento && (
+                  <p className="text-xs text-gray-600 mt-3">
+                    <span className="font-semibold text-gray-700">Descripción:</span>{" "}
+                    {data.descripcionEvento}
+                  </p>
+                )}
+              </div>
+
+              {/* Informe de atención (solo lectura) */}
+              <div className="rounded-xl border border-purple-200 overflow-hidden">
+                <div className="bg-purple-600 text-white px-4 py-3 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <BarChart3 className="w-4 h-4 flex-shrink-0" />
+                    <p className="font-semibold text-sm truncate">
+                      Informe de Atención de Ayuda Humanitaria
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={descargarInforme}
+                    disabled={descargandoPdf}
+                    className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-semibold px-3 py-1.5 rounded-lg disabled:opacity-50 flex-shrink-0"
+                  >
+                    {descargandoPdf ? (
+                      <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generando…</>
+                    ) : (
+                      <><FileText className="w-3.5 h-3.5" /> Descargar PDF</>
+                    )}
+                  </button>
+                </div>
+
+                <div className="p-4 space-y-4 bg-white">
+                  {/* A) Identificación */}
+                  <ReadSeccion letra="A" titulo="Identificación">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <ReadCampo label="Fecha" value={fmtDate(informeEval.fecha)} />
+                      <ReadCampo label="Dirigido a" value={report.dirigidoA || "—"} />
+                      <ReadCampo label="Motivo" value={report.motivo || "—"} />
+                    </div>
+                  </ReadSeccion>
+
+                  {/* B) Objetivos */}
+                  <ReadSeccion letra="B" titulo="Objetivos">
+                    <p className="text-xs text-gray-700">
+                      <span className="font-semibold">General: </span>
+                      {report.objetivoGeneral || "—"}
+                    </p>
+                    {objetivos.filter((o) => o.trim()).length > 0 && (
+                      <ul className="mt-2 space-y-1">
+                        {objetivos
+                          .filter((o) => o.trim())
+                          .map((o, i) => (
+                            <li key={i} className="text-xs text-gray-700 flex gap-1.5">
+                              <span className="text-purple-500">•</span>
+                              {o}
+                            </li>
+                          ))}
+                      </ul>
+                    )}
+                  </ReadSeccion>
+
+                  {/* C) Análisis y hallazgos */}
+                  <ReadSeccion letra="C" titulo="Análisis y Hallazgos">
+                    {report.analisis && <p className="text-xs text-gray-700">{report.analisis}</p>}
+                    {report.hallazgosTexto && (
+                      <p className="text-xs text-gray-700 mt-2">{report.hallazgosTexto}</p>
+                    )}
+                    {hallazgos.filter((h) => h.trim()).length > 0 && (
+                      <ul className="mt-2 space-y-1">
+                        {hallazgos
+                          .filter((h) => h.trim())
+                          .map((h, i) => (
+                            <li key={i} className="text-xs text-gray-700 flex gap-1.5">
+                              <span className="text-purple-500">•</span>
+                              {h}
+                            </li>
+                          ))}
+                      </ul>
+                    )}
+                  </ReadSeccion>
+
+                  {/* D) Asignación de ayuda por familia */}
+                  <ReadSeccion letra="D" titulo="Asignación de Ayuda Humanitaria por Familia">
+                    <div className="space-y-3">
+                      {targets.map((g) => {
+                        const kits = kitsLimpios(g.id);
+                        const nota = notaFamiliaDe(g.id);
+                        return (
+                          <div
+                            key={g.id}
+                            className="rounded-lg border border-purple-100 bg-purple-50/40 p-3"
+                          >
+                            <div className="flex items-center gap-2 mb-2">
+                              <Users className="w-3.5 h-3.5 text-purple-600" />
+                              <p className="text-xs font-bold text-purple-800">
+                                {g.nombreReferencia ?? "Familia"}
+                              </p>
+                              <span className="text-[10px] text-gray-500">
+                                {g.personas.length} integrante(s) · {kits.length} kit(s)
+                              </span>
+                            </div>
+                            {integrantesDe(g).length > 0 && (
+                              <div className="flex flex-wrap gap-1 mb-2">
+                                {integrantesDe(g).map((nombre, i) => (
+                                  <span
+                                    key={i}
+                                    className="text-[10px] bg-white border border-purple-100 rounded-full px-2 py-0.5 text-gray-700"
+                                  >
+                                    {nombre}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            {nota && (
+                              <p className="text-[11px] text-purple-700 italic mb-2">
+                                <span className="font-semibold not-italic">Brigadista: </span>
+                                {nota}
+                              </p>
+                            )}
+                            {kits.length === 0 ? (
+                              <p className="text-[11px] text-gray-400 italic">Sin kits asignados.</p>
+                            ) : (
+                              <div className="space-y-2">
+                                {kits.map((kit, ki) => (
+                                  <div key={ki} className="bg-white rounded-lg border border-gray-100 overflow-hidden">
+                                    <p className="text-[11px] font-bold text-[#009850] px-2.5 py-1.5 border-b border-gray-100">
+                                      {kit.tipoKit}
+                                    </p>
+                                    <table className="w-full text-[11px]">
+                                      <thead>
+                                        <tr className="text-gray-400 bg-gray-50">
+                                          <th className="text-left font-semibold px-2.5 py-1 w-8">N°</th>
+                                          <th className="text-left font-semibold px-2.5 py-1">Código</th>
+                                          <th className="text-left font-semibold px-2.5 py-1">Descripción</th>
+                                          <th className="text-right font-semibold px-2.5 py-1 w-16">Cant.</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {kit.articulos.map((a, ai) => (
+                                          <tr key={ai} className="border-t border-gray-50">
+                                            <td className="px-2.5 py-1 text-gray-400">{ai + 1}</td>
+                                            <td className="px-2.5 py-1 font-mono text-gray-600">{a.codigo || "—"}</td>
+                                            <td className="px-2.5 py-1 text-gray-700">{a.descripcion || "—"}</td>
+                                            <td className="px-2.5 py-1 text-right font-semibold text-gray-800">{a.cantidad}</td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Resumen consolidado */}
+                    {articulosConsolidados().length > 0 && (
+                      <div className="mt-3 rounded-lg overflow-hidden border border-gray-200">
+                        <p className="text-[11px] font-bold text-white bg-gray-700 px-3 py-2 uppercase tracking-wider">
+                          Resumen consolidado de artículos
+                        </p>
+                        <table className="w-full text-[11px]">
+                          <thead>
+                            <tr className="text-gray-500 bg-gray-50">
+                              <th className="text-left font-semibold px-3 py-1.5">Kit</th>
+                              <th className="text-left font-semibold px-3 py-1.5">Código</th>
+                              <th className="text-left font-semibold px-3 py-1.5">Descripción</th>
+                              <th className="text-right font-semibold px-3 py-1.5 w-20">Cant. total</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {articulosConsolidados().map((f, i) => (
+                              <tr key={i} className="border-t border-gray-100">
+                                <td className="px-3 py-1.5 text-purple-700">{f.tipoKit}</td>
+                                <td className="px-3 py-1.5 font-mono text-gray-600">{f.codigo || "—"}</td>
+                                <td className="px-3 py-1.5 text-gray-700">{f.descripcion || "—"}</td>
+                                <td className="px-3 py-1.5 text-right font-bold text-gray-800">{f.cantidad}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </ReadSeccion>
+
+                  {/* E) Conclusiones */}
+                  {report.conclusiones && (
+                    <ReadSeccion letra="E" titulo="Conclusiones">
+                      <p className="text-xs text-gray-700">{report.conclusiones}</p>
+                    </ReadSeccion>
+                  )}
+                </div>
+              </div>
+            </>
           )}
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Observaciones / Motivo
+
+          <div className="border-t border-gray-100 pt-4">
+            <label className="block text-xs font-semibold text-gray-700 mb-1">
+              Resolución y observaciones del Comité
             </label>
             <textarea
               rows={3}
               className={textareaCls}
               value={obsText}
               onChange={(e) => setObsText(e.target.value)}
-              placeholder="Ingresa observaciones si devuelves o motivo si rechazas..."
+              placeholder="Justificación de la decisión, criterios aplicados, condiciones de la donación..."
             />
           </div>
           <div className="flex gap-3 justify-end flex-wrap">
