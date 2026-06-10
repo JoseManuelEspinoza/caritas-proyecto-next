@@ -54,9 +54,11 @@ const ESTADO_BADGE: Record<string, { cls: string; icon: React.ReactNode }> = {
 export function SimulacrosModule({
   actividades,
   parroquias,
+  role,
 }: {
   actividades: Actividad[];
   parroquias: Parroquia[];
+  role: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -289,12 +291,14 @@ export function SimulacrosModule({
             <p className="text-sm text-gray-600">Prevención · actividades por parroquia</p>
           </div>
         </div>
-        <button
-          onClick={() => setShowForm((s) => !s)}
-          className="flex items-center gap-2 px-4 py-2 bg-[var(--caritas-green)] text-white rounded"
-        >
-          <Plus className="w-4 h-4" /> Programar
-        </button>
+        {role !== "brigadista" && (
+          <button
+            onClick={() => setShowForm((s) => !s)}
+            className="flex items-center gap-2 px-4 py-2 bg-[var(--caritas-green)] text-white rounded"
+          >
+            <Plus className="w-4 h-4" /> Programar
+          </button>
+        )}
       </div>
 
       <div className="bg-white border border-[var(--caritas-border)] rounded-xl p-4 mb-6 space-y-3">

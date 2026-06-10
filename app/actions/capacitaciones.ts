@@ -150,6 +150,7 @@ export type CursoInscrito = {
   evalFinal: number | null;
   resultado: string | null;
   certificado: boolean;
+  constanciaUrl: string | null;
   sesiones: Sesion[];
   cuestionarioInicial: {
     id: string;
@@ -189,6 +190,63 @@ export async function listarInscripciones(idCurso: string) {
   return makeCursoUseCases().listarInscripciones.execute(idCurso);
 }
 
+export type ParticipanteCurso = {
+  idInscripcion: string;
+  nombre: string;
+  documento: string | null;
+  correo: string | null;
+  estadoInscripcion: string;
+  nota: number | null;
+  resultado: string | null;
+  certificado: boolean;
+  constanciaUrl: string | null;
+};
+
+export async function listarParticipantesCurso(idCurso: string): Promise<ParticipanteCurso[]> {
+  await verifySession();
+  const rows = await prisma.inscripcionCurso.findMany({
+    where: { idCursoCapacitacion: idCurso },
+    orderBy: { fechaInscripcion: "asc" },
+    include: {
+      participante: { select: { nombres: true, apellidos: true, tipoDocumento: true, numeroDocumento: true, correo: true } },
+      evaluaciones: {
+        orderBy: { fechaEvaluacion: "desc" },
+        take: 1,
+        select: { nota: true, resultado: true },
+      },
+      certificacion: { select: { idCertificacionCurso: true, constanciaUrl: true } },
+    },
+  });
+  return rows.map((r) => ({
+    idInscripcion: r.idInscripcionCurso,
+    nombre: `${r.participante.nombres} ${r.participante.apellidos ?? ""}`.trim(),
+    documento: r.participante.numeroDocumento ?? null,
+    correo: r.participante.correo ?? null,
+    estadoInscripcion: r.estadoInscripcion,
+    nota: r.evaluaciones[0]?.nota != null ? Number(r.evaluaciones[0].nota) : null,
+    resultado: r.evaluaciones[0]?.resultado ?? null,
+    certificado: r.certificacion !== null,
+    constanciaUrl: r.certificacion?.constanciaUrl ?? null,
+  }));
+}
+
+export async function actualizarConstancia(
+  idInscripcion: string,
+  constanciaUrl: string
+): Promise<void | { message: string }> {
+  await verifySession();
+  if (!constanciaUrl.trim()) return { message: "La URL de la constancia es obligatoria." };
+  try {
+    await prisma.certificacionCurso.update({
+      where: { idInscripcionCurso: idInscripcion },
+      data: { constanciaUrl: constanciaUrl.trim() },
+    });
+  } catch (err) {
+    return fail(err, "No se pudo actualizar la constancia.");
+  }
+  revalidatePath(REVALIDATE);
+}
+
 export async function listarCursosConSesiones(idResponsable?: string): Promise<CursoDetalle[]> {
   await verifySession();
   const rows = await prisma.cursoCapacitacion.findMany({
@@ -211,45 +269,64 @@ export async function listarCursosConSesiones(idResponsable?: string): Promise<C
           },
         },
       },
-      cuestionarios: {
-        where: { estado: "ACTIVO" },
-        include: { _count: { select: { preguntas: true } } },
-      },
       _count: { select: { inscripciones: true } },
     },
   });
-  return rows.map((r) => ({
-    id: r.idCursoCapacitacion,
-    codigoCurso: r.codigoCurso,
-    nombreCurso: r.nombreCurso,
-    descripcion: r.descripcion,
-    modalidadGeneral: r.modalidadGeneral,
-    estadoCurso: r.estadoCurso,
-    fechaPublicacion: r.fechaPublicacion?.toISOString() ?? null,
-    fechaCierre: r.fechaCierre?.toISOString() ?? null,
-    responsable: `${r.usuarioResponsable.nombres} ${r.usuarioResponsable.apellidos}`.trim(),
-    idResponsable: r.idUsuarioResponsableGRD,
-    totalInscritos: r._count.inscripciones,
-    sesiones: r.unidades.map((u) => ({
-      id: u.idUnidadContenido,
-      numeroOrden: u.numeroOrden,
-      tituloUnidad: u.tituloUnidad,
-      materiales: u.materiales.map((m) => ({
-        id: m.idMaterialCapacitacion,
-        titulo: m.titulo,
-        tipoMaterial: m.tipoMaterial,
-        enlaceMaterial: m.enlaceMaterial,
+
+  // Intentar obtener cuestionarios; si la tabla aún no existe en la BD, continuar sin ellos.
+  type CuestionarioRow = { idCursoCapacitacion: string; idCuestionarioCurso: string; titulo: string; notaAprobatoria: unknown; estado: string; _count: { preguntas: number } };
+  let cuestionariosPorCurso: Record<string, CuestionarioRow> = {};
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const cuestionarios = await (prisma as any).cuestionarioCurso.findMany({
+      where: { estado: "ACTIVO" },
+      include: { _count: { select: { preguntas: true } } },
+    });
+    for (const c of cuestionarios as CuestionarioRow[]) {
+      if (!cuestionariosPorCurso[c.idCursoCapacitacion]) {
+        cuestionariosPorCurso[c.idCursoCapacitacion] = c;
+      }
+    }
+  } catch {
+    // La tabla cuestionario_curso todavía no existe en la BD — se muestra sin cuestionario.
+  }
+
+  return rows.map((r) => {
+    const c = cuestionariosPorCurso[r.idCursoCapacitacion];
+    return {
+      id: r.idCursoCapacitacion,
+      codigoCurso: r.codigoCurso,
+      nombreCurso: r.nombreCurso,
+      descripcion: r.descripcion,
+      modalidadGeneral: r.modalidadGeneral,
+      estadoCurso: r.estadoCurso,
+      fechaPublicacion: r.fechaPublicacion?.toISOString() ?? null,
+      fechaCierre: r.fechaCierre?.toISOString() ?? null,
+      responsable: `${r.usuarioResponsable.nombres} ${r.usuarioResponsable.apellidos}`.trim(),
+      idResponsable: r.idUsuarioResponsableGRD,
+      totalInscritos: r._count.inscripciones,
+      sesiones: r.unidades.map((u) => ({
+        id: u.idUnidadContenido,
+        numeroOrden: u.numeroOrden,
+        tituloUnidad: u.tituloUnidad,
+        materiales: u.materiales.map((m) => ({
+          id: m.idMaterialCapacitacion,
+          titulo: m.titulo,
+          tipoMaterial: m.tipoMaterial,
+          enlaceMaterial: m.enlaceMaterial,
+        })),
       })),
-    })),
-    cuestionarioInicial: (() => {
-      const c = r.cuestionarios.find((q) => q.tipoCuestionario === "INICIAL");
-      return c ? { id: c.idCuestionarioCurso, titulo: c.titulo, totalPreguntas: c._count.preguntas, notaAprobatoria: Number(c.notaAprobatoria), estado: c.estado } : null;
-    })(),
-    cuestionarioFinal: (() => {
-      const c = r.cuestionarios.find((q) => q.tipoCuestionario === "FINAL" || q.tipoCuestionario === "UNICO");
-      return c ? { id: c.idCuestionarioCurso, titulo: c.titulo, totalPreguntas: c._count.preguntas, notaAprobatoria: Number(c.notaAprobatoria), estado: c.estado } : null;
-    })(),
-  }));
+      cuestionario: c
+        ? {
+            id: c.idCuestionarioCurso,
+            titulo: c.titulo,
+            totalPreguntas: c._count.preguntas,
+            notaAprobatoria: Number(c.notaAprobatoria),
+            estado: c.estado,
+          }
+        : null,
+    };
+  });
 }
 
 export async function listarEspecialistas(): Promise<{ id: string; nombre: string }[]> {
@@ -292,19 +369,69 @@ export async function listarMisCursos(): Promise<CursoInscrito[]> {
               },
             },
           },
-          cuestionarios: {
-            where: { estado: "ACTIVO" },
-            include: { _count: { select: { preguntas: true } } },
-          },
         },
       },
-      evaluaciones: { orderBy: { fechaEvaluacion: "asc" } },
-      certificacion: { select: { idCertificacionCurso: true } },
+      // Selección explícita para evitar columnas que aún no existen en AWS (idCuestionarioCurso)
+      evaluaciones: {
+        orderBy: { fechaEvaluacion: "asc" },
+        select: {
+          idEvaluacionCurso: true,
+          tipoEvaluacion: true,
+          numeroIntento: true,
+          nota: true,
+          resultado: true,
+          observacion: true,
+          fechaEvaluacion: true,
+          idInscripcionCurso: true,
+        },
+      },
+      certificacion: { select: { idCertificacionCurso: true, constanciaUrl: true } },
     },
   });
 
+  // Cuestionarios en tabla separada — puede no existir aún en AWS
+  type CuestionarioRow = { idCursoCapacitacion: string; idCuestionarioCurso: string; titulo: string; notaAprobatoria: unknown; maxIntentos: number; estado: string; _count: { preguntas: number } };
+  let cuestionariosPorCurso: Record<string, CuestionarioRow> = {};
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const cuestionarios = await (prisma as any).cuestionarioCurso.findMany({
+      where: { estado: "ACTIVO" },
+      include: { _count: { select: { preguntas: true } } },
+    });
+    for (const c of cuestionarios as CuestionarioRow[]) {
+      if (!cuestionariosPorCurso[c.idCursoCapacitacion]) {
+        cuestionariosPorCurso[c.idCursoCapacitacion] = c;
+      }
+    }
+  } catch {
+    // La tabla cuestionario_curso todavía no existe en la BD.
+  }
+
+  // Migración lazy: certificar aprobados sin certificación, y completar URL faltante
+  for (const i of inscripciones) {
+    const evals = i.evaluaciones;
+    const aprobado = evals.some((e) => e.resultado === "APROBADO");
+    const constanciaUrl = `/capacitaciones/constancia/${i.idInscripcionCurso}`;
+    if (aprobado && i.certificacion === null) {
+      try {
+        await makeCursoUseCases().certificar.execute(i.idInscripcionCurso, constanciaUrl);
+        i.certificacion = { idCertificacionCurso: "pending", constanciaUrl };
+      } catch {
+        // Ignorar si falla
+      }
+    } else if (aprobado && i.certificacion !== null && !i.certificacion.constanciaUrl) {
+      try {
+        await makeCursoUseCases().certificar.execute(i.idInscripcionCurso, constanciaUrl);
+        i.certificacion = { ...i.certificacion, constanciaUrl };
+      } catch {
+        // Ignorar si falla
+      }
+    }
+  }
+
   return inscripciones.map((i) => {
     const evals = i.evaluaciones;
+    const c = cuestionariosPorCurso[i.curso.idCursoCapacitacion];
     return {
       id: i.curso.idCursoCapacitacion,
       codigoCurso: i.curso.codigoCurso,
@@ -324,14 +451,17 @@ export async function listarMisCursos(): Promise<CursoInscrito[]> {
           : null,
       resultado: evals.length > 0 ? (evals[evals.length - 1].resultado ?? null) : null,
       certificado: i.certificacion !== null,
-      cuestionarioInicial: (() => {
-        const c = i.curso.cuestionarios.find((q) => q.tipoCuestionario === "INICIAL");
-        return c ? { id: c.idCuestionarioCurso, titulo: c.titulo, notaAprobatoria: Number(c.notaAprobatoria), maxIntentos: c.maxIntentos, totalPreguntas: c._count.preguntas, intentosUsados: evals.filter((e: any) => e.idCuestionarioCurso === c.idCuestionarioCurso).length } : null;
-      })(),
-      cuestionarioFinal: (() => {
-        const c = i.curso.cuestionarios.find((q) => q.tipoCuestionario === "FINAL" || q.tipoCuestionario === "UNICO");
-        return c ? { id: c.idCuestionarioCurso, titulo: c.titulo, notaAprobatoria: Number(c.notaAprobatoria), maxIntentos: c.maxIntentos, totalPreguntas: c._count.preguntas, intentosUsados: evals.filter((e: any) => e.idCuestionarioCurso === c.idCuestionarioCurso).length } : null;
-      })(),
+      constanciaUrl: i.certificacion?.constanciaUrl ?? null,
+      cuestionario: c
+        ? {
+            id: c.idCuestionarioCurso,
+            titulo: c.titulo,
+            notaAprobatoria: Number(c.notaAprobatoria),
+            maxIntentos: c.maxIntentos,
+            totalPreguntas: c._count.preguntas,
+            intentosUsados: evals.length,
+          }
+        : null,
       sesiones: i.curso.unidades.map((u) => ({
         id: u.idUnidadContenido,
         numeroOrden: u.numeroOrden,
@@ -609,6 +739,85 @@ export async function agregarMaterial(
   revalidatePath(REVALIDATE);
 }
 
+export async function editarSesion(
+  idUnidad: string,
+  data: { tituloUnidad: string }
+): Promise<void | { message: string }> {
+  await verifySession();
+  if (!data.tituloUnidad.trim()) return { message: "El título es obligatorio." };
+  try {
+    await prisma.unidadContenido.update({
+      where: { idUnidadContenido: idUnidad },
+      data: { tituloUnidad: data.tituloUnidad.trim() },
+    });
+  } catch (err) {
+    return fail(err, "No se pudo editar la unidad.");
+  }
+  revalidatePath(REVALIDATE);
+}
+
+export async function eliminarSesion(
+  idUnidad: string
+): Promise<void | { message: string }> {
+  await verifySession();
+  try {
+    await prisma.materialCapacitacion.deleteMany({ where: { idUnidadContenido: idUnidad } });
+    await prisma.unidadContenido.delete({ where: { idUnidadContenido: idUnidad } });
+  } catch (err) {
+    return fail(err, "No se pudo eliminar la unidad.");
+  }
+  revalidatePath(REVALIDATE);
+}
+
+export async function editarMaterial(
+  idMaterial: string,
+  data: { titulo: string; tipoMaterial: string; enlaceMaterial: string }
+): Promise<void | { message: string }> {
+  await verifySession();
+  if (!data.titulo.trim()) return { message: "El título del material es obligatorio." };
+  try {
+    await prisma.materialCapacitacion.update({
+      where: { idMaterialCapacitacion: idMaterial },
+      data: {
+        titulo: data.titulo.trim(),
+        tipoMaterial: data.tipoMaterial || null,
+        enlaceMaterial: data.enlaceMaterial.trim() || null,
+      },
+    });
+  } catch (err) {
+    return fail(err, "No se pudo editar el material.");
+  }
+  revalidatePath(REVALIDATE);
+}
+
+export async function moverMaterial(
+  idMaterial: string,
+  idUnidadDestino: string
+): Promise<void | { message: string }> {
+  await verifySession();
+  try {
+    await prisma.materialCapacitacion.update({
+      where: { idMaterialCapacitacion: idMaterial },
+      data: { idUnidadContenido: idUnidadDestino },
+    });
+  } catch (err) {
+    return fail(err, "No se pudo mover el material.");
+  }
+  revalidatePath(REVALIDATE);
+}
+
+export async function eliminarMaterial(
+  idMaterial: string
+): Promise<void | { message: string }> {
+  await verifySession();
+  try {
+    await prisma.materialCapacitacion.delete({ where: { idMaterialCapacitacion: idMaterial } });
+  } catch (err) {
+    return fail(err, "No se pudo eliminar el material.");
+  }
+  revalidatePath(REVALIDATE);
+}
+
 export async function inscribirParticipante(idCurso: string, participante: ParticipanteData) {
   const session = await verifySession();
   try {
@@ -745,6 +954,14 @@ export async function registrarEvaluacion(
       field: "Nota",
       newValue: nota.toString(),
     });
+    if (r.resultado === "APROBADO") {
+      try {
+        const constanciaUrl = `/capacitaciones/constancia/${idInscripcion}`;
+        await makeCursoUseCases().certificar.execute(idInscripcion, constanciaUrl);
+      } catch {
+        // Ya certificado o sin evaluación aprobada — no bloquea
+      }
+    }
     revalidatePath(REVALIDATE);
     return { message: `Evaluación registrada: ${r.resultado}.` };
   } catch (err) {
@@ -997,6 +1214,16 @@ export async function enviarRespuestasExamen(
       },
     });
 
+    // Auto-certificar si aprobó, guardando la URL de la constancia automática
+    if (aprobado) {
+      try {
+        const constanciaUrl = `/capacitaciones/constancia/${idInscripcion}`;
+        await makeCursoUseCases().certificar.execute(idInscripcion, constanciaUrl);
+      } catch {
+        // Si ya está certificado o falla, no bloquear el resultado
+      }
+    }
+
     revalidatePath(REVALIDATE);
     return { resultado: { nota, puntajeObtenido, puntajeTotal, porcentaje, aprobado } };
   } catch (err) {
@@ -1068,6 +1295,47 @@ export async function editarCuestionario(
     return fail(err, "No se pudo editar el cuestionario.");
   }
   revalidatePath(REVALIDATE);
+}
+
+export async function presignMaterial(nombreArchivo: string, contentType: string) {
+  await verifySession();
+  const { isS3Configured, presignPut, presignGet, safeFilename } = await import("@/app/lib/s3");
+  if (!isS3Configured()) return { ok: false as const, message: "S3 no configurado." };
+  const { randomUUID } = await import("crypto");
+  const key = `capacitaciones/materiales/${randomUUID()}-${safeFilename(nombreArchivo)}`;
+  try {
+    const uploadUrl = await presignPut(key, contentType || "application/octet-stream");
+    const publicUrl = await presignGet(key, 60 * 60 * 24 * 365);
+    return { ok: true as const, uploadUrl, publicUrl };
+  } catch {
+    return { ok: false as const, message: "No se pudo preparar la subida." };
+  }
+}
+
+export async function obtenerDatosConstancia(idInscripcion: string) {
+  const ins = await prisma.inscripcionCurso.findUnique({
+    where: { idInscripcionCurso: idInscripcion },
+    select: {
+      idInscripcionCurso: true,
+      participante: { select: { nombres: true, apellidos: true } },
+      curso: { select: { nombreCurso: true, codigoCurso: true } },
+      certificacion: { select: { fechaCertificacion: true, idCertificacionCurso: true } },
+      evaluaciones: {
+        orderBy: { fechaEvaluacion: "desc" },
+        take: 1,
+        select: { nota: true, resultado: true },
+      },
+    },
+  });
+  if (!ins || !ins.certificacion) return null;
+  return {
+    nombreParticipante: `${ins.participante.nombres} ${ins.participante.apellidos ?? ""}`.trim(),
+    nombreCurso: ins.curso.nombreCurso,
+    codigoCurso: ins.curso.codigoCurso,
+    fechaCertificacion: ins.certificacion.fechaCertificacion?.toISOString() ?? null,
+    idCertificacion: ins.certificacion.idCertificacionCurso,
+    nota: ins.evaluaciones[0]?.nota != null ? Number(ins.evaluaciones[0].nota) : null,
+  };
 }
 
 export async function certificarParticipante(idInscripcion: string, constanciaUrl?: string) {

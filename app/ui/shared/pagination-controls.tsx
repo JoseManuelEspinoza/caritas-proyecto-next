@@ -52,5 +52,7 @@ export function PaginationControls({
         </button>
       </div>
     </div>
+
+  
   );
 }

@@ -55,10 +55,6 @@ function validarCreacion(data: CreateIncidenteData): void {
 
   if (!telLocal) throw new ValidationError("Ingresa el celular de quien reportó.");
 
-  if (codigoPais === "+51" && !/^9\d{8}$/.test(telLocal)) {
-    throw new ValidationError("El celular debe tener 9 dígitos y empezar con 9.");
-  }
-
   if (codigoPais !== "+51" && (telLocal.length < 7 || telLocal.length > 12)) {
     throw new ValidationError("El número de celular no es válido.");
   }
