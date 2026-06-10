@@ -30,8 +30,9 @@ services:
       # host.docker.internal → 127.0.0.1) y desde el contenedor (extra_hosts →
       # host-gateway → puerto 8085 del host). Así el `iss` del token coincide con
       # el issuer configurado y el discovery/JWKS/token funcionan server-side.
-      - AUTH_KEYCLOAK_ISSUER=http://host.docker.internal:8090/realms/caritas
-      - KEYCLOAK_ADMIN_URL=http://host.docker.internal:8090
+      - AUTH_KEYCLOAK_ISSUER=http://localhost:8090/realms/caritas
+      - AUTH_KEYCLOAK_INTERNAL_URL=http://keycloak:8080/realms/caritas
+      - KEYCLOAK_ADMIN_URL=http://keycloak:8080
       - KEYCLOAK_REALM=caritas
       - KEYCLOAK_ADMIN_CLIENT_ID=caritas-app
       - KEYCLOAK_ADMIN_CLIENT_SECRET=caritas-app-secret-dev
@@ -114,7 +115,7 @@ services:
       # HTTP local (sin TLS en dev) + health
       KC_HTTP_ENABLED: "true"
       # URL pública del IdP: debe coincidir con el issuer que usa la app.
-      KC_HOSTNAME: http://host.docker.internal:8090
+      KC_HOSTNAME: http://localhost:8090
       KC_HOSTNAME_STRICT: "false"
       KC_HEALTH_ENABLED: "true"
     ports:
