@@ -46,7 +46,7 @@ export default async function BrigadistasPage() {
 
   return (
     <BrigadistasList
-      canEdit={role === "admin"}
+      canEdit={role === "admin" || role === "especialistaGRD"}
       brigadistas={brigadistas.map((b) => ({
         id: b.idBrigadistaParroquial,
         nombres: b.nombres,

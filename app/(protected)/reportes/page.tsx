@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function ReportesPage({
   searchParams,
 }: {
-  searchParams?: { desde?: string; hasta?: string };
+  searchParams?: Promise<{ desde?: string; hasta?: string }>;
 }) {
   const session = await verifySession();
   const role = toFrontendRole(session.role);
