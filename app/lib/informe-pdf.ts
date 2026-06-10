@@ -3,6 +3,7 @@ import { jsPDF } from "jspdf";
 export type ArticuloPdf = { codigo: string; descripcion: string; cantidad: number };
 export type KitPdf = { tipoKit: string; articulos: ArticuloPdf[] };
 export type FamiliaPdf = { nombre: string; integrantes: string[]; kits: KitPdf[] };
+export type EvidenciaImagenPdf = { url: string; nombre: string; formato?: string };
 
 export type InformePdfData = {
   codigo: string;
@@ -24,9 +25,40 @@ export type InformePdfData = {
   hallazgosClave: string[];
   necesidadesIdentificadas: string[];
   evidenciasCount: number;
+  /** Imágenes a incrustar en el PDF (pre-presignadas). */
+  evidenciasImagenes?: EvidenciaImagenPdf[];
   familias: FamiliaPdf[];
   conclusiones: string;
 };
+
+async function loadImageForPdf(
+  url: string,
+  maxW: number,
+  maxH: number
+): Promise<{ dataUrl: string; w: number; h: number } | null> {
+  return new Promise((resolve) => {
+    const img = new window.Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const scale = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight, 1);
+        const w = Math.max(1, Math.round(img.naturalWidth * scale));
+        const h = Math.max(1, Math.round(img.naturalHeight * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { resolve(null); return; }
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve({ dataUrl: canvas.toDataURL("image/jpeg", 0.72), w, h });
+      } catch {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
 
 const VERDE: [number, number, number] = [0, 152, 80];
 const GRIS: [number, number, number] = [110, 110, 110];
@@ -35,8 +67,9 @@ const MARGEN = 40;
 /**
  * Genera y descarga el "Informe de Atención de Ayuda Humanitaria" en PDF,
  * replicando el formato institucional de Cáritas GRD.
+ * Las imágenes se cargan y redimensionan vía Canvas antes de incrustarse.
  */
-export function generarInformePdf(d: InformePdfData): void {
+export async function generarInformePdf(d: InformePdfData): Promise<void> {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
@@ -305,8 +338,40 @@ export function generarInformePdf(d: InformePdfData): void {
     y += 10;
   }
 
-  // ── e) Conclusiones ──
-  heading("e) Conclusiones");
+  // ── e) Evidencias fotográficas ──
+  const colW = Math.floor((ancho - 8) / 2);
+  const colH = Math.floor(colW * 0.72); // ~4:3 aspect at 72%
+  const imgEntries: { dataUrl: string; w: number; h: number; nombre: string }[] = [];
+  for (const ev of d.evidenciasImagenes ?? []) {
+    const fmt = ev.formato ?? "";
+    const isImg = fmt.startsWith("image/") || /\.(jpe?g|png|gif|webp|bmp)$/i.test(ev.nombre);
+    if (!isImg) continue;
+    const loaded = await loadImageForPdf(ev.url, colW, colH);
+    if (loaded) imgEntries.push({ ...loaded, nombre: ev.nombre });
+  }
+  if (imgEntries.length > 0) {
+    heading("e) Evidencias fotográficas");
+    let col = 0;
+    for (const img of imgEntries) {
+      const imgX = col === 0 ? MARGEN : MARGEN + colW + 8;
+      checkSpace(img.h + 18);
+      doc.addImage(img.dataUrl, "JPEG", imgX, y, img.w, img.h);
+      doc.setFontSize(7);
+      doc.setTextColor(...GRIS);
+      doc.text(doc.splitTextToSize(img.nombre, colW)[0] ?? "", imgX, y + img.h + 10);
+      if (col === 0) {
+        col = 1;
+      } else {
+        col = 0;
+        y += img.h + 18;
+      }
+    }
+    if (col !== 0) y += (imgEntries[imgEntries.length - 1]?.h ?? 0) + 18;
+    y += 6;
+  }
+
+  // ── f) Conclusiones ──
+  heading(imgEntries.length > 0 ? "f) Conclusiones" : "e) Conclusiones");
   parrafo("", d.conclusiones);
   y += 16;
 

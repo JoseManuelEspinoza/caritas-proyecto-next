@@ -145,7 +145,7 @@ const PARENTESCOS = [
   "Otro",
 ];
 
-// ─── SearchableSelect ─────────────────────────────────────────────────────────
+// ─── SearchableSelect ────────────────────────────────────────────────────────
 
 function SearchableSelect({
   value,

@@ -21,6 +21,7 @@ import {
   Mountain,
   Zap,
   TrendingDown,
+  SendHorizonal,
 } from "lucide-react";
 import type { FrontendRole } from "@/app/lib/roles";
 
@@ -38,6 +39,8 @@ export type IncidenteItem = {
   totalFamilias: number;
   totalPersonas: number;
   brigadistas: string[]; // nombres de brigadistas asignados
+  /** True cuando el estado es DATA RECOPILADA y ya hay un borrador de informe guardado */
+  tieneBorradorInforme?: boolean;
 };
 
 // ─── Configuración de estados ─────────────────────────────────────────────────
@@ -342,6 +345,12 @@ export function GrdList({ items, role }: GrdListProps) {
                   <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${cfg.badge}`}>
                     {cfg.label}
                   </span>
+                  {item.tieneBorradorInforme && (
+                    <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-100 text-violet-700 flex items-center gap-1">
+                      <SendHorizonal className="w-3 h-3" />
+                      Por enviar
+                    </span>
+                  )}
                   {item.tipoEvento && (
                     <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 flex items-center gap-1">
                       <CatIcon cat={item.tipoEvento} className="w-3 h-3" />
@@ -450,11 +459,19 @@ export function GrdList({ items, role }: GrdListProps) {
                         </span>
                       </td>
                       <td className="px-5 py-4 whitespace-nowrap">
-                        <span
-                          className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${cfg.badge}`}
-                        >
-                          {cfg.label}
-                        </span>
+                        <div className="flex flex-col gap-1 items-start">
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${cfg.badge}`}
+                          >
+                            {cfg.label}
+                          </span>
+                          {item.tieneBorradorInforme && (
+                            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-100 text-violet-700 flex items-center gap-1">
+                              <SendHorizonal className="w-3 h-3" />
+                              Por enviar
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-5 py-4 whitespace-nowrap">
                         <span className="flex items-center gap-1 text-sm text-gray-500">

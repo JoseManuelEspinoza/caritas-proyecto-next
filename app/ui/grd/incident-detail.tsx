@@ -40,6 +40,8 @@ import {
   ExternalLink,
   Image as ImageIcon,
   Upload,
+  MessageSquarePlus,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -47,6 +49,7 @@ import {
   autoasignarme,
   saveInfoCampo,
   saveInformeEvaluacion,
+  saveBorradorInformeEvaluacion,
   aprobarCaso,
   observarCaso,
   rechazarCaso,
@@ -56,7 +59,14 @@ import {
   cerrarCaso,
   agregarPersonaCampo,
   addEvidenciasCampo,
+  agregarPersonaAFamiliaCampo,
+  updatePersonaCampo,
+  deletePersonaCampo,
+  addGrupoFamiliarCampo,
+  deleteGrupoFamiliarCampo,
 } from "@/app/actions/incidents";
+import type { PersonaForm } from "@/app/actions/incidents";
+import { PersonaModal } from "./persona-modal";
 import { presignEvidencia } from "@/app/actions/evidencias";
 import type { FrontendRole } from "@/app/lib/roles";
 
@@ -1116,8 +1126,6 @@ function EvidenciaChip({ ev }: { ev: IncidentData["evidencias"][number] }) {
   );
 }
 
-const SEXOS = ["", "M", "F"];
-const PARENTESCOS = ["", "Jefe(a) de hogar", "Cónyuge", "Hijo(a)", "Padre/Madre", "Otro"];
 const MARCA_CAMPO = "Evidencia de campo";
 
 // ─── Panel: Recopilar Información (Campo) ────────────────────────────────────
@@ -1131,53 +1139,119 @@ function PanelCampo({ data, onDone }: { data: IncidentData; onDone: () => void }
     data.role === "especialistaGRD" ||
     data.isResponsableGRD ||
     (data.role === "brigadista" && data.isBrigadistaAsignado);
+  const canUpload =
+    data.role === "admin" ||
+    data.isResponsableGRD ||
+    (data.role === "brigadista" && data.isBrigadistaAsignado);
   const done = data.estadoActual !== "ASIGNADO";
   const informeCampo = data.informes.find((i) => i.tipo === "CAMPO");
 
   const [obsCampo, setObsCampo] = useState("");
   const [obsBrig, setObsBrig] = useState("");
-  const [showPersona, setShowPersona] = useState(false);
-  const [savingPersona, setSavingPersona] = useState(false);
-  const [persona, setPersona] = useState({
-    nombres: "",
-    apellidos: "",
-    edad: "",
-    sexo: "",
-    numeroDocumento: "",
-    parentesco: "",
-  });
+  const [familyNotes, setFamilyNotes] = useState<Record<string, string>>({});
+  const [familyOpen, setFamilyOpen] = useState<Record<string, boolean>>({});
+  // Modal de empadronamiento
+  const [showPersonaModal, setShowPersonaModal] = useState(false);
+  const [editingPersonaForm, setEditingPersonaForm] = useState<PersonaForm | null>(null);
+  const [addingToFamiliaId, setAddingToFamiliaId] = useState<string | null>(null);
+  // Nuevo grupo familiar
+  const [showAddFamilia, setShowAddFamilia] = useState(false);
+  const [nuevaFamilia, setNuevaFamilia] = useState("");
+  const [savingFamilia, setSavingFamilia] = useState(false);
   const [subiendo, setSubiendo] = useState<string[]>([]);
 
-  function handleAddPersona() {
-    if (!persona.nombres.trim()) {
-      toast.error("Ingresa al menos el nombre de la persona.");
-      return;
-    }
-    setSavingPersona(true);
+  function personaToForm(p: Persona, familiaId: string): PersonaForm {
+    const apellidos = p.apellidos ?? "";
+    const parts = apellidos.split(" ");
+    return {
+      id: p.id,
+      tipoDoc: p.tipoDocumento ?? "DNI",
+      dni: p.numeroDocumento ?? "",
+      nombre: p.nombres,
+      apellidoPaterno: parts[0] ?? "",
+      apellidoMaterno: parts.slice(1).join(" "),
+      edad: p.edad ?? "",
+      genero: p.sexo === "M" ? "Masculino" : p.sexo === "F" ? "Femenino" : "Otro",
+      celular: p.telefono ?? "",
+      parentesco: p.parentesco ?? "",
+      situacionActual: p.condicionEspecial ?? "",
+      familiaId,
+    };
+  }
+
+  function handleEditPersona(p: Persona, familiaId: string) {
+    setEditingPersonaForm(personaToForm(p, familiaId));
+    setAddingToFamiliaId(null);
+    setShowPersonaModal(true);
+  }
+
+  function handleAddToFamilia(familiaId: string) {
+    setEditingPersonaForm(null);
+    setAddingToFamiliaId(familiaId);
+    setShowPersonaModal(true);
+  }
+
+  function handleSavePersona(form: PersonaForm) {
+    const apellidos =
+      [form.apellidoPaterno, form.apellidoMaterno].filter(Boolean).join(" ") || null;
+    const edadNum = form.edad ? parseInt(form.edad, 10) : null;
+    const sexo =
+      form.genero === "Masculino" ? "M" : form.genero === "Femenino" ? "F" : null;
+    const payload = {
+      nombres: form.nombre,
+      apellidos,
+      edad: edadNum,
+      sexo,
+      tipoDocumento: form.tipoDoc || null,
+      numeroDocumento: form.dni || null,
+      parentesco: form.parentesco || null,
+      condicionEspecial: form.situacionActual || null,
+      telefono: form.celular || null,
+    };
+    const isEditing = !!editingPersonaForm;
     startTransition(async () => {
-      const res = await agregarPersonaCampo(data.idIncidencia, {
-        nombres: persona.nombres,
-        apellidos: persona.apellidos || null,
-        edad: persona.edad ? parseInt(persona.edad, 10) : null,
-        sexo: persona.sexo || null,
-        numeroDocumento: persona.numeroDocumento || null,
-        parentesco: persona.parentesco || null,
-      });
-      setSavingPersona(false);
-      if (res && "message" in res) {
-        toast.error(res.message);
-        return;
+      let res;
+      if (isEditing) {
+        res = await updatePersonaCampo(data.idIncidencia, form.id, payload);
+      } else if (addingToFamiliaId) {
+        res = await agregarPersonaAFamiliaCampo(data.idIncidencia, addingToFamiliaId, payload);
       }
-      toast.success("Persona agregada al empadronamiento.");
-      setPersona({
-        nombres: "",
-        apellidos: "",
-        edad: "",
-        sexo: "",
-        numeroDocumento: "",
-        parentesco: "",
-      });
-      setShowPersona(false);
+      if (res && "message" in res) { toast.error(res.message); return; }
+      toast.success(isEditing ? "Persona actualizada." : "Persona agregada.");
+      router.refresh();
+    });
+  }
+
+  function handleDeletePersona(personaId: string) {
+    if (!confirm("¿Eliminar esta persona del empadronamiento?")) return;
+    startTransition(async () => {
+      const res = await deletePersonaCampo(personaId, data.idIncidencia);
+      if (res && "message" in res) { toast.error(res.message); return; }
+      toast.success("Persona eliminada.");
+      router.refresh();
+    });
+  }
+
+  function handleDeleteFamilia(grupoId: string) {
+    if (!confirm("¿Eliminar este grupo familiar y todas sus personas?")) return;
+    startTransition(async () => {
+      const res = await deleteGrupoFamiliarCampo(grupoId, data.idIncidencia);
+      if (res && "message" in res) { toast.error(res.message); return; }
+      toast.success("Grupo familiar eliminado.");
+      router.refresh();
+    });
+  }
+
+  function handleAddFamilia() {
+    if (!nuevaFamilia.trim()) return;
+    setSavingFamilia(true);
+    startTransition(async () => {
+      const res = await addGrupoFamiliarCampo(data.idIncidencia, nuevaFamilia.trim());
+      setSavingFamilia(false);
+      if (res && "message" in res) { toast.error(res.message); return; }
+      toast.success("Grupo familiar creado.");
+      setNuevaFamilia("");
+      setShowAddFamilia(false);
       router.refresh();
     });
   }
@@ -1234,6 +1308,9 @@ function PanelCampo({ data, onDone }: { data: IncidentData; onDone: () => void }
   }
 
   function handleSubmit() {
+    const notasGuardar = Object.entries(familyNotes)
+      .filter(([, nota]) => nota.trim())
+      .map(([id, nota]) => ({ id, nota: nota.trim() }));
     startTransition(async () => {
       const res = await saveInfoCampo(data.idIncidencia, {
         fechaVisita: new Date().toISOString().split("T")[0],
@@ -1243,6 +1320,7 @@ function PanelCampo({ data, onDone }: { data: IncidentData; onDone: () => void }
         necesidadesPrioritarias: [],
         recomendacion: "",
         observaciones: obsBrig.trim(),
+        notasFamilias: notasGuardar.length ? notasGuardar : undefined,
         condHabitabilidad: {},
       });
       if (res && "message" in res) {
@@ -1264,26 +1342,66 @@ function PanelCampo({ data, onDone }: { data: IncidentData; onDone: () => void }
           }
         })()
       : null;
+    const notasFamilias: { id: string; nota: string }[] = parsed?.notasFamilias ?? [];
     return (
-      <div className="space-y-3">
+      <div className="space-y-4">
         <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
           <CheckCircle className="w-4 h-4 text-green-600" />
           <span className="text-sm font-medium text-green-800">
             Levantamiento completado el {fmtDate(informeCampo.fecha)}
+            {parsed?.responsable ? ` · ${parsed.responsable}` : ""}
           </span>
         </div>
         {parsed && (
-          <div className="space-y-3 text-sm">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <InfoField label="Descripción en campo" value={parsed.descripcionEvento} />
-              <InfoField label="Nivel de vulnerabilidad" value={parsed.nivelVulnerabilidad} />
-              <InfoField
-                label="Necesidades"
-                value={parsed.necesidadesPrioritarias?.join(", ") ?? "—"}
-              />
-            </div>
+          <div className="space-y-4">
+            {parsed.descripcionEvento &&
+              parsed.descripcionEvento !== "Levantamiento de campo realizado." && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                    Observaciones desde campo
+                  </p>
+                  <p className="text-sm text-gray-800 bg-gray-50 border border-gray-100 rounded-lg p-3">
+                    {parsed.descripcionEvento}
+                  </p>
+                </div>
+              )}
+            {parsed.observaciones && (
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                  Observaciones generales del campo
+                </p>
+                <p className="text-sm text-gray-800 bg-gray-50 border border-gray-100 rounded-lg p-3">
+                  {parsed.observaciones}
+                </p>
+              </div>
+            )}
+            {notasFamilias.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                  Notas por familia
+                </p>
+                <div className="space-y-2">
+                  {data.gruposFamiliares
+                    .map((g) => {
+                      const item = notasFamilias.find((n) => n.id === g.id);
+                      if (!item?.nota) return null;
+                      return (
+                        <div
+                          key={g.id}
+                          className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-2"
+                        >
+                          <p className="text-[11px] font-semibold text-blue-700 mb-0.5">
+                            {g.nombreReferencia ?? "Familia"}
+                          </p>
+                          <p className="text-xs text-gray-700">{item.nota}</p>
+                        </div>
+                      );
+                    })
+                    .filter(Boolean)}
+                </div>
+              </div>
+            )}
             <EvidenciasRegistro evidencias={data.evidencias} />
-            <InfoField label="Recomendación" value={parsed.recomendacion} />
           </div>
         )}
       </div>
@@ -1314,7 +1432,6 @@ function PanelCampo({ data, onDone }: { data: IncidentData; onDone: () => void }
     },
     {}
   );
-  const setP = (k: string, v: string) => setPersona((p) => ({ ...p, [k]: v }));
 
   return (
     <div className="space-y-4">
@@ -1361,9 +1478,58 @@ function PanelCampo({ data, onDone }: { data: IncidentData; onDone: () => void }
               </p>
             )}
             {data.causa && (
-              <p>
-                <span className="font-semibold">Causa:</span> {data.causa}
-              </p>
+              (() => {
+                let ctx: Record<string, unknown> | null = null;
+                try { ctx = JSON.parse(data.causa!); } catch {}
+                if (ctx && typeof ctx === "object") {
+                  const causaStr = typeof ctx.causa === "string" ? ctx.causa : "";
+                  const refStr = typeof ctx.referencia === "string" ? ctx.referencia : "";
+                  const necs: string[] = Array.isArray(ctx.necesidades)
+                    ? (ctx.necesidades as unknown[]).map((n) => String(n))
+                    : [];
+                  const necObs =
+                    typeof ctx.necesidadesObs === "string" ? ctx.necesidadesObs : "";
+                  return (
+                    <div className="space-y-1">
+                      {causaStr && (
+                        <p>
+                          <span className="font-semibold">Causa:</span> {causaStr}
+                        </p>
+                      )}
+                      {refStr && (
+                        <p>
+                          <span className="font-semibold">Referencia al lugar:</span> {refStr}
+                        </p>
+                      )}
+                      {necs.length > 0 && (
+                        <div className="flex items-start gap-2 flex-wrap">
+                          <span className="font-semibold flex-shrink-0">Necesidades:</span>
+                          <div className="flex flex-wrap gap-1">
+                            {necs.map((n, i) => (
+                              <span
+                                key={i}
+                                className="px-2 py-0.5 bg-orange-50 text-orange-700 text-[10px] rounded-full border border-orange-200"
+                              >
+                                {n}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {necObs && (
+                        <p>
+                          <span className="font-semibold">Obs. necesidades:</span> {necObs}
+                        </p>
+                      )}
+                    </div>
+                  );
+                }
+                return (
+                  <p>
+                    <span className="font-semibold">Causa:</span> {data.causa}
+                  </p>
+                );
+              })()
             )}
           </div>
 
@@ -1466,112 +1632,153 @@ function PanelCampo({ data, onDone }: { data: IncidentData; onDone: () => void }
           </span>
         </summary>
         <div className="p-4 space-y-2">
-          {totalPersonas === 0 ? (
-            <p className="text-xs text-gray-400 italic">Sin personas empadronadas aún.</p>
-          ) : (
-            data.gruposFamiliares.map((g) => (
-              <div key={g.id} className="bg-gray-50 rounded-lg border border-gray-100 p-2.5">
-                <div className="flex items-center justify-between mb-1">
-                  <p className="text-[11px] font-bold text-gray-700">
-                    {g.nombreReferencia ?? "Grupo familiar"}
-                  </p>
-                  <span className="text-[10px] text-gray-500">{g.totalPersonas} miembro(s)</span>
-                </div>
-                <ul className="space-y-0.5">
-                  {g.personas.map((p) => (
-                    <li key={p.id} className="text-[11px] text-gray-700 flex justify-between gap-2">
-                      <span className="truncate">
-                        {p.nombres} {p.apellidos ?? ""}
-                        {p.parentesco ? <span className="text-gray-400"> · {p.parentesco}</span> : ""}
-                      </span>
-                      <span className="text-[10px] text-gray-500 flex-shrink-0">
-                        {p.edad ? `${p.edad}a` : "—"} · {p.sexo ?? "—"}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+          {data.gruposFamiliares.map((g) => (
+            <div
+              key={g.id}
+              className="bg-gray-50 rounded-lg border border-gray-100 p-2.5 space-y-1.5"
+            >
+              {/* Cabecera del grupo familiar */}
+              <div className="flex items-center gap-1">
+                <p className="text-[11px] font-bold text-gray-700 flex-1 min-w-0 truncate">
+                  {g.nombreReferencia ?? "Grupo familiar"}
+                </p>
+                <span className="text-[10px] text-gray-400 flex-shrink-0">
+                  {g.totalPersonas} mbr.
+                </span>
+                <button
+                  type="button"
+                  title="Agregar persona a esta familia"
+                  onClick={() => handleAddToFamilia(g.id)}
+                  className="p-1 rounded text-gray-400 hover:text-green-600 hover:bg-green-50 transition-colors"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  title={familyOpen[g.id] ? "Ocultar nota" : "Agregar nota"}
+                  onClick={() =>
+                    setFamilyOpen((prev) => ({ ...prev, [g.id]: !prev[g.id] }))
+                  }
+                  className={`p-1 rounded transition-colors ${
+                    familyOpen[g.id] || familyNotes[g.id]?.trim()
+                      ? "text-blue-600 bg-blue-50"
+                      : "text-gray-400 hover:text-blue-500 hover:bg-blue-50"
+                  }`}
+                >
+                  <MessageSquarePlus className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  title="Eliminar grupo familiar"
+                  onClick={() => handleDeleteFamilia(g.id)}
+                  className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
               </div>
-            ))
+
+              {/* Lista de personas */}
+              <ul className="space-y-0.5">
+                {g.personas.map((p) => (
+                  <li
+                    key={p.id}
+                    className="flex items-center gap-1 text-[11px] text-gray-700"
+                  >
+                    <span className="flex-1 min-w-0 truncate">
+                      {p.nombres} {p.apellidos ?? ""}
+                      {p.parentesco ? (
+                        <span className="text-gray-400"> · {p.parentesco}</span>
+                      ) : null}
+                    </span>
+                    <span className="text-[10px] text-gray-400 flex-shrink-0">
+                      {p.edad ? `${p.edad}a` : "—"} · {p.sexo ?? "—"}
+                    </span>
+                    <button
+                      type="button"
+                      title="Editar persona"
+                      onClick={() => handleEditPersona(p, g.id)}
+                      className="p-1 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors flex-shrink-0"
+                    >
+                      <Pencil className="w-3 h-3" />
+                    </button>
+                    <button
+                      type="button"
+                      title="Eliminar persona"
+                      onClick={() => handleDeletePersona(p.id)}
+                      className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </li>
+                ))}
+                {g.personas.length === 0 && (
+                  <li className="text-[10px] text-gray-400 italic">Sin personas registradas.</li>
+                )}
+              </ul>
+
+              {/* Nota de familia */}
+              {familyOpen[g.id] && (
+                <textarea
+                  rows={2}
+                  className="w-full px-2.5 py-1.5 text-xs border border-blue-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 resize-none placeholder:text-gray-400"
+                  placeholder="¿Qué necesita esta familia? (opcional)"
+                  value={familyNotes[g.id] ?? ""}
+                  onChange={(e) =>
+                    setFamilyNotes((prev) => ({ ...prev, [g.id]: e.target.value }))
+                  }
+                />
+              )}
+            </div>
+          ))}
+
+          {data.gruposFamiliares.length === 0 && (
+            <p className="text-xs text-gray-400 italic">Sin grupos familiares registrados.</p>
           )}
 
-          {!showPersona ? (
+          {/* Agregar nuevo grupo familiar */}
+          {showAddFamilia ? (
+            <div className="flex gap-2 items-center">
+              <input
+                type="text"
+                className={inputCls}
+                placeholder="Nombre del grupo familiar"
+                value={nuevaFamilia}
+                onChange={(e) => setNuevaFamilia(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleAddFamilia();
+                }}
+              />
+              <button
+                type="button"
+                onClick={handleAddFamilia}
+                disabled={savingFamilia}
+                className="px-3 py-2 bg-[#009850] text-white rounded-lg text-sm flex-shrink-0 disabled:opacity-50"
+              >
+                {savingFamilia ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  "Crear"
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddFamilia(false);
+                  setNuevaFamilia("");
+                }}
+                className="px-3 py-2 border border-gray-200 rounded-lg text-sm flex-shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
             <button
               type="button"
-              onClick={() => setShowPersona(true)}
+              onClick={() => setShowAddFamilia(true)}
               className="w-full flex items-center justify-center gap-2 py-2 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-600 hover:border-[#009850] hover:text-[#009850] transition-colors"
             >
-              <Plus className="w-4 h-4" /> Agregar persona
+              <Plus className="w-4 h-4" /> Agregar grupo familiar
             </button>
-          ) : (
-            <div className="border border-gray-200 rounded-lg p-3 space-y-2">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <input
-                  className={inputCls}
-                  placeholder="Nombres *"
-                  value={persona.nombres}
-                  onChange={(e) => setP("nombres", e.target.value)}
-                />
-                <input
-                  className={inputCls}
-                  placeholder="Apellidos"
-                  value={persona.apellidos}
-                  onChange={(e) => setP("apellidos", e.target.value)}
-                />
-                <input
-                  className={inputCls}
-                  placeholder="Edad"
-                  inputMode="numeric"
-                  value={persona.edad}
-                  onChange={(e) => setP("edad", e.target.value.replace(/\D/g, ""))}
-                />
-                <select
-                  className={inputCls}
-                  value={persona.sexo}
-                  onChange={(e) => setP("sexo", e.target.value)}
-                >
-                  {SEXOS.map((s) => (
-                    <option key={s} value={s}>
-                      {s === "" ? "Sexo…" : s === "M" ? "Masculino" : "Femenino"}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  className={inputCls}
-                  placeholder="N° documento"
-                  value={persona.numeroDocumento}
-                  onChange={(e) => setP("numeroDocumento", e.target.value)}
-                />
-                <select
-                  className={inputCls}
-                  value={persona.parentesco}
-                  onChange={(e) => setP("parentesco", e.target.value)}
-                >
-                  {PARENTESCOS.map((s) => (
-                    <option key={s} value={s}>
-                      {s === "" ? "Parentesco…" : s}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowPersona(false)}
-                  className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={handleAddPersona}
-                  disabled={savingPersona}
-                  className="px-3 py-1.5 text-sm text-white rounded-lg disabled:opacity-50"
-                  style={{ background: "var(--caritas-green)" }}
-                >
-                  {savingPersona ? "Agregando…" : "Agregar"}
-                </button>
-              </div>
-            </div>
           )}
         </div>
       </details>
@@ -1598,28 +1805,34 @@ function PanelCampo({ data, onDone }: { data: IncidentData; onDone: () => void }
             </ul>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <label className="flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-600 hover:border-[#009850] hover:text-[#009850] cursor-pointer transition-colors">
-              <Camera className="w-4 h-4" /> Tomar foto
-              <input
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="hidden"
-                onChange={(e) => handleUploadCampo(e.target.files)}
-              />
-            </label>
-            <label className="flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-600 hover:border-[#009850] hover:text-[#009850] cursor-pointer transition-colors">
-              <Upload className="w-4 h-4" /> Cargar foto / video
-              <input
-                type="file"
-                multiple
-                accept="image/*,video/*,.pdf"
-                className="hidden"
-                onChange={(e) => handleUploadCampo(e.target.files)}
-              />
-            </label>
-          </div>
+          {canUpload ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <label className="flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-600 hover:border-[#009850] hover:text-[#009850] cursor-pointer transition-colors">
+                <Camera className="w-4 h-4" /> Tomar foto
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={(e) => handleUploadCampo(e.target.files)}
+                />
+              </label>
+              <label className="flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-600 hover:border-[#009850] hover:text-[#009850] cursor-pointer transition-colors">
+                <Upload className="w-4 h-4" /> Cargar foto / video
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*,video/*,.pdf"
+                  className="hidden"
+                  onChange={(e) => handleUploadCampo(e.target.files)}
+                />
+              </label>
+            </div>
+          ) : (
+            <p className="text-xs text-gray-400 italic text-center py-1">
+              Solo el equipo asignado puede cargar evidencias.
+            </p>
+          )}
 
           {subiendo.length > 0 && (
             <p className="text-xs text-blue-600 flex items-center gap-1">
@@ -1641,19 +1854,25 @@ function PanelCampo({ data, onDone }: { data: IncidentData; onDone: () => void }
         </div>
       </details>
 
-      {/* Observaciones del brigadista */}
-      <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1">
-          Observaciones del Brigadista
-        </label>
-        <textarea
-          rows={3}
-          className={textareaCls}
-          value={obsBrig}
-          onChange={(e) => setObsBrig(e.target.value)}
-          placeholder="Observaciones generales del brigadista…"
-        />
-      </div>
+      {/* 4. Observaciones generales del campo */}
+      <details className="border border-gray-200 rounded-xl overflow-hidden">
+        <summary className="cursor-pointer px-4 py-3 flex items-center gap-2 bg-gray-50 hover:bg-gray-100">
+          <span className="w-6 h-6 rounded-full bg-orange-100 text-orange-700 text-xs font-bold flex items-center justify-center">
+            4
+          </span>
+          <ClipboardList className="w-4 h-4 text-gray-500" />
+          <span className="text-sm font-semibold text-gray-800">Observaciones Generales del Campo</span>
+        </summary>
+        <div className="p-4">
+          <textarea
+            rows={4}
+            className={textareaCls}
+            value={obsBrig}
+            onChange={(e) => setObsBrig(e.target.value)}
+            placeholder="Describe la situación general observada en campo: condiciones del lugar, acceso, riesgos adicionales, coordinación con otras instituciones…"
+          />
+        </div>
+      </details>
 
       {/* Resumen + enviar */}
       <div className="flex flex-wrap items-center gap-3 text-xs text-gray-600">
@@ -1694,6 +1913,26 @@ function PanelCampo({ data, onDone }: { data: IncidentData; onDone: () => void }
           </>
         )}
       </button>
+
+      {/* Modal de persona afectada (agregar / editar) */}
+      {showPersonaModal && (
+        <PersonaModal
+          editing={editingPersonaForm ?? undefined}
+          familias={data.gruposFamiliares.map((g) => ({
+            id: g.id,
+            nombre: g.nombreReferencia ?? "Familia",
+          }))}
+          activeFamiliaId={
+            addingToFamiliaId ?? editingPersonaForm?.familiaId ?? undefined
+          }
+          onSave={handleSavePersona}
+          onClose={() => {
+            setShowPersonaModal(false);
+            setEditingPersonaForm(null);
+            setAddingToFamiliaId(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -1775,6 +2014,13 @@ function ListaEditable({
 
 function PanelRevisar({ data, onDone }: { data: IncidentData; onDone: () => void }) {
   const [isPending, startTransition] = useTransition();
+
+  // Compute early so useState initializers can pre-populate from the last saved informe
+  const informeEval = data.informes.find((i) => i.tipo === "EVALUACION");
+  const sc = informeEval?.contenido
+    ? (() => { try { return JSON.parse(informeEval.contenido) as Record<string, unknown>; } catch { return null; } })()
+    : null;
+
   // El comité ve "Decidir" por defecto cuando el estado ya está en evaluación
   const defaultView: "evaluar" | "decidir" =
     (data.role === "comite" || data.role === "jefaOGP") && data.estadoActual === "EN EVALUACION"
@@ -1803,18 +2049,65 @@ function PanelRevisar({ data, onDone }: { data: IncidentData; onDone: () => void
     "Otros",
   ];
   const [report, setReport] = useState({
-    motivo: "",
-    dirigidoA: "Comité de donaciones",
-    objetivoGeneral: "",
-    analisis: "",
-    hallazgosTexto: "",
-    conclusiones: "",
+    motivo: typeof sc?.motivo === "string" ? sc.motivo : "",
+    dirigidoA: typeof sc?.dirigidoA === "string" ? sc.dirigidoA : "Comité de donaciones",
+    objetivoGeneral: typeof sc?.objetivoGeneral === "string" ? sc.objetivoGeneral : "",
+    analisis: typeof sc?.analisisSituacion === "string" ? sc.analisisSituacion : "",
+    hallazgosTexto: typeof sc?.hallazgosTexto === "string" ? sc.hallazgosTexto : "",
+    conclusiones: typeof sc?.conclusiones === "string" ? sc.conclusiones : "",
   });
   const setR = (k: string, v: string) => setReport((p) => ({ ...p, [k]: v }));
-  const [objetivos, setObjetivos] = useState<string[]>([""]);
-  const [hallazgos, setHallazgos] = useState<string[]>([""]);
-  const [asignaciones, setAsignaciones] = useState<Record<string, KitLocal[]>>({});
+  const [objetivos, setObjetivos] = useState<string[]>(
+    Array.isArray(sc?.objetivosEspecificos) && (sc.objetivosEspecificos as unknown[]).length > 0
+      ? (sc.objetivosEspecificos as unknown[]).map(String)
+      : [""]
+  );
+  const [hallazgos, setHallazgos] = useState<string[]>(
+    Array.isArray(sc?.hallazgosClave) && (sc.hallazgosClave as unknown[]).length > 0
+      ? (sc.hallazgosClave as unknown[]).map(String)
+      : [""]
+  );
+  const [asignaciones, setAsignaciones] = useState<Record<string, KitLocal[]>>(() => {
+    if (!Array.isArray(sc?.asignacionFamilias)) return {};
+    const out: Record<string, KitLocal[]> = {};
+    for (const af of sc.asignacionFamilias as unknown[]) {
+      const a = af as Record<string, unknown>;
+      if (typeof a.refId === "string" && Array.isArray(a.kits)) {
+        out[a.refId] = (a.kits as unknown[]).map((k) => {
+          const kit = k as Record<string, unknown>;
+          return {
+            tipoKit: typeof kit.tipoKit === "string" ? kit.tipoKit : "",
+            articulos: Array.isArray(kit.articulos)
+              ? (kit.articulos as unknown[]).map((art) => {
+                  const ar = art as Record<string, unknown>;
+                  return {
+                    codigo: typeof ar.codigo === "string" ? ar.codigo : "",
+                    descripcion: typeof ar.descripcion === "string" ? ar.descripcion : "",
+                    cantidad: typeof ar.cantidad === "number" ? ar.cantidad : 1,
+                  };
+                })
+              : [{ codigo: "", descripcion: "", cantidad: 1 }],
+          };
+        });
+      }
+    }
+    return out;
+  });
   const [collapsed, setCollapsed] = useState(false);
+
+  // Validación de campos obligatorios
+  const [fieldErrors, setFieldErrors] = useState<Set<string>>(new Set());
+  // Evidencias seleccionadas para incluir en el informe
+  const [evidenciasSeleccionadas, setEvidenciasSeleccionadas] = useState<Set<string>>(
+    new Set(Array.isArray(sc?.evidenciasSeleccionadas) ? (sc.evidenciasSeleccionadas as unknown[]).map(String) : [])
+  );
+  // Paso de adjuntar documento al comité (modal emergente)
+  const [showDocStep, setShowDocStep] = useState(false);
+  const [docTipo, setDocTipo] = useState<"link" | "file">("link");
+  const [docLink, setDocLink] = useState("");
+  const [docFile, setDocFile] = useState<File | null>(null);
+  const [subiendoDoc, setSubiendoDoc] = useState(false);
+  const [savingForPdf, setSavingForPdf] = useState(false);
 
   const addKit = (refId: string, tipo: string) =>
     setAsignaciones((p) => ({
@@ -1842,8 +2135,18 @@ function PanelRevisar({ data, onDone }: { data: IncidentData; onDone: () => void
 
   const canEvaluar = data.role === "admin" || data.role === "especialistaGRD";
   const canDecidir = data.role === "admin" || data.role === "comite" || data.role === "jefaOGP";
-  const informeEval = data.informes.find((i) => i.tipo === "EVALUACION");
   const solicitud = data.solicitudComite;
+
+  // Anotaciones por familia registradas en el levantamiento de campo
+  const notasFamiliasRef: { id: string; nota: string }[] = (() => {
+    const campo = data.informes.find((i) => i.tipo === "CAMPO");
+    try {
+      const p = campo?.contenido ? JSON.parse(campo.contenido) : null;
+      return Array.isArray(p?.notasFamilias) ? p.notasFamilias : [];
+    } catch {
+      return [];
+    }
+  })();
 
   const targets = data.gruposFamiliares;
   const integrantesDe = (g: IncidentData["gruposFamiliares"][number]) =>
@@ -1864,11 +2167,62 @@ function PanelRevisar({ data, onDone }: { data: IncidentData; onDone: () => void
       .filter((k) => k.articulos.length);
   }
 
-  function handleEvaluar() {
-    if (!report.analisis.trim() || !report.conclusiones.trim()) {
-      toast.error("Completa el análisis de la situación y las conclusiones.");
+  // Helper: clase de error para campos obligatorios
+  const errCls = (field: string) =>
+    fieldErrors.has(field)
+      ? "border-red-500 ring-1 ring-red-300 focus:ring-red-300 focus:border-red-500"
+      : "";
+
+  function validate(): boolean {
+    const errs = new Set<string>();
+    if (!report.motivo.trim()) errs.add("motivo");
+    if (!report.objetivoGeneral.trim()) errs.add("objetivoGeneral");
+    if (!report.analisis.trim()) errs.add("analisis");
+    if (!report.conclusiones.trim()) errs.add("conclusiones");
+    setFieldErrors(errs);
+    return errs.size === 0;
+  }
+
+  // Primer click: valida y abre paso de documento
+  function handleClickEnviar() {
+    if (!validate()) {
+      setCollapsed(false);
+      toast.error("Completa los campos marcados en rojo antes de enviar.");
       return;
     }
+    setShowDocStep(true);
+  }
+
+  // Segundo click (desde el paso de documento): sube documento y envía
+  async function handleEvaluar() {
+    let docAdjunto: string | null = null;
+
+    if (docTipo === "link" && docLink.trim()) {
+      docAdjunto = docLink.trim();
+    } else if (docTipo === "file" && docFile) {
+      setSubiendoDoc(true);
+      try {
+        const res = await presignEvidencia({
+          nombreArchivo: docFile.name,
+          contentType: docFile.type || "application/octet-stream",
+          incidenciaId: data.idIncidencia,
+        });
+        if (!res.ok) throw new Error(res.message);
+        const put = await fetch(res.uploadUrl, {
+          method: "PUT",
+          body: docFile,
+          headers: { "Content-Type": docFile.type || "application/octet-stream" },
+        });
+        if (!put.ok) throw new Error(`Error al subir (${put.status})`);
+        docAdjunto = res.key;
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "No se pudo subir el documento.");
+        setSubiendoDoc(false);
+        return;
+      }
+      setSubiendoDoc(false);
+    }
+
     startTransition(async () => {
       const res = await saveInformeEvaluacion(data.idIncidencia, {
         analisisSituacion: report.analisis,
@@ -1887,6 +2241,8 @@ function PanelRevisar({ data, onDone }: { data: IncidentData; onDone: () => void
           nombre: g.nombreReferencia ?? "Familia",
           kits: kitsLimpios(g.id),
         })),
+        evidenciasSeleccionadas: Array.from(evidenciasSeleccionadas),
+        documentoAdjunto: docAdjunto,
       });
       if (res && "message" in res) {
         toast.error(res.message);
@@ -1898,8 +2254,56 @@ function PanelRevisar({ data, onDone }: { data: IncidentData; onDone: () => void
   }
 
   async function handlePdf() {
+    if (!validate()) {
+      setCollapsed(false);
+      toast.error("Completa los campos marcados en rojo antes de generar el PDF.");
+      return;
+    }
+
+    // Save current form state as draft (no state transition)
+    setSavingForPdf(true);
+    const saveRes = await saveBorradorInformeEvaluacion(data.idIncidencia, {
+      analisisSituacion: report.analisis,
+      hallazgosTexto: report.hallazgosTexto,
+      conclusiones: report.conclusiones,
+      nivelUrgencia: "Alta",
+      tipoIntervencion: "Donación en especie",
+      recomendacionComite: "",
+      motivo: report.motivo,
+      dirigidoA: report.dirigidoA,
+      objetivoGeneral: report.objetivoGeneral,
+      objetivosEspecificos: objetivos.map((s) => s.trim()).filter(Boolean),
+      hallazgosClave: hallazgos.map((s) => s.trim()).filter(Boolean),
+      asignacionFamilias: targets.map((g) => ({
+        refId: g.id,
+        nombre: g.nombreReferencia ?? "Familia",
+        kits: kitsLimpios(g.id),
+      })),
+      evidenciasSeleccionadas: Array.from(evidenciasSeleccionadas),
+      documentoAdjunto: null,
+    });
+    setSavingForPdf(false);
+    if (saveRes && "message" in saveRes) {
+      toast.error(saveRes.message);
+      return;
+    }
+    toast.success("Informe guardado");
+
+    // Determine which images to embed: selected evidence images, or all if none selected
+    const isImgEv = (ev: (typeof data.evidencias)[number]) => {
+      const fmt = ev.formato ?? "";
+      const name = ev.nombreArchivo ?? "";
+      return fmt.startsWith("image/") || /\.(jpe?g|png|gif|webp|bmp)$/i.test(name);
+    };
+    const evIds = Array.from(evidenciasSeleccionadas);
+    const evParaPdf = (
+      evIds.length > 0
+        ? data.evidencias.filter((e) => evIds.includes(e.id) && isImgEv(e))
+        : data.evidencias.filter(isImgEv)
+    ).filter((e) => e.urlArchivo);
+
     const { generarInformePdf } = await import("@/app/lib/informe-pdf");
-    generarInformePdf({
+    await generarInformePdf({
       codigo: data.codigoCaso ?? "GRD",
       categoria: data.tipoEvento ?? "—",
       evento: data.tituloIncidencia ?? data.codigoCaso ?? "Incidencia",
@@ -1919,6 +2323,11 @@ function PanelRevisar({ data, onDone }: { data: IncidentData; onDone: () => void
       hallazgosClave: hallazgos.map((s) => s.trim()).filter(Boolean),
       necesidadesIdentificadas: [],
       evidenciasCount: data.evidencias.length,
+      evidenciasImagenes: evParaPdf.map((e) => ({
+        url: e.urlArchivo!,
+        nombre: e.nombreArchivo,
+        formato: e.formato ?? undefined,
+      })),
       familias: targets.map((g) => ({
         nombre: g.nombreReferencia ?? "Familia",
         integrantes: integrantesDe(g),
@@ -2061,33 +2470,16 @@ function PanelRevisar({ data, onDone }: { data: IncidentData; onDone: () => void
 
       {/* Vista: Evaluar */}
       {view === "evaluar" &&
-        (informeEval ? (
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <FileCheck className="w-4 h-4 text-blue-600" />
-              <span className="text-sm font-medium text-blue-800">
-                Informe enviado al Comité — {fmtDate(informeEval.fecha)}
-              </span>
-            </div>
-            <InfoField label="Análisis de la situación" value={informeEval.resumen ?? "—"} />
-            {informeEval.contenido &&
-              (() => {
-                try {
-                  const p = JSON.parse(informeEval.contenido);
-                  return (
-                    <div className="space-y-2">
-                      <InfoField label="Hallazgos" value={p.hallazgosTexto ?? "—"} />
-                      <InfoField label="Conclusiones" value={p.conclusiones ?? "—"} />
-                      <InfoField label="Tipo de intervención" value={p.tipoIntervencion ?? "—"} />
-                    </div>
-                  );
-                } catch {
-                  return null;
-                }
-              })()}
-          </div>
-        ) : canEvaluar ? (
+        (canEvaluar ? (
           <div className="space-y-4">
+            {informeEval && (
+              <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <FileCheck className="w-4 h-4 text-blue-600" />
+                <span className="text-sm font-medium text-blue-800">
+                  Última versión guardada: {fmtDate(informeEval.fecha)}
+                </span>
+              </div>
+            )}
             {/* Un datalist por tipo de kit: cada kit muestra solo su catálogo */}
             {KIT_TIPOS.map((tipo, ti) => (
               <datalist key={tipo} id={`cat-${ti}`}>
@@ -2148,14 +2540,22 @@ function PanelRevisar({ data, onDone }: { data: IncidentData; onDone: () => void
                 {/* A) Datos de identificación */}
                 <Seccion num="A" titulo="Datos de Identificación">
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                    <label className={`block text-xs font-medium mb-1 ${fieldErrors.has("motivo") ? "text-red-600" : "text-gray-700"}`}>
                       Motivo <span className="text-red-500">*</span>
+                      {fieldErrors.has("motivo") && (
+                        <span className="ml-2 text-red-500">— Campo obligatorio</span>
+                      )}
                     </label>
                     <textarea
                       rows={2}
-                      className={textareaCls}
+                      className={`${textareaCls} ${errCls("motivo")}`}
                       value={report.motivo}
-                      onChange={(e) => setR("motivo", e.target.value)}
+                      onChange={(e) => {
+                        setR("motivo", e.target.value);
+                        if (fieldErrors.has("motivo") && e.target.value.trim()) {
+                          setFieldErrors((prev) => { const n = new Set(prev); n.delete("motivo"); return n; });
+                        }
+                      }}
                       placeholder="Motivo del informe..."
                     />
                   </div>
@@ -2170,14 +2570,22 @@ function PanelRevisar({ data, onDone }: { data: IncidentData; onDone: () => void
                 {/* B) Objetivos de la visita */}
                 <Seccion num="B" titulo="Objetivos de la Visita">
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                    <label className={`block text-xs font-medium mb-1 ${fieldErrors.has("objetivoGeneral") ? "text-red-600" : "text-gray-700"}`}>
                       Objetivo general <span className="text-red-500">*</span>
+                      {fieldErrors.has("objetivoGeneral") && (
+                        <span className="ml-2 text-red-500">— Campo obligatorio</span>
+                      )}
                     </label>
                     <textarea
                       rows={2}
-                      className={textareaCls}
+                      className={`${textareaCls} ${errCls("objetivoGeneral")}`}
                       value={report.objetivoGeneral}
-                      onChange={(e) => setR("objetivoGeneral", e.target.value)}
+                      onChange={(e) => {
+                        setR("objetivoGeneral", e.target.value);
+                        if (fieldErrors.has("objetivoGeneral") && e.target.value.trim()) {
+                          setFieldErrors((prev) => { const n = new Set(prev); n.delete("objetivoGeneral"); return n; });
+                        }
+                      }}
                       placeholder="Describe el objetivo general..."
                     />
                   </div>
@@ -2231,14 +2639,22 @@ function PanelRevisar({ data, onDone }: { data: IncidentData; onDone: () => void
                     );
                   })()}
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                    <label className={`block text-xs font-medium mb-1 ${fieldErrors.has("analisis") ? "text-red-600" : "text-gray-700"}`}>
                       Análisis de la situación <span className="text-red-500">*</span>
+                      {fieldErrors.has("analisis") && (
+                        <span className="ml-2 text-red-500">— Campo obligatorio</span>
+                      )}
                     </label>
                     <textarea
                       rows={3}
-                      className={textareaCls}
+                      className={`${textareaCls} ${errCls("analisis")}`}
                       value={report.analisis}
-                      onChange={(e) => setR("analisis", e.target.value)}
+                      onChange={(e) => {
+                        setR("analisis", e.target.value);
+                        if (fieldErrors.has("analisis") && e.target.value.trim()) {
+                          setFieldErrors((prev) => { const n = new Set(prev); n.delete("analisis"); return n; });
+                        }
+                      }}
                       placeholder="Análisis socioeconómico, magnitud del daño, redes de apoyo..."
                     />
                   </div>
@@ -2301,6 +2717,20 @@ function PanelRevisar({ data, onDone }: { data: IncidentData; onDone: () => void
                               })}
                             </div>
                           </div>
+
+                          {/* Anotación del brigadista para esta familia */}
+                          {(() => {
+                            const notaItem = notasFamiliasRef.find((n) => n.id === g.id);
+                            if (!notaItem?.nota) return null;
+                            return (
+                              <div className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 text-xs">
+                                <p className="text-[10px] font-semibold text-blue-700 uppercase tracking-wide mb-0.5">
+                                  Anotación del brigadista
+                                </p>
+                                <p className="text-blue-900">{notaItem.nota}</p>
+                              </div>
+                            );
+                          })()}
 
                           {/* Kits asignados */}
                           {kits.map((kit, ki) => (
@@ -2378,51 +2808,201 @@ function PanelRevisar({ data, onDone }: { data: IncidentData; onDone: () => void
                   )}
                 </Seccion>
 
-                {/* E) Conclusiones */}
-                <Seccion num="E" titulo="Conclusiones">
-                  <textarea
-                    rows={3}
-                    className={textareaCls}
-                    value={report.conclusiones}
-                    onChange={(e) => setR("conclusiones", e.target.value)}
-                    placeholder="Conclusiones finales del informe..."
-                  />
+                {/* E) Evidencias a incluir en el informe */}
+                <Seccion num="E" titulo="Evidencias a incluir en el informe">
+                  {data.evidencias.length === 0 ? (
+                    <p className="text-xs text-gray-400">
+                      No hay evidencias registradas para este caso.
+                    </p>
+                  ) : (
+                    <>
+                      <p className="text-xs text-gray-500">
+                        Selecciona las evidencias que quieres incluir en el informe.
+                        {evidenciasSeleccionadas.size > 0 && (
+                          <span className="ml-1 font-semibold text-purple-700">
+                            {evidenciasSeleccionadas.size} seleccionada(s)
+                          </span>
+                        )}
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {data.evidencias.map((ev) => {
+                          const selected = evidenciasSeleccionadas.has(ev.id);
+                          return (
+                            <button
+                              key={ev.id}
+                              type="button"
+                              onClick={() =>
+                                setEvidenciasSeleccionadas((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(ev.id)) next.delete(ev.id);
+                                  else next.add(ev.id);
+                                  return next;
+                                })
+                              }
+                              className={`text-left border-2 rounded-lg p-2 transition-all ${
+                                selected
+                                  ? "border-purple-500 bg-purple-50"
+                                  : "border-gray-200 hover:border-purple-300 hover:bg-purple-50/30"
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <div
+                                  className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
+                                    selected
+                                      ? "border-purple-600 bg-purple-600"
+                                      : "border-gray-300"
+                                  }`}
+                                >
+                                  {selected && (
+                                    <CheckCircle className="w-3 h-3 text-white" />
+                                  )}
+                                </div>
+                                <span className="text-xs text-gray-700 truncate flex-1">
+                                  {ev.nombreArchivo}
+                                </span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
                 </Seccion>
 
-                {/* Evidencia tomada por el brigadista */}
+                {/* F) Conclusiones */}
+                <Seccion num="F" titulo="Conclusiones">
+                  <div>
+                    <label className={`block text-xs font-medium mb-1 ${fieldErrors.has("conclusiones") ? "text-red-600" : "text-gray-700"}`}>
+                      Conclusiones <span className="text-red-500">*</span>
+                      {fieldErrors.has("conclusiones") && (
+                        <span className="ml-2 text-red-500">— Campo obligatorio</span>
+                      )}
+                    </label>
+                    <textarea
+                      rows={3}
+                      className={`${textareaCls} ${errCls("conclusiones")}`}
+                      value={report.conclusiones}
+                      onChange={(e) => {
+                        setR("conclusiones", e.target.value);
+                        if (fieldErrors.has("conclusiones") && e.target.value.trim()) {
+                          setFieldErrors((prev) => { const n = new Set(prev); n.delete("conclusiones"); return n; });
+                        }
+                      }}
+                      placeholder="Conclusiones finales del informe..."
+                    />
+                  </div>
+                </Seccion>
+
+                {/* Evidencias de referencia (solo visualización) */}
                 <div className="border border-gray-200 rounded-xl p-3">
+                  <p className="text-xs font-semibold text-gray-500 uppercase mb-2">
+                    Todas las evidencias del caso (referencia)
+                  </p>
                   <EvidenciasRegistro evidencias={data.evidencias} />
                 </div>
 
                 {/* Acciones */}
+                {fieldErrors.size > 0 && (
+                  <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700">
+                    <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                    <span>
+                      Faltan {fieldErrors.size} campo(s) obligatorio(s): completa los campos
+                      marcados en rojo antes de enviar el informe.
+                    </span>
+                  </div>
+                )}
+
                 <div className="flex flex-col sm:flex-row gap-2">
                   <button
                     type="button"
                     onClick={handlePdf}
-                    className="flex-1 flex items-center justify-center gap-2 py-2.5 border border-purple-300 text-purple-700 rounded-xl font-medium hover:bg-purple-50"
+                    disabled={savingForPdf || isPending}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 border border-purple-300 text-purple-700 rounded-xl font-medium hover:bg-purple-50 disabled:opacity-50"
                   >
-                    <FileText className="w-4 h-4" /> Generar y descargar PDF
+                    {savingForPdf ? (
+                      <><Loader2 className="w-4 h-4 animate-spin" /> Guardando…</>
+                    ) : (
+                      <><FileText className="w-4 h-4" /> Generar y descargar PDF</>
+                    )}
                   </button>
                   <button
                     type="button"
-                    onClick={handleEvaluar}
+                    onClick={handleClickEnviar}
                     disabled={isPending}
                     className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-white font-semibold disabled:opacity-50"
                     style={{ background: "#7c3aed" }}
                   >
-                    {isPending ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" /> Enviando…
-                      </>
-                    ) : (
-                      <>
-                        <FileCheck className="w-4 h-4" /> Enviar Informe al Comité
-                      </>
-                    )}
+                    <FileCheck className="w-4 h-4" /> Enviar Informe al Comité
                   </button>
                 </div>
+
               </>
             )}
+          </div>
+        ) : informeEval ? (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <FileCheck className="w-4 h-4 text-blue-600" />
+              <span className="text-sm font-medium text-blue-800">
+                Informe enviado al Comité — {fmtDate(informeEval.fecha)}
+              </span>
+            </div>
+            <InfoField label="Análisis de la situación" value={informeEval.resumen ?? "—"} />
+            {informeEval.contenido &&
+              (() => {
+                try {
+                  const p = JSON.parse(informeEval.contenido);
+                  const docAdj: string | null =
+                    typeof p.documentoAdjunto === "string" ? p.documentoAdjunto : null;
+                  const evIdsStored: string[] = Array.isArray(p.evidenciasSeleccionadas)
+                    ? (p.evidenciasSeleccionadas as unknown[]).map(String)
+                    : [];
+                  const evIncluidas = data.evidencias.filter((e) => evIdsStored.includes(e.id));
+                  return (
+                    <div className="space-y-2">
+                      <InfoField label="Hallazgos" value={p.hallazgosTexto ?? "—"} />
+                      <InfoField label="Conclusiones" value={p.conclusiones ?? "—"} />
+                      <InfoField label="Tipo de intervención" value={p.tipoIntervencion ?? "—"} />
+                      {docAdj && (
+                        <div>
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                            Documento adjunto
+                          </p>
+                          {docAdj.startsWith("http") ? (
+                            <a
+                              href={docAdj}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-blue-600 underline break-all flex items-center gap-1"
+                            >
+                              <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                              {docAdj}
+                            </a>
+                          ) : (
+                            <span className="text-xs text-gray-600 italic">
+                              Archivo adjunto disponible
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {evIncluidas.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                            Evidencias incluidas en el informe ({evIncluidas.length})
+                          </p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                            {evIncluidas.map((ev) => (
+                              <EvidenciaChip key={ev.id} ev={ev} />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                } catch {
+                  return null;
+                }
+              })()}
           </div>
         ) : (
           <p className="text-sm text-gray-500 text-center py-4">
@@ -2476,6 +3056,104 @@ function PanelRevisar({ data, onDone }: { data: IncidentData; onDone: () => void
             >
               {isPending ? "Procesando..." : "Aprobar caso"}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: adjuntar documento de respaldo */}
+      {showDocStep && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowDocStep(false); }}
+        >
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md space-y-4 p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FileCheck className="w-5 h-5 text-purple-700" />
+                <p className="text-base font-semibold text-purple-900">
+                  Adjuntar documento de respaldo
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDocStep(false)}
+                className="text-gray-400 hover:text-gray-600 rounded-full p-1 hover:bg-gray-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-xs text-gray-500">
+              Opcional — puedes adjuntar un enlace (Google Drive, OneDrive…) o subir un
+              archivo PDF/Word directamente.
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setDocTipo("link")}
+                className={`px-3 py-1.5 text-xs rounded-lg border font-medium transition-colors ${
+                  docTipo === "link"
+                    ? "bg-purple-700 text-white border-purple-700"
+                    : "border-gray-300 text-gray-700 hover:bg-gray-50"
+                }`}
+              >
+                Enlace URL
+              </button>
+              <button
+                type="button"
+                onClick={() => setDocTipo("file")}
+                className={`px-3 py-1.5 text-xs rounded-lg border font-medium transition-colors ${
+                  docTipo === "file"
+                    ? "bg-purple-700 text-white border-purple-700"
+                    : "border-gray-300 text-gray-700 hover:bg-gray-50"
+                }`}
+              >
+                Subir archivo
+              </button>
+            </div>
+            {docTipo === "link" ? (
+              <input
+                type="url"
+                className={inputCls}
+                placeholder="https://drive.google.com/..."
+                value={docLink}
+                onChange={(e) => setDocLink(e.target.value)}
+              />
+            ) : (
+              <label className="flex items-center justify-center gap-2 py-4 border-2 border-dashed border-purple-300 rounded-xl text-purple-700 cursor-pointer hover:bg-purple-50 transition-colors">
+                <Upload className="w-4 h-4" />
+                <span className="text-sm">
+                  {docFile ? docFile.name : "Seleccionar archivo (PDF, Word, imagen)"}
+                </span>
+                <input
+                  type="file"
+                  accept=".pdf,.doc,.docx,image/*"
+                  className="hidden"
+                  onChange={(e) => setDocFile(e.target.files?.[0] ?? null)}
+                />
+              </label>
+            )}
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowDocStep(false)}
+                className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-medium hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleEvaluar}
+                disabled={isPending || subiendoDoc}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50 flex items-center justify-center gap-2"
+                style={{ background: "#7c3aed" }}
+              >
+                {isPending || subiendoDoc ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Enviando…</>
+                ) : (
+                  <><FileCheck className="w-4 h-4" /> Confirmar y enviar al Comité</>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

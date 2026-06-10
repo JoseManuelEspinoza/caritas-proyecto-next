@@ -58,6 +58,12 @@ export default async function GrdPage() {
           brigadista: { select: { nombres: true, apellidos: true } },
         },
       },
+      // Detectar si hay borrador de informe de evaluación guardado
+      informes: {
+        where: { tipoInforme: "EVALUACION" },
+        select: { idInforme: true },
+        take: 1,
+      },
     },
   });
 
@@ -75,6 +81,7 @@ export default async function GrdPage() {
     brigadistas: i.asignaciones.map((a) =>
       `${a.brigadista.nombres} ${a.brigadista.apellidos ?? ""}`.trim()
     ),
+    tieneBorradorInforme: i.estadoActual === "DATA RECOPILADA" && i.informes.length > 0,
   }));
 
   return <GrdList items={items} role={role} />;

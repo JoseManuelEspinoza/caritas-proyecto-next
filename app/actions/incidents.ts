@@ -234,9 +234,54 @@ export async function addEvidenciasCampo(
 }
 
 export async function saveInformeEvaluacion(incidenciaId: string, data: InformeEvaluacionData) {
+  // Si ya está EN EVALUACION solo actualizamos el informe, sin re-transicionar
+  const inc = await prisma.incidencia.findUnique({
+    where: { idIncidencia: incidenciaId },
+    select: { estadoActual: true },
+  });
+  if (inc?.estadoActual === "EN EVALUACION") {
+    return saveBorradorInformeEvaluacion(incidenciaId, data);
+  }
   const elaboradoPor = (await nombreUsuario()) ?? "";
   try {
     await makeIncidenciaUseCases().generarInforme.execute(incidenciaId, data, elaboradoPor);
+  } catch (err) {
+    return asMessage(err);
+  }
+  revalidar(incidenciaId);
+}
+
+/**
+ * Guarda el borrador del informe de evaluación SIN transicionar el estado de la incidencia.
+ * Se usa al "Generar PDF" para persistir la última versión sin enviar al Comité.
+ */
+export async function saveBorradorInformeEvaluacion(
+  incidenciaId: string,
+  data: InformeEvaluacionData
+) {
+  const elaboradoPor = (await nombreUsuario()) ?? "";
+  try {
+    const existente = await prisma.informe.findFirst({
+      where: { idIncidencia: incidenciaId, tipoInforme: "EVALUACION" },
+      select: { idInforme: true },
+    });
+    const payload = {
+      tituloInforme: "Informe de Evaluación Social",
+      tipoInforme: "EVALUACION",
+      resumen: data.analisisSituacion,
+      contenido: JSON.stringify({ ...data, elaboradoPor }),
+      estadoInforme: "BORRADOR",
+    };
+    if (existente) {
+      await prisma.informe.update({
+        where: { idInforme: existente.idInforme },
+        data: payload,
+      });
+    } else {
+      await prisma.informe.create({
+        data: { idIncidencia: incidenciaId, ...payload },
+      });
+    }
   } catch (err) {
     return asMessage(err);
   }
@@ -311,6 +356,130 @@ export async function cerrarCaso(incidenciaId: string) {
   await verifySession();
   try {
     await makeIncidenciaUseCases().cerrar.execute(incidenciaId);
+  } catch (err) {
+    return asMessage(err);
+  }
+  revalidar(incidenciaId);
+}
+
+// ─── Empadronamiento: CRUD directo ──────────────────────────────────────────
+
+/** Agrega una persona a un grupo familiar específico (por ID). */
+export async function agregarPersonaAFamiliaCampo(
+  incidenciaId: string,
+  familiaId: string,
+  persona: {
+    nombres: string;
+    apellidos?: string | null;
+    edad?: number | null;
+    sexo?: string | null;
+    tipoDocumento?: string | null;
+    numeroDocumento?: string | null;
+    parentesco?: string | null;
+    condicionEspecial?: string | null;
+    telefono?: string | null;
+  }
+) {
+  await verifySession();
+  const fechaNacimiento =
+    persona.edad != null && persona.edad > 0
+      ? new Date(new Date().getFullYear() - persona.edad, 0, 1)
+      : null;
+  try {
+    await prisma.personaAfectada.create({
+      data: {
+        idGrupoFamiliar: familiaId,
+        nombres: persona.nombres.trim(),
+        apellidos: persona.apellidos?.trim() || null,
+        fechaNacimiento,
+        sexo: persona.sexo || null,
+        tipoDocumento: persona.tipoDocumento || null,
+        numeroDocumento: persona.numeroDocumento || null,
+        parentesco: persona.parentesco || null,
+        condicionEspecial: persona.condicionEspecial || null,
+        telefono: persona.telefono || null,
+      },
+    });
+  } catch (err) {
+    return asMessage(err);
+  }
+  revalidar(incidenciaId);
+}
+
+/** Actualiza los datos de una persona afectada. */
+export async function updatePersonaCampo(
+  incidenciaId: string,
+  personaId: string,
+  persona: {
+    nombres: string;
+    apellidos?: string | null;
+    edad?: number | null;
+    sexo?: string | null;
+    tipoDocumento?: string | null;
+    numeroDocumento?: string | null;
+    parentesco?: string | null;
+    condicionEspecial?: string | null;
+    telefono?: string | null;
+  }
+) {
+  await verifySession();
+  const fechaNacimiento =
+    persona.edad != null && persona.edad > 0
+      ? new Date(new Date().getFullYear() - persona.edad, 0, 1)
+      : null;
+  try {
+    await prisma.personaAfectada.update({
+      where: { idPersonaAfectada: personaId },
+      data: {
+        nombres: persona.nombres.trim(),
+        apellidos: persona.apellidos?.trim() || null,
+        fechaNacimiento,
+        sexo: persona.sexo || null,
+        tipoDocumento: persona.tipoDocumento || null,
+        numeroDocumento: persona.numeroDocumento || null,
+        parentesco: persona.parentesco || null,
+        condicionEspecial: persona.condicionEspecial || null,
+        telefono: persona.telefono || null,
+      },
+    });
+  } catch (err) {
+    return asMessage(err);
+  }
+  revalidar(incidenciaId);
+}
+
+/** Elimina una persona afectada del empadronamiento. */
+export async function deletePersonaCampo(personaId: string, incidenciaId: string) {
+  await verifySession();
+  try {
+    await prisma.personaAfectada.delete({ where: { idPersonaAfectada: personaId } });
+  } catch (err) {
+    return asMessage(err);
+  }
+  revalidar(incidenciaId);
+}
+
+/** Crea un nuevo grupo familiar en la incidencia. */
+export async function addGrupoFamiliarCampo(incidenciaId: string, nombre: string) {
+  await verifySession();
+  try {
+    await prisma.grupoFamiliarAfectado.create({
+      data: { idIncidencia: incidenciaId, nombreReferencia: nombre.trim() },
+    });
+  } catch (err) {
+    return asMessage(err);
+  }
+  revalidar(incidenciaId);
+}
+
+/** Elimina un grupo familiar y todas sus personas. */
+export async function deleteGrupoFamiliarCampo(grupoId: string, incidenciaId: string) {
+  await verifySession();
+  try {
+    await prisma.$transaction([
+      prisma.personaAfectada.deleteMany({ where: { idGrupoFamiliar: grupoId } }),
+      prisma.grupoFamiliarAfectado.delete({ where: { idGrupoFamiliar: grupoId } }),
+    ]);
   } catch (err) {
     return asMessage(err);
   }
