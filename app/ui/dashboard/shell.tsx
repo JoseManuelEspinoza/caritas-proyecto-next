@@ -20,6 +20,7 @@ import {
   Database,
   ChevronDown,
   HandHeart,
+  Church,
 } from "lucide-react";
 import { NavLink } from "./nav-link";
 import { logout } from "@/app/actions/auth";
@@ -56,6 +57,7 @@ const ALL_NAV = [
     roles: ["admin", "especialistaGRD", "brigadista"],
   },
   { href: "/brigadistas", icon: Users, label: "Brigadistas", exact: false, roles: ["admin", "especialistaGRD"] },
+  { href: "/parroquias", icon: Church, label: "Parroquias", exact: false, roles: ["admin", "especialistaGRD"] },
   { href: "/planes", icon: ClipboardList, label: "Planes GRD", exact: false, roles: ["admin"] },
   {
     href: "/simulacros",
@@ -235,8 +237,8 @@ export function DashboardShell({
 
               {showUserMenu && (
                 <>
-                  <div className="fixed inset-0 z-[100]" onClick={() => setShowUserMenu(false)} />
-                  <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-[110]">
+                  <div className="fixed inset-0 z-100" onClick={() => setShowUserMenu(false)} />
+                  <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-110">
                     {/* User info */}
                     <div className="px-4 py-3 border-b border-[#DDDDDD]">
                       <div className="flex items-center gap-3">
