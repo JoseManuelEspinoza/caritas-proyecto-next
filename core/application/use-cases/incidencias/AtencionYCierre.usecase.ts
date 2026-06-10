@@ -20,6 +20,16 @@ export class RegistrarAtencionUseCase {
   }
 }
 
+/** ATENDIDO → SEGUIMIENTO ABIERTO: abre el seguimiento sin registrar aún una visita. */
+export class IniciarSeguimientoUseCase {
+  constructor(private readonly repo: IIncidenciaRepository) {}
+  async execute(idIncidencia: string): Promise<void> {
+    const inc = await cargar(this.repo, idIncidencia);
+    inc.iniciarSeguimiento();
+    await this.repo.guardarTransicion(inc, "Inicio de seguimiento post-atención");
+  }
+}
+
 /** Registra un seguimiento; transiciona ATENDIDO → SEGUIMIENTO ABIERTO si corresponde. */
 export class AgregarSeguimientoUseCase {
   constructor(private readonly repo: IIncidenciaRepository) {}

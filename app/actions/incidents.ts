@@ -342,10 +342,36 @@ export async function registrarAtencion(incidenciaId: string, data: AtencionData
   revalidar(incidenciaId);
 }
 
+export async function iniciarSeguimientoCaso(incidenciaId: string) {
+  await verifySession();
+  try {
+    await makeIncidenciaUseCases().iniciarSeguimiento.execute(incidenciaId);
+  } catch (err) {
+    return asMessage(err);
+  }
+  revalidar(incidenciaId);
+}
+
 export async function addSeguimiento(incidenciaId: string, data: SeguimientoData) {
   await verifySession();
   try {
     await makeIncidenciaUseCases().agregarSeguimiento.execute(incidenciaId, data);
+  } catch (err) {
+    return asMessage(err);
+  }
+  revalidar(incidenciaId);
+}
+
+/**
+ * Registra el (único) seguimiento y cierra el caso en una sola operación.
+ * SEGUIMIENTO ABIERTO → (guarda seguimiento) → CERRADO.
+ */
+export async function registrarSeguimientoYCerrar(incidenciaId: string, data: SeguimientoData) {
+  await verifySession();
+  try {
+    const uc = makeIncidenciaUseCases();
+    await uc.agregarSeguimiento.execute(incidenciaId, data);
+    await uc.cerrar.execute(incidenciaId);
   } catch (err) {
     return asMessage(err);
   }

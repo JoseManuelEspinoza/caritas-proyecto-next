@@ -42,6 +42,7 @@ import {
   Upload,
   MessageSquarePlus,
   Trash2,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -55,7 +56,8 @@ import {
   rechazarCaso,
   corregirYReenviar,
   registrarAtencion,
-  addSeguimiento,
+  iniciarSeguimientoCaso,
+  registrarSeguimientoYCerrar,
   cerrarCaso,
   agregarPersonaCampo,
   addEvidenciasCampo,
@@ -3449,32 +3451,378 @@ function PanelRevisar({ data, onDone }: { data: IncidentData; onDone: () => void
 
 // ─── Panel: Atender Caso ──────────────────────────────────────────────────────
 
-function PanelAtender({ data, onDone }: { data: IncidentData; onDone: () => void }) {
+type ActaArt = { codigo: string; descripcion: string; cantidad: number };
+type ActaKit = { tipoKit: string; articulos: ActaArt[] };
+type ActaFam = { refId: string; nombre: string; kits: ActaKit[] };
+
+function PanelAtender({
+  data,
+  onDone,
+  onNavigate,
+}: {
+  data: IncidentData;
+  onDone: () => void;
+  onNavigate: (step: number) => void;
+}) {
   const [isPending, startTransition] = useTransition();
-  const [form, setForm] = useState({
-    tipoAyuda: "Donación en especie",
-    descripcion: "",
-    lugar: "",
-    observaciones: "",
-  });
-  const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const canAct = data.role === "admin" || data.role === "especialistaGRD";
   const done = data.entregas.length > 0;
 
+  // Kits aprobados por familia (del informe de evaluación enviado al Comité)
+  const informeEval = data.informes.find((i) => i.tipo === "EVALUACION");
+  const familias: ActaFam[] = (() => {
+    if (!informeEval?.contenido) return [];
+    let sc: Record<string, unknown> | null = null;
+    try {
+      sc = JSON.parse(informeEval.contenido) as Record<string, unknown>;
+    } catch {
+      return [];
+    }
+    if (!Array.isArray(sc?.asignacionFamilias)) return [];
+    return (sc.asignacionFamilias as unknown[]).map((af) => {
+      const a = af as Record<string, unknown>;
+      const kits = Array.isArray(a.kits)
+        ? (a.kits as unknown[]).map((k) => {
+            const kit = k as Record<string, unknown>;
+            return {
+              tipoKit: typeof kit.tipoKit === "string" ? kit.tipoKit : "",
+              articulos: Array.isArray(kit.articulos)
+                ? (kit.articulos as unknown[]).map((art) => {
+                    const ar = art as Record<string, unknown>;
+                    return {
+                      codigo: typeof ar.codigo === "string" ? ar.codigo : "",
+                      descripcion: typeof ar.descripcion === "string" ? ar.descripcion : "",
+                      cantidad: typeof ar.cantidad === "number" ? ar.cantidad : 1,
+                    };
+                  })
+                : [],
+            };
+          })
+        : [];
+      return {
+        refId: typeof a.refId === "string" ? a.refId : "",
+        nombre: typeof a.nombre === "string" ? a.nombre : "Familia",
+        kits: kits.filter((k) => k.articulos.length > 0),
+      };
+    });
+  })();
+
+  const grupoDe = (refId: string) => data.gruposFamiliares.find((g) => g.id === refId);
+  const integrantesDe = (refId: string): string[] =>
+    (grupoDe(refId)?.personas ?? []).map((p) => `${p.nombres} ${p.apellidos ?? ""}`.trim());
+
+  const totalItemsFam = (f: ActaFam) => f.kits.reduce((n, k) => n + k.articulos.length, 0);
+  const itemKey = (refId: string, ki: number, ai: number) => `${refId}::${ki}::${ai}`;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const [fecha, setFecha] = useState(today);
+  const [confirmados, setConfirmados] = useState<Set<string>>(new Set());
+  const [descripcion, setDescripcion] = useState("");
+  const [colapsadas, setColapsadas] = useState<Set<string>>(new Set());
+  const [evidencia, setEvidencia] = useState<File | null>(null);
+  const [fotosFamilia, setFotosFamilia] = useState<Record<string, File | null>>({});
+  const [subiendo, setSubiendo] = useState(false);
+  const [showActaModal, setShowActaModal] = useState(false);
+  const [actaFile, setActaFile] = useState<File | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [asignandoSeg, setAsignandoSeg] = useState(false);
+
+  const totalItems = familias.reduce((n, f) => n + totalItemsFam(f), 0);
+  const totalConfirmados = confirmados.size;
+
+  const toggleItem = (key: string) =>
+    setConfirmados((prev) => {
+      const n = new Set(prev);
+      if (n.has(key)) n.delete(key);
+      else n.add(key);
+      return n;
+    });
+  const confirmadosFam = (f: ActaFam) =>
+    f.kits.reduce(
+      (n, k, ki) => n + k.articulos.filter((_, ai) => confirmados.has(itemKey(f.refId, ki, ai))).length,
+      0
+    );
+  const toggleColapso = (refId: string) =>
+    setColapsadas((prev) => {
+      const n = new Set(prev);
+      if (n.has(refId)) n.delete(refId);
+      else n.add(refId);
+      return n;
+    });
+
+  async function subirArchivo(file: File): Promise<void> {
+    const res = await presignEvidencia({
+      nombreArchivo: file.name,
+      contentType: file.type || "application/octet-stream",
+      incidenciaId: data.idIncidencia,
+    });
+    if (!res.ok) throw new Error(res.message);
+    const put = await fetch(res.uploadUrl, {
+      method: "PUT",
+      body: file,
+      headers: { "Content-Type": file.type || "application/octet-stream" },
+    });
+    if (!put.ok) throw new Error(`Error al subir (${put.status})`);
+  }
+
+  function resumenEntrega(): string {
+    const partes = familias.map((f) => {
+      const items = f.kits
+        .flatMap((k, ki) =>
+          k.articulos
+            .filter((_, ai) => confirmados.has(itemKey(f.refId, ki, ai)))
+            .map((a) => `${a.descripcion} x${a.cantidad}`)
+        )
+        .join(", ");
+      return `• ${f.nombre}: ${items || "sin ítems confirmados"}`;
+    });
+    return `Ítems confirmados: ${totalConfirmados}/${totalItems}.\n${partes.join("\n")}`;
+  }
+
+  function generarActa() {
+    startTransition(async () => {
+      const { generarActaEntregaPdf } = await import("@/app/lib/acta-entrega-pdf");
+      const urls: string[] = [];
+      const objUrl = (file: File | null | undefined): string | undefined => {
+        if (!file || !file.type.startsWith("image/")) return undefined;
+        const u = URL.createObjectURL(file);
+        urls.push(u);
+        return u;
+      };
+      const evidencias =
+        evidencia && evidencia.type.startsWith("image/")
+          ? [{ url: objUrl(evidencia)!, nombre: evidencia.name }]
+          : [];
+      try {
+        await generarActaEntregaPdf({
+          codigo: data.codigoCaso ?? "GRD",
+          evento: data.tituloIncidencia ?? data.codigoCaso ?? "Incidencia",
+          ubicacion: [data.direccionEvento, data.parroquia].filter(Boolean).join(", ") || "—",
+          fechaEntrega: fmtDate(new Date(fecha).toISOString()),
+          lugarEntrega: data.parroquia ?? "—",
+          emitidoPor: `${data.currentUserName} — Especialista GRD`,
+          resolucionComite: data.solicitudComite?.observaciones ?? "",
+          descripcionEntrega: descripcion,
+          familias: familias.map((f) => {
+            const foto = fotosFamilia[f.refId];
+            return {
+              nombre: f.nombre,
+              integrantes: integrantesDe(f.refId),
+              fotoUrl: objUrl(foto),
+              fotoNombre: foto?.type.startsWith("image/") ? foto.name : undefined,
+              kits: f.kits.map((k, ki) => ({
+                tipoKit: k.tipoKit,
+                articulos: k.articulos.map((a, ai) => ({
+                  ...a,
+                  confirmado: confirmados.has(itemKey(f.refId, ki, ai)),
+                })),
+              })),
+            };
+          }),
+          evidencias,
+        });
+      } finally {
+        urls.forEach((u) => URL.revokeObjectURL(u));
+      }
+    });
+  }
+
+  // Abre el modal para adjuntar el acta firmada antes de confirmar.
+  function marcarAtendido() {
+    if (!fecha) {
+      toast.error("Indica la fecha de entrega.");
+      return;
+    }
+    setShowActaModal(true);
+  }
+
+  function elegirActa(file: File | null) {
+    if (!file) return;
+    if (file.type !== "application/pdf" && !/\.pdf$/i.test(file.name)) {
+      toast.error("El acta debe estar en formato PDF.");
+      return;
+    }
+    if (file.size > 15 * 1024 * 1024) {
+      toast.error("El archivo supera el máximo de 15 MB.");
+      return;
+    }
+    setActaFile(file);
+  }
+
+  // Confirma la entrega: sube el acta firmada + evidencias y cambia a ATENDIDO.
+  async function confirmarAtendido() {
+    if (!actaFile) {
+      toast.error("Adjunta el acta firmada en PDF para confirmar.");
+      return;
+    }
+    setSubiendo(true);
+    try {
+      const files: File[] = [actaFile];
+      if (evidencia) files.push(evidencia);
+      for (const f of Object.values(fotosFamilia)) if (f) files.push(f);
+      for (const f of files) {
+        try {
+          await subirArchivo(f);
+        } catch {
+          toast.error(`No se pudo subir ${f.name}, se continuará sin esa evidencia.`);
+        }
+      }
+    } finally {
+      setSubiendo(false);
+    }
+
+    const descFinal = [descripcion.trim(), resumenEntrega()].filter(Boolean).join("\n\n");
+    startTransition(async () => {
+      const res = await registrarAtencion(data.idIncidencia, {
+        tipoAyuda: "Donación en especie",
+        descripcionAyuda: descFinal || "Entrega de kits de ayuda humanitaria.",
+        lugarEntrega: data.parroquia ?? "—",
+        observaciones: `Ítems confirmados: ${totalConfirmados}/${totalItems}. Acta firmada: ${actaFile.name}.`,
+        fechaEntrega: new Date(fecha).toISOString(),
+      });
+      if (res && "message" in res) {
+        toast.error(res.message);
+        return;
+      }
+      setShowActaModal(false);
+      toast.success("Entrega registrada. Caso marcado como Atendido.");
+      onDone();
+    });
+  }
+
+  // Decisión post-atención: "No, cerrar caso". El "Sí" pasa por la asignación de responsable.
+  function decidirSeguimiento(seguir: boolean) {
+    if (seguir) {
+      setAsignandoSeg(true);
+      return;
+    }
+    startTransition(async () => {
+      const res = await cerrarCaso(data.idIncidencia);
+      if (res && "message" in res) {
+        toast.error(res.message);
+        return;
+      }
+      toast.success("Caso cerrado correctamente.");
+      onNavigate(6);
+      onDone();
+    });
+  }
+
   if (done) {
     const e = data.entregas[0];
+    const enAtendido = data.estadoActual === "ATENDIDO";
     return (
-      <div className="space-y-3">
-        <div className="flex items-center gap-2 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
-          <HandHeart className="w-4 h-4 text-cyan-600" />
-          <span className="text-sm font-medium text-cyan-800">
-            Ayuda entregada {e.fecha ? fmtDate(e.fecha) : ""}
-          </span>
+      <div className="space-y-4">
+        {/* Decisión de seguimiento (solo cuando está ATENDIDO) */}
+        {enAtendido && canAct && (
+          <div className="rounded-xl border border-cyan-200 overflow-hidden">
+            <div className="bg-cyan-700 text-white p-4 flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
+                  <FileCheck className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-semibold">Caso Atendido — Decisión de Seguimiento</p>
+                  <p className="text-sm text-white/90">
+                    ¿Deseas realizar seguimiento post-donación a esta familia?
+                  </p>
+                </div>
+              </div>
+              <span className="text-[10px] font-bold bg-white/20 px-2 py-1 rounded-full uppercase flex-shrink-0">
+                Especialista GRD
+              </span>
+            </div>
+            <div className="p-4 space-y-4 bg-white">
+              <div className="bg-cyan-50 border border-cyan-200 rounded-lg p-3">
+                <p className="text-[11px] font-bold text-cyan-800 uppercase tracking-wider mb-1">
+                  Entrega registrada
+                </p>
+                <p className="text-xs text-cyan-900">{e.descripcionAyuda ?? "—"}</p>
+                {e.observaciones && (
+                  <p className="text-[11px] text-cyan-700 mt-1">{e.observaciones}</p>
+                )}
+              </div>
+
+              {asignandoSeg ? (
+                <AsignarSeguimientoPanel
+                  data={data}
+                  onCancel={() => setAsignandoSeg(false)}
+                  onListo={() => {
+                    setAsignandoSeg(false);
+                    onNavigate(5);
+                    onDone();
+                  }}
+                />
+              ) : (
+                <>
+                  <p className="text-sm font-semibold text-gray-800 text-center">
+                    ¿Deseas realizar seguimiento post-donación a esta familia?
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setAsignandoSeg(true)}
+                      disabled={isPending}
+                      className="flex flex-col items-center gap-1.5 py-6 rounded-xl border-2 border-green-300 bg-green-50 hover:bg-green-100 text-green-700 disabled:opacity-50"
+                    >
+                      <ShieldCheck className="w-6 h-6" />
+                      <span className="text-sm font-bold">Sí, realizar seguimiento</span>
+                      <span className="text-[11px] text-green-600">
+                        Asignar responsable y documentar
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => decidirSeguimiento(false)}
+                      disabled={isPending}
+                      className="flex flex-col items-center gap-1.5 py-6 rounded-xl border-2 border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-600 disabled:opacity-50"
+                    >
+                      <X className="w-6 h-6" />
+                      <span className="text-sm font-bold">No, cerrar caso</span>
+                      <span className="text-[11px] text-gray-400">
+                        Marcar como cerrado definitivamente
+                      </span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Registro de entrega */}
+        <div className="rounded-xl border border-gray-200 overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
+            <Package className="w-4 h-4 text-cyan-600" />
+            <p className="text-sm font-bold text-gray-800">Registro de Entrega</p>
+          </div>
+          <div className="p-4 space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="bg-gray-50 rounded-lg border border-gray-100 px-3 py-2">
+                <p className="text-[10px] text-gray-400 uppercase tracking-wider">Fecha de entrega</p>
+                <p className="text-sm font-medium text-gray-800">
+                  {e.fecha ? fmtDate(e.fecha) : "—"}
+                </p>
+              </div>
+              <div className="bg-gray-50 rounded-lg border border-gray-100 px-3 py-2">
+                <p className="text-[10px] text-gray-400 uppercase tracking-wider">Elaborado por</p>
+                <p className="text-sm font-medium text-gray-800">{data.currentUserName}</p>
+              </div>
+            </div>
+            <div className="bg-cyan-50 border border-cyan-100 rounded-lg px-3 py-2">
+              <p className="text-[10px] text-cyan-600 uppercase tracking-wider mb-0.5">
+                Descripción de la entrega
+              </p>
+              <p className="text-xs text-cyan-900 whitespace-pre-line">{e.descripcionAyuda ?? "—"}</p>
+            </div>
+            {!enAtendido && (
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                <CheckCircle className="w-4 h-4 text-cyan-600" />
+                Caso en estado <span className="font-semibold">{data.estadoActual}</span>.
+              </div>
+            )}
+          </div>
         </div>
-        <InfoField label="Tipo de ayuda" value={e.tipoAyuda ?? "—"} />
-        <InfoField label="Descripción" value={e.descripcionAyuda ?? "—"} />
-        <InfoField label="Lugar de entrega" value={e.lugarEntrega ?? "—"} />
-        {e.observaciones && <InfoField label="Observaciones" value={e.observaciones} />}
       </div>
     );
   }
@@ -3487,151 +3835,739 @@ function PanelAtender({ data, onDone }: { data: IncidentData; onDone: () => void
     );
 
   return (
-    <div className="space-y-4">
-      <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-800">
-        El Comité aprobó este caso. Registra la entrega de la ayuda humanitaria.
+    <>
+    <div className="rounded-xl border border-cyan-200 overflow-hidden">
+      {/* Header */}
+      <div className="bg-cyan-700 text-white p-4 flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
+            <Package className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <p className="font-semibold">Registrar Entrega — Marcar como Atendido</p>
+            <p className="text-sm text-white/90">
+              Confirma los ítems entregados a cada familia y adjunta el acta firmada.
+            </p>
+          </div>
+        </div>
+        <span className="text-[10px] font-bold bg-white/20 px-2 py-1 rounded-full uppercase flex-shrink-0">
+          Especialista GRD
+        </span>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+      <div className="p-4 space-y-4 bg-white">
+        {/* Resolución del Comité */}
+        {data.solicitudComite?.observaciones && (
+          <div className="flex items-start gap-2 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
+            <FileCheck className="w-4 h-4 text-cyan-600 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-[11px] font-bold text-cyan-800 uppercase tracking-wider">
+                Resolución del Comité de Donaciones
+              </p>
+              <p className="text-xs text-cyan-800 mt-0.5">{data.solicitudComite.observaciones}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Fecha de entrega */}
         <div>
           <label className="block text-xs font-medium text-gray-700 mb-1">
-            Tipo de ayuda <span className="text-red-500">*</span>
+            Fecha de entrega <span className="text-red-500">*</span>
           </label>
-          <select
-            className={inputCls}
-            value={form.tipoAyuda}
-            onChange={(e) => set("tipoAyuda", e.target.value)}
-          >
-            {[
-              "Donación en especie",
-              "Donación económica",
-              "Kit de emergencia",
-              "Víveres",
-              "Ropa y abrigo",
-              "Colchones y frazadas",
-              "Útiles de higiene",
-              "Material de construcción",
-              "Otro",
-            ].map((t) => (
-              <option key={t}>{t}</option>
-            ))}
-          </select>
+          <input
+            type="date"
+            value={fecha}
+            onChange={(e) => setFecha(e.target.value)}
+            className={`${inputCls} max-w-xs`}
+          />
         </div>
+
+        {/* Grupos familiares y kits */}
         <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">
-            Lugar de entrega <span className="text-red-500">*</span>
-          </label>
-          <select
-            className={inputCls}
-            value={form.lugar}
-            onChange={(e) => set("lugar", e.target.value)}
+          <p className="text-[11px] font-bold text-cyan-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+            <Users className="w-3.5 h-3.5" /> Grupos familiares y kits asignados
+          </p>
+          {familias.length === 0 ? (
+            <p className="text-xs text-gray-500 italic">
+              El informe aprobado no registra kits asignados por familia.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {familias.map((f) => {
+                const grupo = grupoDe(f.refId);
+                const colapsada = colapsadas.has(f.refId);
+                const conf = confirmadosFam(f);
+                const total = totalItemsFam(f);
+                return (
+                  <div key={f.refId} className="rounded-lg border border-cyan-100 bg-cyan-50/40 overflow-hidden">
+                    <div className="flex items-center gap-2 p-3">
+                      <div className="w-8 h-8 rounded-lg bg-cyan-600 flex items-center justify-center flex-shrink-0">
+                        <Users className="w-4 h-4 text-white" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-bold text-cyan-800 truncate">{f.nombre}</p>
+                        <p className="text-[11px] text-gray-500">
+                          {grupo?.personas.length ?? 0} integrante(s) · {f.kits.length} kit(s) ·{" "}
+                          <span className={conf === total && total > 0 ? "text-green-600 font-semibold" : ""}>
+                            {conf}/{total} ítems confirmados
+                          </span>
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => toggleColapso(f.refId)}
+                        className="text-gray-400 hover:text-gray-600 p-1"
+                      >
+                        {colapsada ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+                      </button>
+                    </div>
+
+                    {!colapsada && (
+                      <div className="px-3 pb-3 space-y-3">
+                        {/* Integrantes */}
+                        {grupo && grupo.personas.length > 0 && (
+                          <div>
+                            <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">
+                              Integrantes
+                            </p>
+                            <div className="flex flex-wrap gap-1">
+                              {grupo.personas.map((p) => (
+                                <span
+                                  key={p.id}
+                                  className="text-[10px] bg-white border border-cyan-100 rounded-full px-2 py-0.5 text-gray-700 flex items-center gap-1"
+                                >
+                                  {`${p.nombres} ${p.apellidos ?? ""}`.trim()}
+                                  {p.edad && <span className="text-gray-400">· {p.edad}a</span>}
+                                  {p.condicionEspecial && (
+                                    <span className="text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5">
+                                      {p.condicionEspecial}
+                                    </span>
+                                  )}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Kits con checkboxes */}
+                        {f.kits.map((kit, ki) => (
+                          <div key={ki} className="bg-white rounded-lg border border-gray-100 overflow-hidden">
+                            <p className="text-[11px] font-bold text-cyan-700 px-3 py-1.5 border-b border-gray-100 flex items-center gap-1.5">
+                              <Package className="w-3.5 h-3.5" /> {kit.tipoKit}
+                            </p>
+                            <div className="divide-y divide-gray-50">
+                              {kit.articulos.map((a, ai) => {
+                                const key = itemKey(f.refId, ki, ai);
+                                const checked = confirmados.has(key);
+                                return (
+                                  <label
+                                    key={ai}
+                                    className={`flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-gray-50 ${checked ? "bg-cyan-50/50" : ""}`}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      onChange={() => toggleItem(key)}
+                                      className="w-4 h-4 rounded border-gray-300 text-cyan-600 focus:ring-cyan-500"
+                                    />
+                                    <span className="text-xs text-gray-700 flex-1">{a.descripcion}</span>
+                                    <span className="text-[10px] font-mono text-gray-400">{a.codigo}</span>
+                                    <span className="text-[11px] font-semibold text-gray-600">x{a.cantidad}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+
+                        {/* Foto de evidencia por familia */}
+                        <div>
+                          <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                            <Camera className="w-3 h-3" /> Foto de evidencia de esta familia
+                          </p>
+                          <label className="inline-flex items-center gap-2 px-3 py-1.5 border border-dashed border-cyan-300 rounded-lg text-cyan-700 cursor-pointer hover:bg-cyan-50 text-xs">
+                            <Camera className="w-3.5 h-3.5" />
+                            {fotosFamilia[f.refId]?.name ?? "Adjuntar foto"}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) =>
+                                setFotosFamilia((prev) => ({
+                                  ...prev,
+                                  [f.refId]: e.target.files?.[0] ?? null,
+                                }))
+                              }
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Evidencia de entrega general */}
+        <div>
+          <p className="text-[11px] font-bold text-cyan-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+            <Camera className="w-3.5 h-3.5" /> Evidencia de entrega
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label className="flex flex-col items-center justify-center gap-1.5 py-5 border-2 border-cyan-200 rounded-xl text-cyan-700 cursor-pointer hover:bg-cyan-50">
+              <Camera className="w-5 h-5" />
+              <span className="text-xs font-medium">
+                {evidencia && evidencia.type.startsWith("image/") ? evidencia.name : "Foto / Acta"}
+              </span>
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => setEvidencia(e.target.files?.[0] ?? null)}
+              />
+            </label>
+            <label className="flex flex-col items-center justify-center gap-1.5 py-5 border-2 border-gray-200 rounded-xl text-gray-500 cursor-pointer hover:bg-gray-50">
+              <Upload className="w-5 h-5" />
+              <span className="text-xs font-medium">
+                {evidencia && !evidencia.type.startsWith("image/") ? evidencia.name : "Documento"}
+              </span>
+              <input
+                type="file"
+                accept=".pdf,.doc,.docx,image/*"
+                className="hidden"
+                onChange={(e) => setEvidencia(e.target.files?.[0] ?? null)}
+              />
+            </label>
+          </div>
+        </div>
+
+        {/* Descripción */}
+        <div>
+          <p className="text-[11px] font-bold text-cyan-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+            <FileText className="w-3.5 h-3.5" /> Descripción de la entrega (Especialista GRD)
+          </p>
+          <textarea
+            rows={3}
+            className={textareaCls}
+            value={descripcion}
+            onChange={(e) => setDescripcion(e.target.value)}
+            placeholder="Describe el proceso de entrega, observaciones, condiciones de la familia al momento de la entrega, etc."
+          />
+        </div>
+
+        {/* Acciones */}
+        <div className="flex flex-col sm:flex-row gap-2 pt-1">
+          <button
+            type="button"
+            onClick={generarActa}
+            disabled={isPending || subiendo}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 border border-cyan-300 text-cyan-700 rounded-xl font-medium hover:bg-cyan-50 disabled:opacity-50"
           >
-            <option value="">Selecciona una parroquia...</option>
-            {data.parroquias.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
+            <Download className="w-4 h-4" /> Generar Acta PDF
+          </button>
+          <button
+            type="button"
+            onClick={marcarAtendido}
+            disabled={isPending || subiendo}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-white font-semibold disabled:opacity-50"
+            style={{ background: "#0e7490" }}
+          >
+            {isPending || subiendo ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" /> Procesando…
+              </>
+            ) : (
+              <>
+                <FileCheck className="w-4 h-4" /> Marcar como Atendido
+              </>
+            )}
+          </button>
         </div>
       </div>
-      <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1">
-          Descripción de la ayuda <span className="text-red-500">*</span>
-        </label>
-        <textarea
-          rows={3}
-          className={textareaCls}
-          value={form.descripcion}
-          onChange={(e) => set("descripcion", e.target.value)}
-          placeholder="Detalla los ítems entregados y cantidades..."
-        />
+    </div>
+
+    {/* Modal: adjuntar acta firmada */}
+    {showActaModal && (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+        onClick={(e) => {
+          if (e.target === e.currentTarget && !subiendo && !isPending) setShowActaModal(false);
+        }}
+      >
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+          <div className="bg-cyan-700 text-white p-4 flex items-start justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Pencil className="w-5 h-5" />
+              <div>
+                <p className="font-semibold">Adjuntar acta firmada</p>
+                <p className="text-xs text-white/90">
+                  Sube el acta de entrega con la firma del especialista antes de cerrar el caso.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => !subiendo && !isPending && setShowActaModal(false)}
+              className="text-white/80 hover:text-white rounded-full p-1 hover:bg-white/10"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="p-5 space-y-4">
+            <label
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOver(true);
+              }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragOver(false);
+                elegirActa(e.dataTransfer.files?.[0] ?? null);
+              }}
+              className={`flex flex-col items-center justify-center gap-2 py-10 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${
+                dragOver
+                  ? "border-cyan-500 bg-cyan-50"
+                  : actaFile
+                    ? "border-green-300 bg-green-50"
+                    : "border-gray-300 hover:bg-gray-50"
+              }`}
+            >
+              {actaFile ? (
+                <>
+                  <FileText className="w-7 h-7 text-green-600" />
+                  <span className="text-sm font-medium text-green-700">{actaFile.name}</span>
+                  <span className="text-[11px] text-gray-400">
+                    {(actaFile.size / 1024 / 1024).toFixed(1)} MB · Click para reemplazar
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Upload className="w-7 h-7 text-gray-400" />
+                  <span className="text-sm font-semibold text-gray-700">
+                    Click o arrastra para subir el acta firmada
+                  </span>
+                  <span className="text-[11px] text-gray-400">Formato PDF · Máx. 15 MB</span>
+                </>
+              )}
+              <input
+                type="file"
+                accept="application/pdf,.pdf"
+                className="hidden"
+                onChange={(e) => elegirActa(e.target.files?.[0] ?? null)}
+              />
+            </label>
+
+            <div className="bg-cyan-50 border border-cyan-100 rounded-lg p-3 text-[11px] text-cyan-800">
+              El acta quedará registrada como evidencia de la entrega realizada. Usa el botón{" "}
+              <span className="font-semibold">Generar Acta PDF</span> para descargar la plantilla,
+              fírmala y súbela aquí.
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setShowActaModal(false)}
+                disabled={subiendo || isPending}
+                className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmarAtendido}
+                disabled={subiendo || isPending || !actaFile}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50 flex items-center justify-center gap-2"
+                style={{ background: "#0e7490" }}
+              >
+                {subiendo || isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" /> Procesando…
+                  </>
+                ) : (
+                  <>
+                    <FileCheck className="w-4 h-4" /> Confirmar — Marcar Atendido
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
-      <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1">Observaciones</label>
-        <textarea
-          rows={2}
-          className={textareaCls}
-          value={form.observaciones}
-          onChange={(e) => set("observaciones", e.target.value)}
-          placeholder="Observaciones adicionales..."
-        />
-      </div>
-      <div className="flex justify-end">
+    )}
+    </>
+  );
+}
+
+// ─── Sub-panel: Asignar responsable del seguimiento ───────────────────────────
+// Reutiliza las mismas acciones de asignación de brigadistas / autoasignarse.
+
+function AsignarSeguimientoPanel({
+  data,
+  onCancel,
+  onListo,
+}: {
+  data: IncidentData;
+  onCancel: () => void;
+  onListo: () => void;
+}) {
+  const [isPending, startTransition] = useTransition();
+  const [tab, setTab] = useState<"brigadista" | "auto">("brigadista");
+  const [responsable, setResponsable] = useState("");
+  const [query, setQuery] = useState("");
+  const [instrucciones, setInstrucciones] = useState("");
+
+  const esRecomendado = (parroquia: string | null) =>
+    !!data.parroquia &&
+    !!parroquia &&
+    parroquia.trim().toLowerCase() === data.parroquia.trim().toLowerCase();
+
+  const catalogo = data.brigadistasDisponibles
+    .filter((b) => b.id !== responsable)
+    .filter((b) => {
+      const q = query.trim().toLowerCase();
+      if (!q) return true;
+      return (
+        `${b.nombres} ${b.apellidos ?? ""}`.toLowerCase().includes(q) ||
+        (b.parroquia ?? "").toLowerCase().includes(q)
+      );
+    })
+    .sort((a, b) => {
+      const aDisp = a.disponibilidad === "DISPONIBLE" ? 1 : 0;
+      const bDisp = b.disponibilidad === "DISPONIBLE" ? 1 : 0;
+      if (bDisp !== aDisp) return bDisp - aDisp;
+      return Number(esRecomendado(b.parroquia)) - Number(esRecomendado(a.parroquia));
+    });
+
+  const respBrig = data.brigadistasDisponibles.find((b) => b.id === responsable);
+
+  function confirmarBrigadista() {
+    if (!responsable) {
+      toast.error("Designa un brigadista responsable del seguimiento.");
+      return;
+    }
+    startTransition(async () => {
+      const asg = await assignEquipo(data.idIncidencia, responsable, [], instrucciones);
+      if (asg && "message" in asg) {
+        toast.error(asg.message);
+        return;
+      }
+      const seg = await iniciarSeguimientoCaso(data.idIncidencia);
+      if (seg && "message" in seg) {
+        toast.error(seg.message);
+        return;
+      }
+      toast.success("Responsable asignado. Seguimiento iniciado.");
+      onListo();
+    });
+  }
+
+  function confirmarAuto() {
+    startTransition(async () => {
+      const asg = await autoasignarme(data.idIncidencia, instrucciones);
+      if (asg && "message" in asg) {
+        toast.error(asg.message);
+        return;
+      }
+      const seg = await iniciarSeguimientoCaso(data.idIncidencia);
+      if (seg && "message" in seg) {
+        toast.error(seg.message);
+        return;
+      }
+      toast.success("Te asignaste el seguimiento. Seguimiento iniciado.");
+      onListo();
+    });
+  }
+
+  return (
+    <div className="space-y-3 border border-green-200 rounded-xl p-4 bg-green-50/40">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-bold text-green-800 uppercase tracking-wider">
+          Asignar responsable del seguimiento
+        </p>
         <button
-          onClick={() => {
-            if (!form.descripcion || !form.lugar) {
-              toast.error("Completa los campos obligatorios");
-              return;
-            }
-            startTransition(async () => {
-              await registrarAtencion(data.idIncidencia, {
-                tipoAyuda: form.tipoAyuda,
-                descripcionAyuda: form.descripcion,
-                lugarEntrega: form.lugar,
-                observaciones: form.observaciones,
-              });
-              toast.success("Entrega registrada correctamente");
-              onDone();
-            });
-          }}
+          type="button"
+          onClick={onCancel}
           disabled={isPending}
-          className={btnPrimary}
-          style={{ background: "var(--caritas-green)" }}
+          className="text-gray-400 hover:text-gray-600 p-1 disabled:opacity-50"
         >
-          {isPending ? "Registrando..." : "Registrar entrega"}
+          <X className="w-4 h-4" />
         </button>
       </div>
+
+      {/* Tabs */}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => setTab("brigadista")}
+          className={`px-3 py-1.5 text-xs font-medium rounded-lg border ${
+            tab === "brigadista"
+              ? "bg-green-600 text-white border-green-600"
+              : "border-gray-300 text-gray-700 hover:bg-gray-50"
+          }`}
+        >
+          Asignar brigadista
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("auto")}
+          className={`px-3 py-1.5 text-xs font-medium rounded-lg border ${
+            tab === "auto"
+              ? "bg-green-600 text-white border-green-600"
+              : "border-gray-300 text-gray-700 hover:bg-gray-50"
+          }`}
+        >
+          Hacerme responsable
+        </button>
+      </div>
+
+      {tab === "brigadista" ? (
+        <div className="space-y-3">
+          {/* Responsable seleccionado */}
+          {respBrig && (
+            <div className="flex items-center justify-between gap-2 bg-white border border-green-200 rounded-lg px-3 py-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                  <UserCheck className="w-4 h-4 text-green-700" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-gray-900 truncate">
+                    {respBrig.nombres} {respBrig.apellidos ?? ""}
+                  </p>
+                  <p className="text-[10px] text-gray-500">
+                    {respBrig.parroquia ?? "—"} · Responsable
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setResponsable("")}
+                className="text-gray-400 hover:text-red-500 p-1"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* Buscador + catálogo */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar brigadista por nombre o parroquia..."
+              className={`${inputCls} pl-9`}
+            />
+          </div>
+          <div className="max-h-48 overflow-y-auto space-y-1.5">
+            {catalogo.length === 0 ? (
+              <p className="text-[11px] text-gray-400 italic px-1 py-2">
+                No hay brigadistas disponibles que coincidan.
+              </p>
+            ) : (
+              catalogo.map((b) => (
+                <button
+                  key={b.id}
+                  type="button"
+                  onClick={() => setResponsable(b.id)}
+                  className="w-full flex items-center justify-between gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2 hover:border-green-300 hover:bg-green-50 text-left"
+                >
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-gray-900 truncate">
+                      {b.nombres} {b.apellidos ?? ""}
+                    </p>
+                    <p className="text-[10px] text-gray-500">{b.parroquia ?? "—"}</p>
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    {esRecomendado(b.parroquia) && (
+                      <span className="text-[9px] bg-green-100 text-green-700 rounded-full px-1.5 py-0.5 font-semibold">
+                        Recomendado
+                      </span>
+                    )}
+                    <span
+                      className={`text-[9px] rounded-full px-1.5 py-0.5 font-semibold ${
+                        b.disponibilidad === "DISPONIBLE"
+                          ? "bg-green-100 text-green-700"
+                          : "bg-gray-100 text-gray-500"
+                      }`}
+                    >
+                      {b.disponibilidad === "DISPONIBLE" ? "Disponible" : b.disponibilidad}
+                    </span>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+
+          <textarea
+            rows={2}
+            className={textareaCls}
+            value={instrucciones}
+            onChange={(e) => setInstrucciones(e.target.value)}
+            placeholder="Instrucciones para el seguimiento (opcional)..."
+          />
+
+          <div className="flex gap-2 justify-end">
+            <button type="button" onClick={onCancel} disabled={isPending} className={btnGhost}>
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={confirmarBrigadista}
+              disabled={isPending || !responsable}
+              className={btnPrimary}
+              style={{ background: "var(--caritas-green)" }}
+            >
+              {isPending ? "Asignando..." : "Asignar e iniciar seguimiento"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div className="bg-white border border-green-200 rounded-lg p-3 text-xs text-gray-600">
+            Te asignarás como responsable único del seguimiento de este caso.
+          </div>
+          <textarea
+            rows={2}
+            className={textareaCls}
+            value={instrucciones}
+            onChange={(e) => setInstrucciones(e.target.value)}
+            placeholder="Notas del seguimiento (opcional)..."
+          />
+          <div className="flex gap-2 justify-end">
+            <button type="button" onClick={onCancel} disabled={isPending} className={btnGhost}>
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={confirmarAuto}
+              disabled={isPending}
+              className={btnPrimary}
+              style={{ background: "var(--caritas-green)" }}
+            >
+              {isPending ? "Asignando..." : "Asignarme e iniciar seguimiento"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 // ─── Panel: Seguimiento ───────────────────────────────────────────────────────
 
-function PanelSeguimiento({ data, onDone }: { data: IncidentData; onDone: () => void }) {
+function PanelSeguimiento({
+  data,
+  onDone,
+  onNavigate,
+}: {
+  data: IncidentData;
+  onDone: () => void;
+  onNavigate: (step: number) => void;
+}) {
   const [isPending, startTransition] = useTransition();
+  const hoy = new Date().toISOString().slice(0, 10);
   const [form, setForm] = useState({
-    situacion: "",
-    descripcion: "",
-    necesidades: "",
-    recomendaciones: "",
+    fecha: hoy,
+    medio: "Presencial",
+    situacion: "Mejoró",
+    usoAyuda: "Adecuado",
+    recomendacion: "Acompañamiento",
+    notas: "",
   });
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
-  const canAct = data.role === "admin" || data.role === "especialistaGRD";
-  const canClose =
-    canAct && (data.estadoActual === "SEGUIMIENTO ABIERTO" || data.estadoActual === "ATENDIDO");
+  const [fotos, setFotos] = useState<File[]>([]);
+  const [subiendo, setSubiendo] = useState(false);
 
-  function handleSeguimiento() {
-    if (!form.situacion || !form.descripcion) {
-      toast.error("Completa los campos obligatorios");
+  // El especialista/admin, o el responsable asignado al seguimiento (brigadista o GRD), puede registrar.
+  const canAct =
+    data.role === "admin" ||
+    data.role === "especialistaGRD" ||
+    data.isResponsableGRD ||
+    data.isBrigadistaAsignado;
+  const yaRegistrado = data.seguimientos.length > 0;
+  const finalizado = data.estadoActual === "CERRADO" || data.estadoActual === "RECHAZADO";
+
+  const responsables =
+    data.responsableGRD?.nombre ??
+    (() => {
+      const r = data.asignaciones.find((a) => a.esResponsable);
+      return r ? `${r.nombres} ${r.apellidos ?? ""}`.trim() : "Especialista GRD";
+    })();
+
+  async function subirArchivo(file: File): Promise<void> {
+    const res = await presignEvidencia({
+      nombreArchivo: file.name,
+      contentType: file.type || "application/octet-stream",
+      incidenciaId: data.idIncidencia,
+    });
+    if (!res.ok) throw new Error(res.message);
+    const put = await fetch(res.uploadUrl, {
+      method: "PUT",
+      body: file,
+      headers: { "Content-Type": file.type || "application/octet-stream" },
+    });
+    if (!put.ok) throw new Error(`Error al subir (${put.status})`);
+  }
+
+  function agregarFotos(files: FileList | null) {
+    if (!files) return;
+    setFotos((prev) => [...prev, ...Array.from(files)]);
+  }
+
+  async function enviar() {
+    if (!form.fecha) {
+      toast.error("Indica la fecha de seguimiento.");
       return;
     }
+    if (!form.notas.trim()) {
+      toast.error("Escribe las notas del seguimiento.");
+      return;
+    }
+    setSubiendo(true);
+    try {
+      for (const f of fotos) {
+        try {
+          await subirArchivo(f);
+        } catch {
+          toast.error(`No se pudo subir ${f.name}, se continuará sin ese archivo.`);
+        }
+      }
+    } finally {
+      setSubiendo(false);
+    }
     startTransition(async () => {
-      await addSeguimiento(data.idIncidencia, {
+      const res = await registrarSeguimientoYCerrar(data.idIncidencia, {
         situacion: form.situacion,
-        descripcion: form.descripcion,
-        necesidadesPendientes: form.necesidades,
-        recomendaciones: form.recomendaciones,
+        descripcion: form.notas,
+        recomendaciones: form.recomendacion,
+        observaciones: `Medio: ${form.medio} · Uso de la ayuda: ${form.usoAyuda} · Fotos/videos: ${fotos.length}`,
+        fecha: new Date(form.fecha).toISOString(),
       });
-      toast.success("Seguimiento registrado");
-      setForm({ situacion: "", descripcion: "", necesidades: "", recomendaciones: "" });
+      if (res && "message" in res) {
+        toast.error(res.message);
+        return;
+      }
+      toast.success("Seguimiento registrado. Caso cerrado.");
+      onNavigate(6);
       onDone();
     });
   }
 
-  function handleCerrar() {
-    startTransition(async () => {
-      await cerrarCaso(data.idIncidencia);
-      toast.success("Caso cerrado correctamente");
-      onDone();
-    });
-  }
-
-  return (
-    <div className="space-y-4">
-      {/* Historial de seguimientos */}
-      {data.seguimientos.length > 0 && (
-        <div>
-          <p className="text-xs font-semibold text-gray-500 mb-2">Seguimientos registrados</p>
+  // ── Vista de solo lectura: ya se registró el seguimiento o el caso está cerrado ──
+  if (yaRegistrado || finalizado) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+          <CheckCircle className="w-4 h-4 text-green-600" />
+          <span className="text-sm font-medium text-green-800">
+            {finalizado ? "Caso cerrado tras el seguimiento." : "Seguimiento registrado."}
+          </span>
+        </div>
+        {data.seguimientos.length > 0 ? (
           <div className="space-y-2">
             {data.seguimientos.map((s) => (
               <div key={s.id} className="p-3 bg-gray-50 border border-[#DDDDDD] rounded-lg text-sm">
@@ -3639,7 +4575,12 @@ function PanelSeguimiento({ data, onDone }: { data: IncidentData; onDone: () => 
                   <span className="font-medium text-gray-800">{s.situacion ?? "—"}</span>
                   <span className="text-xs text-gray-400">{fmtDate(s.fecha)}</span>
                 </div>
-                <p className="text-gray-600">{s.descripcion ?? "—"}</p>
+                <p className="text-gray-600 whitespace-pre-line">{s.descripcion ?? "—"}</p>
+                {s.recomendaciones && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Recomendación: {s.recomendaciones}
+                  </p>
+                )}
                 {s.necesidadesPendientes && (
                   <p className="text-xs text-amber-700 mt-1">
                     Necesidades: {s.necesidadesPendientes}
@@ -3648,109 +4589,339 @@ function PanelSeguimiento({ data, onDone }: { data: IncidentData; onDone: () => 
               </div>
             ))}
           </div>
-        </div>
-      )}
+        ) : (
+          <p className="text-sm text-gray-500 text-center py-2">No hay seguimiento registrado.</p>
+        )}
+      </div>
+    );
+  }
 
-      {/* Formulario nuevo seguimiento */}
-      {canAct && data.estadoActual !== "CERRADO" && data.estadoActual !== "RECHAZADO" && (
-        <div className="space-y-3">
-          <p className="text-xs font-semibold text-gray-600">Agregar seguimiento</p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                Situación actual <span className="text-red-500">*</span>
-              </label>
-              <input
-                className={inputCls}
-                value={form.situacion}
-                onChange={(e) => set("situacion", e.target.value)}
-                placeholder="Ej: Familia estabilizada, necesita asistencia"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                Necesidades pendientes
-              </label>
-              <input
-                className={inputCls}
-                value={form.necesidades}
-                onChange={(e) => set("necesidades", e.target.value)}
-                placeholder="Ej: Reparación de techo"
-              />
-            </div>
+  if (!canAct) {
+    return (
+      <p className="text-sm text-gray-500 text-center py-4">
+        El seguimiento será registrado por el responsable asignado.
+      </p>
+    );
+  }
+
+  // ── Formulario de seguimiento (se realiza una sola vez) ──
+  return (
+    <div className="rounded-xl border border-[#91D723]/40 overflow-hidden">
+      <div className="bg-[#91D723] text-white p-4 flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
+            <ShieldCheck className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <p className="font-semibold">Seguimiento Activo</p>
+            <p className="text-sm text-white/90">Responsable(s): {responsables}</p>
+          </div>
+        </div>
+        <span className="text-[10px] font-bold bg-white/20 px-2 py-1 rounded-full uppercase flex-shrink-0">
+          Seguimiento
+        </span>
+      </div>
+
+      <div className="p-4 space-y-4 bg-white">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              Fecha de seguimiento <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="date"
+              className={inputCls}
+              value={form.fecha}
+              onChange={(e) => set("fecha", e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Medio</label>
+            <select className={inputCls} value={form.medio} onChange={(e) => set("medio", e.target.value)}>
+              {["Presencial", "Telefónico", "Virtual", "Visita domiciliaria"].map((o) => (
+                <option key={o}>{o}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">
-              Descripción <span className="text-red-500">*</span>
+              Situación actual de la familia
             </label>
-            <textarea
-              rows={2}
-              className={textareaCls}
-              value={form.descripcion}
-              onChange={(e) => set("descripcion", e.target.value)}
-              placeholder="Detalla la situación actual..."
-            />
+            <select
+              className={inputCls}
+              value={form.situacion}
+              onChange={(e) => set("situacion", e.target.value)}
+            >
+              {["Mejoró", "Se mantiene igual", "Empeoró"].map((o) => (
+                <option key={o}>{o}</option>
+              ))}
+            </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Recomendaciones</label>
-            <textarea
-              rows={2}
-              className={textareaCls}
-              value={form.recomendaciones}
-              onChange={(e) => set("recomendaciones", e.target.value)}
-              placeholder="Acciones recomendadas..."
-            />
-          </div>
-          <div className="flex items-center gap-3 justify-between">
-            <div>
-              {canClose && (
-                <button onClick={handleCerrar} disabled={isPending} className={btnGhost}>
-                  {isPending ? "Cerrando..." : "Cerrar caso"}
-                </button>
-              )}
-            </div>
-            <button
-              onClick={handleSeguimiento}
-              disabled={isPending}
-              className={btnPrimary}
-              style={{ background: "var(--caritas-green)" }}
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              Uso de la ayuda entregada
+            </label>
+            <select
+              className={inputCls}
+              value={form.usoAyuda}
+              onChange={(e) => set("usoAyuda", e.target.value)}
             >
-              {isPending ? "Guardando..." : "Guardar seguimiento"}
-            </button>
+              {["Adecuado", "Parcial", "Inadecuado", "No utilizada"].map((o) => (
+                <option key={o}>{o}</option>
+              ))}
+            </select>
           </div>
         </div>
-      )}
 
-      {!canAct && data.seguimientos.length === 0 && (
-        <p className="text-sm text-gray-500 text-center py-4">No hay seguimientos registrados.</p>
-      )}
+        <div>
+          <label className="block text-xs font-medium text-gray-700 mb-1">Recomendación técnica</label>
+          <select
+            className={inputCls}
+            value={form.recomendacion}
+            onChange={(e) => set("recomendacion", e.target.value)}
+          >
+            {["Acompañamiento", "Cierre del caso", "Nueva intervención", "Derivación"].map((o) => (
+              <option key={o}>{o}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-700 mb-1">
+            Notas del seguimiento <span className="text-red-500">*</span>
+          </label>
+          <textarea
+            rows={4}
+            className={textareaCls}
+            value={form.notas}
+            onChange={(e) => set("notas", e.target.value)}
+            placeholder="¿Cómo está la familia? ¿Usaron bien la ayuda? ¿Qué acciones se tomaron?"
+          />
+        </div>
+
+        {/* Fotos / videos del seguimiento */}
+        <div>
+          <label className="block text-xs font-medium text-gray-700 mb-1">
+            Fotos del seguimiento
+          </label>
+          <div className="flex gap-2">
+            <label className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#91D723] text-[#009850] rounded-lg cursor-pointer hover:bg-[#91D723]/10 text-xs font-medium">
+              <Camera className="w-3.5 h-3.5" /> Cámara
+              <input
+                type="file"
+                accept="image/*,video/*"
+                capture="environment"
+                multiple
+                className="hidden"
+                onChange={(e) => agregarFotos(e.target.files)}
+              />
+            </label>
+            <label className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 text-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 text-xs font-medium">
+              <ImageIcon className="w-3.5 h-3.5" /> Galería
+              <input
+                type="file"
+                accept="image/*,video/*"
+                multiple
+                className="hidden"
+                onChange={(e) => agregarFotos(e.target.files)}
+              />
+            </label>
+          </div>
+          {fotos.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {fotos.map((f, i) => (
+                <span
+                  key={i}
+                  className="inline-flex items-center gap-1 text-[10px] bg-gray-100 border border-gray-200 rounded-full pl-2 pr-1 py-0.5 text-gray-700"
+                >
+                  {f.name}
+                  <button
+                    type="button"
+                    onClick={() => setFotos((prev) => prev.filter((_, j) => j !== i))}
+                    className="text-gray-400 hover:text-red-500"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <button
+          onClick={enviar}
+          disabled={isPending || subiendo}
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-white font-semibold disabled:opacity-50"
+          style={{ background: "var(--caritas-green)" }}
+        >
+          {isPending || subiendo ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" /> Enviando…
+            </>
+          ) : (
+            <>
+              <ShieldCheck className="w-4 h-4" /> Enviar
+            </>
+          )}
+        </button>
+        <p className="text-[11px] text-gray-400 text-center">
+          El seguimiento se registra una sola vez y, al enviarlo, el caso se cierra
+          definitivamente.
+        </p>
+      </div>
     </div>
   );
 }
 
 // ─── Panel: Resumen Final ─────────────────────────────────────────────────────
 
+function ResumenBloque({
+  icon: Icon,
+  titulo,
+  contador,
+  children,
+}: {
+  icon: typeof FileText;
+  titulo: string;
+  contador?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <details open className="border border-gray-200 rounded-xl overflow-hidden group">
+      <summary className="cursor-pointer list-none px-4 py-3 bg-gray-50 flex items-center gap-2 hover:bg-gray-100">
+        <Icon className="w-4 h-4 text-[#009850] flex-shrink-0" />
+        <span className="text-sm font-bold text-gray-800 flex-1">{titulo}</span>
+        {contador && <span className="text-[11px] text-gray-400">{contador}</span>}
+        <ChevronDown className="w-4 h-4 text-gray-400 transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="p-4 space-y-3">{children}</div>
+    </details>
+  );
+}
+
 function PanelResumen({ data }: { data: IncidentData }) {
+  const [descargando, setDescargando] = useState(false);
+
+  const parse = (s: string | null | undefined): Record<string, unknown> | null => {
+    try {
+      return s ? (JSON.parse(s) as Record<string, unknown>) : null;
+    } catch {
+      return null;
+    }
+  };
+  const str = (v: unknown, d = ""): string => (typeof v === "string" ? v : d);
+  const arr = (v: unknown): string[] =>
+    Array.isArray(v) ? v.map(String).map((x) => x.trim()).filter(Boolean) : [];
+
+  const campoInf = data.informes.find((i) => i.tipo === "CAMPO");
+  const evalInf = data.informes.find((i) => i.tipo === "EVALUACION");
+  const campo = parse(campoInf?.contenido);
+  const sc = parse(evalInf?.contenido);
+
+  type RArt = { codigo: string; descripcion: string; cantidad: number };
+  type RFam = { refId: string; nombre: string; kits: { tipoKit: string; articulos: RArt[] }[] };
+  const familiasEval: RFam[] = Array.isArray(sc?.asignacionFamilias)
+    ? (sc.asignacionFamilias as unknown[]).map((af) => {
+        const a = af as Record<string, unknown>;
+        return {
+          refId: str(a.refId),
+          nombre: str(a.nombre, "Familia"),
+          kits: Array.isArray(a.kits)
+            ? (a.kits as unknown[]).map((k) => {
+                const kit = k as Record<string, unknown>;
+                return {
+                  tipoKit: str(kit.tipoKit),
+                  articulos: Array.isArray(kit.articulos)
+                    ? (kit.articulos as unknown[]).map((art) => {
+                        const ar = art as Record<string, unknown>;
+                        return {
+                          codigo: str(ar.codigo),
+                          descripcion: str(ar.descripcion),
+                          cantidad: typeof ar.cantidad === "number" ? ar.cantidad : 1,
+                        };
+                      })
+                    : [],
+                };
+              })
+            : [],
+        };
+      })
+    : [];
+
+  const grupoDe = (refId: string) => data.gruposFamiliares.find((g) => g.id === refId);
+  const integrantesDe = (refId: string): string[] =>
+    (grupoDe(refId)?.personas ?? []).map((p) => `${p.nombres} ${p.apellidos ?? ""}`.trim());
+
+  const notasFamilias: { id: string; nota: string }[] = Array.isArray(campo?.notasFamilias)
+    ? (campo!.notasFamilias as { id: string; nota: string }[])
+    : [];
+
+  const totalPersonas = data.gruposFamiliares.reduce((s, g) => s + g.totalPersonas, 0);
+  const respBrig = data.asignaciones.find((a) => a.esResponsable);
+  const equipo = data.asignaciones.filter((a) => !a.esResponsable);
+  const cerrado = data.estadoActual === "CERRADO";
+
+  async function descargarInformePdf() {
+    if (!sc) return;
+    setDescargando(true);
+    try {
+      const { generarInformePdf } = await import("@/app/lib/informe-pdf");
+      await generarInformePdf({
+        codigo: data.codigoCaso ?? "GRD",
+        categoria: data.tipoEvento ?? "—",
+        evento: data.tituloIncidencia ?? data.codigoCaso ?? "Incidencia",
+        ubicacion: [data.direccionEvento, data.parroquia].filter(Boolean).join(", ") || "—",
+        fechaSuceso: fmtDate(data.fechaRegistro),
+        familiasAfectadas: data.gruposFamiliares.length,
+        personasEmpadronadas: totalPersonas,
+        fechaEmision: fmtDate(evalInf?.fecha ?? data.fechaRegistro),
+        emitidoPor: "Especialista GRD",
+        oficina: "Oficina de Gestión Pastoral / GRD",
+        motivo: str(sc.motivo),
+        dirigidoA: str(sc.dirigidoA, "Comité de donaciones"),
+        objetivoGeneral: str(sc.objetivoGeneral),
+        objetivosEspecificos: arr(sc.objetivosEspecificos),
+        analisisSituacion: str(sc.analisisSituacion),
+        hallazgosTexto: str(sc.hallazgosTexto),
+        hallazgosClave: arr(sc.hallazgosClave),
+        necesidadesIdentificadas: [],
+        evidenciasCount: data.evidencias.length,
+        evidenciasImagenes: [],
+        familias: familiasEval.map((f) => ({
+          nombre: f.nombre,
+          integrantes: integrantesDe(f.refId),
+          kits: f.kits,
+        })),
+        conclusiones: str(sc.conclusiones),
+      });
+    } catch {
+      toast.error("No se pudo generar el PDF.");
+    } finally {
+      setDescargando(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
+      {/* Estado y métricas */}
       <div className="flex items-center gap-3 p-4 bg-gray-50 border border-gray-200 rounded-xl">
-        <CheckCircle className="w-6 h-6 text-gray-500" />
+        <CheckCircle className={`w-6 h-6 ${cerrado ? "text-green-600" : "text-gray-500"}`} />
         <div>
           <p className="font-semibold text-gray-800">
-            Caso {data.estadoActual === "CERRADO" ? "cerrado" : data.estadoActual}
+            Caso {cerrado ? "cerrado" : data.estadoActual}
           </p>
-          <p className="text-xs text-gray-500">Registrado el {fmtDate(data.fechaRegistro)}</p>
+          <p className="text-xs text-gray-500">
+            {data.codigoCaso} · Registrado el {fmtDate(data.fechaRegistro)}
+          </p>
         </div>
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-center">
         {[
           { label: "Familias", value: data.gruposFamiliares.length },
-          {
-            label: "Personas",
-            value: data.gruposFamiliares.reduce((s, g) => s + g.totalPersonas, 0),
-          },
-          { label: "Seguimientos", value: data.seguimientos.length },
+          { label: "Personas", value: totalPersonas },
           { label: "Informes", value: data.informes.length },
+          { label: "Entregas", value: data.entregas.length },
+          { label: "Documentos", value: data.evidencias.length },
         ].map((s) => (
           <div key={s.label} className="bg-white border border-[#DDDDDD] rounded-xl p-3">
             <p className="text-2xl font-bold text-gray-900">{s.value}</p>
@@ -3758,9 +4929,312 @@ function PanelResumen({ data }: { data: IncidentData }) {
           </div>
         ))}
       </div>
+
+      {/* 1. Datos del evento */}
+      <ResumenBloque icon={FileText} titulo="1. Registro del evento">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <InfoField label="Categoría" value={data.tipoEvento ?? "—"} />
+          <InfoField label="Gravedad" value={data.gravedad ?? "—"} />
+          <InfoField label="Fecha del suceso" value={fmtDate(data.fechaRegistro)} />
+          <InfoField label="Parroquia / Distrito" value={data.parroquia ?? "—"} />
+          <InfoField label="Dirección" value={data.direccionEvento ?? "—"} />
+          <InfoField label="Causa" value={data.causa ?? "—"} />
+        </div>
+        {data.descripcionEvento && (
+          <InfoField label="Descripción" value={data.descripcionEvento} />
+        )}
+        {data.aviso && (
+          <div className="bg-gray-50 border border-gray-100 rounded-lg p-3">
+            <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Reportado por</p>
+            <p className="text-sm text-gray-800">{data.aviso.nombreInformante ?? "—"}</p>
+            {data.aviso.telefonoInformante && (
+              <p className="text-xs text-gray-500">Tel: {data.aviso.telefonoInformante}</p>
+            )}
+            {data.aviso.descripcion && (
+              <p className="text-xs text-gray-600 mt-1">{data.aviso.descripcion}</p>
+            )}
+          </div>
+        )}
+      </ResumenBloque>
+
+      {/* 2. Equipo asignado */}
+      <ResumenBloque
+        icon={UserCheck}
+        titulo="2. Equipo asignado"
+        contador={`${data.asignaciones.length || (data.responsableGRD ? 1 : 0)} responsable(s)`}
+      >
+        {data.responsableGRD ? (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <p className="text-[10px] text-blue-700 uppercase font-semibold">
+              Especialista GRD — Responsable único
+            </p>
+            <p className="text-sm font-semibold text-gray-900">{data.responsableGRD.nombre}</p>
+            {data.responsableGRD.correo && (
+              <p className="text-xs text-gray-500">{data.responsableGRD.correo}</p>
+            )}
+          </div>
+        ) : data.asignaciones.length > 0 ? (
+          <div className="space-y-2">
+            {respBrig && (
+              <p className="text-sm text-gray-800">
+                <span className="font-semibold">Responsable:</span> {respBrig.nombres}{" "}
+                {respBrig.apellidos ?? ""}
+                {respBrig.parroquia ? ` · ${respBrig.parroquia}` : ""}
+              </p>
+            )}
+            {equipo.length > 0 && (
+              <div>
+                <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">
+                  Integrantes
+                </p>
+                <div className="flex flex-wrap gap-1">
+                  {equipo.map((m) => (
+                    <span
+                      key={m.brigadistaId}
+                      className="text-[11px] bg-gray-100 border border-gray-200 rounded-full px-2 py-0.5 text-gray-700"
+                    >
+                      {m.nombres} {m.apellidos ?? ""}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="text-xs text-gray-400 italic">Sin equipo registrado.</p>
+        )}
+        {data.instruccionesAsignacion && (
+          <InfoField label="Instrucciones" value={data.instruccionesAsignacion} />
+        )}
+      </ResumenBloque>
+
+      {/* 3. Empadronamiento */}
+      <ResumenBloque
+        icon={Users}
+        titulo="3. Empadronamiento"
+        contador={`${data.gruposFamiliares.length} familia(s) · ${totalPersonas} persona(s)`}
+      >
+        {data.gruposFamiliares.length === 0 ? (
+          <p className="text-xs text-gray-400 italic">Sin grupos familiares registrados.</p>
+        ) : (
+          <div className="space-y-2">
+            {data.gruposFamiliares.map((g) => (
+              <div key={g.id} className="bg-gray-50 border border-gray-100 rounded-lg p-3">
+                <p className="text-sm font-semibold text-gray-800 mb-1.5">
+                  {g.nombreReferencia ?? "Grupo familiar"}{" "}
+                  <span className="text-[11px] font-normal text-gray-400">
+                    · {g.personas.length} persona(s)
+                  </span>
+                </p>
+                <ul className="space-y-1">
+                  {g.personas.map((p) => (
+                    <li key={p.id} className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-gray-700">
+                        {p.nombres} {p.apellidos ?? ""}
+                        {p.parentesco && <span className="text-gray-400"> · {p.parentesco}</span>}
+                        {p.condicionEspecial && (
+                          <span className="ml-1 text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5">
+                            {p.condicionEspecial}
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-[10px] text-gray-400 flex-shrink-0">
+                        {p.edad ? `${p.edad}a` : ""}
+                        {p.numeroDocumento ? ` · ${p.tipoDocumento ?? "DOC"} ${p.numeroDocumento}` : ""}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
+      </ResumenBloque>
+
+      {/* 4. Levantamiento de campo */}
+      {campo && (
+        <ResumenBloque icon={ClipboardList} titulo="4. Levantamiento de campo">
+          {str(campo.nivelVulnerabilidad) && (
+            <InfoField label="Nivel de vulnerabilidad" value={str(campo.nivelVulnerabilidad)} />
+          )}
+          {str(campo.descripcionEvento) &&
+            str(campo.descripcionEvento) !== "Levantamiento de campo realizado." && (
+              <InfoField label="Descripción de campo" value={str(campo.descripcionEvento)} />
+            )}
+          {str(campo.observaciones) && (
+            <InfoField label="Observaciones" value={str(campo.observaciones)} />
+          )}
+          {str(campo.recomendacion) && (
+            <InfoField label="Recomendación" value={str(campo.recomendacion)} />
+          )}
+          {notasFamilias.length > 0 && (
+            <div>
+              <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">
+                Notas por familia
+              </p>
+              <ul className="space-y-1">
+                {notasFamilias.map((n, i) => (
+                  <li key={i} className="text-xs text-gray-700">
+                    <span className="font-semibold">
+                      {grupoDe(n.id)?.nombreReferencia ?? "Familia"}:
+                    </span>{" "}
+                    {n.nota}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </ResumenBloque>
+      )}
+
+      {/* 5. Informe de evaluación al Comité */}
+      {sc && (
+        <ResumenBloque icon={BarChart3} titulo="5. Informe de evaluación (Comité)">
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={descargarInformePdf}
+              disabled={descargando}
+              className="flex items-center gap-1.5 text-xs font-semibold text-[#009850] border border-[#009850]/40 rounded-lg px-3 py-1.5 hover:bg-[#009850]/5 disabled:opacity-50"
+            >
+              {descargando ? (
+                <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generando…</>
+              ) : (
+                <><Download className="w-3.5 h-3.5" /> Descargar informe PDF</>
+              )}
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <InfoField label="Motivo" value={str(sc.motivo, "—")} />
+            <InfoField label="Dirigido a" value={str(sc.dirigidoA, "—")} />
+            <InfoField label="Nivel de urgencia" value={str(sc.nivelUrgencia, "—")} />
+            <InfoField label="Tipo de intervención" value={str(sc.tipoIntervencion, "—")} />
+          </div>
+          {str(sc.objetivoGeneral) && (
+            <InfoField label="Objetivo general" value={str(sc.objetivoGeneral)} />
+          )}
+          {str(sc.analisisSituacion) && (
+            <InfoField label="Análisis de la situación" value={str(sc.analisisSituacion)} />
+          )}
+          {str(sc.hallazgosTexto) && <InfoField label="Hallazgos" value={str(sc.hallazgosTexto)} />}
+          {str(sc.conclusiones) && <InfoField label="Conclusiones" value={str(sc.conclusiones)} />}
+
+          {familiasEval.length > 0 && (
+            <div>
+              <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1.5">
+                Kits asignados por familia
+              </p>
+              <div className="space-y-2">
+                {familiasEval.map((f) => (
+                  <div key={f.refId} className="bg-gray-50 border border-gray-100 rounded-lg p-2.5">
+                    <p className="text-xs font-semibold text-gray-800 mb-1">{f.nombre}</p>
+                    {f.kits.map((k, ki) => (
+                      <div key={ki} className="mb-1">
+                        <p className="text-[11px] font-semibold text-[#009850]">{k.tipoKit}</p>
+                        <ul className="ml-2">
+                          {k.articulos.map((a, ai) => (
+                            <li key={ai} className="text-[11px] text-gray-600">
+                              {a.descripcion} <span className="text-gray-400">({a.codigo})</span> ×
+                              {a.cantidad}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </ResumenBloque>
+      )}
+
+      {/* 6. Decisión del Comité */}
+      {data.solicitudComite && (
+        <ResumenBloque icon={CheckCircle} titulo="6. Decisión del Comité de Donaciones">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <InfoField
+              label="Resultado"
+              value={data.solicitudComite.resultado ?? data.solicitudComite.estado ?? "—"}
+            />
+            {data.solicitudComite.fecha && (
+              <InfoField label="Fecha de decisión" value={fmtDate(data.solicitudComite.fecha)} />
+            )}
+          </div>
+          {data.solicitudComite.observaciones && (
+            <InfoField label="Resolución / observaciones" value={data.solicitudComite.observaciones} />
+          )}
+        </ResumenBloque>
+      )}
+
+      {/* 7. Entrega de ayuda */}
+      {data.entregas.length > 0 && (
+        <ResumenBloque
+          icon={Package}
+          titulo="7. Entrega de ayuda humanitaria"
+          contador={`${data.entregas.length} entrega(s)`}
+        >
+          {data.entregas.map((e) => (
+            <div key={e.id} className="bg-gray-50 border border-gray-100 rounded-lg p-3 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-gray-800">{e.tipoAyuda ?? "—"}</span>
+                <span className="text-xs text-gray-400">{e.fecha ? fmtDate(e.fecha) : "—"}</span>
+              </div>
+              {e.descripcionAyuda && (
+                <p className="text-xs text-gray-700 whitespace-pre-line">{e.descripcionAyuda}</p>
+              )}
+              {e.lugarEntrega && (
+                <p className="text-[11px] text-gray-500">Lugar: {e.lugarEntrega}</p>
+              )}
+              {e.observaciones && (
+                <p className="text-[11px] text-gray-500">{e.observaciones}</p>
+              )}
+            </div>
+          ))}
+        </ResumenBloque>
+      )}
+
+      {/* 8. Seguimiento */}
+      {data.seguimientos.length > 0 && (
+        <ResumenBloque
+          icon={ShieldCheck}
+          titulo="8. Seguimiento post-atención"
+          contador={`${data.seguimientos.length} registro(s)`}
+        >
+          {data.seguimientos.map((s) => (
+            <div key={s.id} className="bg-gray-50 border border-gray-100 rounded-lg p-3 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-gray-800">{s.situacion ?? "—"}</span>
+                <span className="text-xs text-gray-400">{fmtDate(s.fecha)}</span>
+              </div>
+              {s.descripcion && (
+                <p className="text-xs text-gray-700 whitespace-pre-line">{s.descripcion}</p>
+              )}
+              {s.recomendaciones && (
+                <p className="text-[11px] text-gray-500">Recomendación: {s.recomendaciones}</p>
+              )}
+              {s.necesidadesPendientes && (
+                <p className="text-[11px] text-amber-700">
+                  Necesidades: {s.necesidadesPendientes}
+                </p>
+              )}
+            </div>
+          ))}
+        </ResumenBloque>
+      )}
+
+      {/* 9. Documentos y evidencias */}
+      <ResumenBloque
+        icon={FileText}
+        titulo="9. Documentos y evidencias"
+        contador={`${data.evidencias.length} archivo(s)`}
+      >
+        <EvidenciasRegistro evidencias={data.evidencias} />
+      </ResumenBloque>
+
+      {/* 10. Historial de estados */}
       {data.historial.length > 0 && (
-        <div>
-          <p className="text-xs font-semibold text-gray-500 mb-2">Historial de estados</p>
+        <ResumenBloque icon={Clock} titulo="10. Historial de estados">
           <div className="space-y-1.5">
             {data.historial.map((h, i) => (
               <div key={i} className="flex items-center gap-3 text-xs text-gray-600">
@@ -3770,7 +5244,7 @@ function PanelResumen({ data }: { data: IncidentData }) {
               </div>
             ))}
           </div>
-        </div>
+        </ResumenBloque>
       )}
     </div>
   );
@@ -3914,8 +5388,12 @@ export function IncidentDetail({ data }: { data: IncidentData }) {
           {activeStep === 1 && <PanelAsignar data={data} onDone={handleDone} />}
           {activeStep === 2 && <PanelCampo data={data} onDone={handleDone} />}
           {activeStep === 3 && <PanelRevisar data={data} onDone={handleDone} />}
-          {activeStep === 4 && <PanelAtender data={data} onDone={handleDone} />}
-          {activeStep === 5 && <PanelSeguimiento data={data} onDone={handleDone} />}
+          {activeStep === 4 && (
+            <PanelAtender data={data} onDone={handleDone} onNavigate={setActiveStep} />
+          )}
+          {activeStep === 5 && (
+            <PanelSeguimiento data={data} onDone={handleDone} onNavigate={setActiveStep} />
+          )}
           {activeStep === 6 && <PanelResumen data={data} />}
         </div>
       </div>

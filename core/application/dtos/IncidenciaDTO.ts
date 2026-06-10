@@ -123,6 +123,8 @@ export type AtencionData = {
   descripcionAyuda: string;
   lugarEntrega: string;
   observaciones?: string;
+  /** Fecha de entrega en formato ISO. Si se omite, se usa la fecha actual. */
+  fechaEntrega?: string;
 };
 
 export type SeguimientoData = {
@@ -130,4 +132,7 @@ export type SeguimientoData = {
   descripcion: string;
   necesidadesPendientes?: string;
   recomendaciones?: string;
+  observaciones?: string;
+  /** Fecha del seguimiento en formato ISO. Si se omite, se usa la fecha actual. */
+  fecha?: string;
 };
