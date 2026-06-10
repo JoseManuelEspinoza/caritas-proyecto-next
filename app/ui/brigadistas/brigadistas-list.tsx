@@ -17,6 +17,7 @@ import {
   Mail,
   MapPin,
   Filter,
+  Download,
 } from "lucide-react";
 import PhoneInput, { type Value as PhoneValue } from "react-phone-number-input";
 import "react-phone-number-input/style.css";
@@ -381,9 +382,10 @@ interface Props {
   brigadistas: BrigadistaItem[];
   parroquias: ParroquiaItem[];
   stats: { total: number; activos: number; disponibles: number; enCampo: number };
+  canEdit?: boolean;
 }
 
-export function BrigadistasList({ brigadistas, parroquias, stats }: Props) {
+export function BrigadistasList({ brigadistas, parroquias, stats, canEdit = true }: Props) {
   const [isPending, startTransition] = useTransition();
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<BrigadistaItem | undefined>();
@@ -437,6 +439,32 @@ export function BrigadistasList({ brigadistas, parroquias, stats }: Props) {
     });
   }
 
+  function handleExport() {
+    const headers = ["N°", "Nombres", "Apellidos", "DNI", "Celular", "Correo", "Parroquia", "Disponibilidad", "Estado", "Fecha de Registro"];
+    const rows = filtered.map((b, idx) => [
+      String(idx + 1),
+      b.nombres,
+      b.apellidos ?? "",
+      b.dni ?? "",
+      b.celular ?? "",
+      b.correo ?? "",
+      b.parroquia?.nombre ?? "",
+      b.disponibilidad ?? "",
+      b.estado,
+      new Date(b.fechaRegistro).toLocaleDateString("es-PE", { timeZone: "America/Lima" }),
+    ]);
+    const csv = [headers, ...rows]
+      .map((row) => row.map((v) => `"${v.replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `brigadistas_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="p-4 md:p-6 space-y-5">
       {/* Header */}
@@ -445,14 +473,25 @@ export function BrigadistasList({ brigadistas, parroquias, stats }: Props) {
           <h1 className="text-xl font-semibold text-gray-900">Brigadistas Parroquiales</h1>
           <p className="text-sm text-gray-500 mt-0.5">Padrón de brigadistas — Cáritas Lima</p>
         </div>
-        <button
-          onClick={openCreate}
-          className="flex items-center gap-2 px-4 py-2 text-white text-sm font-medium rounded-lg hover:opacity-90 transition-all"
-          style={{ background: "#009850" }}
-        >
-          <Plus className="w-4 h-4" />
-          Registrar brigadista
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleExport}
+            className="hidden md:flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 bg-[#F5F5F5] border border-[#DDDDDD] rounded-lg hover:bg-gray-200 transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            Exportar
+          </button>
+          {canEdit && (
+            <button
+              onClick={openCreate}
+              className="flex items-center gap-2 px-4 py-2 text-white text-sm font-medium rounded-lg hover:opacity-90 transition-all"
+              style={{ background: "#009850" }}
+            >
+              <Plus className="w-4 h-4" />
+              Registrar brigadista
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Stats */}
@@ -601,44 +640,58 @@ export function BrigadistasList({ brigadistas, parroquias, stats }: Props) {
                         <span className="text-sm text-gray-700">{b.parroquia?.nombre ?? "—"}</span>
                       </td>
                       <td className="px-4 py-3">
-                        <button
-                          onClick={() => handleToggleDisponibilidad(b)}
-                          disabled={isPending || b.estado !== "ACTIVO"}
-                          className={`px-2.5 py-1 rounded-full text-xs font-semibold cursor-pointer hover:opacity-80 transition-opacity disabled:cursor-not-allowed ${dispCfg.badge}`}
-                          title="Clic para cambiar disponibilidad"
-                        >
-                          {dispCfg.label}
-                        </button>
+                        {canEdit ? (
+                          <button
+                            onClick={() => handleToggleDisponibilidad(b)}
+                            disabled={isPending || b.estado !== "ACTIVO"}
+                            className={`px-2.5 py-1 rounded-full text-xs font-semibold cursor-pointer hover:opacity-80 transition-opacity disabled:cursor-not-allowed ${dispCfg.badge}`}
+                            title="Clic para cambiar disponibilidad"
+                          >
+                            {dispCfg.label}
+                          </button>
+                        ) : (
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${dispCfg.badge}`}>
+                            {dispCfg.label}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
-                        <button
-                          onClick={() => handleToggleEstado(b)}
-                          disabled={isPending}
-                          className="flex items-center gap-1.5 text-xs font-medium hover:opacity-80 transition-opacity disabled:opacity-50"
-                          title="Clic para cambiar estado"
-                        >
-                          {b.estado === "ACTIVO" ? (
-                            <>
-                              <ToggleRight className="w-5 h-5 text-[#009850]" />
-                              <span className="text-[#009850]">Activo</span>
-                            </>
-                          ) : (
-                            <>
-                              <ToggleLeft className="w-5 h-5 text-gray-400" />
-                              <span className="text-gray-500">Inactivo</span>
-                            </>
-                          )}
-                        </button>
+                        {canEdit ? (
+                          <button
+                            onClick={() => handleToggleEstado(b)}
+                            disabled={isPending}
+                            className="flex items-center gap-1.5 text-xs font-medium hover:opacity-80 transition-opacity disabled:opacity-50"
+                            title="Clic para cambiar estado"
+                          >
+                            {b.estado === "ACTIVO" ? (
+                              <>
+                                <ToggleRight className="w-5 h-5 text-[#009850]" />
+                                <span className="text-[#009850]">Activo</span>
+                              </>
+                            ) : (
+                              <>
+                                <ToggleLeft className="w-5 h-5 text-gray-400" />
+                                <span className="text-gray-500">Inactivo</span>
+                              </>
+                            )}
+                          </button>
+                        ) : (
+                          <span className={`text-xs font-medium ${b.estado === "ACTIVO" ? "text-[#009850]" : "text-gray-500"}`}>
+                            {b.estado === "ACTIVO" ? "Activo" : "Inactivo"}
+                          </span>
+                        )}
                       </td>
-                      <td className="px-4 py-3">
-                        <button
-                          onClick={() => openEdit(b)}
-                          className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-600 transition-colors"
-                          title="Editar"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
-                      </td>
+                      {canEdit && (
+                        <td className="px-4 py-3">
+                          <button
+                            onClick={() => openEdit(b)}
+                            className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-600 transition-colors"
+                            title="Editar"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -674,12 +727,14 @@ export function BrigadistasList({ brigadistas, parroquias, stats }: Props) {
                       {b.dni && <p className="text-xs text-gray-400">DNI: {b.dni}</p>}
                     </div>
                   </div>
-                  <button
-                    onClick={() => openEdit(b)}
-                    className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-600"
-                  >
-                    <Edit3 className="w-4 h-4" />
-                  </button>
+                  {canEdit && (
+                    <button
+                      onClick={() => openEdit(b)}
+                      className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-600"
+                    >
+                      <Edit3 className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <span
@@ -698,22 +753,24 @@ export function BrigadistasList({ brigadistas, parroquias, stats }: Props) {
                     </span>
                   )}
                 </div>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => handleToggleEstado(b)}
-                    disabled={isPending}
-                    className="flex-1 py-2 border border-[#DDDDDD] rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                  >
-                    {b.estado === "ACTIVO" ? "Desactivar" : "Activar"}
-                  </button>
-                  <button
-                    onClick={() => handleToggleDisponibilidad(b)}
-                    disabled={isPending || b.estado !== "ACTIVO"}
-                    className="flex-1 py-2 border border-[#DDDDDD] rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                  >
-                    {b.disponibilidad === "DISPONIBLE" ? "Marcar ocupado" : "Marcar disponible"}
-                  </button>
-                </div>
+                {canEdit && (
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => handleToggleEstado(b)}
+                      disabled={isPending}
+                      className="flex-1 py-2 border border-[#DDDDDD] rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      {b.estado === "ACTIVO" ? "Desactivar" : "Activar"}
+                    </button>
+                    <button
+                      onClick={() => handleToggleDisponibilidad(b)}
+                      disabled={isPending || b.estado !== "ACTIVO"}
+                      className="flex-1 py-2 border border-[#DDDDDD] rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      {b.disponibilidad === "DISPONIBLE" ? "Marcar ocupado" : "Marcar disponible"}
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })

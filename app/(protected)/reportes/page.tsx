@@ -1,7 +1,7 @@
 import { verifySession } from "@/app/lib/dal";
 import { toFrontendRole } from "@/app/lib/roles";
 import { redirect } from "next/navigation";
-import prisma from "@/app/lib/prisma";
+import { prisma } from "@/app/lib/prisma";
 import { ReportesModule } from "@/app/ui/reportes/reportes-module";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +13,7 @@ export default async function ReportesPage({
 }) {
   const session = await verifySession();
   const role = toFrontendRole(session.role);
-  if (!["admin", "comite", "jefaOGP"].includes(role)) redirect("/dashboard");
+  if (!["admin", "especialistaGRD", "comite", "jefaOGP"].includes(role)) redirect("/dashboard");
 
   // 1. Manejo de Filtros de Fecha (RF100, RF104)
   // Por defecto muestra los últimos 30 días si no se selecciona nada

@@ -191,14 +191,6 @@ function DetalleInscrito({ curso, onVolver }: { curso: CursoInscrito; onVolver: 
                     {curso.cuestionario.maxIntentos - curso.cuestionario.intentosUsados} intento(s) restante(s) de {curso.cuestionario.maxIntentos}
                   </p>
                 </div>
-                <button
-                  onClick={() => setShowExamenFinal(true)}
-                  disabled={curso.cuestionarioFinal.intentosUsados >= curso.cuestionarioFinal.maxIntentos}
-                  className="flex items-center gap-1.5 px-4 py-2 text-sm bg-[var(--caritas-green)] text-white rounded-lg hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shrink-0"
-                >
-                  <ClipboardList className="w-3.5 h-3.5" />
-                  {curso.cuestionarioFinal.intentosUsados > 0 ? "Reintentar" : "Rendir examen"}
-                </button>
               </div>
               <button
                 onClick={() => setShowExamen(true)}
@@ -466,7 +458,6 @@ export function BrigadistaCapacitaciones({
       {/* Constancias */}
       {tab === "constancias" && (
         <div className="space-y-4">
-          <p className="text-sm text-gray-500">Tus constancias de capacitación.</p>
           {constancias.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 bg-white border-2 border-dashed border-gray-200 rounded-xl py-16 text-gray-400">
               <ScrollText className="w-10 h-10" />
@@ -519,9 +510,6 @@ export function BrigadistaCapacitaciones({
       {/* Cursos Disponibles */}
       {tab === "disponibles" && (
         <div className="space-y-4">
-          <p className="text-sm text-gray-500">
-            Cursos publicados en los que puedes inscribirte. El especialista GRD confirmará tu registro.
-          </p>
           {disponiblesCursos.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 bg-white border-2 border-dashed border-gray-200 rounded-xl py-16 text-gray-400">
               <GraduationCap className="w-10 h-10" />

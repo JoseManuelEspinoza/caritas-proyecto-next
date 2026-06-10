@@ -257,6 +257,10 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
     });
   function validarSesionTitulo(titulo: string): string | null {
     const limpio = titulo.trim();
+    if (!limpio) return "El título no puede estar vacío.";
+    if (limpio.length < 3) return "El título debe tener al menos 3 caracteres.";
+    return null;
+  }
 
   const ORDEN_ESTADO: Record<string, number> = { PUBLICADO: 0, BORRADOR: 1, CERRADO: 2 };
 
