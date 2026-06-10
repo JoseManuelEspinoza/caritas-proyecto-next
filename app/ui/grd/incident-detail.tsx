@@ -154,6 +154,7 @@ type IncidentData = {
     nombres: string;
     apellidos: string | null;
     celular: string | null;
+    disponibilidad: string;
     parroquia: string | null;
   }[];
   evidencias: {
@@ -597,7 +598,12 @@ function PanelAsignar({ data, onDone }: { data: IncidentData; onDone: () => void
         (b.parroquia ?? "").toLowerCase().includes(q)
       );
     })
-    .sort((a, b) => Number(esRecomendado(b.parroquia)) - Number(esRecomendado(a.parroquia)));
+    .sort((a, b) => {
+      const aDisp = a.disponibilidad === "DISPONIBLE" ? 1 : 0;
+      const bDisp = b.disponibilidad === "DISPONIBLE" ? 1 : 0;
+      if (bDisp !== aDisp) return bDisp - aDisp;
+      return Number(esRecomendado(b.parroquia)) - Number(esRecomendado(a.parroquia));
+    });
 
   function findBrig(id: string) {
     return (
@@ -978,13 +984,23 @@ function PanelAsignar({ data, onDone }: { data: IncidentData; onDone: () => void
                         </span>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <p className="text-sm font-medium text-gray-800 truncate">
                             {b.nombres} {b.apellidos ?? ""}
                           </p>
                           {rec && (
                             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700">
                               <Star className="w-3 h-3 fill-amber-500 text-amber-500" /> RECOMENDADO
+                            </span>
+                          )}
+                          {b.disponibilidad === "EN CAMPO" && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-700">
+                              EN CAMPO
+                            </span>
+                          )}
+                          {b.disponibilidad === "NO DISPONIBLE" && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-100 text-gray-500">
+                              NO DISPONIBLE
                             </span>
                           )}
                         </div>

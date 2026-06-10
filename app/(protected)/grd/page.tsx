@@ -15,18 +15,22 @@ export default async function GrdPage() {
       where: { idCredencial: session.userId },
       select: { idUsuarioGRD: true },
     });
-    if (usuarioGRD) {
-      const brigadista = await prisma.brigadistaParroquial.findFirst({
-        where: { idUsuarioGRD: usuarioGRD.idUsuarioGRD },
-        select: { idBrigadistaParroquial: true },
-      });
-      if (brigadista) {
-        whereClause.asignaciones = {
-          some: { idBrigadistaParroquial: brigadista.idBrigadistaParroquial },
-        };
-      }
+
+    const brigadista = usuarioGRD
+      ? await prisma.brigadistaParroquial.findFirst({
+          where: { idUsuarioGRD: usuarioGRD.idUsuarioGRD },
+          select: { idBrigadistaParroquial: true },
+        })
+      : null;
+
+    if (brigadista) {
+      whereClause.asignaciones = {
+        some: { idBrigadistaParroquial: brigadista.idBrigadistaParroquial },
+      };
+    } else {
+      // Sin registro operativo → lista vacía por seguridad (no debe ver nada)
+      return <GrdList items={[]} role={role} />;
     }
-    // Si el brigadista no tiene record aún, ve lista vacía (seguro)
   }
 
   const incidencias = await prisma.incidencia.findMany({

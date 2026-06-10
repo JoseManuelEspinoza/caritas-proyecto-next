@@ -218,22 +218,17 @@ export default async function IncidentePage({ params }: { params: Promise<{ id: 
   );
 
   const brigadistasDisp = await prisma.brigadistaParroquial.findMany({
-    where: {
-      estado: "ACTIVO",
-      OR: [
-        { disponibilidad: "DISPONIBLE" },
-        ...(asignadosIds.length ? [{ idBrigadistaParroquial: { in: asignadosIds } }] : []),
-      ],
-    },
+    where: { estado: "ACTIVO" },
     select: {
       idBrigadistaParroquial: true,
       nombres: true,
       apellidos: true,
       celular: true,
+      disponibilidad: true,
       parroquia: { select: { nombre: true } },
     },
     orderBy: { nombres: "asc" },
-    take: 50,
+    take: 100,
   });
 
   const data = {
@@ -357,6 +352,7 @@ export default async function IncidentePage({ params }: { params: Promise<{ id: 
       nombres: b.nombres,
       apellidos: b.apellidos,
       celular: b.celular,
+      disponibilidad: b.disponibilidad ?? "DISPONIBLE",
       parroquia: b.parroquia?.nombre ?? null,
     })),
 
