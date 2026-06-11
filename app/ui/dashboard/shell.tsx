@@ -218,7 +218,7 @@ export function DashboardShell({
 
           <div className="flex items-center gap-2 md:gap-3 ml-auto">
             {/* Notifications */}
-            <button className="relative p-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors">
+            <button suppressHydrationWarning className="relative p-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors">
               <Bell className="w-4 h-4" />
               <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-red-500 rounded-full" />
             </button>
@@ -226,6 +226,7 @@ export function DashboardShell({
             {/* User menu */}
             <div className="relative">
               <button
+                suppressHydrationWarning
                 onClick={() => setShowUserMenu(!showUserMenu)}
                 className="flex items-center gap-1.5 hover:bg-gray-50 py-1 px-1.5 rounded-lg transition-colors"
               >
