@@ -145,7 +145,7 @@ const PARENTESCOS = [
   "Otro",
 ];
 
-// ─── SearchableSelect ─────────────────────────────────────────────────────────
+// ─── SearchableSelect ────────────────────────────────────────────────────────
 
 function SearchableSelect({
   value,
@@ -367,8 +367,10 @@ function MultiSelect({
       <div
         className="w-full flex items-center gap-2 px-3 py-2.5 bg-white border border-[#DDDDDD] rounded-lg text-sm focus-within:ring-2 focus-within:ring-[#009850]/20 focus-within:border-[#009850] transition-colors cursor-text"
         onClick={() => {
-          setOpen(true);
-          inputRef.current?.focus();
+          if (!open) {
+            setOpen(true);
+            inputRef.current?.focus();
+          }
         }}
       >
         <Search className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
@@ -385,9 +387,24 @@ function MultiSelect({
           className="flex-1 min-w-0 outline-none bg-transparent placeholder:text-gray-400"
           autoComplete="off"
         />
-        <ChevronDown
-          className={`w-4 h-4 text-gray-400 flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
-        />
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (open) {
+              setOpen(false);
+              setQuery("");
+            } else {
+              setOpen(true);
+              inputRef.current?.focus();
+            }
+          }}
+          className="flex-shrink-0 p-0.5 hover:opacity-60 transition-opacity"
+        >
+          <ChevronDown
+            className={`w-4 h-4 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`}
+          />
+        </button>
       </div>
 
       {/* Chips seleccionados, debajo de la caja */}
@@ -836,8 +853,13 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
   const [fechaReporte] = useState(initialData?.fechaReporte ?? nowLocal());
   const [reportaDni, setReportaDni] = useState(initialData?.reportaDni ?? "");
   const [reportaNombre, setReportaNombre] = useState(initialData?.reportaNombre ?? "");
-  const [reportaTel, setReportaTel] = useState(initialData?.reportaTel ?? "");
-  const [reportaTelCodigo, setReportaTelCodigo] = useState("+51");
+  // El teléfono se guarda como "+51 987654321"; al cargar en edición se separan código y número.
+  const _telStored = initialData?.reportaTel ?? "";
+  const _telParsed = _telStored.match(/^(\+\d+)\s+(.*)$/);
+  const [reportaTel, setReportaTel] = useState(
+    _telParsed ? _telParsed[2].replace(/\D/g, "") : _telStored.replace(/\D/g, "")
+  );
+  const [reportaTelCodigo, setReportaTelCodigo] = useState(_telParsed?.[1] ?? "+51");
   const [reportaRol, setReportaRol] = useState(initialData?.reportaRol ?? "");
 
   // Sección 2
@@ -879,14 +901,15 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
   const [necesidadOtra, setNecesidadOtra] = useState(initialData?.necesidadOtra ?? "");
   const [necesidadesObs, setNecesidadesObs] = useState(initialData?.necesidadesObs ?? "");
 
-  // Sección 6 — evidencias subidas a S3 (cada archivo lleva su estado de subida)
+  // Sección 6 — evidencias (se suben a S3 al momento de guardar, no al seleccionar)
   type EvidenciaArchivo = {
     uid: string;
     nombre: string;
     tamano: number;
     formato: string;
     key?: string;
-    estado: "subiendo" | "listo" | "error";
+    estado: "pendiente" | "subiendo" | "listo" | "error";
+    file?: File;
   };
   const [fuentesEvidencia, setFuentesEvidencia] = useState<
     { id: string; fuente: string; archivos: EvidenciaArchivo[] }[]
@@ -1284,69 +1307,24 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
     });
   }
 
-  async function uploadArchivos(fuenteId: string, files: FileList | null) {
+  function stageArchivos(fuenteId: string, files: FileList | null) {
     if (!files) return;
-    for (const file of Array.from(files)) {
-      const uid =
+    const nuevos: EvidenciaArchivo[] = Array.from(files).map((file) => ({
+      uid:
         typeof crypto !== "undefined" && crypto.randomUUID
           ? crypto.randomUUID()
-          : `${Date.now()}-${Math.random()}`;
-      const ct = file.type || "application/octet-stream";
-      // Placeholder "subiendo"
-      setFuentesEvidencia((prev) =>
-        prev.map((f) =>
-          f.id === fuenteId
-            ? {
-                ...f,
-                archivos: [
-                  ...f.archivos,
-                  { uid, nombre: file.name, tamano: file.size, formato: ct, estado: "subiendo" },
-                ],
-              }
-            : f
-        )
-      );
-      try {
-        const res = await presignEvidencia({
-          nombreArchivo: file.name,
-          contentType: ct,
-          incidenciaId,
-        });
-        if (!res.ok) throw new Error(res.message);
-        const put = await fetch(res.uploadUrl, {
-          method: "PUT",
-          body: file,
-          headers: { "Content-Type": ct },
-        });
-        if (!put.ok) throw new Error(`Error al subir (${put.status})`);
-        setFuentesEvidencia((prev) =>
-          prev.map((f) =>
-            f.id === fuenteId
-              ? {
-                  ...f,
-                  archivos: f.archivos.map((a) =>
-                    a.uid === uid ? { ...a, estado: "listo", key: res.key } : a
-                  ),
-                }
-              : f
-          )
-        );
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "No se pudo subir el archivo.");
-        setFuentesEvidencia((prev) =>
-          prev.map((f) =>
-            f.id === fuenteId
-              ? {
-                  ...f,
-                  archivos: f.archivos.map((a) =>
-                    a.uid === uid ? { ...a, estado: "error" } : a
-                  ),
-                }
-              : f
-          )
-        );
-      }
-    }
+          : `${Date.now()}-${Math.random()}`,
+      nombre: file.name,
+      tamano: file.size,
+      formato: file.type || "application/octet-stream",
+      estado: "pendiente" as const,
+      file,
+    }));
+    setFuentesEvidencia((prev) =>
+      prev.map((f) =>
+        f.id === fuenteId ? { ...f, archivos: [...f.archivos, ...nuevos] } : f
+      )
+    );
   }
 
   function hoyLocalISO(): string {
@@ -1409,12 +1387,8 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
 
     const archivos = fuentesEvidencia.flatMap((f) => f.archivos);
 
-    if (archivos.some((a) => a.estado === "subiendo")) {
-      return "Espera a que terminen de subirse las evidencias antes de guardar.";
-    }
-
     if (archivos.some((a) => a.estado === "error")) {
-      return "Hay evidencias con error de subida. Elimínalas o vuelve a subirlas antes de guardar.";
+      return "Hay evidencias con error de subida. Elimínalas o vuelve a intentarlo.";
     }
 
     return null;
@@ -1423,7 +1397,6 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
   // ─── Guardar (crear o actualizar) ─────────────────────────────────────────
 
   function handleSave() {
-    // Validación de campos obligatorios.
     setIntentoEnvio(true);
     const errorValidacion = validarFormularioIncidencia();
     if (errorValidacion) {
@@ -1431,45 +1404,138 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
       return;
     }
 
-    const payload: CreateIncidenteData = {
-      reportaDni,
-      reportaNombre,
-      reportaTel: `${reportaTelCodigo} ${reportaTel}`.trim(),
-      reportaRol,
-      fechaReporte,
-      fechaSuceso,
-      horaSuceso,
-      categoria,
-      pais,
-      region,
-      distrito,
-      parroquia,
-      direccion,
-      referencia,
-      descripcion,
-      causa,
-      familias,
-      personas,
-      necesidades,
-      necesidadOtra,
-      necesidadesObs,
-      nivelAfectacion,
-      lat,
-      lng,
-      evidencias: fuentesEvidencia.flatMap((f) =>
-        f.archivos
-          .filter((a) => a.estado === "listo" && a.key)
-          .map((a) => ({
-            key: a.key as string,
-            nombreArchivo: a.nombre,
-            formato: a.formato || null,
-            tamano: a.tamano,
-            descripcion: f.fuente,
-          }))
-      ),
-    };
+    // Snapshot de archivos pendientes antes de la transición
+    const pendingUploads = fuentesEvidencia.flatMap((f) =>
+      f.archivos
+        .filter(
+          (a): a is EvidenciaArchivo & { file: File } =>
+            a.estado === "pendiente" && !!a.file
+        )
+        .map((a) => ({
+          fuenteId: f.id,
+          fuente: f.fuente,
+          uid: a.uid,
+          file: a.file,
+          ct: a.formato || "application/octet-stream",
+          nombre: a.nombre,
+          tamano: a.tamano,
+        }))
+    );
 
     startTransition(async () => {
+      const uploadedKeys: Record<string, string> = {};
+
+      // Subir archivos pendientes a S3
+      for (const item of pendingUploads) {
+        setFuentesEvidencia((prev) =>
+          prev.map((f) =>
+            f.id === item.fuenteId
+              ? {
+                  ...f,
+                  archivos: f.archivos.map((a) =>
+                    a.uid === item.uid ? { ...a, estado: "subiendo" as const } : a
+                  ),
+                }
+              : f
+          )
+        );
+        try {
+          const res = await presignEvidencia({
+            nombreArchivo: item.file.name,
+            contentType: item.ct,
+            incidenciaId,
+          });
+          if (!res.ok) throw new Error(res.message);
+          const put = await fetch(res.uploadUrl, {
+            method: "PUT",
+            body: item.file,
+            headers: { "Content-Type": item.ct },
+          });
+          if (!put.ok) throw new Error(`Error al subir (${put.status})`);
+          uploadedKeys[item.uid] = res.key;
+          setFuentesEvidencia((prev) =>
+            prev.map((f) =>
+              f.id === item.fuenteId
+                ? {
+                    ...f,
+                    archivos: f.archivos.map((a) =>
+                      a.uid === item.uid
+                        ? { ...a, estado: "listo" as const, key: res.key, file: undefined }
+                        : a
+                    ),
+                  }
+                : f
+            )
+          );
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : "No se pudo subir el archivo.");
+          setFuentesEvidencia((prev) =>
+            prev.map((f) =>
+              f.id === item.fuenteId
+                ? {
+                    ...f,
+                    archivos: f.archivos.map((a) =>
+                      a.uid === item.uid ? { ...a, estado: "error" as const } : a
+                    ),
+                  }
+                : f
+            )
+          );
+          return;
+        }
+      }
+
+      const payload: CreateIncidenteData = {
+        reportaDni,
+        reportaNombre,
+        reportaTel: `${reportaTelCodigo} ${reportaTel}`.trim(),
+        reportaRol,
+        fechaReporte,
+        fechaSuceso,
+        horaSuceso,
+        categoria,
+        pais,
+        region,
+        distrito,
+        parroquia,
+        direccion,
+        referencia,
+        descripcion,
+        causa,
+        familias,
+        personas,
+        necesidades,
+        necesidadOtra,
+        necesidadesObs,
+        nivelAfectacion,
+        lat,
+        lng,
+        evidencias: [
+          // Archivos ya subidos previamente
+          ...fuentesEvidencia.flatMap((f) =>
+            f.archivos
+              .filter((a) => a.estado === "listo" && a.key)
+              .map((a) => ({
+                key: a.key as string,
+                nombreArchivo: a.nombre,
+                formato: a.formato || null,
+                tamano: a.tamano,
+                descripcion: f.fuente,
+              }))
+          ),
+          // Archivos recién subidos en este guardado
+          ...pendingUploads
+            .filter((item) => uploadedKeys[item.uid])
+            .map((item) => ({
+              key: uploadedKeys[item.uid],
+              nombreArchivo: item.nombre,
+              formato: item.ct !== "application/octet-stream" ? item.ct : null,
+              tamano: item.tamano,
+              descripcion: item.fuente,
+            })),
+        ],
+      };
+
       const result =
         isEdit && incidenciaId
           ? await updateIncidente(incidenciaId, payload)
@@ -1480,7 +1546,7 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
   }
 
   return (
-    <div className="min-h-screen bg-[#F5F5F5] pb-56">
+    <div className="min-h-screen bg-[#F5F5F5] pb-24">
       {/* Header sticky */}
       <div className="bg-white border-b border-[#DDDDDD] sticky top-0 z-10 shadow-sm">
         <div className="max-w-7xl mx-auto px-6 py-3 flex items-center gap-3">
@@ -2080,15 +2146,7 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
                             ({(archivo.tamano / 1024).toFixed(1)} KB)
                           </span>
                           {archivo.estado === "subiendo" && (
-                            <span className="text-[10px] text-blue-600 flex items-center gap-1">
-                              <Loader2 className="w-3 h-3 animate-spin" /> subiendo…
-                            </span>
-                          )}
-                          {archivo.estado === "listo" && (
-                            <span className="text-[10px] text-green-600">✓ subido</span>
-                          )}
-                          {archivo.estado === "error" && (
-                            <span className="text-[10px] text-red-600">✕ error</span>
+                            <Loader2 className="w-3 h-3 animate-spin text-blue-500 flex-shrink-0" />
                           )}
                         </div>
                         <button
@@ -2111,13 +2169,13 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
                     <label className="flex items-center justify-center gap-2 px-4 py-2 border-2 border-dashed border-gray-300 rounded-lg hover:bg-white hover:border-blue-400 transition-colors cursor-pointer">
                       <Upload className="w-4 h-4 text-gray-500" />
                       <span className="text-xs text-gray-600">
-                        Subir evidencias (fotos, videos, documentos)
+                        Adjuntar evidencias (fotos, videos, documentos)
                       </span>
                       <input
                         type="file"
                         multiple
                         accept="image/*,video/*,.pdf,.doc,.docx"
-                        onChange={(e) => uploadArchivos(fuente.id, e.target.files)}
+                        onChange={(e) => stageArchivos(fuente.id, e.target.files)}
                         className="hidden"
                       />
                     </label>
@@ -2253,21 +2311,32 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
             </div>
           </FormSection>
 
-          {/* Acciones (en el flujo del formulario, no flotante) */}
-          <div className="flex items-center gap-3 pt-2 pb-8 border-t border-[#DDDDDD] mt-2">
-            <Link
-              href={isEdit && incidenciaId ? `/grd/${incidenciaId}` : "/grd"}
-              className="px-5 py-3 border border-[#DDDDDD] rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              Cancelar
-            </Link>
+        </div>
+      </div>
+
+      {/* ── Footer sticky ─────────────────────────────────────────────── */}
+      <div className="fixed bottom-0 left-0 right-0 z-20 bg-white/95 backdrop-blur-sm border-t border-[#DDDDDD] shadow-[0_-2px_16px_rgba(0,0,0,0.08)]">
+        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
+          <Link
+            href={isEdit && incidenciaId ? `/grd/${incidenciaId}` : "/grd"}
+            className="flex items-center gap-2 px-5 py-2.5 border border-[#DDDDDD] rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Cancelar
+          </Link>
+
+          <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={handleSave}
               disabled={isPending}
-              className="flex-1 sm:flex-none sm:px-10 flex items-center justify-center gap-2 py-3 bg-[#009850] text-white rounded-xl hover:opacity-90 transition-all font-bold text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-8 py-2.5 bg-[#009850] text-white rounded-xl hover:bg-[#007a40] active:scale-[0.98] transition-all font-bold text-sm shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Save className="w-4 h-4" />
+              {isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Save className="w-4 h-4" />
+              )}
               {isPending
                 ? isEdit
                   ? "Guardando..."

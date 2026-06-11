@@ -78,6 +78,7 @@ export type InfoCampoData = {
   necesidadesPrioritarias: string[];
   recomendacion: string;
   observaciones?: string;
+  notasFamilias?: { id: string; nota: string }[];
   condHabitabilidad: Record<string, boolean>;
 };
 
@@ -106,6 +107,8 @@ export type InformeEvaluacionData = {
   objetivosEspecificos?: string[];
   hallazgosClave?: string[];
   asignacionFamilias?: AsignacionFamilia[];
+  evidenciasSeleccionadas?: string[]; // IDs de evidencias incluidas en el informe
+  documentoAdjunto?: string | null;   // URL o clave S3 del documento de respaldo
 };
 
 export type CorreccionData = {
@@ -120,6 +123,8 @@ export type AtencionData = {
   descripcionAyuda: string;
   lugarEntrega: string;
   observaciones?: string;
+  /** Fecha de entrega en formato ISO. Si se omite, se usa la fecha actual. */
+  fechaEntrega?: string;
 };
 
 export type SeguimientoData = {
@@ -127,4 +132,7 @@ export type SeguimientoData = {
   descripcion: string;
   necesidadesPendientes?: string;
   recomendaciones?: string;
+  observaciones?: string;
+  /** Fecha del seguimiento en formato ISO. Si se omite, se usa la fecha actual. */
+  fecha?: string;
 };

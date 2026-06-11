@@ -16,6 +16,7 @@ import {
 import { DecisionComiteUseCase } from "../../application/use-cases/incidencias/DecisionComite.usecase";
 import {
   RegistrarAtencionUseCase,
+  IniciarSeguimientoUseCase,
   AgregarSeguimientoUseCase,
   CerrarCasoUseCase,
 } from "../../application/use-cases/incidencias/AtencionYCierre.usecase";
@@ -36,6 +37,7 @@ export function makeIncidenciaUseCases() {
     corregir: new CorregirYReenviarUseCase(repo),
     decisionComite: new DecisionComiteUseCase(repo),
     registrarAtencion: new RegistrarAtencionUseCase(repo),
+    iniciarSeguimiento: new IniciarSeguimientoUseCase(repo),
     agregarSeguimiento: new AgregarSeguimientoUseCase(repo),
     cerrar: new CerrarCasoUseCase(repo),
   };
