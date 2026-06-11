@@ -191,6 +191,13 @@ export function RevisionStep({
           : k
       ),
     }));
+  const removeArt = (refId: string, ki: number, ai: number) =>
+    setAsignaciones((p) => ({
+      ...p,
+      [refId]: (p[refId] ?? []).map((k, i) =>
+        i === ki ? { ...k, articulos: k.articulos.filter((_, j) => j !== ai) } : k
+      ),
+    }));
 
   const { puedeEvaluar: canEvaluar, puedeDecidir: canDecidir } = permisosDeDetalle(data);
   const solicitud = data.solicitudComite;
@@ -847,55 +854,82 @@ export function RevisionStep({
                                   <X className="w-3.5 h-3.5" />
                                 </button>
                               </div>
-                              {kit.articulos.map((a, ai) => (
-                                <div key={ai} className="flex items-center gap-1.5 mb-1">
-                                  <input
-                                    list={
-                                      kit.idKit
-                                        ? undefined
-                                        : KIT_TIPOS.includes(kit.tipoKit)
-                                          ? `cat-${KIT_TIPOS.indexOf(kit.tipoKit)}`
-                                          : "cat-all"
-                                    }
-                                    className="w-20 px-2 py-1 text-xs border border-gray-200 rounded"
-                                    placeholder="Código"
-                                    value={a.codigo}
-                                    onChange={(e) => {
-                                      const codigo = e.target.value;
-                                      const cat =
-                                        data.catalogoArticulos.find(
-                                          (c) => c.codigo === codigo && c.catalogo === kit.tipoKit
-                                        ) ?? data.catalogoArticulos.find((c) => c.codigo === codigo);
-                                      updArt(g.id, ki, ai, {
-                                        codigo,
-                                        ...(cat ? { descripcion: cat.valor } : {}),
-                                      });
-                                    }}
-                                  />
-                                  <input
-                                    className="flex-1 px-2 py-1 text-xs border border-gray-200 rounded"
-                                    placeholder="Descripción del artículo"
-                                    list={kit.idKit ? `kitcomp-${kit.idKit}` : undefined}
-                                    value={a.descripcion}
-                                    onChange={(e) => updArt(g.id, ki, ai, { descripcion: e.target.value })}
-                                  />
-                                  <input
-                                    type="number"
-                                    min={1}
-                                    className="w-14 px-2 py-1 text-xs border border-gray-200 rounded"
-                                    value={a.cantidad}
-                                    onChange={(e) =>
-                                      updArt(g.id, ki, ai, { cantidad: parseInt(e.target.value, 10) || 1 })
-                                    }
-                                  />
-                                </div>
-                              ))}
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+                                {kit.articulos.map((a, ai) => (
+                                  <div
+                                    key={ai}
+                                    className="flex items-center gap-1 bg-white border border-purple-100 rounded px-1.5 py-1"
+                                  >
+                                    <input
+                                      list={
+                                        kit.idKit
+                                          ? undefined
+                                          : KIT_TIPOS.includes(kit.tipoKit)
+                                            ? `cat-${KIT_TIPOS.indexOf(kit.tipoKit)}`
+                                            : "cat-all"
+                                      }
+                                      className="w-16 px-1.5 py-0.5 text-[11px] border border-gray-200 rounded text-gray-500"
+                                      placeholder="Cód."
+                                      value={a.codigo}
+                                      onChange={(e) => {
+                                        const codigo = e.target.value;
+                                        const cat =
+                                          data.catalogoArticulos.find(
+                                            (c) => c.codigo === codigo && c.catalogo === kit.tipoKit
+                                          ) ?? data.catalogoArticulos.find((c) => c.codigo === codigo);
+                                        updArt(g.id, ki, ai, {
+                                          codigo,
+                                          ...(cat ? { descripcion: cat.valor } : {}),
+                                        });
+                                      }}
+                                    />
+                                    <input
+                                      className="flex-1 min-w-0 px-1.5 py-0.5 text-[11px] border border-gray-200 rounded"
+                                      placeholder="Artículo"
+                                      list={kit.idKit ? `kitcomp-${kit.idKit}` : undefined}
+                                      value={a.descripcion}
+                                      onChange={(e) => updArt(g.id, ki, ai, { descripcion: e.target.value })}
+                                    />
+                                    <div className="flex items-center shrink-0">
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          updArt(g.id, ki, ai, { cantidad: Math.max(1, a.cantidad - 1) })
+                                        }
+                                        className="w-5 h-5 flex items-center justify-center rounded border border-gray-200 text-gray-500 hover:bg-purple-50 text-xs leading-none"
+                                        title="Quitar uno"
+                                      >
+                                        −
+                                      </button>
+                                      <span className="w-7 text-center text-[11px] font-semibold text-gray-700">
+                                        {a.cantidad}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => updArt(g.id, ki, ai, { cantidad: a.cantidad + 1 })}
+                                        className="w-5 h-5 flex items-center justify-center rounded border border-gray-200 text-gray-500 hover:bg-purple-50 text-xs leading-none"
+                                        title="Agregar uno"
+                                      >
+                                        +
+                                      </button>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => removeArt(g.id, ki, ai)}
+                                      className="shrink-0 p-0.5 text-gray-300 hover:text-red-500"
+                                      title="Quitar artículo"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
                               <button
                                 type="button"
                                 onClick={() => addArt(g.id, ki)}
-                                className="text-[11px] text-purple-600 flex items-center gap-1 mt-1"
+                                className="text-[10px] text-purple-600 flex items-center gap-0.5 mt-1.5"
                               >
-                                <Plus className="w-3 h-3" /> Artículo
+                                <Plus className="w-3 h-3" /> Agregar artículo
                               </button>
                             </div>
                           ))}

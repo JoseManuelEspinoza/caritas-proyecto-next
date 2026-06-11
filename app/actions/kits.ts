@@ -40,6 +40,21 @@ export async function listarArticulosKit(idKit: string): Promise<ArticuloKit[]> 
   return rows;
 }
 
+/** Prefijo de código a partir del nombre del kit: "Kit de Alimentos Prueba" → "AP". */
+function prefijoCodigoKit(tipoKit: string): string {
+  const iniciales = tipoKit
+    .replace(/^kits?\s+de\s+/i, "")
+    .normalize("NFKD")
+    .replace(/[^a-zA-Z\s]/g, "")
+    .trim()
+    .split(/\s+/)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 3);
+  return iniciales || "KIT";
+}
+
 /** Reemplaza la composición completa del kit (borrar + crear, transaccional). */
 export async function guardarArticulosKit(
   idKit: string,
@@ -56,10 +71,21 @@ export async function guardarArticulosKit(
 
   try {
     const { prisma } = await import("@/app/lib/prisma");
+    // Todo elemento recibe código; si no lo trae, se auto-asigna <INICIALES>-<nn>.
+    const kit = await prisma.kitEmergencia.findUnique({
+      where: { idKitEmergencia: idKit },
+      select: { tipoKit: true },
+    });
+    const prefijo = prefijoCodigoKit(kit?.tipoKit ?? "Kit");
+    const conCodigo = limpios.map((a, i) => ({
+      ...a,
+      codigo: a.codigo ?? `${prefijo}-${String(i + 1).padStart(3, "0")}`,
+    }));
+
     await prisma.$transaction([
       prisma.kitArticulo.deleteMany({ where: { idKitEmergencia: idKit } }),
       prisma.kitArticulo.createMany({
-        data: limpios.map((a, i) => ({ idKitEmergencia: idKit, ...a, orden: i })),
+        data: conCodigo.map((a, i) => ({ idKitEmergencia: idKit, ...a, orden: i })),
       }),
     ]);
   } catch (err) {
