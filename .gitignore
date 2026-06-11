@@ -49,3 +49,4 @@ next-env.d.ts
 /app/generated/prisma
 # Archivos temporales de Office (lock files)
 ~$*
+docker-compose.yml

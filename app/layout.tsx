@@ -6,12 +6,14 @@ const nunito = Nunito({
   variable: "--font-nunito",
   subsets: ["latin"],
   weight: ["400", "500", "700"],
+  preload: false,
 });
 
 const asap = Asap({
   variable: "--font-asap",
   subsets: ["latin"],
   weight: ["400", "500"],
+  preload: false,
 });
 
 export const metadata: Metadata = {
@@ -25,8 +27,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es" className={`${nunito.variable} ${asap.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="es" className={`${nunito.variable} ${asap.variable} h-full antialiased`} suppressHydrationWarning>
+      <body className="min-h-full flex flex-col" suppressHydrationWarning>{children}</body>
     </html>
   );
 }

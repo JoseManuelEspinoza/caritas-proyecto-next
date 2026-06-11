@@ -6,8 +6,8 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - DATABASE_URL=postgresql://postgres:CaritasDB_2026_Test@caritas-grd-db.c2sjosirydcu.us-east-1.rds.amazonaws.com:5432/caritas_db?schema=public&uselibpqcompat=true&sslmode=require
-      - SESSION_SECRET=dev-secret-minimo-32-caracteres-cambiar-en-prod
+      - DATABASE_URL=${DATABASE_URL}
+      - SESSION_SECRET=${SESSION_SECRET:-dev-secret-minimo-32-caracteres-cambiar-en-prod}
       - APP_URL=http://localhost:3000
       - NODE_ENV=development
       # Limit Node.js heap to 4 GB — prevents unbounded growth that caused ~60 GB RAM usage.
@@ -17,26 +17,14 @@ services:
       # 300 ms was polling 1 GB of node_modules thousands of times/sec; 3 s is sufficient.
       - CHOKIDAR_INTERVAL=3000
       # ─── Auth.js v5 + Keycloak (OIDC) ──────────────────────────────────────
-      # AUTH_KEYCLOAK_ISSUER → URL interna Docker: el contenedor la usa para
-      #   OIDC discovery, token exchange y JWKS (todos server-side via keycloak:8080).
-      # AUTH_KEYCLOAK_AUTHORIZATION → URL pública: solo el navegador la usa para
-      #   el redirect de login. Se sobreescribe en auth.config.ts.
+      # ISSUER = URL pública (navegador). INTERNAL = red Docker (callback/token).
       - AUTH_SECRET=dev-auth-secret-cambiar-en-produccion-min-32-chars
       - AUTH_TRUST_HOST=true
       - AUTH_URL=http://localhost:3000
       - AUTH_KEYCLOAK_ID=caritas-app
       - AUTH_KEYCLOAK_SECRET=caritas-app-secret-dev
-      # Un único issuer alcanzable IGUAL desde el navegador (Windows resuelve
-      # host.docker.internal → 127.0.0.1) y desde el contenedor (extra_hosts →
-      # host-gateway → puerto 8085 del host). Así el `iss` del token coincide con
-      # el issuer configurado y el discovery/JWKS/token funcionan server-side.
-      - AUTH_KEYCLOAK_ISSUER=http://host.docker.internal:8090/realms/caritas
-      - KEYCLOAK_ADMIN_URL=http://host.docker.internal:8090
-      - KEYCLOAK_REALM=caritas
-      - KEYCLOAK_ADMIN_CLIENT_ID=caritas-app
-      - KEYCLOAK_ADMIN_CLIENT_SECRET=caritas-app-secret-dev
-      - KEYCLOAK_ADMIN_USER=admin
-      - KEYCLOAK_ADMIN_PASS=admin
+      - AUTH_KEYCLOAK_ISSUER=http://localhost:8085/realms/caritas
+      - AUTH_KEYCLOAK_INTERNAL_URL=http://keycloak:8085/realms/caritas
       # SMTP — se lee desde el archivo .env del proyecto
       - SMTP_HOST=${SMTP_HOST:-mailhog}
       - SMTP_PORT=${SMTP_PORT:-1025}
@@ -61,9 +49,6 @@ services:
     volumes:
       - .:/app
       - node_modules:/app/node_modules
-    depends_on:
-      db:
-        condition: service_healthy
     command: sh -c "npm install && npm install lightningcss-linux-arm64-gnu @tailwindcss/oxide-linux-arm64-gnu --no-save 2>/dev/null || true && ln -sf /app/node_modules/lightningcss-linux-arm64-gnu/lightningcss.linux-arm64-gnu.node /app/node_modules/lightningcss/lightningcss.linux-arm64-gnu.node 2>/dev/null || true && ln -sf /app/node_modules/@tailwindcss/oxide-linux-arm64-gnu/tailwindcss-oxide.linux-arm64-gnu.node /app/node_modules/@tailwindcss/oxide/tailwindcss-oxide.linux-arm64-gnu.node 2>/dev/null || true && npx prisma generate && npx prisma db push --accept-data-loss && npm run dev"
 
   # ─── Base de datos de la APLICACIÓN ──────────────────────────────────────────
@@ -73,7 +58,7 @@ services:
       - "5434:5432"
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: CaritasDB_2026_Test
+      POSTGRES_PASSWORD: admin123
       POSTGRES_DB: caritas_db
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -113,12 +98,13 @@ services:
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
       # HTTP local (sin TLS en dev) + health
       KC_HTTP_ENABLED: "true"
+      KC_HTTP_PORT: "8085"
       # URL pública del IdP: debe coincidir con el issuer que usa la app.
-      KC_HOSTNAME: http://host.docker.internal:8090
+      KC_HOSTNAME: http://localhost:8085
       KC_HOSTNAME_STRICT: "false"
       KC_HEALTH_ENABLED: "true"
     ports:
-      - "8090:8080"
+      - "8085:8085"
     volumes:
       # El realm se importa al primer arranque
       - ./keycloak/realm-caritas.json:/opt/keycloak/data/import/realm-caritas.json:ro

@@ -458,7 +458,6 @@ export function BrigadistaCapacitaciones({
       {/* Constancias */}
       {tab === "constancias" && (
         <div className="space-y-4">
-          <p className="text-sm text-gray-500">Tus constancias de capacitación.</p>
           {constancias.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 bg-white border-2 border-dashed border-gray-200 rounded-xl py-16 text-gray-400">
               <ScrollText className="w-10 h-10" />
@@ -511,9 +510,6 @@ export function BrigadistaCapacitaciones({
       {/* Cursos Disponibles */}
       {tab === "disponibles" && (
         <div className="space-y-4">
-          <p className="text-sm text-gray-500">
-            Cursos publicados en los que puedes inscribirte. El especialista GRD confirmará tu registro.
-          </p>
           {disponiblesCursos.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 bg-white border-2 border-dashed border-gray-200 rounded-xl py-16 text-gray-400">
               <GraduationCap className="w-10 h-10" />

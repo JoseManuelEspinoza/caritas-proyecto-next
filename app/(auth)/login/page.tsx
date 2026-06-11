@@ -6,7 +6,20 @@ export const metadata: Metadata = {
   title: "Iniciar sesión — Cáritas Lima",
 };
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const { error } = await searchParams;
+
+  // Keycloak's UPDATE_PASSWORD required action (contraseña temporal) completes
+  // correctamente pero devuelve authentication_expired en el primer callback.
+  // Re-iniciar el flujo OAuth recoge la sesión ya establecida sin pedir credenciales.
+  if (error === "OAuthCallbackError") {
+    await loginConKeycloak();
+  }
+
   return (
     <div className="text-center">
       <div className="w-14 h-14 mx-auto mb-4 bg-[var(--caritas-green)]/10 rounded-2xl flex items-center justify-center">
