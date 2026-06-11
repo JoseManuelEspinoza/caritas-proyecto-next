@@ -69,6 +69,15 @@ export interface CandidatoSugerido {
   distanciaKm: number | null;
   mismaZonaPastoral: boolean | null;
   scoreConfianza: number | null;
+  // ── Opción híbrida: factores extra + score combinado ──
+  /** Carga de trabajo actual (incidencias ASIGNADAS sin cerrar). */
+  cargaActual?: number | null;
+  /** Tiempo promedio de respuesta en horas (asignación → data recopilada). */
+  tiempoRespuestaHoras?: number | null;
+  /** Nivel del grafo de parroquias (1=incidente, 2=vecina, 3=cercana). */
+  nivel?: number | null;
+  /** Score combinado final 0–10 (confianza + disponibilidad + cercanía). */
+  scoreFinal?: number | null;
 }
 
 /** Salida del algoritmo: hasta `topN` sugerencias + la fase alcanzada. */
@@ -83,10 +92,24 @@ export interface ConfigAlgoritmo {
   pesoManual: number;
   pesoAutomatico: number;
   topN: number;
+  // ── Opción híbrida (todos opcionales; tienen default) ──
+  /** Radio (km) para conectar parroquias vecinas en el grafo de adyacencia. */
+  radioAdyacenciaKm?: number;
+  /** Distancia (km) a la que la cercanía vale 0 (para normalizar el score). */
+  distanciaMaxKm?: number;
+  /** Pesos del score combinado final. */
+  pesoConfianza?: number;
+  pesoDisponibilidad?: number;
+  pesoCercania?: number;
 }
 
 export const CONFIG_DEFAULT: ConfigAlgoritmo = {
   pesoManual: 0.4,
   pesoAutomatico: 0.6,
   topN: 5,
+  radioAdyacenciaKm: 3,
+  distanciaMaxKm: 20,
+  pesoConfianza: 0.5,
+  pesoDisponibilidad: 0.2,
+  pesoCercania: 0.3,
 };

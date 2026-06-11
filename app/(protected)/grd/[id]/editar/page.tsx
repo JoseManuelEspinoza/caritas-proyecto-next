@@ -121,7 +121,22 @@ export default async function EditarIncidentePage({ params }: { params: Promise<
     lng: inc.longitud != null ? Number(inc.longitud) : null,
   };
 
+  const parroquias = await prisma.parroquia.findMany({
+    where: { estado: "ACTIVO" },
+    select: { nombre: true, latitud: true, longitud: true },
+    orderBy: { nombre: "asc" },
+  });
+
   return (
-    <IncidentForm initialData={initialData} incidenciaId={id} codigoCaso={inc.codigoCaso ?? ""} />
+    <IncidentForm
+      initialData={initialData}
+      incidenciaId={id}
+      codigoCaso={inc.codigoCaso ?? ""}
+      parroquiasSistema={parroquias.map((p) => ({
+        nombre: p.nombre,
+        lat: p.latitud != null ? Number(p.latitud) : null,
+        lng: p.longitud != null ? Number(p.longitud) : null,
+      }))}
+    />
   );
 }
