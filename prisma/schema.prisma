@@ -455,7 +455,13 @@ model PersonaAfectada {
   telefono          String?
   observaciones     String?
 
-  grupoFamiliar GrupoFamiliarAfectado @relation(fields: [idGrupoFamiliar], references: [idGrupoFamiliar])
+  uuidMovil           String?               @unique
+  syncEstado          String?
+  fechaSincronizacion DateTime?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @default(now()) @updatedAt
+  deletedAt           DateTime?
+  grupoFamiliar       GrupoFamiliarAfectado @relation(fields: [idGrupoFamiliar], references: [idGrupoFamiliar])
 
   @@index([idGrupoFamiliar], map: "idx_persona_afectada_grupo")
   @@index([numeroDocumento], map: "idx_persona_afectada_documento")

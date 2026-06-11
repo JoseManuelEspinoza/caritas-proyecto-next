@@ -21,6 +21,7 @@ import {
   Mountain,
   Zap,
   TrendingDown,
+  SendHorizonal,
 } from "lucide-react";
 import type { FrontendRole } from "@/app/lib/roles";
 
@@ -38,6 +39,8 @@ export type IncidenteItem = {
   totalFamilias: number;
   totalPersonas: number;
   brigadistas: string[]; // nombres de brigadistas asignados
+  /** True cuando el estado es DATA RECOPILADA y ya hay un borrador de informe guardado */
+  tieneBorradorInforme?: boolean;
 };
 
 // ─── Configuración de estados ─────────────────────────────────────────────────
@@ -177,6 +180,32 @@ export function GrdList({ items, role }: GrdListProps) {
   const canCreate = role === "admin" || role === "especialistaGRD";
   const rowsPerPage = 10;
 
+  const handleExport = () => {
+    const headers = ["Código", "Incidente", "Categoría", "Estado", "Ubicación", "Parroquia", "Familias", "Personas", "Brigadistas", "Fecha"];
+    const rows = filtered.map((i) => [
+      i.codigoCaso ?? "",
+      i.tituloIncidencia ?? "",
+      i.tipoEvento ?? "",
+      i.estadoActual,
+      i.direccionEvento ?? "",
+      i.parroquia ?? "",
+      String(i.totalFamilias),
+      String(i.totalPersonas),
+      i.brigadistas.join("; "),
+      new Date(i.fechaRegistro).toLocaleDateString("es-PE", { timeZone: "America/Lima" }),
+    ]);
+    const csv = [headers, ...rows]
+      .map((row) => row.map((v) => `"${v.replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `incidencias_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   // Filtros
   const filtered = items.filter((i) => {
     if (statusFilter !== "all" && i.estadoActual !== statusFilter) return false;
@@ -244,6 +273,7 @@ export function GrdList({ items, role }: GrdListProps) {
             <button
               key={s}
               onClick={() => setStatusFilter(active ? "all" : s)}
+              suppressHydrationWarning
               className={`bg-gradient-to-br ${cfg.card} border rounded-xl p-3 md:p-4 cursor-pointer transition-all hover:shadow-md hover:scale-105 text-left ${active ? `ring-2 ${cfg.ring}` : ""}`}
             >
               <div className="flex items-center gap-2 mb-1">
@@ -270,6 +300,7 @@ export function GrdList({ items, role }: GrdListProps) {
               placeholder="Buscar por nombre o código..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              suppressHydrationWarning
               className="w-full pl-9 pr-4 py-2 text-sm bg-[#F5F5F5] border border-[#DDDDDD] rounded focus:outline-none focus:ring-2 focus:ring-[#009850]/20 focus:border-[#009850]"
             />
           </div>
@@ -279,6 +310,7 @@ export function GrdList({ items, role }: GrdListProps) {
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
+              suppressHydrationWarning
               className="flex-1 px-3 py-2 text-sm bg-[#F5F5F5] border border-[#DDDDDD] rounded focus:outline-none focus:ring-2 focus:ring-[#009850]/20 focus:border-[#009850]"
             >
               <option value="all">Todas las categorías</option>
@@ -292,7 +324,11 @@ export function GrdList({ items, role }: GrdListProps) {
               <option value="Colapso de infraestructura">Colapso de infraestructura</option>
             </select>
 
-            <button className="hidden md:flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 bg-[#F5F5F5] border border-[#DDDDDD] rounded hover:bg-gray-200 transition-colors">
+            <button
+              onClick={handleExport}
+              suppressHydrationWarning
+              className="hidden md:flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 bg-[#F5F5F5] border border-[#DDDDDD] rounded hover:bg-gray-200 transition-colors"
+            >
               <Download className="w-4 h-4" />
               Exportar
             </button>
@@ -342,6 +378,12 @@ export function GrdList({ items, role }: GrdListProps) {
                   <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${cfg.badge}`}>
                     {cfg.label}
                   </span>
+                  {item.tieneBorradorInforme && (
+                    <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-100 text-violet-700 flex items-center gap-1">
+                      <SendHorizonal className="w-3 h-3" />
+                      Por enviar
+                    </span>
+                  )}
                   {item.tipoEvento && (
                     <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 flex items-center gap-1">
                       <CatIcon cat={item.tipoEvento} className="w-3 h-3" />
@@ -450,11 +492,19 @@ export function GrdList({ items, role }: GrdListProps) {
                         </span>
                       </td>
                       <td className="px-5 py-4 whitespace-nowrap">
-                        <span
-                          className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${cfg.badge}`}
-                        >
-                          {cfg.label}
-                        </span>
+                        <div className="flex flex-col gap-1 items-start">
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${cfg.badge}`}
+                          >
+                            {cfg.label}
+                          </span>
+                          {item.tieneBorradorInforme && (
+                            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-100 text-violet-700 flex items-center gap-1">
+                              <SendHorizonal className="w-3 h-3" />
+                              Por enviar
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-5 py-4 whitespace-nowrap">
                         <span className="flex items-center gap-1 text-sm text-gray-500">

@@ -477,15 +477,20 @@ export class PrismaIncidenciaRepository implements IIncidenciaRepository {
       descripcionAyuda: string;
       lugarEntrega: string;
       observaciones?: string;
+      fechaEntrega?: string;
     }
   ): Promise<void> {
+    const fechaEntrega =
+      data.fechaEntrega && !isNaN(new Date(data.fechaEntrega).getTime())
+        ? new Date(data.fechaEntrega)
+        : new Date();
     await prisma.entregaAyudaHumanitaria.create({
       data: {
         idIncidencia,
         tipoAyuda: data.tipoAyuda,
         descripcionAyuda: data.descripcionAyuda,
         lugarEntrega: data.lugarEntrega,
-        fechaEntrega: new Date(),
+        fechaEntrega,
         observaciones: data.observaciones ?? null,
         entregaParcial: false,
         conformidadRecepcion: true,
@@ -500,15 +505,21 @@ export class PrismaIncidenciaRepository implements IIncidenciaRepository {
       descripcion: string;
       necesidadesPendientes?: string;
       recomendaciones?: string;
+      observaciones?: string;
+      fecha?: string;
     }
   ): Promise<void> {
+    const fechaSeguimiento =
+      data.fecha && !isNaN(new Date(data.fecha).getTime()) ? new Date(data.fecha) : new Date();
     await prisma.seguimientoIncidencia.create({
       data: {
         idIncidencia,
+        fechaSeguimiento,
         situacion: data.situacion,
         descripcion: data.descripcion,
         necesidadesPendientes: data.necesidadesPendientes || null,
         recomendaciones: data.recomendaciones || null,
+        observaciones: data.observaciones || null,
         estado: "ACTIVO",
       },
     });

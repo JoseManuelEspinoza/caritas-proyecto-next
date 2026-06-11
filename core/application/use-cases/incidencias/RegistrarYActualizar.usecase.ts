@@ -35,7 +35,10 @@ function validarCoordenadas(data: CreateIncidenteData): void {
 /** Validaciones de campos obligatorios y formato del formulario de incidente. */
 function validarCreacion(data: CreateIncidenteData): void {
   const dni = soloDigitos(data.reportaDni ?? "");
-  const tel = soloDigitos(data.reportaTel ?? "");
+  // reportaTel se almacena como "+51 987654321"; se extrae el código y el número local.
+  const telRaw = data.reportaTel ?? "";
+  const codigoPais = telRaw.match(/^(\+\d+)\s*/)?.[1] ?? "+51";
+  const telLocal = soloDigitos(telRaw.replace(/^\+\d+\s*/, "") || telRaw);
 
   if (!dni) throw new ValidationError("Ingresa el DNI de quien reportó.");
   if (dni.length !== 8) {
@@ -50,10 +53,10 @@ function validarCreacion(data: CreateIncidenteData): void {
     throw new ValidationError("El nombre de quien reporta debe tener al menos 5 caracteres.");
   }
 
-  if (!tel) throw new ValidationError("Ingresa el celular de quien reportó.");
+  if (!telLocal) throw new ValidationError("Ingresa el celular de quien reportó.");
 
-  if (!/^9\d{8}$/.test(tel)) {
-    throw new ValidationError("El celular debe tener 9 dígitos y empezar con 9.");
+  if (codigoPais !== "+51" && (telLocal.length < 7 || telLocal.length > 12)) {
+    throw new ValidationError("El número de celular no es válido.");
   }
 
   if (!data.reportaRol?.trim()) {
@@ -128,7 +131,6 @@ export class ActualizarIncidenciaUseCase {
 
     const incidencia = await this.repo.findById(id);
     if (!incidencia) throw new NotFoundError("Incidencia no encontrada.");
-
     incidencia.asegurarEditable();
     await this.repo.actualizarDatos(id, data);
   }

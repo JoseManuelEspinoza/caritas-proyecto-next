@@ -3,19 +3,45 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { HandHeart, CheckCircle, XCircle, AlertCircle, Clock, Eye } from "lucide-react";
+import {
+  HandHeart,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  Clock,
+  Eye,
+  FileText,
+  Loader2,
+  Users,
+  BarChart3,
+} from "lucide-react";
 import { toast } from "sonner";
 import { aprobarCaso, observarCaso, rechazarCaso } from "@/app/actions/incidents";
 import { PaginationControls } from "@/app/ui/shared/pagination-controls";
 
-type Informe = {
-  analisisSituacion?: string;
-  hallazgosTexto?: string;
-  conclusiones?: string;
-  nivelUrgencia?: string;
-  tipoIntervencion?: string;
-  recomendacionComite?: string;
-} | null;
+export type ReporteArticulo = { codigo: string; descripcion: string; cantidad: number };
+export type ReporteKit = { tipoKit: string; articulos: ReporteArticulo[] };
+export type ReporteFamilia = {
+  refId: string;
+  nombre: string;
+  integrantes: string[];
+  nota: string | null;
+  kits: ReporteKit[];
+};
+export type ReporteComite = {
+  fechaInforme: string | null;
+  dirigidoA: string;
+  motivo: string;
+  objetivoGeneral: string;
+  objetivosEspecificos: string[];
+  analisisSituacion: string;
+  hallazgosTexto: string;
+  hallazgosClave: string[];
+  conclusiones: string;
+  nivelUrgencia: string;
+  tipoIntervencion: string;
+  familias: ReporteFamilia[];
+};
 
 export type Caso = {
   id: string;
@@ -27,10 +53,38 @@ export type Caso = {
   parroquia: string | null;
   direccion: string | null;
   descripcion: string | null;
+  fechaSuceso: string | null;
+  reportadoPor: string | null;
+  familias: number;
+  personas: number;
   solicitudTipo: string | null;
   solicitudNecesidad: string | null;
-  informe: Informe;
+  reporte: ReporteComite | null;
 };
+
+function fmtFecha(iso: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("es-PE", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+type ArticuloConsolidado = { tipoKit: string; codigo: string; descripcion: string; cantidad: number };
+
+function consolidarArticulos(reporte: ReporteComite): ArticuloConsolidado[] {
+  const map = new Map<string, ArticuloConsolidado>();
+  for (const fam of reporte.familias) {
+    for (const kit of fam.kits) {
+      for (const a of kit.articulos) {
+        const k = `${kit.tipoKit}||${a.codigo}||${a.descripcion}`;
+        const prev = map.get(k);
+        if (prev) prev.cantidad += a.cantidad;
+        else map.set(k, { tipoKit: kit.tipoKit, codigo: a.codigo, descripcion: a.descripcion, cantidad: a.cantidad });
+      }
+    }
+  }
+  return Array.from(map.values());
+}
 
 const STATUS_COLOR: Record<string, string> = {
   "EN EVALUACION": "bg-purple-50 text-purple-700",
@@ -55,6 +109,7 @@ export function DonacionesModule({ casos, canEvaluate }: { casos: Caso[]; canEva
   const [notes, setNotes] = useState("");
   const [queuePage, setQueuePage] = useState(1);
   const [historyPage, setHistoryPage] = useState(1);
+  const [descargandoPdf, setDescargandoPdf] = useState(false);
 
   const queue = casos.filter((c) => PENDIENTES.includes(c.estado));
   const closed = casos.filter((c) => !PENDIENTES.includes(c.estado));
@@ -105,6 +160,49 @@ export function DonacionesModule({ casos, canEvaluate }: { casos: Caso[]; canEva
       setSelectedId(null);
       router.refresh();
     });
+  };
+
+  // Descarga el informe en PDF (se genera en el cliente a partir del informe ya
+  // guardado por el Especialista; no modifica ni persiste nada).
+  const descargarInforme = async (caso: Caso) => {
+    if (!caso.reporte) return;
+    const rep = caso.reporte;
+    setDescargandoPdf(true);
+    try {
+      const { generarInformePdf } = await import("@/app/lib/informe-pdf");
+      await generarInformePdf({
+        codigo: caso.codigo ?? "GRD",
+        categoria: caso.categoria ?? "—",
+        evento: caso.titulo ?? caso.codigo ?? "Incidencia",
+        ubicacion: [caso.direccion, caso.parroquia].filter(Boolean).join(", ") || "—",
+        fechaSuceso: fmtFecha(caso.fechaSuceso),
+        familiasAfectadas: caso.familias,
+        personasEmpadronadas: caso.personas,
+        fechaEmision: fmtFecha(rep.fechaInforme),
+        emitidoPor: "Especialista GRD",
+        oficina: "Oficina de Gestión Pastoral / GRD",
+        motivo: rep.motivo,
+        dirigidoA: rep.dirigidoA,
+        objetivoGeneral: rep.objetivoGeneral,
+        objetivosEspecificos: rep.objetivosEspecificos,
+        analisisSituacion: rep.analisisSituacion,
+        hallazgosTexto: rep.hallazgosTexto,
+        hallazgosClave: rep.hallazgosClave,
+        necesidadesIdentificadas: [],
+        evidenciasCount: 0,
+        evidenciasImagenes: [],
+        familias: rep.familias.map((f) => ({
+          nombre: f.nombre,
+          integrantes: f.integrantes,
+          kits: f.kits,
+        })),
+        conclusiones: rep.conclusiones,
+      });
+    } catch {
+      toast.error("No se pudo generar el PDF.");
+    } finally {
+      setDescargandoPdf(false);
+    }
   };
 
   return (
@@ -237,11 +335,16 @@ export function DonacionesModule({ casos, canEvaluate }: { casos: Caso[]; canEva
               </div>
 
               <div className="p-4 space-y-3">
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                   {[
                     { label: "Categoría", value: current.categoria },
                     { label: "Gravedad", value: current.gravedad },
                     { label: "Tipo de ayuda", value: current.solicitudTipo },
+                    { label: "Fecha suceso", value: fmtFecha(current.fechaSuceso) },
+                    { label: "Distrito", value: current.parroquia },
+                    { label: "Familias", value: String(current.familias) },
+                    { label: "Personas", value: String(current.personas) },
+                    { label: "Reportado por", value: current.reportadoPor },
                   ]
                     .filter((f) => f.value)
                     .map(({ label, value }) => (
@@ -266,42 +369,30 @@ export function DonacionesModule({ casos, canEvaluate }: { casos: Caso[]; canEva
                   </div>
                 )}
 
-                {current.informe && (
-                  <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 space-y-3">
-                    <p className="text-xs font-bold text-purple-800 uppercase tracking-wider">
-                      Informe del Especialista GRD
+                {current.reporte ? (
+                  <ReporteReadOnly
+                    reporte={current.reporte}
+                    descargando={descargandoPdf}
+                    onDescargar={() => descargarInforme(current)}
+                  />
+                ) : (
+                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center">
+                    <p className="text-xs text-gray-500">
+                      El Especialista GRD aún no ha enviado el informe de evaluación.
                     </p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Field label="Urgencia" value={current.informe.nivelUrgencia} />
-                      <Field label="Intervención" value={current.informe.tipoIntervencion} />
-                    </div>
-                    {current.informe.analisisSituacion && (
-                      <Block
-                        label="Análisis de la situación"
-                        value={current.informe.analisisSituacion}
-                      />
-                    )}
-                    {current.informe.hallazgosTexto && (
-                      <Block label="Hallazgos" value={current.informe.hallazgosTexto} />
-                    )}
-                    {current.informe.recomendacionComite && (
-                      <Block
-                        label="Recomendación al Comité"
-                        value={`"${current.informe.recomendacionComite}"`}
-                        italic
-                      />
-                    )}
                   </div>
                 )}
 
                 {canEvaluate && PENDIENTES.includes(current.estado) ? (
                   <div className="border-t border-gray-100 pt-4 space-y-3">
-                    <p className="text-xs font-bold text-gray-700">Resolución del Comité</p>
+                    <p className="text-xs font-bold text-gray-700">
+                      Resolución y observaciones del Comité
+                    </p>
                     <textarea
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
                       rows={3}
-                      placeholder="Justificación, criterios aplicados, monto o kit aprobado..."
+                      placeholder="Justificación de la decisión, criterios aplicados, condiciones de la donación..."
                       className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-purple-400 resize-none"
                     />
                     <div className="grid grid-cols-3 gap-2">
@@ -387,19 +478,233 @@ function CasoRow({
     </button>
   );
 }
-function Field({ label, value }: { label: string; value?: string }) {
+// ─── Informe de Atención (solo lectura) para el Comité ────────────────────────
+
+function ReadSeccion({
+  letra,
+  titulo,
+  children,
+}: {
+  letra: string;
+  titulo: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="bg-white rounded-lg p-2.5 border border-purple-100">
-      <p className="text-[10px] text-gray-400 mb-0.5">{label}</p>
-      <p className="text-xs font-bold text-purple-800">{value ?? "—"}</p>
+    <div>
+      <p className="text-[11px] font-bold text-purple-700 uppercase tracking-wider mb-2">
+        {letra}) {titulo}
+      </p>
+      {children}
     </div>
   );
 }
-function Block({ label, value, italic }: { label: string; value: string; italic?: boolean }) {
+
+function ReadCampo({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-white rounded-lg p-3 border border-purple-100">
-      <p className="text-[10px] text-purple-700 font-semibold mb-1">{label}:</p>
-      <p className={`text-xs text-gray-700 ${italic ? "italic" : ""}`}>{value}</p>
+    <div className="bg-gray-50 rounded-lg border border-gray-100 px-2.5 py-1.5">
+      <p className="text-[10px] text-gray-400 uppercase tracking-wider">{label}</p>
+      <p className="text-xs font-medium text-gray-800">{value}</p>
+    </div>
+  );
+}
+
+function ReporteReadOnly({
+  reporte,
+  descargando,
+  onDescargar,
+}: {
+  reporte: ReporteComite;
+  descargando: boolean;
+  onDescargar: () => void;
+}) {
+  const consolidado = consolidarArticulos(reporte);
+  return (
+    <div className="rounded-xl border border-purple-200 overflow-hidden">
+      <div className="bg-purple-600 text-white px-4 py-3 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <BarChart3 className="w-4 h-4 flex-shrink-0" />
+          <p className="font-semibold text-sm truncate">Informe de Atención de Ayuda Humanitaria</p>
+        </div>
+        <button
+          type="button"
+          onClick={onDescargar}
+          disabled={descargando}
+          className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-semibold px-3 py-1.5 rounded-lg disabled:opacity-50 flex-shrink-0"
+        >
+          {descargando ? (
+            <>
+              <Loader2 className="w-3.5 h-3.5 animate-spin" /> Generando…
+            </>
+          ) : (
+            <>
+              <FileText className="w-3.5 h-3.5" /> Descargar PDF
+            </>
+          )}
+        </button>
+      </div>
+
+      <div className="p-4 space-y-4 bg-white">
+        {/* A) Identificación */}
+        <ReadSeccion letra="A" titulo="Identificación">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <ReadCampo label="Fecha" value={fmtFecha(reporte.fechaInforme)} />
+            <ReadCampo label="Dirigido a" value={reporte.dirigidoA || "—"} />
+            <ReadCampo label="Motivo" value={reporte.motivo || "—"} />
+          </div>
+        </ReadSeccion>
+
+        {/* B) Objetivos */}
+        {(reporte.objetivoGeneral || reporte.objetivosEspecificos.length > 0) && (
+          <ReadSeccion letra="B" titulo="Objetivos">
+            {reporte.objetivoGeneral && (
+              <p className="text-xs text-gray-700">
+                <span className="font-semibold">General: </span>
+                {reporte.objetivoGeneral}
+              </p>
+            )}
+            {reporte.objetivosEspecificos.length > 0 && (
+              <ul className="mt-2 space-y-1">
+                {reporte.objetivosEspecificos.map((o, i) => (
+                  <li key={i} className="text-xs text-gray-700 flex gap-1.5">
+                    <span className="text-purple-500">•</span>
+                    {o}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </ReadSeccion>
+        )}
+
+        {/* C) Análisis y hallazgos */}
+        {(reporte.analisisSituacion ||
+          reporte.hallazgosTexto ||
+          reporte.hallazgosClave.length > 0) && (
+          <ReadSeccion letra="C" titulo="Análisis y Hallazgos">
+            {reporte.analisisSituacion && (
+              <p className="text-xs text-gray-700">{reporte.analisisSituacion}</p>
+            )}
+            {reporte.hallazgosTexto && (
+              <p className="text-xs text-gray-700 mt-2">{reporte.hallazgosTexto}</p>
+            )}
+            {reporte.hallazgosClave.length > 0 && (
+              <ul className="mt-2 space-y-1">
+                {reporte.hallazgosClave.map((h, i) => (
+                  <li key={i} className="text-xs text-gray-700 flex gap-1.5">
+                    <span className="text-purple-500">•</span>
+                    {h}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </ReadSeccion>
+        )}
+
+        {/* D) Asignación de ayuda por familia */}
+        <ReadSeccion letra="D" titulo="Asignación de Ayuda Humanitaria por Familia">
+          <div className="space-y-3">
+            {reporte.familias.map((fam) => (
+              <div key={fam.refId} className="rounded-lg border border-purple-100 bg-purple-50/40 p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Users className="w-3.5 h-3.5 text-purple-600" />
+                  <p className="text-xs font-bold text-purple-800">{fam.nombre}</p>
+                  <span className="text-[10px] text-gray-500">
+                    {fam.integrantes.length} integrante(s) · {fam.kits.length} kit(s)
+                  </span>
+                </div>
+                {fam.integrantes.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mb-2">
+                    {fam.integrantes.map((nombre, i) => (
+                      <span
+                        key={i}
+                        className="text-[10px] bg-white border border-purple-100 rounded-full px-2 py-0.5 text-gray-700"
+                      >
+                        {nombre}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {fam.nota && (
+                  <p className="text-[11px] text-purple-700 italic mb-2">
+                    <span className="font-semibold not-italic">Brigadista: </span>
+                    {fam.nota}
+                  </p>
+                )}
+                {fam.kits.length === 0 ? (
+                  <p className="text-[11px] text-gray-400 italic">Sin kits asignados.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {fam.kits.map((kit, ki) => (
+                      <div key={ki} className="bg-white rounded-lg border border-gray-100 overflow-hidden">
+                        <p className="text-[11px] font-bold text-[#009850] px-2.5 py-1.5 border-b border-gray-100">
+                          {kit.tipoKit}
+                        </p>
+                        <table className="w-full text-[11px]">
+                          <thead>
+                            <tr className="text-gray-400 bg-gray-50">
+                              <th className="text-left font-semibold px-2.5 py-1 w-8">N°</th>
+                              <th className="text-left font-semibold px-2.5 py-1">Código</th>
+                              <th className="text-left font-semibold px-2.5 py-1">Descripción</th>
+                              <th className="text-right font-semibold px-2.5 py-1 w-16">Cant.</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {kit.articulos.map((a, ai) => (
+                              <tr key={ai} className="border-t border-gray-50">
+                                <td className="px-2.5 py-1 text-gray-400">{ai + 1}</td>
+                                <td className="px-2.5 py-1 font-mono text-gray-600">{a.codigo || "—"}</td>
+                                <td className="px-2.5 py-1 text-gray-700">{a.descripcion || "—"}</td>
+                                <td className="px-2.5 py-1 text-right font-semibold text-gray-800">
+                                  {a.cantidad}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Resumen consolidado */}
+          {consolidado.length > 0 && (
+            <div className="mt-3 rounded-lg overflow-hidden border border-gray-200">
+              <p className="text-[11px] font-bold text-white bg-gray-700 px-3 py-2 uppercase tracking-wider">
+                Resumen consolidado de artículos
+              </p>
+              <table className="w-full text-[11px]">
+                <thead>
+                  <tr className="text-gray-500 bg-gray-50">
+                    <th className="text-left font-semibold px-3 py-1.5">Kit</th>
+                    <th className="text-left font-semibold px-3 py-1.5">Código</th>
+                    <th className="text-left font-semibold px-3 py-1.5">Descripción</th>
+                    <th className="text-right font-semibold px-3 py-1.5 w-20">Cant. total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {consolidado.map((f, i) => (
+                    <tr key={i} className="border-t border-gray-100">
+                      <td className="px-3 py-1.5 text-purple-700">{f.tipoKit}</td>
+                      <td className="px-3 py-1.5 font-mono text-gray-600">{f.codigo || "—"}</td>
+                      <td className="px-3 py-1.5 text-gray-700">{f.descripcion || "—"}</td>
+                      <td className="px-3 py-1.5 text-right font-bold text-gray-800">{f.cantidad}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </ReadSeccion>
+
+        {/* E) Conclusiones */}
+        {reporte.conclusiones && (
+          <ReadSeccion letra="E" titulo="Conclusiones">
+            <p className="text-xs text-gray-700">{reporte.conclusiones}</p>
+          </ReadSeccion>
+        )}
+      </div>
     </div>
   );
 }

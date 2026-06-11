@@ -78,6 +78,7 @@ export async function createBrigadista(data: BrigadistaFormData) {
     module: "Brigadistas",
   });
   revalidatePath("/brigadistas");
+  revalidatePath("/grd", "layout");
 }
 
 export async function updateBrigadista(id: string, data: BrigadistaFormData) {

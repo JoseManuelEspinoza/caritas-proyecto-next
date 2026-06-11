@@ -1,5 +1,5 @@
-import type { NextAuthConfig } from "next-auth";
-import Keycloak from "next-auth/providers/keycloak";
+import type { NextAuthConfig } from 'next-auth'
+import Keycloak from 'next-auth/providers/keycloak'
 
 /** Roles conocidos de la app, en orden de prioridad (el "principal" se elige así). */
 const KNOWN_ROLES = [
@@ -58,9 +58,13 @@ function keycloakProvider({
     authorization: `${publicBase}/protocol/openid-connect/auth`,
     token: `${internalBase}/protocol/openid-connect/token`,
     userinfo: `${internalBase}/protocol/openid-connect/userinfo`,
-  });
+  })
 }
 
+/**
+ * Configuración EDGE-SAFE de Auth.js (sin Prisma ni dependencias de Node).
+ * La usa el proxy (middleware) para leer la sesión y los roles del token.
+ */
 export const authConfig: NextAuthConfig = {
   trustHost: true,
   providers: [

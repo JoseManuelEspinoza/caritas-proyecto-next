@@ -20,6 +20,7 @@ import {
   Database,
   ChevronDown,
   HandHeart,
+  Church,
 } from "lucide-react";
 import { NavLink } from "./nav-link";
 import { logout } from "@/app/actions/auth";
@@ -55,7 +56,8 @@ const ALL_NAV = [
     exact: false,
     roles: ["admin", "especialistaGRD", "brigadista"],
   },
-  { href: "/brigadistas", icon: Users, label: "Brigadistas", exact: false, roles: ["admin"] },
+  { href: "/brigadistas", icon: Users, label: "Brigadistas", exact: false, roles: ["admin", "especialistaGRD"] },
+  { href: "/parroquias", icon: Church, label: "Parroquias", exact: false, roles: ["admin", "especialistaGRD"] },
   { href: "/planes", icon: ClipboardList, label: "Planes GRD", exact: false, roles: ["admin"] },
   {
     href: "/simulacros",
@@ -73,7 +75,7 @@ const ALL_NAV = [
     icon: FileText,
     label: "Reportes",
     exact: false,
-    roles: ["admin", "comite", "jefaOGP"],
+    roles: ["admin", "especialistaGRD", "comite", "jefaOGP"],
   },
 ];
 
@@ -95,7 +97,7 @@ export function DashboardShell({
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile, setIsMobile] = useState<boolean | null>(null);
 
   useEffect(() => {
     const check = () => {
@@ -114,16 +116,16 @@ export function DashboardShell({
 
   const navItems = ALL_NAV.filter((item) => item.roles.includes(frontendRole));
   const closeMobile = () => {
-    if (isMobile) setMobileMenuOpen(false);
+    if (isMobile === true) setMobileMenuOpen(false);
   };
-  const collapsed = !isMobile && !sidebarOpen;
+  const collapsed = isMobile === false && !sidebarOpen;
   const roleLabel = getRoleLabel(userRole);
   const initials = getInitials(userName);
 
   return (
     <div className="h-screen flex overflow-hidden bg-gray-50">
       {/* Mobile overlay */}
-      {isMobile && mobileMenuOpen && (
+      {isMobile === true && mobileMenuOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-40 md:hidden"
           onClick={() => setMobileMenuOpen(false)}
@@ -133,20 +135,21 @@ export function DashboardShell({
       {/* Sidebar */}
       <aside
         className={`
-          ${isMobile ? "fixed inset-y-0 left-0 z-50 w-64" : collapsed ? "w-20" : "w-64"}
-          ${isMobile && !mobileMenuOpen ? "-translate-x-full" : "translate-x-0"}
+          ${isMobile === true ? "fixed inset-y-0 left-0 z-50 w-64" : collapsed ? "w-20" : "w-64"}
+          ${isMobile === true && !mobileMenuOpen ? "-translate-x-full" : "translate-x-0"}
           bg-white border-r border-[#DDDDDD] transition-all duration-300 flex flex-col
         `}
       >
         {/* Logo */}
         <div className="h-12 flex items-center justify-between px-4 border-b border-[#DDDDDD]">
-          {(!isMobile && !collapsed) || (isMobile && mobileMenuOpen) ? (
+          {(isMobile !== true && !collapsed) || (isMobile === true && mobileMenuOpen) ? (
             <Image
               src="/caritas-logo.png"
               alt="Cáritas Lima"
               width={120}
               height={28}
               className="h-7 w-auto"
+              style={{ width: "auto" }}
             />
           ) : (
             <div className="mx-auto">
@@ -159,7 +162,7 @@ export function DashboardShell({
               />
             </div>
           )}
-          {!isMobile && (
+          {isMobile === false && (
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
               className="text-gray-500 hover:text-gray-700 p-0.5"
@@ -167,7 +170,7 @@ export function DashboardShell({
               {sidebarOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
             </button>
           )}
-          {isMobile && (
+          {isMobile === true && (
             <button
               onClick={() => setMobileMenuOpen(false)}
               className="text-gray-500 hover:text-gray-700 p-0.5"
@@ -204,7 +207,7 @@ export function DashboardShell({
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top bar */}
         <header className="h-12 bg-white border-b border-[#DDDDDD] flex items-center justify-between px-3 md:px-6">
-          {isMobile && (
+          {isMobile === true && (
             <button
               onClick={() => setMobileMenuOpen(true)}
               className="p-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors"
@@ -234,8 +237,8 @@ export function DashboardShell({
 
               {showUserMenu && (
                 <>
-                  <div className="fixed inset-0 z-[100]" onClick={() => setShowUserMenu(false)} />
-                  <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-[110]">
+                  <div className="fixed inset-0 z-100" onClick={() => setShowUserMenu(false)} />
+                  <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-110">
                     {/* User info */}
                     <div className="px-4 py-3 border-b border-[#DDDDDD]">
                       <div className="flex items-center gap-3">

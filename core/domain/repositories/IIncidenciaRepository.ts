@@ -85,6 +85,7 @@ export interface IIncidenciaRepository {
       descripcionAyuda: string;
       lugarEntrega: string;
       observaciones?: string;
+      fechaEntrega?: string;
     }
   ): Promise<void>;
 
@@ -96,6 +97,8 @@ export interface IIncidenciaRepository {
       descripcion: string;
       necesidadesPendientes?: string;
       recomendaciones?: string;
+      observaciones?: string;
+      fecha?: string;
     }
   ): Promise<void>;
 
