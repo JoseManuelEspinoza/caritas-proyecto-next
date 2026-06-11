@@ -71,7 +71,8 @@ import {
 } from "@/app/actions/incidents";
 import type { PersonaForm } from "@/app/actions/incidents";
 import { PersonaModal } from "./persona-modal";
-import { presignEvidencia } from "@/app/actions/evidencias";
+import { subirArchivoS3, type ArchivoSubido } from "@/app/ui/shared/file-upload";
+import { ACCEPT } from "@/app/lib/upload-config";
 import type { FrontendRole } from "@/app/lib/roles";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -1427,25 +1428,16 @@ function PanelCampo({ data, onDone }: { data: IncidentData; onDone: () => void }
       descripcion: string;
     }[] = [];
     for (const file of arr) {
-      const ct = file.type || "application/octet-stream";
       try {
-        const res = await presignEvidencia({
-          nombreArchivo: file.name,
-          contentType: ct,
-          incidenciaId: data.idIncidencia,
+        const subido = await subirArchivoS3(file, {
+          tipo: "evidencia-incidencia",
+          entidadId: data.idIncidencia,
         });
-        if (!res.ok) throw new Error(res.message);
-        const put = await fetch(res.uploadUrl, {
-          method: "PUT",
-          body: file,
-          headers: { "Content-Type": ct },
-        });
-        if (!put.ok) throw new Error(`Error al subir (${put.status})`);
         subidas.push({
-          key: res.key,
-          nombreArchivo: file.name,
-          formato: ct,
-          tamano: file.size,
+          key: subido.key,
+          nombreArchivo: subido.nombre,
+          formato: subido.formato,
+          tamano: subido.tamano,
           descripcion: MARCA_CAMPO,
         });
       } catch (e) {
@@ -1981,7 +1973,7 @@ function PanelCampo({ data, onDone }: { data: IncidentData; onDone: () => void }
                 <input
                   type="file"
                   multiple
-                  accept="image/*,video/*,.pdf"
+                  accept={ACCEPT.evidencia}
                   className="hidden"
                   onChange={(e) => handleUploadCampo(e.target.files)}
                 />
@@ -2424,19 +2416,11 @@ function PanelRevisar({ data, onDone }: { data: IncidentData; onDone: () => void
     } else if (docTipo === "file" && docFile) {
       setSubiendoDoc(true);
       try {
-        const res = await presignEvidencia({
-          nombreArchivo: docFile.name,
-          contentType: docFile.type || "application/octet-stream",
-          incidenciaId: data.idIncidencia,
+        const subido = await subirArchivoS3(docFile, {
+          tipo: "evidencia-incidencia",
+          entidadId: data.idIncidencia,
         });
-        if (!res.ok) throw new Error(res.message);
-        const put = await fetch(res.uploadUrl, {
-          method: "PUT",
-          body: docFile,
-          headers: { "Content-Type": docFile.type || "application/octet-stream" },
-        });
-        if (!put.ok) throw new Error(`Error al subir (${put.status})`);
-        docAdjunto = res.key;
+        docAdjunto = subido.key;
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "No se pudo subir el documento.");
         setSubiendoDoc(false);
@@ -3707,19 +3691,8 @@ function PanelAtender({
       return n;
     });
 
-  async function subirArchivo(file: File): Promise<void> {
-    const res = await presignEvidencia({
-      nombreArchivo: file.name,
-      contentType: file.type || "application/octet-stream",
-      incidenciaId: data.idIncidencia,
-    });
-    if (!res.ok) throw new Error(res.message);
-    const put = await fetch(res.uploadUrl, {
-      method: "PUT",
-      body: file,
-      headers: { "Content-Type": file.type || "application/octet-stream" },
-    });
-    if (!put.ok) throw new Error(`Error al subir (${put.status})`);
+  async function subirArchivo(file: File): Promise<ArchivoSubido> {
+    return subirArchivoS3(file, { tipo: "evidencia-incidencia", entidadId: data.idIncidencia });
   }
 
   function resumenEntrega(): string {
@@ -3814,16 +3787,29 @@ function PanelAtender({
     }
     setSubiendo(true);
     try {
-      const files: File[] = [actaFile];
-      if (evidencia) files.push(evidencia);
-      for (const f of Object.values(fotosFamilia)) if (f) files.push(f);
-      for (const f of files) {
+      const files: { file: File; etiqueta: string }[] = [
+        { file: actaFile, etiqueta: "Acta de entrega firmada" },
+      ];
+      if (evidencia) files.push({ file: evidencia, etiqueta: "Evidencia de entrega" });
+      for (const f of Object.values(fotosFamilia))
+        if (f) files.push({ file: f, etiqueta: "Evidencia de entrega" });
+      const subidas: Parameters<typeof addEvidenciasCampo>[1] = [];
+      for (const { file, etiqueta } of files) {
         try {
-          await subirArchivo(f);
+          const s = await subirArchivo(file);
+          subidas.push({
+            key: s.key,
+            nombreArchivo: s.nombre,
+            formato: s.formato,
+            tamano: s.tamano,
+            descripcion: etiqueta,
+          });
         } catch {
-          toast.error(`No se pudo subir ${f.name}, se continuará sin esa evidencia.`);
+          toast.error(`No se pudo subir ${file.name}, se continuará sin esa evidencia.`);
         }
       }
+      // Registrar las evidencias en la BD (antes quedaban huérfanas en S3).
+      if (subidas.length) await addEvidenciasCampo(data.idIncidencia, subidas);
     } finally {
       setSubiendo(false);
     }
@@ -4655,19 +4641,8 @@ function PanelSeguimiento({
       return r ? `${r.nombres} ${r.apellidos ?? ""}`.trim() : "Especialista GRD";
     })();
 
-  async function subirArchivo(file: File): Promise<void> {
-    const res = await presignEvidencia({
-      nombreArchivo: file.name,
-      contentType: file.type || "application/octet-stream",
-      incidenciaId: data.idIncidencia,
-    });
-    if (!res.ok) throw new Error(res.message);
-    const put = await fetch(res.uploadUrl, {
-      method: "PUT",
-      body: file,
-      headers: { "Content-Type": file.type || "application/octet-stream" },
-    });
-    if (!put.ok) throw new Error(`Error al subir (${put.status})`);
+  async function subirArchivo(file: File): Promise<ArchivoSubido> {
+    return subirArchivoS3(file, { tipo: "evidencia-incidencia", entidadId: data.idIncidencia });
   }
 
   function agregarFotos(files: FileList | null) {
@@ -4686,13 +4661,23 @@ function PanelSeguimiento({
     }
     setSubiendo(true);
     try {
+      const subidas: Parameters<typeof addEvidenciasCampo>[1] = [];
       for (const f of fotos) {
         try {
-          await subirArchivo(f);
+          const s = await subirArchivo(f);
+          subidas.push({
+            key: s.key,
+            nombreArchivo: s.nombre,
+            formato: s.formato,
+            tamano: s.tamano,
+            descripcion: "Evidencia de seguimiento",
+          });
         } catch {
           toast.error(`No se pudo subir ${f.name}, se continuará sin ese archivo.`);
         }
       }
+      // Registrar las evidencias en la BD (antes quedaban huérfanas en S3).
+      if (subidas.length) await addEvidenciasCampo(data.idIncidencia, subidas);
     } finally {
       setSubiendo(false);
     }

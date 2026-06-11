@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { Upload, Link as LinkIcon, X, FileText, CheckCircle2, Loader2 } from "lucide-react";
-import { toast } from "sonner";
+import { useState } from "react";
+import { Upload, Link as LinkIcon, X } from "lucide-react";
+import { FileUpload, type ArchivoSubido } from "@/app/ui/shared/file-upload";
 
 function detectarTipo(filename: string): string {
   const ext = filename.split(".").pop()?.toLowerCase() ?? "";
@@ -41,51 +41,27 @@ export function MaterialModal({ title = "Agregar Material", inicial, onConfirm, 
   const [enlaceMaterial, setEnlaceMaterial] = useState(inicial?.enlaceMaterial ?? "");
   const [tipoMaterial, setTipoMaterial] = useState(inicial?.tipoMaterial ?? "Enlace web");
   const [modo, setModo] = useState<"enlace" | "archivo">("enlace");
-  const [uploading, setUploading] = useState(false);
-  const [uploadedName, setUploadedName] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [archivos, setArchivos] = useState<ArchivoSubido[]>([]);
 
   const cambiarModo = (nuevoModo: "enlace" | "archivo") => {
-    if (nuevoModo === "enlace") {
-      setTipoMaterial("Enlace web");
-      setUploadedName(null);
-      setEnlaceMaterial("");
-      if (fileRef.current) fileRef.current.value = "";
-    } else {
-      setTipoMaterial("Documento (PDF, Word, Excel)");
-      setEnlaceMaterial("");
-    }
+    setTipoMaterial(nuevoModo === "enlace" ? "Enlace web" : "Documento (PDF, Word, Excel)");
+    setEnlaceMaterial("");
+    setArchivos([]);
     setModo(nuevoModo);
   };
 
-  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setTipoMaterial(detectarTipo(file.name));
-    if (!titulo) setTitulo(file.name.replace(/\.[^.]+$/, ""));
-    setUploading(true);
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch("/api/upload-material", { method: "POST", body: fd });
-      const text = await res.text();
-      let data: { ok: boolean; publicUrl?: string; message?: string };
-      try {
-        data = JSON.parse(text);
-      } catch {
-        console.error("[upload-material] respuesta no-JSON:", text.slice(0, 300));
-        toast.error(`Error del servidor (${res.status}). Revisa la consola.`);
-        return;
-      }
-      if (!data.ok) { toast.error(data.message ?? "No se pudo subir el archivo."); return; }
-      setEnlaceMaterial(data.publicUrl!);
-      setUploadedName(file.name);
-      toast.success("Archivo subido correctamente.");
-    } catch (err) {
-      console.error("[upload-material] fetch error:", err);
-      toast.error("No se pudo conectar con el servidor.");
-    } finally {
-      setUploading(false);
+  // Al subir un archivo se guarda un enlace ESTABLE (/api/archivos?key=...):
+  // nunca expira, a diferencia de las URLs prefirmadas.
+  const handleArchivos = (nuevos: ArchivoSubido[]) => {
+    setArchivos(nuevos);
+    const archivo = nuevos[0];
+    if (archivo) {
+      setEnlaceMaterial(`/api/archivos?key=${encodeURIComponent(archivo.key)}`);
+      setTipoMaterial(detectarTipo(archivo.nombre));
+      if (!titulo) setTitulo(archivo.nombre.replace(/\.[^.]+$/, ""));
+    } else {
+      setEnlaceMaterial("");
+      setTipoMaterial("Documento (PDF, Word, Excel)");
     }
   };
 
@@ -135,42 +111,13 @@ export function MaterialModal({ title = "Agregar Material", inicial, onConfirm, 
               <p className="text-[11px] text-gray-400 mt-1">Google Drive, YouTube, Dropbox u otro enlace externo.</p>
             </div>
           ) : (
-            <div>
-              <input ref={fileRef} type="file" className="hidden" onChange={handleFile}
-                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.mp4,.mov,.avi,.mkv,.webm,.png,.jpg,.jpeg" />
-              {uploadedName ? (
-                <div className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-                  <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-green-800 truncate">{uploadedName}</p>
-                    <p className="text-xs text-green-600">{tipoMaterial}</p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setUploadedName(null);
-                      setEnlaceMaterial("");
-                      setTipoMaterial("Documento (PDF, Word, Excel)");
-                      if (fileRef.current) fileRef.current.value = "";
-                    }}
-                    className="text-green-500 hover:text-green-700"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => fileRef.current?.click()}
-                  disabled={uploading}
-                  className="w-full flex flex-col items-center justify-center gap-2 p-6 border-2 border-dashed border-gray-300 rounded-lg hover:border-[var(--caritas-green)] hover:bg-[var(--caritas-green)]/5 transition-colors disabled:opacity-50"
-                >
-                  {uploading ? (
-                    <><Loader2 className="w-6 h-6 text-[var(--caritas-green)] animate-spin" /><span className="text-xs text-gray-500">Subiendo...</span></>
-                  ) : (
-                    <><FileText className="w-6 h-6 text-gray-400" /><span className="text-sm text-gray-600 font-medium">Haz clic para seleccionar un archivo</span><span className="text-xs text-gray-400">PDF, Word, Excel, PowerPoint, Video, Imagen</span></>
-                  )}
-                </button>
-              )}
-            </div>
+            <FileUpload
+              tipo="material-capacitacion"
+              multiple={false}
+              value={archivos}
+              onChange={handleArchivos}
+              label="Arrastra el material aquí o haz clic para seleccionar"
+            />
           )}
         </div>
 
@@ -179,7 +126,7 @@ export function MaterialModal({ title = "Agregar Material", inicial, onConfirm, 
             Cancelar
           </button>
           <button
-            disabled={loading || uploading || !puedeAgregar}
+            disabled={loading || !puedeAgregar}
             onClick={() => onConfirm({ titulo, tipoMaterial, enlaceMaterial })}
             className="px-4 py-2 text-sm bg-[var(--caritas-green)] text-white rounded-lg disabled:opacity-50 hover:opacity-90 transition-opacity"
           >
