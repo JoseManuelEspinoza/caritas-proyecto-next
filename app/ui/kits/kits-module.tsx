@@ -41,7 +41,17 @@ const TIPOS = ["INGRESO", "ENTREGA"] as const;
 const KIT_PAGE_SIZE = 5;
 const MOV_PAGE_SIZE = 5;
 
-export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parroquia[] }) {
+type ArticuloCatalogo = { codigo: string; valor: string; catalogo: string };
+
+export function KitsModule({
+  kits,
+  parroquias,
+  catalogoArticulos = [],
+}: {
+  kits: Kit[];
+  parroquias: Parroquia[];
+  catalogoArticulos?: ArticuloCatalogo[];
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [selected, setSelected] = useState<string | null>(kits[0]?.id ?? null);
@@ -547,13 +557,28 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
                   )
                 ) : (
                   <div className="border border-[var(--caritas-border)] rounded p-3 space-y-2">
+                    {/* Sugerencias desde el maestro de artículos (módulo Catálogos) */}
+                    <datalist id="kit-catalogo-articulos">
+                      {catalogoArticulos.map((c) => (
+                        <option key={`${c.catalogo}-${c.codigo}`} value={c.codigo}>
+                          {c.valor} — {c.catalogo}
+                        </option>
+                      ))}
+                    </datalist>
                     {artDraft.map((a, i) => (
                       <div key={i} className="flex items-center gap-1.5">
                         <input
                           value={a.codigo ?? ""}
-                          onChange={(e) =>
-                            setArtDraft((p) => p.map((x, j) => (j === i ? { ...x, codigo: e.target.value } : x)))
-                          }
+                          list="kit-catalogo-articulos"
+                          onChange={(e) => {
+                            const codigo = e.target.value;
+                            const cat = catalogoArticulos.find((c) => c.codigo === codigo);
+                            setArtDraft((p) =>
+                              p.map((x, j) =>
+                                j === i ? { ...x, codigo, ...(cat ? { descripcion: cat.valor } : {}) } : x
+                              )
+                            );
+                          }}
                           placeholder="Código"
                           className="w-24 px-2 py-1.5 text-xs border border-[var(--caritas-border)] rounded"
                         />
