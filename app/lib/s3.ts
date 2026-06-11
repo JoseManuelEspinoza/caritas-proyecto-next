@@ -69,18 +69,6 @@ export async function presignPut(
   return getSignedUrl(client(), cmd, { expiresIn });
 }
 
-/** Sube un buffer directamente a S3 desde el servidor. */
-export async function uploadBuffer(
-  key: string,
-  buffer: Buffer,
-  contentType: string
-): Promise<void> {
-  const { PutObjectCommand } = await import("@aws-sdk/client-s3");
-  await client().send(
-    new PutObjectCommand({ Bucket: BUCKET, Key: key, Body: buffer, ContentType: contentType })
-  );
-}
-
 /** URL prefirmada para DESCARGAR/VER (GET) un objeto. Expira en `expiresIn` seg. */
 export async function presignGet(key: string, expiresIn = 900): Promise<string> {
   // Si el bucket sirve público, devolvemos la URL pública directa.

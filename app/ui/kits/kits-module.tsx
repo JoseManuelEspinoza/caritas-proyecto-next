@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { Package, Plus, ArrowDownCircle, ArrowUpCircle, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { crearKit, registrarMovimientoKit, listarMovimientosKit } from "@/app/actions/kits";
-import { subirEvidenciaKit, listarEvidenciasKit, obtenerUrlDescarga } from "@/app/actions/evidencias";
+import { registrarEvidenciaKit, listarEvidenciasKit } from "@/app/actions/evidencias";
+import { subirArchivoS3 } from "@/app/ui/shared/file-upload";
 import { PaginationControls } from "@/app/ui/shared/pagination-controls";
 
 type Kit = {
@@ -224,13 +225,13 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
       }
 
       if (evidenciaFile) {
-        const fd = new FormData();
-        fd.append("file", evidenciaFile);
-        const evRes = await subirEvidenciaKit(current.id, fd);
-        if (evRes?.message && evRes.message !== "Sin archivo.") toast.error(`Evidencia: ${evRes.message}`);
-        else {
+        try {
+          const archivo = await subirArchivoS3(evidenciaFile, { tipo: "evidencia-kit", entidadId: current.id });
+          await registrarEvidenciaKit(current.id, archivo);
           const updated = await listarEvidenciasKit(current.id);
           setEvidencias(updated);
+        } catch (e) {
+          toast.error(`Evidencia: ${e instanceof Error ? e.message : "Error al subir"}`);
         }
         setEvidenciaFile(null);
       }
@@ -520,15 +521,14 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
                         <span className="text-gray-500">📎</span>
                         <span className="flex-1 truncate text-gray-700">{ev.nombreArchivo}</span>
                         <span className="text-gray-400">{new Date(ev.fechaCarga).toLocaleDateString("es-PE")}</span>
-                        <button
-                          onClick={async () => {
-                            const url = await obtenerUrlDescarga(ev.urlArchivo);
-                            window.open(url, "_blank");
-                          }}
+                        <a
+                          href={`/api/archivos?key=${encodeURIComponent(ev.urlArchivo)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           className="text-green-700 hover:underline font-medium"
                         >
                           Ver
-                        </button>
+                        </a>
                       </li>
                     ))}
                   </ul>

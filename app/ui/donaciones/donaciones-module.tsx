@@ -21,7 +21,8 @@ import {
 import { toast } from "sonner";
 import { aprobarCaso, observarCaso, rechazarCaso } from "@/app/actions/incidents";
 import { registrarEntregaAyuda, listarEntregasAyuda } from "@/app/actions/donaciones";
-import { subirEvidenciaEntrega, listarEvidenciasEntrega, obtenerUrlDescarga } from "@/app/actions/evidencias";
+import { registrarEvidenciaEntrega, listarEvidenciasEntrega } from "@/app/actions/evidencias";
+import { subirArchivoS3 } from "@/app/ui/shared/file-upload";
 import { PaginationControls } from "@/app/ui/shared/pagination-controls";
 
 export type Entrega = {
@@ -221,13 +222,13 @@ export function DonacionesModule({ casos, canEvaluate }: { casos: Caso[]; canEva
       if (res?.message) { toast.error(res.message); return; }
 
       if (actaFile) {
-        const fd = new FormData();
-        fd.append("file", actaFile);
-        const evRes = await subirEvidenciaEntrega(current.id, fd);
-        if (evRes?.message && evRes.message !== "Sin archivo.") toast.error(`Acta: ${evRes.message}`);
-        else {
+        try {
+          const archivo = await subirArchivoS3(actaFile, { tipo: "evidencia-entrega", entidadId: current.id });
+          await registrarEvidenciaEntrega(current.id, archivo);
           const updatedEv = await listarEvidenciasEntrega(current.id);
           setEvidenciasEntrega(updatedEv);
+        } catch (e) {
+          toast.error(`Acta: ${e instanceof Error ? e.message : "Error al subir"}`);
         }
         setActaFile(null);
       }
@@ -557,15 +558,14 @@ export function DonacionesModule({ casos, canEvaluate }: { casos: Caso[]; canEva
                             <span>📎</span>
                             <span className="flex-1 truncate text-gray-700">{ev.nombreArchivo}</span>
                             <span className="text-gray-400">{new Date(ev.fechaCarga).toLocaleDateString("es-PE")}</span>
-                            <button
-                              onClick={async () => {
-                                const url = await obtenerUrlDescarga(ev.urlArchivo);
-                                window.open(url, "_blank");
-                              }}
+                            <a
+                              href={`/api/archivos?key=${encodeURIComponent(ev.urlArchivo)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
                               className="text-green-700 hover:underline font-medium"
                             >
                               Ver
-                            </button>
+                            </a>
                           </div>
                         ))}
                       </div>
