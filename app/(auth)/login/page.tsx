@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { LogIn, ShieldCheck } from "lucide-react";
 import { loginConKeycloak } from "@/app/actions/auth";
 
@@ -16,8 +17,9 @@ export default async function LoginPage({
   // Keycloak's UPDATE_PASSWORD required action (contraseña temporal) completes
   // correctamente pero devuelve authentication_expired en el primer callback.
   // Re-iniciar el flujo OAuth recoge la sesión ya establecida sin pedir credenciales.
+  // signIn() modifica cookies → no se puede llamar en render; usar redirect en su lugar.
   if (error === "OAuthCallbackError") {
-    await loginConKeycloak();
+    redirect("/api/auth/signin/keycloak?callbackUrl=/dashboard");
   }
 
   return (

@@ -553,6 +553,7 @@ export function ReportesModule({
           onClick={exportarPDF}
           className="flex items-center gap-2 px-4 py-2 text-white text-sm font-medium rounded-lg hover:opacity-90 transition-all"
           style={{ background: "#009850" }}
+          suppressHydrationWarning
         >
           <FileDown className="w-4 h-4" /> Exportar PDF
         </button>
@@ -587,6 +588,7 @@ export function ReportesModule({
             onClick={aplicarFiltros}
             className="px-4 py-1.5 text-white text-sm font-medium rounded-lg hover:opacity-90 transition-all"
             style={{ background: "#009850" }}
+            suppressHydrationWarning
           >
             Aplicar
           </button>
