@@ -1,4 +1,7 @@
-export type FrontendRole = "admin" | "especialistaGRD" | "brigadista" | "comite" | "jefaOGP";
+import type { Rol } from "@/core/domain/value-objects/Rol";
+
+/** Rol de presentación. Es el mismo `Rol` del dominio (re-exportado para compatibilidad). */
+export type FrontendRole = Rol;
 
 const DB_TO_FRONTEND: Record<string, FrontendRole> = {
   ADMINISTRADOR: "admin",
