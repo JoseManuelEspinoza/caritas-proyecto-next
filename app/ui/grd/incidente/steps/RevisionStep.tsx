@@ -586,6 +586,14 @@ export function RevisionStep({
                 </option>
               ))}
             </datalist>
+            {/* Composición real de cada kit del sistema (gestionada en el módulo Kits) */}
+            {data.kitsEmergencia.map((k) => (
+              <datalist key={k.id} id={`kitcomp-${k.id}`}>
+                {k.articulos.map((a, i) => (
+                  <option key={i} value={a.descripcion} />
+                ))}
+              </datalist>
+            ))}
 
             {/* Header morado + resumen del evento */}
             <div className="rounded-xl bg-purple-600 text-white p-4">
@@ -843,9 +851,11 @@ export function RevisionStep({
                                 <div key={ai} className="flex items-center gap-1.5 mb-1">
                                   <input
                                     list={
-                                      KIT_TIPOS.includes(kit.tipoKit)
-                                        ? `cat-${KIT_TIPOS.indexOf(kit.tipoKit)}`
-                                        : "cat-all"
+                                      kit.idKit
+                                        ? undefined
+                                        : KIT_TIPOS.includes(kit.tipoKit)
+                                          ? `cat-${KIT_TIPOS.indexOf(kit.tipoKit)}`
+                                          : "cat-all"
                                     }
                                     className="w-20 px-2 py-1 text-xs border border-gray-200 rounded"
                                     placeholder="Código"
@@ -865,6 +875,7 @@ export function RevisionStep({
                                   <input
                                     className="flex-1 px-2 py-1 text-xs border border-gray-200 rounded"
                                     placeholder="Descripción del artículo"
+                                    list={kit.idKit ? `kitcomp-${kit.idKit}` : undefined}
                                     value={a.descripcion}
                                     onChange={(e) => updArt(g.id, ki, ai, { descripcion: e.target.value })}
                                   />
