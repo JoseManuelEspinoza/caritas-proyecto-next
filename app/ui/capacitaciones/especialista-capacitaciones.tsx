@@ -255,9 +255,6 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
         router.refresh();
       }
     });
-  function validarSesionTitulo(titulo: string): string | null {
-    const limpio = titulo.trim();
-
   const ORDEN_ESTADO: Record<string, number> = { PUBLICADO: 0, BORRADOR: 1, CERRADO: 2 };
 
   const cursosFiltrados = useMemo(() => {

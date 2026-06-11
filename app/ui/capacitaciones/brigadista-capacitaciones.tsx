@@ -174,7 +174,7 @@ function DetalleInscrito({ curso, onVolver }: { curso: CursoInscrito; onVolver: 
         </div>
 
         {/* Examen */}
-        {curso.cuestionario && (
+        {curso.cuestionarioFinal && (
           <div className="bg-white border border-[var(--caritas-border)] rounded-xl p-5">
             <h3 className="text-sm font-semibold text-[var(--caritas-text)] mb-3">Evaluación final</h3>
             <div className="flex items-center justify-between gap-4 p-4 bg-gray-50 rounded-xl">
@@ -183,30 +183,22 @@ function DetalleInscrito({ curso, onVolver }: { curso: CursoInscrito; onVolver: 
                   <ClipboardList className="w-5 h-5 text-[var(--caritas-green)]" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-[var(--caritas-text)]">{curso.cuestionario.titulo}</p>
+                  <p className="text-sm font-semibold text-[var(--caritas-text)]">{curso.cuestionarioFinal.titulo}</p>
                   <p className="text-xs text-gray-400 mt-0.5">
-                    {curso.cuestionario.totalPreguntas} preguntas · Nota mínima {curso.cuestionario.notaAprobatoria}/20
+                    {curso.cuestionarioFinal.totalPreguntas} preguntas · Nota mínima {curso.cuestionarioFinal.notaAprobatoria}/20
                   </p>
-                  <p className={`text-xs mt-0.5 font-medium ${curso.cuestionario.intentosUsados >= curso.cuestionario.maxIntentos ? "text-red-500" : "text-[var(--caritas-green)]"}`}>
-                    {curso.cuestionario.maxIntentos - curso.cuestionario.intentosUsados} intento(s) restante(s) de {curso.cuestionario.maxIntentos}
+                  <p className={`text-xs mt-0.5 font-medium ${curso.cuestionarioFinal.intentosUsados >= curso.cuestionarioFinal.maxIntentos ? "text-red-500" : "text-[var(--caritas-green)]"}`}>
+                    {curso.cuestionarioFinal.maxIntentos - curso.cuestionarioFinal.intentosUsados} intento(s) restante(s) de {curso.cuestionarioFinal.maxIntentos}
                   </p>
                 </div>
-                <button
-                  onClick={() => setShowExamenFinal(true)}
-                  disabled={curso.cuestionarioFinal.intentosUsados >= curso.cuestionarioFinal.maxIntentos}
-                  className="flex items-center gap-1.5 px-4 py-2 text-sm bg-[var(--caritas-green)] text-white rounded-lg hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shrink-0"
-                >
-                  <ClipboardList className="w-3.5 h-3.5" />
-                  {curso.cuestionarioFinal.intentosUsados > 0 ? "Reintentar" : "Rendir examen"}
-                </button>
               </div>
               <button
                 onClick={() => setShowExamen(true)}
-                disabled={curso.cuestionario.intentosUsados >= curso.cuestionario.maxIntentos}
+                disabled={curso.cuestionarioFinal.intentosUsados >= curso.cuestionarioFinal.maxIntentos}
                 className="flex items-center gap-2 px-4 py-2.5 text-sm bg-[var(--caritas-green)] text-white rounded-xl hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shrink-0 font-medium"
               >
                 <PlayCircle className="w-4 h-4" />
-                {curso.cuestionario.intentosUsados > 0 ? "Reintentar" : "Rendir examen"}
+                {curso.cuestionarioFinal.intentosUsados > 0 ? "Reintentar" : "Rendir examen"}
               </button>
             </div>
           </div>
@@ -257,10 +249,10 @@ function DetalleInscrito({ curso, onVolver }: { curso: CursoInscrito; onVolver: 
         </div>
       </div>
 
-      {showExamen && curso.cuestionario && (
+      {showExamen && curso.cuestionarioFinal && (
         <RendirExamenModal
           idInscripcion={curso.idInscripcion}
-          cuestionario={curso.cuestionario}
+          cuestionario={curso.cuestionarioFinal}
           onClose={() => setShowExamen(false)}
         />
       )}

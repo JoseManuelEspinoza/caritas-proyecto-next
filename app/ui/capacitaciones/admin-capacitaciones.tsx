@@ -338,6 +338,7 @@ export function AdminCapacitaciones({
   const [showSesion, setShowSesion] = useState(false);
   const [showCuestionario, setShowCuestionario] = useState(false);
   const [cuestionarioEditar, setCuestionarioEditar] = useState<CuestionarioDetalle | null>(null);
+  const [tipoCuestionarioActivo, setTipoCuestionarioActivo] = useState<"INICIAL" | "FINAL">("FINAL");
   const [showConfirmCerrar, setShowConfirmCerrar] = useState(false);
 
   const [crearForm, setCrearForm] = useState({
@@ -721,7 +722,7 @@ export function AdminCapacitaciones({
               <div className="mb-5">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-semibold text-[var(--caritas-text)]">Cuestionario Final</h3>
-                  {!current.cuestionario && (
+                  {!current.cuestionarioFinal && (
                     <button
                       onClick={() => setShowCuestionario(true)}
                       className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-[var(--caritas-border)] rounded-lg hover:bg-gray-50 transition-colors"
@@ -730,7 +731,7 @@ export function AdminCapacitaciones({
                     </button>
                   )}
                 </div>
-                {current.cuestionario ? (
+                {current.cuestionarioFinal ? (
                   <div className="flex items-center justify-between gap-3 border border-[var(--caritas-border)] rounded-xl p-4 bg-gray-50">
                     <div className="flex items-center gap-3">
                       <div className="w-9 h-9 rounded-lg bg-[var(--caritas-green)]/10 flex items-center justify-center shrink-0">
@@ -738,10 +739,10 @@ export function AdminCapacitaciones({
                       </div>
                       <div>
                         <p className="text-sm font-medium text-[var(--caritas-text)]">
-                          {current.cuestionario.titulo}
+                          {current.cuestionarioFinal.titulo}
                         </p>
                         <p className="text-xs text-gray-400 mt-0.5">
-                          {current.cuestionario.totalPreguntas} preguntas · Nota mín: {current.cuestionario.notaAprobatoria}/20
+                          {current.cuestionarioFinal.totalPreguntas} preguntas · Nota mín: {current.cuestionarioFinal.notaAprobatoria}/20
                         </p>
                       </div>
                     </div>
