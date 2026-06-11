@@ -182,10 +182,11 @@ function ParroquiaModal({
             <div>
               <label className={labelCls}>Teléfono</label>
               <input
-                type="text"
+                type="tel"
                 value={form.telefono}
-                onChange={(e) => set("telefono", e.target.value.replace(/[^\d+\-() ]/g, ""))}
-                placeholder="Ej: 01-234-5678"
+                onChange={(e) => set("telefono", e.target.value.replace(/\D/g, "").slice(0, 9))}
+                placeholder="Ej: 987654321"
+                maxLength={9}
                 className={inputCls}
               />
             </div>

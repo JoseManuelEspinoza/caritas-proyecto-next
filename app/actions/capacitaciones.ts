@@ -118,14 +118,26 @@ export type CursoDetalle = {
   idResponsable: string;
   totalInscritos: number;
   sesiones: Sesion[];
-  cuestionarioInicial: {
+
+  // Compatibilidad con la UI actual, que usa curso.cuestionario
+  cuestionario?: {
     id: string;
     titulo: string;
     totalPreguntas: number;
     notaAprobatoria: number;
     estado: string;
   } | null;
-  cuestionarioFinal: {
+
+  // Compatibilidad con la UI que ya estaba preparada para inicial/final
+  cuestionarioInicial?: {
+    id: string;
+    titulo: string;
+    totalPreguntas: number;
+    notaAprobatoria: number;
+    estado: string;
+  } | null;
+
+  cuestionarioFinal?: {
     id: string;
     titulo: string;
     totalPreguntas: number;
@@ -152,7 +164,9 @@ export type CursoInscrito = {
   certificado: boolean;
   constanciaUrl: string | null;
   sesiones: Sesion[];
-  cuestionarioInicial: {
+
+  // Compatibilidad con la UI actual del brigadista
+  cuestionario?: {
     id: string;
     titulo: string;
     notaAprobatoria: number;
@@ -160,7 +174,18 @@ export type CursoInscrito = {
     totalPreguntas: number;
     intentosUsados: number;
   } | null;
-  cuestionarioFinal: {
+
+  // Compatibilidad futura/inicial-final
+  cuestionarioInicial?: {
+    id: string;
+    titulo: string;
+    notaAprobatoria: number;
+    maxIntentos: number;
+    totalPreguntas: number;
+    intentosUsados: number;
+  } | null;
+
+  cuestionarioFinal?: {
     id: string;
     titulo: string;
     notaAprobatoria: number;
@@ -1308,21 +1333,6 @@ export async function editarCuestionario(
     return fail(err, "No se pudo editar el cuestionario.");
   }
   revalidatePath(REVALIDATE);
-}
-
-export async function presignMaterial(nombreArchivo: string, contentType: string) {
-  await verifySession();
-  const { isS3Configured, presignPut, presignGet, safeFilename } = await import("@/app/lib/s3");
-  if (!isS3Configured()) return { ok: false as const, message: "S3 no configurado." };
-  const { randomUUID } = await import("crypto");
-  const key = `capacitaciones/materiales/${randomUUID()}-${safeFilename(nombreArchivo)}`;
-  try {
-    const uploadUrl = await presignPut(key, contentType || "application/octet-stream");
-    const publicUrl = await presignGet(key, 60 * 60 * 24 * 365);
-    return { ok: true as const, uploadUrl, publicUrl };
-  } catch {
-    return { ok: false as const, message: "No se pudo preparar la subida." };
-  }
 }
 
 export async function obtenerDatosConstancia(idInscripcion: string) {
