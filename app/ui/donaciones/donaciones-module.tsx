@@ -14,10 +14,26 @@ import {
   Loader2,
   Users,
   BarChart3,
+  Package,
+  Plus,
+  ClipboardList,
 } from "lucide-react";
 import { toast } from "sonner";
 import { aprobarCaso, observarCaso, rechazarCaso } from "@/app/actions/incidents";
+import { registrarEntregaAyuda, listarEntregasAyuda } from "@/app/actions/donaciones";
 import { PaginationControls } from "@/app/ui/shared/pagination-controls";
+
+export type Entrega = {
+  idEntrega: string;
+  codigoEntrega: string | null;
+  fechaEntrega: string | null;
+  lugarEntrega: string | null;
+  tipoAyuda: string | null;
+  cantidadEntregada: number | null;
+  descripcionAyuda: string | null;
+  observaciones: string | null;
+  createdAt: string;
+};
 
 export type ReporteArticulo = { codigo: string; descripcion: string; cantidad: number };
 export type ReporteKit = { tipoKit: string; articulos: ReporteArticulo[] };
@@ -57,6 +73,7 @@ export type Caso = {
   reportadoPor: string | null;
   familias: number;
   personas: number;
+  idSolicitud: string | null;
   solicitudTipo: string | null;
   solicitudNecesidad: string | null;
   reporte: ReporteComite | null;
@@ -110,6 +127,17 @@ export function DonacionesModule({ casos, canEvaluate }: { casos: Caso[]; canEva
   const [queuePage, setQueuePage] = useState(1);
   const [historyPage, setHistoryPage] = useState(1);
   const [descargandoPdf, setDescargandoPdf] = useState(false);
+  const [entregas, setEntregas] = useState<Entrega[]>([]);
+  const [showEntregaForm, setShowEntregaForm] = useState(false);
+  const [entregaForm, setEntregaForm] = useState({
+    fechaEntrega: new Date().toISOString().slice(0, 10),
+    lugarEntrega: "",
+    tipoAyuda: "",
+    cantidadEntregada: "",
+    descripcionAyuda: "",
+    actorParroquial: "",
+    observaciones: "",
+  });
 
   const queue = casos.filter((c) => PENDIENTES.includes(c.estado));
   const closed = casos.filter((c) => !PENDIENTES.includes(c.estado));
@@ -137,6 +165,11 @@ export function DonacionesModule({ casos, canEvaluate }: { casos: Caso[]; canEva
     if (historyPage > totalHistoryPages) setHistoryPage(totalHistoryPages);
   }, [historyPage, totalHistoryPages]);
 
+  useEffect(() => {
+    if (!selectedId) { setEntregas([]); return; }
+    listarEntregasAyuda(selectedId).then(setEntregas).catch(() => setEntregas([]));
+  }, [selectedId]);
+
   const decidir = (accion: "APROBAR" | "OBSERVAR" | "RECHAZAR") => {
     if (!current) return;
     if (!notes.trim()) {
@@ -158,6 +191,35 @@ export function DonacionesModule({ casos, canEvaluate }: { casos: Caso[]; canEva
       toast.success("Decisión registrada.");
       setNotes("");
       setSelectedId(null);
+      router.refresh();
+    });
+  };
+
+  const submitEntrega = () => {
+    if (!current) return;
+    if (!entregaForm.fechaEntrega) { toast.error("Indica la fecha de entrega."); return; }
+    if (!entregaForm.lugarEntrega.trim()) { toast.error("Indica el lugar de entrega."); return; }
+    if (!entregaForm.tipoAyuda.trim()) { toast.error("Indica el tipo de ayuda."); return; }
+    if (!entregaForm.descripcionAyuda.trim()) { toast.error("Describe la ayuda entregada."); return; }
+
+    startTransition(async () => {
+      const res = await registrarEntregaAyuda({
+        idIncidencia: current.id,
+        idSolicitud: current.idSolicitud ?? undefined,
+        fechaEntrega: entregaForm.fechaEntrega,
+        lugarEntrega: entregaForm.lugarEntrega.trim(),
+        tipoAyuda: entregaForm.tipoAyuda.trim(),
+        cantidadEntregada: entregaForm.cantidadEntregada ? Number(entregaForm.cantidadEntregada) : undefined,
+        descripcionAyuda: entregaForm.descripcionAyuda.trim(),
+        actorParroquial: entregaForm.actorParroquial.trim(),
+        observaciones: entregaForm.observaciones.trim() || undefined,
+      });
+      if (res?.message) { toast.error(res.message); return; }
+      toast.success("Entrega registrada correctamente.");
+      setShowEntregaForm(false);
+      setEntregaForm({ fechaEntrega: new Date().toISOString().slice(0, 10), lugarEntrega: "", tipoAyuda: "", cantidadEntregada: "", descripcionAyuda: "", actorParroquial: "", observaciones: "" });
+      const updated = await listarEntregasAyuda(current.id);
+      setEntregas(updated);
       router.refresh();
     });
   };
@@ -380,6 +442,84 @@ export function DonacionesModule({ casos, canEvaluate }: { casos: Caso[]; canEva
                     <p className="text-xs text-gray-500">
                       El Especialista GRD aún no ha enviado el informe de evaluación.
                     </p>
+                  </div>
+                )}
+
+                {/* ── Sección Entrega de Ayuda Humanitaria (RF36 / RF81) ── */}
+                {["APROBADO", "ATENDIDO", "SEGUIMIENTO ABIERTO", "CERRADO"].includes(current.estado) && (
+                  <div className="border border-green-200 rounded-xl overflow-hidden">
+                    <div className="bg-green-700 px-4 py-3 flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Package className="w-4 h-4 text-white" />
+                        <p className="text-white font-bold text-sm">Entrega de Ayuda Humanitaria</p>
+                      </div>
+                      <button
+                        onClick={() => setShowEntregaForm((s) => !s)}
+                        className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-semibold px-3 py-1.5 rounded-lg"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Nueva entrega
+                      </button>
+                    </div>
+
+                    {showEntregaForm && (
+                      <div className="p-4 bg-green-50 border-b border-green-200 grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <label className="block">
+                          <span className="text-xs text-gray-600">Fecha de entrega</span>
+                          <input type="date" value={entregaForm.fechaEntrega} onChange={(e) => setEntregaForm({ ...entregaForm, fechaEntrega: e.target.value })} className="mt-1 w-full px-3 py-2 border border-green-200 rounded text-sm bg-white" />
+                        </label>
+                        <label className="block">
+                          <span className="text-xs text-gray-600">Lugar de entrega</span>
+                          <input value={entregaForm.lugarEntrega} onChange={(e) => setEntregaForm({ ...entregaForm, lugarEntrega: e.target.value })} className="mt-1 w-full px-3 py-2 border border-green-200 rounded text-sm bg-white" />
+                        </label>
+                        <label className="block">
+                          <span className="text-xs text-gray-600">Tipo de ayuda</span>
+                          <input value={entregaForm.tipoAyuda} onChange={(e) => setEntregaForm({ ...entregaForm, tipoAyuda: e.target.value })} placeholder="Ej: Kit alimentario, Kit de abrigo" className="mt-1 w-full px-3 py-2 border border-green-200 rounded text-sm bg-white" />
+                        </label>
+                        <label className="block">
+                          <span className="text-xs text-gray-600">Cantidad entregada</span>
+                          <input type="number" min="0" value={entregaForm.cantidadEntregada} onChange={(e) => setEntregaForm({ ...entregaForm, cantidadEntregada: e.target.value })} placeholder="Ej: 10" className="mt-1 w-full px-3 py-2 border border-green-200 rounded text-sm bg-white" />
+                        </label>
+                        <label className="block">
+                          <span className="text-xs text-gray-600">Actor parroquial presente</span>
+                          <input value={entregaForm.actorParroquial} onChange={(e) => setEntregaForm({ ...entregaForm, actorParroquial: e.target.value })} className="mt-1 w-full px-3 py-2 border border-green-200 rounded text-sm bg-white" />
+                        </label>
+                        <label className="md:col-span-2 block">
+                          <span className="text-xs text-gray-600">Composición / descripción de la ayuda</span>
+                          <textarea value={entregaForm.descripcionAyuda} onChange={(e) => setEntregaForm({ ...entregaForm, descripcionAyuda: e.target.value })} rows={2} className="mt-1 w-full px-3 py-2 border border-green-200 rounded text-sm bg-white" />
+                        </label>
+                        <label className="md:col-span-2 block">
+                          <span className="text-xs text-gray-600">Observaciones</span>
+                          <textarea value={entregaForm.observaciones} onChange={(e) => setEntregaForm({ ...entregaForm, observaciones: e.target.value })} rows={2} className="mt-1 w-full px-3 py-2 border border-green-200 rounded text-sm bg-white" />
+                        </label>
+                        <div className="md:col-span-2 flex justify-end gap-2">
+                          <button onClick={() => setShowEntregaForm(false)} className="px-4 py-2 border border-gray-300 rounded text-sm">Cancelar</button>
+                          <button onClick={submitEntrega} disabled={pending} className="px-4 py-2 bg-green-700 text-white rounded text-sm disabled:opacity-50">Registrar entrega</button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Historial de entregas */}
+                    <div className="p-4 bg-white space-y-2">
+                      {entregas.length === 0 ? (
+                        <div className="text-center py-6">
+                          <ClipboardList className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                          <p className="text-xs text-gray-500">Sin entregas registradas para este caso.</p>
+                        </div>
+                      ) : (
+                        entregas.map((e) => (
+                          <div key={e.idEntrega} className="border border-gray-100 rounded-lg p-3 bg-gray-50">
+                            <div className="flex items-center justify-between gap-2 mb-1">
+                              <span className="text-xs font-mono text-green-700 font-bold">{e.codigoEntrega}</span>
+                              <span className="text-[10px] text-gray-500">{e.fechaEntrega ? new Date(e.fechaEntrega).toLocaleDateString("es-PE") : "—"}</span>
+                            </div>
+                            <p className="text-xs font-semibold text-gray-800">{e.tipoAyuda}{e.cantidadEntregada != null ? <span className="ml-2 text-green-700 font-normal">× {e.cantidadEntregada}</span> : null}</p>
+                            {e.lugarEntrega && <p className="text-[11px] text-gray-600">📍 {e.lugarEntrega}</p>}
+                            {e.descripcionAyuda && <p className="text-[11px] text-gray-700 mt-1">{e.descripcionAyuda}</p>}
+                            {e.observaciones && <p className="text-[11px] text-gray-500 italic mt-1">{e.observaciones}</p>}
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </div>
                 )}
 

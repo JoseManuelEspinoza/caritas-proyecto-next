@@ -83,6 +83,58 @@ export class PrismaSugerenciaBrigadistasRepository implements ISugerenciaBrigadi
     });
   }
 
+  async getCargaActual(idBrigadistaParroquial: string): Promise<number> {
+    return prisma.asignacionBrigadistaIncidencia.count({
+      where: { idBrigadistaParroquial, estadoAsignacion: "ASIGNADA" },
+    });
+  }
+
+  async getTiempoRespuestaPromedioHoras(
+    idBrigadistaParroquial: string
+  ): Promise<number | null> {
+    // Asignaciones del brigadista + el informe CAMPO de su incidencia.
+    const asigs = await prisma.asignacionBrigadistaIncidencia.findMany({
+      where: { idBrigadistaParroquial },
+      select: {
+        fechaAsignacion: true,
+        incidencia: {
+          select: {
+            informes: {
+              where: { tipoInforme: "CAMPO" },
+              orderBy: { fechaElaboracion: "asc" },
+              take: 1,
+              select: { fechaElaboracion: true },
+            },
+          },
+        },
+      },
+    });
+
+    const horas: number[] = [];
+    for (const a of asigs) {
+      const fin = a.incidencia?.informes[0]?.fechaElaboracion;
+      if (!fin) continue;
+      const ms = fin.getTime() - a.fechaAsignacion.getTime();
+      if (ms > 0) horas.push(ms / 3_600_000);
+    }
+    if (horas.length === 0) return null;
+    return parseFloat((horas.reduce((x, y) => x + y, 0) / horas.length).toFixed(2));
+  }
+
+  async getParroquiasConCoords(): Promise<
+    { idParroquia: string; latitud: number | null; longitud: number | null }[]
+  > {
+    const filas = await prisma.parroquia.findMany({
+      where: { estado: "ACTIVO" },
+      select: { idParroquia: true, latitud: true, longitud: true },
+    });
+    return filas.map((p) => ({
+      idParroquia: p.idParroquia,
+      latitud: toNum(p.latitud),
+      longitud: toNum(p.longitud),
+    }));
+  }
+
   async registrarIntentoFallido(idParroquia: string, tipoIncidente: string): Promise<void> {
     // Trazabilidad de la Fase 3 (sin candidatos). Hoy solo se loguea; a futuro se
     // puede persistir en HistorialAuditoriaGRD para auditoría formal.
