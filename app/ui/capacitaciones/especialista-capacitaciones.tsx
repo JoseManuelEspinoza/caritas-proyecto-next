@@ -32,6 +32,7 @@ import { toast } from "sonner";
 import { cambiarEstadoCurso, crearSesion, agregarMaterial, editarSesion, eliminarSesion, editarMaterial, eliminarMaterial, obtenerCuestionarioPorId, listarParticipantesCurso, actualizarConstancia } from "@/app/actions/capacitaciones";
 import type { CuestionarioDetalle, ParticipanteCurso } from "@/app/actions/capacitaciones";
 import { CuestionarioModal } from "@/app/ui/capacitaciones/cuestionario-modal";
+import { TIPOS_MATERIAL } from "@/app/lib/capacitaciones-tipos";
 import { MaterialModal } from "@/app/ui/capacitaciones/MaterialModal";
 import type { CursoDetalle } from "@/app/actions/capacitaciones";
 
@@ -53,13 +54,6 @@ function getMaterialMeta(tipo: string | null): { rowIcon: React.ReactNode; btnIc
   };
 }
 
-const TIPOS_MATERIAL = [
-  "Documento (PDF, Word, Excel)",
-  "Presentación",
-  "Video",
-  "Enlace web",
-  "Otro",
-];
 
 const ESTADO_CONFIG: Record<string, { label: string; className: string; icon: React.ReactNode }> = {
   PUBLICADO: {

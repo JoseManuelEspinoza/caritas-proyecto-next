@@ -72,15 +72,11 @@ export function RevisionStep({
   // ── Informe enriquecido del Especialista ──
   type ArtLocal = { codigo: string; descripcion: string; cantidad: number };
   type KitLocal = { tipoKit: string; idKit?: string; articulos: ArtLocal[] };
-  // Solo para los datalists de códigos del catálogo (los nombres de catálogo
-  // existentes). Los kits asignables vienen del módulo de Kits de Emergencia.
-  const KIT_TIPOS = [
-    "Kit de Víveres",
-    "Kit de Higiene",
-    "Kit de Dormitorio",
-    "Kit de Complementos",
-    "Otros",
-  ];
+  // Nombres de catálogo presentes en los artículos cargados (módulo Catálogos):
+  // solo se usan para los datalists de códigos de los kits "Otros"/legacy.
+  const KIT_TIPOS = Array.from(new Set(data.catalogoArticulos.map((a) => a.catalogo))).filter(
+    Boolean
+  );
   const [report, setReport] = useState({
     motivo: typeof sc?.motivo === "string" ? sc.motivo : "",
     dirigidoA: typeof sc?.dirigidoA === "string" ? sc.dirigidoA : "Comité de donaciones",
