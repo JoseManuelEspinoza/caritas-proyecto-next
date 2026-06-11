@@ -209,6 +209,9 @@ model UsuarioGRD {
   incidenciasResponsable Incidencia[]
   avisosRegistrados      AvisoEmergencia[]
   asignacionesRealizadas AsignacionBrigadistaIncidencia[]
+  actividadesResponsable         ActividadPreventiva[]    @relation("UsuarioResponsableActividad")
+  observacionesSimulacro         ObservacionSimulacro[]   @relation("ObservadorSimulacro")
+  asignacionesSimulacroRealizadas SimulacroBrigadista[]   @relation("AsignadorSimulacro")
 
   @@map("usuario_grd")
 }
@@ -757,11 +760,20 @@ model ActividadPreventiva {
   estadoActividad             String    @default("PROGRAMADA")
   fechaRegistro               DateTime  @default(now())
 
-  planTrabajo           PlanTrabajoGRD?       @relation(fields: [idPlanTrabajoGRD], references: [idPlanTrabajoGRD])
-  parroquia             Parroquia             @relation(fields: [idParroquia], references: [idParroquia])
-  brigadistaResponsable BrigadistaParroquial? @relation(fields: [idBrigadistaResponsable], references: [idBrigadistaParroquial])
-  usuarioRegistro       UsuarioGRD            @relation("UsuarioRegistroActividad", fields: [idUsuarioRegistroGRD], references: [idUsuarioGRD])
-  movimientosKit        MovimientoKit[]
+  // Asignación de equipo (nuevo flujo multi-brigadista)
+  idUsuarioResponsableGRD  String?
+  indicacionesEquipo       String?  @db.Text
+  reporteBrigadista        String?  @db.Text
+  duracionSimulacro        String?
+
+  planTrabajo              PlanTrabajoGRD?        @relation(fields: [idPlanTrabajoGRD], references: [idPlanTrabajoGRD])
+  parroquia                Parroquia              @relation(fields: [idParroquia], references: [idParroquia])
+  brigadistaResponsable    BrigadistaParroquial?  @relation("BrigadistaResponsableActividad", fields: [idBrigadistaResponsable], references: [idBrigadistaParroquial])
+  usuarioRegistro          UsuarioGRD             @relation("UsuarioRegistroActividad", fields: [idUsuarioRegistroGRD], references: [idUsuarioGRD])
+  usuarioResponsable       UsuarioGRD?            @relation("UsuarioResponsableActividad", fields: [idUsuarioResponsableGRD], references: [idUsuarioGRD])
+  movimientosKit           MovimientoKit[]
+  simulacroBrigadistas     SimulacroBrigadista[]
+  observacionesSimulacro   ObservacionSimulacro[]
 
   uuidMovil           String?   @unique
   syncEstado          String?
@@ -771,6 +783,37 @@ model ActividadPreventiva {
   deletedAt           DateTime?
 
   @@map("actividad_preventiva")
+}
+
+model SimulacroBrigadista {
+  idSimulacroBrigadista  String   @id @default(uuid())
+  idActividadPreventiva  String
+  idBrigadistaParroquial String
+  idUsuarioAsignadorGRD  String?
+  esResponsable          Boolean  @default(false)
+  estadoAsignacion       String   @default("ASIGNADA")
+  fechaAsignacion        DateTime @default(now())
+
+  actividad  ActividadPreventiva  @relation(fields: [idActividadPreventiva], references: [idActividadPreventiva])
+  brigadista BrigadistaParroquial @relation(fields: [idBrigadistaParroquial], references: [idBrigadistaParroquial])
+  asignador  UsuarioGRD?          @relation("AsignadorSimulacro", fields: [idUsuarioAsignadorGRD], references: [idUsuarioGRD])
+
+  @@map("simulacro_brigadista")
+}
+
+model ObservacionSimulacro {
+  idObservacion         String   @id @default(uuid())
+  idActividadPreventiva String
+  idUsuarioGRD          String
+  texto                 String   @db.Text
+  tipo                  String
+  fechaCreacion         DateTime @default(now())
+  fechaEdicion          DateTime?
+
+  actividad ActividadPreventiva @relation(fields: [idActividadPreventiva], references: [idActividadPreventiva])
+  usuario   UsuarioGRD          @relation("ObservadorSimulacro", fields: [idUsuarioGRD], references: [idUsuarioGRD])
+
+  @@map("observacion_simulacro")
 }
 
 model BrigadistaParroquial {
@@ -789,8 +832,9 @@ model BrigadistaParroquial {
 
   parroquia              Parroquia                        @relation(fields: [idParroquia], references: [idParroquia])
   certificacionCurso     CertificacionCurso?              @relation(fields: [idCertificacionCurso], references: [idCertificacionCurso])
-  actividadesResponsable ActividadPreventiva[]
+  actividadesResponsable ActividadPreventiva[]             @relation("BrigadistaResponsableActividad")
   asignacionesIncidencia AsignacionBrigadistaIncidencia[]
+  asignacionesSimulacro  SimulacroBrigadista[]
 
   @@index([idParroquia, disponibilidad], map: "idx_brigadista_parroquia_disp")
   @@index([estado, disponibilidad], map: "idx_brigadista_estado_disp")
