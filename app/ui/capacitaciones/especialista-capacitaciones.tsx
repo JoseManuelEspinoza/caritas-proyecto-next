@@ -26,7 +26,20 @@ import {
   MoreVertical,
 } from "lucide-react";
 import { toast } from "sonner";
-import { cambiarEstadoCurso, crearSesion, agregarMaterial, editarSesion, eliminarSesion, editarMaterial, eliminarMaterial, moverMaterial, obtenerCuestionarioCurso, listarParticipantesCurso, actualizarConstancia } from "@/app/actions/capacitaciones";
+import {
+  cambiarEstadoCurso,
+  crearSesion,
+  agregarMaterial,
+  editarSesion,
+  eliminarSesion,
+  editarMaterial,
+  eliminarMaterial,
+  moverMaterial,
+  obtenerCuestionarioCurso,
+  obtenerCuestionarioPorId,
+  listarParticipantesCurso,
+  actualizarConstancia,
+} from "@/app/actions/capacitaciones";
 import type { CuestionarioDetalle, ParticipanteCurso } from "@/app/actions/capacitaciones";
 import { CuestionarioModal } from "@/app/ui/capacitaciones/cuestionario-modal";
 import { MaterialModal } from "@/app/ui/capacitaciones/MaterialModal";

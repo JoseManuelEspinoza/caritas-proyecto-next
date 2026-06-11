@@ -174,7 +174,7 @@ export function ReportesModule({ filtros, totales, porEstado, porTipo, dataExpor
                   cy="50%"
                   outerRadius={90}
                   innerRadius={50}
-                  label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                  label={({ name, percent }) => `${name} (${((percent ?? 0) * 100).toFixed(0)}%)`}
                 >
                   {porEstado.map((_, i) => (
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />

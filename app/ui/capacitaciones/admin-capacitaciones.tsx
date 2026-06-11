@@ -337,6 +337,7 @@ export function AdminCapacitaciones({
   const [showEditar, setShowEditar] = useState(false);
   const [showSesion, setShowSesion] = useState(false);
   const [showCuestionario, setShowCuestionario] = useState(false);
+  const [tipoCuestionarioActivo, setTipoCuestionarioActivo] = useState<"INICIAL" | "FINAL">("FINAL");
   const [cuestionarioEditar, setCuestionarioEditar] = useState<CuestionarioDetalle | null>(null);
   const [showConfirmCerrar, setShowConfirmCerrar] = useState(false);
 
@@ -723,7 +724,10 @@ export function AdminCapacitaciones({
                   <h3 className="text-sm font-semibold text-[var(--caritas-text)]">Cuestionario Final</h3>
                   {!current.cuestionario && (
                     <button
-                      onClick={() => setShowCuestionario(true)}
+                      onClick={() => {
+                        setTipoCuestionarioActivo("FINAL");
+                        setShowCuestionario(true);
+                      }}
                       className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-[var(--caritas-border)] rounded-lg hover:bg-gray-50 transition-colors"
                     >
                       <Pencil className="w-3 h-3" /> Editar
@@ -749,7 +753,11 @@ export function AdminCapacitaciones({
                       <button
                         onClick={async () => {
                           const detalle = await obtenerCuestionarioCurso(current.id);
-                          if (detalle) { setCuestionarioEditar(detalle); setShowCuestionario(true); }
+                          if (detalle) {
+                            setTipoCuestionarioActivo("FINAL");
+                            setCuestionarioEditar(detalle);
+                            setShowCuestionario(true);
+                          }
                         }}
                         className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-[var(--caritas-border)] rounded-lg hover:bg-white transition-colors"
                       >
