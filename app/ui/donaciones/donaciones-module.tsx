@@ -482,15 +482,15 @@ export function DonacionesModule({ casos, canEvaluate }: { casos: Caso[]; canEva
                     {showEntregaForm && (
                       <div className="p-4 bg-green-50 border-b border-green-200 grid grid-cols-1 md:grid-cols-2 gap-3">
                         <label className="block">
-                          <span className="text-xs text-gray-600">Fecha de entrega</span>
+                          <span className="text-xs text-gray-600">Fecha de entrega <span className="text-red-500">*</span></span>
                           <input type="date" value={entregaForm.fechaEntrega} onChange={(e) => setEntregaForm({ ...entregaForm, fechaEntrega: e.target.value })} className="mt-1 w-full px-3 py-2 border border-green-200 rounded text-sm bg-white" />
                         </label>
                         <label className="block">
-                          <span className="text-xs text-gray-600">Lugar de entrega</span>
+                          <span className="text-xs text-gray-600">Lugar de entrega <span className="text-red-500">*</span></span>
                           <input value={entregaForm.lugarEntrega} onChange={(e) => setEntregaForm({ ...entregaForm, lugarEntrega: e.target.value })} className="mt-1 w-full px-3 py-2 border border-green-200 rounded text-sm bg-white" />
                         </label>
                         <label className="block">
-                          <span className="text-xs text-gray-600">Tipo de ayuda</span>
+                          <span className="text-xs text-gray-600">Tipo de ayuda <span className="text-red-500">*</span></span>
                           <input value={entregaForm.tipoAyuda} onChange={(e) => setEntregaForm({ ...entregaForm, tipoAyuda: e.target.value })} placeholder="Ej: Kit alimentario, Kit de abrigo" className="mt-1 w-full px-3 py-2 border border-green-200 rounded text-sm bg-white" />
                         </label>
                         <label className="block">
@@ -502,7 +502,7 @@ export function DonacionesModule({ casos, canEvaluate }: { casos: Caso[]; canEva
                           <input value={entregaForm.actorParroquial} onChange={(e) => setEntregaForm({ ...entregaForm, actorParroquial: e.target.value })} className="mt-1 w-full px-3 py-2 border border-green-200 rounded text-sm bg-white" />
                         </label>
                         <label className="md:col-span-2 block">
-                          <span className="text-xs text-gray-600">Composición / descripción de la ayuda</span>
+                          <span className="text-xs text-gray-600">Composición / descripción de la ayuda <span className="text-red-500">*</span></span>
                           <textarea value={entregaForm.descripcionAyuda} onChange={(e) => setEntregaForm({ ...entregaForm, descripcionAyuda: e.target.value })} rows={2} className="mt-1 w-full px-3 py-2 border border-green-200 rounded text-sm bg-white" />
                         </label>
                         <label className="md:col-span-2 block">

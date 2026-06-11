@@ -90,7 +90,7 @@ type Persona = {
   telefono: string | null;
 };
 
-type IncidentData = {
+export type IncidentData = {
   idIncidencia: string;
   codigoCaso: string | null;
   tituloIncidencia: string | null;
@@ -302,23 +302,26 @@ const btnGhost =
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString("es-PE", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    timeZone: "America/Lima",
-  });
+const MONTHS_ES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+
+function toLima(iso: string) {
+  // Convert ISO string to Lima time (UTC-5)
+  const d = new Date(iso);
+  const limaOffset = -5 * 60;
+  const utcMs = d.getTime() + d.getTimezoneOffset() * 60000;
+  return new Date(utcMs + limaOffset * 60000);
 }
+
+function fmtDate(iso: string) {
+  const d = toLima(iso);
+  return `${String(d.getDate()).padStart(2, "0")} ${MONTHS_ES[d.getMonth()]}. ${d.getFullYear()}`;
+}
+
 function fmtDateTime(iso: string) {
-  return new Date(iso).toLocaleString("es-PE", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "America/Lima",
-  });
+  const d = toLima(iso);
+  const h = String(d.getHours()).padStart(2, "0");
+  const m = String(d.getMinutes()).padStart(2, "0");
+  return `${String(d.getDate()).padStart(2, "0")} ${MONTHS_ES[d.getMonth()]}. ${d.getFullYear()}, ${h}:${m}`;
 }
 
 /** Formatea bytes a una etiqueta legible (KB/MB). */
