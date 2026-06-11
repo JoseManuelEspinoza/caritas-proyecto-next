@@ -216,6 +216,10 @@ function buildCreateIncidenteData(body: IncidenciaMovilPayload): CreateIncidente
     lng,
 
     evidencias: [],
+    numAfectadosReportado:
+      body.numAfectados ?? (afectados.length > 0 ? afectados.length : null),
+
+    origenRegistro: "MOVIL",
   };
 }
 

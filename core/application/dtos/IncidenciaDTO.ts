@@ -68,6 +68,8 @@ export type CreateIncidenteData = {
   lng?: number | null;
   // Sección 6 - Evidencias ya subidas a S3
   evidencias?: EvidenciaInput[];
+  numAfectadosReportado?: number | null;
+  origenRegistro?: string | null;
 };
 
 export type InfoCampoData = {
