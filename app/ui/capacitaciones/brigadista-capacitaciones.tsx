@@ -18,11 +18,13 @@ import {
   ChevronDown,
   Download,
   ScrollText,
+  Eye,
 } from "lucide-react";
 import { toast } from "sonner";
 import { inscribirme } from "@/app/actions/capacitaciones";
 import type { CursoInscrito, CursoDisponible } from "@/app/actions/capacitaciones";
 import { RendirExamenModal } from "@/app/ui/capacitaciones/rendir-examen-modal";
+import { ConstanciaModal } from "@/app/ui/capacitaciones/ConstanciaModal";
 
 function fmtDate(iso: string | null) {
   if (!iso) return null;
@@ -272,6 +274,7 @@ export function BrigadistaCapacitaciones({
   const [tab, setTab] = useState<"mis-cursos" | "disponibles" | "constancias">("mis-cursos");
   const [detalleId, setDetalleId] = useState<string | null>(null);
   const [filtro, setFiltro] = useState<"todos" | "en-curso" | "aprobados">("todos");
+  const [constanciaAbierta, setConstanciaAbierta] = useState<string | null>(null);
 
   const detalleCurso = inscritosCursos.find((c) => c.id === detalleId) ?? null;
 
@@ -309,6 +312,7 @@ export function BrigadistaCapacitaciones({
   }
 
   return (
+    <>
     <div className="p-4 md:p-8 max-w-5xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-3 mb-7">
@@ -467,10 +471,10 @@ export function BrigadistaCapacitaciones({
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
               {constancias.map((c) => (
-                <a
+                <button
                   key={c.id}
-                  href={c.constanciaUrl!}
-                  className="group block bg-white border border-[var(--caritas-border)] rounded-xl overflow-hidden hover:shadow-lg hover:border-[var(--caritas-green)]/40 transition-all"
+                  onClick={() => setConstanciaAbierta(c.idInscripcion)}
+                  className="group text-left bg-white border border-[var(--caritas-border)] rounded-xl overflow-hidden hover:shadow-lg hover:border-[var(--caritas-green)]/40 transition-all"
                 >
                   {/* Previsualización mini del certificado */}
                   <div className="bg-gray-50 border-b border-[var(--caritas-border)] p-4 aspect-[4/3] flex flex-col">
@@ -497,10 +501,10 @@ export function BrigadistaCapacitaciones({
                     <p className="text-sm font-semibold text-[var(--caritas-text)] leading-snug line-clamp-2 mb-0.5">{c.nombreCurso}</p>
                     <p className="text-xs text-gray-400 mb-3 font-mono">{c.codigoCurso}</p>
                     <div className="flex items-center justify-center gap-2 w-full py-2 text-xs font-medium text-[var(--caritas-green)] border border-[var(--caritas-green)]/30 rounded-lg group-hover:bg-[var(--caritas-green)]/5 transition-colors">
-                      <Download className="w-3.5 h-3.5" /> Ver constancia
+                      <Eye className="w-3.5 h-3.5" /> Ver constancia
                     </div>
                   </div>
-                </a>
+                </button>
               ))}
             </div>
           )}
@@ -550,5 +554,13 @@ export function BrigadistaCapacitaciones({
         </div>
       )}
     </div>
+
+    {constanciaAbierta && (
+      <ConstanciaModal
+        idInscripcion={constanciaAbierta}
+        onClose={() => setConstanciaAbierta(null)}
+      />
+    )}
+    </>
   );
 }
