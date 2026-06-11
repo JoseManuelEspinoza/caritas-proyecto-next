@@ -104,7 +104,7 @@ export function PlanesModule({ planes, parroquias }: { planes: Plan[]; parroquia
       {showForm && (
         <div className="bg-white border border-[var(--caritas-border)] rounded-xl p-5 mb-6 grid grid-cols-1 md:grid-cols-2 gap-3">
           <label className="block">
-            <span className="text-xs text-gray-600">Parroquia</span>
+            <span className="text-xs text-gray-600">Parroquia <span className="text-red-500">*</span></span>
             <select
               value={form.idParroquia}
               onChange={(e) => setForm({ ...form, idParroquia: e.target.value })}
@@ -119,7 +119,7 @@ export function PlanesModule({ planes, parroquias }: { planes: Plan[]; parroquia
             </select>
           </label>
           <label className="block">
-            <span className="text-xs text-gray-600">Título del plan</span>
+            <span className="text-xs text-gray-600">Título del plan <span className="text-red-500">*</span></span>
             <input
               value={form.nombrePlan}
               onChange={(e) => setForm({ ...form, nombrePlan: e.target.value })}

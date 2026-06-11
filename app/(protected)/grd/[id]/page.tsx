@@ -3,7 +3,7 @@ import { verifySession } from "@/app/lib/dal";
 import { getUsuarioGRDId } from "@/app/lib/usuario-grd";
 import { prisma } from "@/app/lib/prisma";
 import { toFrontendRole } from "@/app/lib/roles";
-import { IncidentDetail } from "@/app/ui/grd/incident-detail";
+import { IncidentDetailWrapper as IncidentDetail } from "@/app/ui/grd/incident-detail-wrapper";
 import { presignGet, isS3Configured } from "@/app/lib/s3";
 
 export default async function IncidentePage({ params }: { params: Promise<{ id: string }> }) {
