@@ -15,6 +15,7 @@ function generarCodigoEntrega(): string {
 
 export async function registrarEntregaAyuda(input: {
   idIncidencia: string;
+  idSolicitud?: string;
   fechaEntrega: string;
   lugarEntrega: string;
   tipoAyuda: string;
@@ -34,6 +35,7 @@ export async function registrarEntregaAyuda(input: {
     await prisma.entregaAyudaHumanitaria.create({
       data: {
         idIncidencia: input.idIncidencia,
+        idSolicitud: input.idSolicitud ?? null,
         idUsuarioResponsableGRD,
         codigoEntrega,
         fechaEntrega: new Date(input.fechaEntrega),

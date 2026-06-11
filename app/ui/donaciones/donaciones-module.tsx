@@ -73,6 +73,7 @@ export type Caso = {
   reportadoPor: string | null;
   familias: number;
   personas: number;
+  idSolicitud: string | null;
   solicitudTipo: string | null;
   solicitudNecesidad: string | null;
   reporte: ReporteComite | null;
@@ -204,6 +205,7 @@ export function DonacionesModule({ casos, canEvaluate }: { casos: Caso[]; canEva
     startTransition(async () => {
       const res = await registrarEntregaAyuda({
         idIncidencia: current.id,
+        idSolicitud: current.idSolicitud ?? undefined,
         fechaEntrega: entregaForm.fechaEntrega,
         lugarEntrega: entregaForm.lugarEntrega.trim(),
         tipoAyuda: entregaForm.tipoAyuda.trim(),

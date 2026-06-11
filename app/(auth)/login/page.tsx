@@ -41,12 +41,12 @@ export default async function LoginPage({
           className="w-full flex items-center justify-center gap-2 py-3 bg-[var(--caritas-green)] text-white rounded-xl font-semibold hover:opacity-90 transition-all shadow-sm"
         >
           <LogIn className="w-5 h-5" />
-          Continuar con Keycloak
+          Iniciar sesión
         </button>
       </form>
 
       <p className="text-xs text-gray-400 mt-4">
-        Serás redirigido al proveedor de identidad seguro.
+        Conexión protegida con autenticación institucional.
       </p>
     </div>
   );

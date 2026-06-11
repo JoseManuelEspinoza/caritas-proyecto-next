@@ -1335,21 +1335,6 @@ export async function editarCuestionario(
   revalidatePath(REVALIDATE);
 }
 
-export async function presignMaterial(nombreArchivo: string, contentType: string) {
-  await verifySession();
-  const { isS3Configured, presignPut, presignGet, safeFilename } = await import("@/app/lib/s3");
-  if (!isS3Configured()) return { ok: false as const, message: "S3 no configurado." };
-  const { randomUUID } = await import("crypto");
-  const key = `capacitaciones/materiales/${randomUUID()}-${safeFilename(nombreArchivo)}`;
-  try {
-    const uploadUrl = await presignPut(key, contentType || "application/octet-stream");
-    const publicUrl = await presignGet(key, 60 * 60 * 24 * 365);
-    return { ok: true as const, uploadUrl, publicUrl };
-  } catch {
-    return { ok: false as const, message: "No se pudo preparar la subida." };
-  }
-}
-
 export async function obtenerDatosConstancia(idInscripcion: string) {
   const ins = await prisma.inscripcionCurso.findUnique({
     where: { idInscripcionCurso: idInscripcion },

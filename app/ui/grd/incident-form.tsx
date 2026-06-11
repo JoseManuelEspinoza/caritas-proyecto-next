@@ -34,7 +34,8 @@ import {
 } from "@/app/lib/import-personas";
 import { extraerTextoPdf } from "@/app/lib/pdf-text";
 import { consultarDni } from "@/app/actions/reniec";
-import { presignEvidencia } from "@/app/actions/evidencias";
+import { subirArchivoS3 } from "@/app/ui/shared/file-upload";
+import { ACCEPT, validarArchivo } from "@/app/lib/upload-config";
 // xlsx se carga de forma dinámica para no aumentar el bundle inicial.
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -1297,7 +1298,16 @@ export function IncidentForm({
 
   function stageArchivos(fuenteId: string, files: FileList | null) {
     if (!files) return;
-    const nuevos: EvidenciaArchivo[] = Array.from(files).map((file) => ({
+    const aceptados: File[] = [];
+    for (const file of Array.from(files)) {
+      const invalido = validarArchivo(file, "evidencia");
+      if (invalido) {
+        toast.error(invalido);
+        continue;
+      }
+      aceptados.push(file);
+    }
+    const nuevos: EvidenciaArchivo[] = aceptados.map((file) => ({
       uid:
         typeof crypto !== "undefined" && crypto.randomUUID
           ? crypto.randomUUID()
@@ -1428,19 +1438,11 @@ export function IncidentForm({
           )
         );
         try {
-          const res = await presignEvidencia({
-            nombreArchivo: item.file.name,
-            contentType: item.ct,
-            incidenciaId,
+          const subido = await subirArchivoS3(item.file, {
+            tipo: "evidencia-incidencia",
+            entidadId: incidenciaId,
           });
-          if (!res.ok) throw new Error(res.message);
-          const put = await fetch(res.uploadUrl, {
-            method: "PUT",
-            body: item.file,
-            headers: { "Content-Type": item.ct },
-          });
-          if (!put.ok) throw new Error(`Error al subir (${put.status})`);
-          uploadedKeys[item.uid] = res.key;
+          uploadedKeys[item.uid] = subido.key;
           setFuentesEvidencia((prev) =>
             prev.map((f) =>
               f.id === item.fuenteId
@@ -1448,7 +1450,7 @@ export function IncidentForm({
                     ...f,
                     archivos: f.archivos.map((a) =>
                       a.uid === item.uid
-                        ? { ...a, estado: "listo" as const, key: res.key, file: undefined }
+                        ? { ...a, estado: "listo" as const, key: subido.key, file: undefined }
                         : a
                     ),
                   }
@@ -2162,7 +2164,7 @@ export function IncidentForm({
                       <input
                         type="file"
                         multiple
-                        accept="image/*,video/*,.pdf,.doc,.docx"
+                        accept={ACCEPT.evidencia}
                         onChange={(e) => stageArchivos(fuente.id, e.target.files)}
                         className="hidden"
                       />
