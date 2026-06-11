@@ -24,7 +24,8 @@ import {
   borrarObservacionSimulacro,
   addEvidenciasSimulacro,
 } from "@/app/actions/simulacros";
-import { presignEvidencia } from "@/app/actions/evidencias";
+import { subirArchivoS3 } from "@/app/ui/shared/file-upload";
+import { ACCEPT } from "@/app/lib/upload-config";
 import type { FrontendRole } from "@/app/lib/roles";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -304,13 +305,9 @@ function EvidenciasPanel({
     setSubiendo(arr.map(f => f.name));
     const subidas: Parameters<typeof addEvidenciasSimulacro>[1] = [];
     for (const file of arr) {
-      const ct = file.type || "application/octet-stream";
       try {
-        const res = await presignEvidencia({ nombreArchivo: file.name, contentType: ct });
-        if (!res.ok) throw new Error(res.message);
-        const put = await fetch(res.uploadUrl, { method: "PUT", body: file, headers: { "Content-Type": ct } });
-        if (!put.ok) throw new Error(`Error al subir (${put.status})`);
-        subidas.push({ key: res.key, nombreArchivo: file.name, formato: ct, tamano: file.size });
+        const s = await subirArchivoS3(file, { tipo: "evidencia-simulacro", entidadId: simId });
+        subidas.push({ key: s.key, nombreArchivo: s.nombre, formato: s.formato, tamano: s.tamano });
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "No se pudo subir el archivo.");
       }
@@ -358,7 +355,7 @@ function EvidenciasPanel({
 
       {canUpload && (
         <>
-          <input ref={fileRef} type="file" multiple className="hidden"
+          <input ref={fileRef} type="file" multiple className="hidden" accept={ACCEPT.evidencia}
             onChange={e => handleFiles(e.target.files)} />
           {subiendo.length > 0 ? (
             <div className="text-xs text-gray-500 italic">Subiendo {subiendo.length} archivo(s)...</div>
