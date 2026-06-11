@@ -93,6 +93,8 @@ export const TIPOS_UPLOAD = {
   "evidencia-incidencia": { prefijo: "evidencias/incidencias", categoria: "evidencia" },
   "evidencia-simulacro": { prefijo: "evidencias/simulacros", categoria: "evidencia" },
   "material-capacitacion": { prefijo: "capacitaciones/materiales", categoria: "material" },
+  "evidencia-kit": { prefijo: "kits", categoria: "evidencia" },
+  "evidencia-entrega": { prefijo: "entregas", categoria: "evidencia" },
 } as const satisfies Record<string, { prefijo: string; categoria: CategoriaArchivo }>;
 
 export type TipoUpload = keyof typeof TIPOS_UPLOAD;

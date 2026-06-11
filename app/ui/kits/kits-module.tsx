@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { Package, Plus, ArrowDownCircle, ArrowUpCircle, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { crearKit, registrarMovimientoKit, listarMovimientosKit } from "@/app/actions/kits";
+import { registrarEvidenciaKit, listarEvidenciasKit } from "@/app/actions/evidencias";
+import { subirArchivoS3 } from "@/app/ui/shared/file-upload";
 import { PaginationControls } from "@/app/ui/shared/pagination-controls";
 
 type Kit = {
@@ -17,6 +19,7 @@ type Kit = {
   ubicacionAlmacen: string | null;
 };
 type Parroquia = { id: string; nombre: string };
+type Evidencia = { idEvidenciaGRD: string; nombreArchivo: string; urlArchivo: string; fechaCarga: string };
 type Movimiento = {
   id: string;
   tipo: string;
@@ -36,6 +39,8 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
   const [pending, startTransition] = useTransition();
   const [selected, setSelected] = useState<string | null>(kits[0]?.id ?? null);
   const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
+  const [evidencias, setEvidencias] = useState<Evidencia[]>([]);
+  const [evidenciaFile, setEvidenciaFile] = useState<File | null>(null);
   const [showKitForm, setShowKitForm] = useState(false);
   const [showMovForm, setShowMovForm] = useState(false);
   const [kitPage, setKitPage] = useState(1);
@@ -87,18 +92,19 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
 
     if (!selected) {
       setMovimientos([]);
+      setEvidencias([]);
       return () => {
         active = false;
       };
     }
 
     listarMovimientosKit(selected)
-      .then((items) => {
-        if (active) setMovimientos(items);
-      })
-      .catch(() => {
-        if (active) setMovimientos([]);
-      });
+      .then((items) => { if (active) setMovimientos(items); })
+      .catch(() => { if (active) setMovimientos([]); });
+
+    listarEvidenciasKit(selected)
+      .then((items) => { if (active) setEvidencias(items); })
+      .catch(() => { if (active) setEvidencias([]); });
 
     return () => {
       active = false;
@@ -216,6 +222,18 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
       if (res?.message && /insuficiente|no se pudo|no tiene|válid|obligatori|selecciona/i.test(res.message)) {
         toast.error(res.message);
         return;
+      }
+
+      if (evidenciaFile) {
+        try {
+          const archivo = await subirArchivoS3(evidenciaFile, { tipo: "evidencia-kit", entidadId: current.id });
+          await registrarEvidenciaKit(current.id, archivo);
+          const updated = await listarEvidenciasKit(current.id);
+          setEvidencias(updated);
+        } catch (e) {
+          toast.error(`Evidencia: ${e instanceof Error ? e.message : "Error al subir"}`);
+        }
+        setEvidenciaFile(null);
       }
 
       toast.success(res?.message ?? "Movimiento registrado.");
@@ -421,9 +439,19 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
                       className="mt-1 w-full px-3 py-2 border border-[var(--caritas-border)] rounded text-sm"
                     />
                   </label>
+                  <label className="md:col-span-2 block">
+                    <span className="text-xs text-gray-600">Evidencia fotográfica <span className="text-gray-400">(opcional)</span></span>
+                    <input
+                      type="file"
+                      accept="image/*,application/pdf"
+                      onChange={(e) => setEvidenciaFile(e.target.files?.[0] ?? null)}
+                      className="mt-1 block w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                    />
+                    {evidenciaFile && <p className="text-xs text-green-700 mt-1">📎 {evidenciaFile.name}</p>}
+                  </label>
                   <div className="md:col-span-2 flex justify-end gap-2">
                     <button
-                      onClick={() => setShowMovForm(false)}
+                      onClick={() => { setShowMovForm(false); setEvidenciaFile(null); }}
                       className="px-3 py-2 border border-[var(--caritas-border)] rounded"
                     >
                       Cancelar
@@ -482,6 +510,30 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
                 onNext={() => setMovementPage((page) => Math.min(totalMovementPages, page + 1))}
                 className="mt-4"
               />
+
+              {/* Evidencias del kit */}
+              {evidencias.length > 0 && (
+                <div className="mt-6">
+                  <h3 className="text-sm text-gray-600 mb-2">Evidencias adjuntas</h3>
+                  <ul className="space-y-1">
+                    {evidencias.map((ev) => (
+                      <li key={ev.idEvidenciaGRD} className="flex items-center gap-2 text-xs border border-gray-100 rounded p-2 bg-gray-50">
+                        <span className="text-gray-500">📎</span>
+                        <span className="flex-1 truncate text-gray-700">{ev.nombreArchivo}</span>
+                        <span className="text-gray-400">{new Date(ev.fechaCarga).toLocaleDateString("es-PE")}</span>
+                        <a
+                          href={`/api/archivos?key=${encodeURIComponent(ev.urlArchivo)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-green-700 hover:underline font-medium"
+                        >
+                          Ver
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </>
           )}
         </div>

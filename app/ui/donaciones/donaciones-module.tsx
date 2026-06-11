@@ -21,6 +21,8 @@ import {
 import { toast } from "sonner";
 import { aprobarCaso, observarCaso, rechazarCaso } from "@/app/actions/incidents";
 import { registrarEntregaAyuda, listarEntregasAyuda } from "@/app/actions/donaciones";
+import { registrarEvidenciaEntrega, listarEvidenciasEntrega } from "@/app/actions/evidencias";
+import { subirArchivoS3 } from "@/app/ui/shared/file-upload";
 import { PaginationControls } from "@/app/ui/shared/pagination-controls";
 
 export type Entrega = {
@@ -128,6 +130,8 @@ export function DonacionesModule({ casos, canEvaluate }: { casos: Caso[]; canEva
   const [historyPage, setHistoryPage] = useState(1);
   const [descargandoPdf, setDescargandoPdf] = useState(false);
   const [entregas, setEntregas] = useState<Entrega[]>([]);
+  const [evidenciasEntrega, setEvidenciasEntrega] = useState<{idEvidenciaGRD:string;nombreArchivo:string;urlArchivo:string;fechaCarga:string}[]>([]);
+  const [actaFile, setActaFile] = useState<File | null>(null);
   const [showEntregaForm, setShowEntregaForm] = useState(false);
   const [entregaForm, setEntregaForm] = useState({
     fechaEntrega: new Date().toISOString().slice(0, 10),
@@ -166,8 +170,9 @@ export function DonacionesModule({ casos, canEvaluate }: { casos: Caso[]; canEva
   }, [historyPage, totalHistoryPages]);
 
   useEffect(() => {
-    if (!selectedId) { setEntregas([]); return; }
+    if (!selectedId) { setEntregas([]); setEvidenciasEntrega([]); return; }
     listarEntregasAyuda(selectedId).then(setEntregas).catch(() => setEntregas([]));
+    listarEvidenciasEntrega(selectedId).then(setEvidenciasEntrega).catch(() => setEvidenciasEntrega([]));
   }, [selectedId]);
 
   const decidir = (accion: "APROBAR" | "OBSERVAR" | "RECHAZAR") => {
@@ -215,6 +220,19 @@ export function DonacionesModule({ casos, canEvaluate }: { casos: Caso[]; canEva
         observaciones: entregaForm.observaciones.trim() || undefined,
       });
       if (res?.message) { toast.error(res.message); return; }
+
+      if (actaFile) {
+        try {
+          const archivo = await subirArchivoS3(actaFile, { tipo: "evidencia-entrega", entidadId: current.id });
+          await registrarEvidenciaEntrega(current.id, archivo);
+          const updatedEv = await listarEvidenciasEntrega(current.id);
+          setEvidenciasEntrega(updatedEv);
+        } catch (e) {
+          toast.error(`Acta: ${e instanceof Error ? e.message : "Error al subir"}`);
+        }
+        setActaFile(null);
+      }
+
       toast.success("Entrega registrada correctamente.");
       setShowEntregaForm(false);
       setEntregaForm({ fechaEntrega: new Date().toISOString().slice(0, 10), lugarEntrega: "", tipoAyuda: "", cantidadEntregada: "", descripcionAyuda: "", actorParroquial: "", observaciones: "" });
@@ -491,8 +509,18 @@ export function DonacionesModule({ casos, canEvaluate }: { casos: Caso[]; canEva
                           <span className="text-xs text-gray-600">Observaciones</span>
                           <textarea value={entregaForm.observaciones} onChange={(e) => setEntregaForm({ ...entregaForm, observaciones: e.target.value })} rows={2} className="mt-1 w-full px-3 py-2 border border-green-200 rounded text-sm bg-white" />
                         </label>
+                        <label className="md:col-span-2 block">
+                          <span className="text-xs text-gray-600">Acta firmada <span className="text-gray-400">(opcional)</span></span>
+                          <input
+                            type="file"
+                            accept="image/*,application/pdf"
+                            onChange={(e) => setActaFile(e.target.files?.[0] ?? null)}
+                            className="mt-1 block w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                          />
+                          {actaFile && <p className="text-xs text-green-700 mt-1">📎 {actaFile.name}</p>}
+                        </label>
                         <div className="md:col-span-2 flex justify-end gap-2">
-                          <button onClick={() => setShowEntregaForm(false)} className="px-4 py-2 border border-gray-300 rounded text-sm">Cancelar</button>
+                          <button onClick={() => { setShowEntregaForm(false); setActaFile(null); }} className="px-4 py-2 border border-gray-300 rounded text-sm">Cancelar</button>
                           <button onClick={submitEntrega} disabled={pending} className="px-4 py-2 bg-green-700 text-white rounded text-sm disabled:opacity-50">Registrar entrega</button>
                         </div>
                       </div>
@@ -520,6 +548,28 @@ export function DonacionesModule({ casos, canEvaluate }: { casos: Caso[]; canEva
                         ))
                       )}
                     </div>
+
+                    {/* Actas adjuntas */}
+                    {evidenciasEntrega.length > 0 && (
+                      <div className="px-4 pb-4 bg-white space-y-1">
+                        <p className="text-xs text-gray-500 font-medium mb-1">Actas adjuntas</p>
+                        {evidenciasEntrega.map((ev) => (
+                          <div key={ev.idEvidenciaGRD} className="flex items-center gap-2 text-xs border border-gray-100 rounded p-2 bg-gray-50">
+                            <span>📎</span>
+                            <span className="flex-1 truncate text-gray-700">{ev.nombreArchivo}</span>
+                            <span className="text-gray-400">{new Date(ev.fechaCarga).toLocaleDateString("es-PE")}</span>
+                            <a
+                              href={`/api/archivos?key=${encodeURIComponent(ev.urlArchivo)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-green-700 hover:underline font-medium"
+                            >
+                              Ver
+                            </a>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 
