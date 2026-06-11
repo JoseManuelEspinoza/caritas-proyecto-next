@@ -184,6 +184,7 @@ export function ReportesModule({
   const router = useRouter();
   const [desde, setDesde] = useState(filtros.desde);
   const [hasta, setHasta] = useState(filtros.hasta);
+  const today = new Date().toISOString().split("T")[0];
 
   const aplicarFiltros = () => router.push(`/reportes?desde=${desde}&hasta=${hasta}`);
 
@@ -212,7 +213,7 @@ export function ReportesModule({
       doc.setFontSize(8);
       doc.setFont("helvetica", "normal");
       doc.text("Cáritas Lima — Sistema GRD", W / 2, 18, { align: "center" });
-      doc.text(`Período: ${filtros.desde}  →  ${filtros.hasta}`, W / 2, 24, { align: "center" });
+      doc.text(`Período: ${filtros.desde} a ${filtros.hasta}`, W / 2, 24, { align: "center" });
       doc.setFontSize(7);
       doc.setTextColor(190, 240, 215);
       doc.text(
@@ -577,6 +578,7 @@ export function ReportesModule({
             <input
               type="date"
               value={hasta}
+              max={today}
               onChange={(e) => setHasta(e.target.value)}
               className="px-3 py-1.5 text-sm bg-[#F5F5F5] border border-[#DDDDDD] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#009850]/20 focus:border-[#009850] transition-colors"
             />
@@ -590,7 +592,7 @@ export function ReportesModule({
           </button>
         </div>
         <div className="text-[11px] text-gray-400 ml-auto hidden md:block">
-          Mostrando: <strong className="text-gray-600">{filtros.desde}</strong> → <strong className="text-gray-600">{filtros.hasta}</strong>
+          Mostrando: <strong className="text-gray-600">{filtros.desde}</strong> a <strong className="text-gray-600">{filtros.hasta}</strong>
         </div>
       </div>
 

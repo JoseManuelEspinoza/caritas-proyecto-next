@@ -253,12 +253,14 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
             label="Tipo de kit"
             value={kitForm.tipoKit}
             onChange={(v) => setKitForm({ ...kitForm, tipoKit: v })}
+            required
           />
           <Input
             label="Stock inicial"
             type="number"
             value={String(kitForm.stockInicial)}
             onChange={(v) => setKitForm({ ...kitForm, stockInicial: Number(v) })}
+            required
           />
           <Input
             label="Código de almacén"
@@ -495,15 +497,19 @@ function Input({
   value,
   onChange,
   type = "text",
+  required = false,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   type?: string;
+  required?: boolean;
 }) {
   return (
     <label className="block">
-      <span className="text-xs text-gray-600">{label}</span>
+      <span className="text-xs text-gray-600">
+        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+      </span>
       <input
         type={type}
         value={value}
