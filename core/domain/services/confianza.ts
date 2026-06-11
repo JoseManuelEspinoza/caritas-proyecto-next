@@ -55,6 +55,22 @@ function scoreIncidencias(incidenciasAtendidas: number): number {
   return Math.min((incidenciasAtendidas / MAX_INCIDENCIAS_REFERENCIA) * 10, 10);
 }
 
+// Umbrales del tiempo de respuesta (horas): ≤2h → 10 · ≥48h → 0 · lineal en medio.
+const TR_OPTIMO_H = 2;
+const TR_MAXIMO_H = 48;
+
+/**
+ * Score (0–10) del tiempo promedio de respuesta del brigadista
+ * (fechaAsignación → fecha en que subió la data recopilada). Menor tiempo = mayor score.
+ * Devuelve `null` si no hay historial (no se penaliza).
+ */
+export function scoreTiempoRespuesta(horas: number | null): number | null {
+  if (horas == null) return null;
+  if (horas <= TR_OPTIMO_H) return 10;
+  if (horas >= TR_MAXIMO_H) return 0;
+  return parseFloat((10 * (1 - (horas - TR_OPTIMO_H) / (TR_MAXIMO_H - TR_OPTIMO_H))).toFixed(2));
+}
+
 /**
  * confianza_mixta() — solo se usa en la Fase 1 del algoritmo.
  *
@@ -67,12 +83,20 @@ function scoreIncidencias(incidenciasAtendidas: number): number {
 export function confianzaMixta(
   brigadista: ConfianzaInput,
   incidenciasAtendidas: number,
-  pesos: PesosConfianza = PESOS_DEFAULT
+  pesos: PesosConfianza = PESOS_DEFAULT,
+  tiempoRespuestaHoras: number | null = null
 ): number {
   const base = scoreManual();
   const cap = scoreCapacitaciones(brigadista);
 
-  const auto = incidenciasAtendidas > 0 ? (cap + scoreIncidencias(incidenciasAtendidas)) / 2 : cap; // sin penalización si no hubo incidencias atendidas
+  // Componente automático = promedio de los factores DISPONIBLES, en orden de
+  // prioridad (capacitaciones > tiempo de respuesta > incidencias). Si un factor
+  // no tiene dato (sin historial), no entra y no penaliza.
+  const factores: number[] = [cap];
+  const st = scoreTiempoRespuesta(tiempoRespuestaHoras);
+  if (st != null) factores.push(st);
+  if (incidenciasAtendidas > 0) factores.push(scoreIncidencias(incidenciasAtendidas));
+  const auto = factores.reduce((a, b) => a + b, 0) / factores.length;
 
   const score = pesos.pesoManual * base + pesos.pesoAutomatico * auto;
   return parseFloat(Math.min(Math.max(score, 0), 10).toFixed(2));

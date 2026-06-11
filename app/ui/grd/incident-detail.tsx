@@ -43,6 +43,8 @@ import {
   MessageSquarePlus,
   Trash2,
   Download,
+  Sparkles,
+  Navigation,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -100,6 +102,9 @@ type IncidentData = {
   reportanteRol: string | null;
   fechaRegistro: string;
   parroquia: string | null;
+  idParroquia: string | null;
+  lat: number | null;
+  lng: number | null;
   aviso: {
     nombreInformante: string | null;
     telefonoInformante: string | null;
@@ -569,6 +574,35 @@ function BrigCard({
   );
 }
 
+// RF36 — mapea el tipo de evento (catálogo) al enum que espera el algoritmo.
+const TIPO_INCIDENTE_MAP: Record<string, string> = {
+  incendio: "INCENDIO",
+  incendios: "INCENDIO",
+  inundacion: "INUNDACION",
+  inundaciones: "INUNDACION",
+  derrumbe: "DERRUMBE",
+  derrumbes: "DERRUMBE",
+  tsunami: "TSUNAMI",
+  tsunamis: "TSUNAMI",
+  sismo: "COLAPSO_INFRAESTRUCTURA",
+  sismos: "COLAPSO_INFRAESTRUCTURA",
+  deslizamiento: "DERRUMBE",
+  deslizamientos: "DERRUMBE",
+  vendaval: "PERDIDA_VIVIENDA",
+  vendavales: "PERDIDA_VIVIENDA",
+};
+function mapTipoIncidente(t: string | null): string {
+  if (!t) return "DERRUMBE";
+  const k = t
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "");
+  return TIPO_INCIDENTE_MAP[k] ?? "DERRUMBE";
+}
+type SugInfo = { score: number | null; dist: number | null; rank: number };
+type BrigDisponible = IncidentData["brigadistasDisponibles"][number];
+
 function PanelAsignar({ data, onDone }: { data: IncidentData; onDone: () => void }) {
   const canAct = data.role === "admin" || data.role === "especialistaGRD";
   const puedeEditar =
@@ -594,13 +628,93 @@ function PanelAsignar({ data, onDone }: { data: IncidentData; onDone: () => void
     from: "responsable" | "equipo" | "catalogo";
   } | null>(null);
 
+  // RF36 — sugerencia automática de brigadistas (algoritmo híbrido)
+  const [sugScores, setSugScores] = useState<Map<string, SugInfo>>(new Map());
+  const [extraSug, setExtraSug] = useState<BrigDisponible[]>([]);
+  const [sugLoading, setSugLoading] = useState(false);
+  const [sugMsg, setSugMsg] = useState<string | null>(null);
+
+  async function handleSugerir() {
+    if (!data.idParroquia) {
+      toast.error("La incidencia no tiene parroquia asignada; no se puede sugerir.");
+      return;
+    }
+    setSugLoading(true);
+    try {
+      const res = await fetch("/api/grd/asignar-brigadista", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          idParroquia: data.idParroquia,
+          latitud: data.lat,
+          longitud: data.lng,
+          tipoIncidente: mapTipoIncidente(data.tipoEvento),
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        toast.error(json?.message ?? "No se pudo generar la sugerencia.");
+        return;
+      }
+      const lista: Array<{
+        idBrigadistaParroquial: string;
+        nombres: string;
+        apellidos: string | null;
+        celular: string | null;
+        nombreParroquia: string | null;
+        disponibilidad: string;
+        distanciaKm: number | null;
+        scoreConfianza: number | null;
+        scoreFinal?: number | null;
+      }> = json.listaSugerida ?? [];
+
+      const m = new Map<string, SugInfo>();
+      lista.forEach((s, i) =>
+        m.set(s.idBrigadistaParroquial, {
+          score: s.scoreFinal ?? s.scoreConfianza,
+          dist: s.distanciaKm,
+          rank: i,
+        })
+      );
+      setSugScores(m);
+
+      const conocidos = new Set(data.brigadistasDisponibles.map((b) => b.id));
+      setExtraSug(
+        lista
+          .filter((s) => !conocidos.has(s.idBrigadistaParroquial))
+          .map((s) => ({
+            id: s.idBrigadistaParroquial,
+            nombres: s.nombres,
+            apellidos: s.apellidos ?? null,
+            celular: s.celular ?? null,
+            disponibilidad: s.disponibilidad ?? "DISPONIBLE",
+            parroquia: s.nombreParroquia ?? null,
+          }))
+      );
+
+      const fase = json.faseResultado ? ` · Fase ${json.faseResultado}` : "";
+      setSugMsg(
+        lista.length
+          ? `${lista.length} brigadista(s) sugerido(s) por cercanía, parroquia y confianza${fase}`
+          : (json.mensaje ?? "El algoritmo no encontró candidatos.")
+      );
+      if (lista.length) toast.success("Brigadistas ordenados por el algoritmo");
+      else toast.message(json.mensaje ?? "Sin candidatos sugeridos");
+    } catch {
+      toast.error("Error al consultar el algoritmo de sugerencia.");
+    } finally {
+      setSugLoading(false);
+    }
+  }
+
   const seleccionados = [responsable, ...equipo].filter(Boolean);
   const esRecomendado = (parroquia: string | null) =>
     !!data.parroquia &&
     !!parroquia &&
     parroquia.trim().toLowerCase() === data.parroquia.trim().toLowerCase();
 
-  const catalogo = data.brigadistasDisponibles
+  const haySugerencias = sugScores.size > 0;
+  const catalogo = [...data.brigadistasDisponibles, ...extraSug]
     .filter((b) => !seleccionados.includes(b.id))
     .filter((b) => {
       const q = query.trim().toLowerCase();
@@ -611,6 +725,11 @@ function PanelAsignar({ data, onDone }: { data: IncidentData; onDone: () => void
       );
     })
     .sort((a, b) => {
+      const sa = sugScores.get(a.id);
+      const sb = sugScores.get(b.id);
+      if (sa && sb) return sa.rank - sb.rank;
+      if (sa && !sb) return -1;
+      if (!sa && sb) return 1;
       const aDisp = a.disponibilidad === "DISPONIBLE" ? 1 : 0;
       const bDisp = b.disponibilidad === "DISPONIBLE" ? 1 : 0;
       if (bDisp !== aDisp) return bDisp - aDisp;
@@ -620,6 +739,7 @@ function PanelAsignar({ data, onDone }: { data: IncidentData; onDone: () => void
   function findBrig(id: string) {
     return (
       data.brigadistasDisponibles.find((b) => b.id === id) ??
+      extraSug.find((b) => b.id === id) ??
       data.asignaciones.find((a) => a.brigadistaId === id)
     );
   }
@@ -960,6 +1080,28 @@ function PanelAsignar({ data, onDone }: { data: IncidentData; onDone: () => void
               </div>
             )}
 
+            {/* RF36 — sugerencia automática de brigadistas */}
+            <div className="flex flex-col gap-1.5">
+              <button
+                type="button"
+                onClick={handleSugerir}
+                disabled={sugLoading}
+                className="self-start flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-[var(--caritas-green)] text-[var(--caritas-green)] hover:bg-[var(--caritas-green)]/5 disabled:opacity-50 transition-colors"
+              >
+                {sugLoading ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="w-3.5 h-3.5" />
+                )}
+                Sugerir con algoritmo
+              </button>
+              {sugMsg && (
+                <p className="text-[11px] text-gray-500 flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 text-amber-500" /> {sugMsg}
+                </p>
+              )}
+            </div>
+
             <div className="relative">
               <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
@@ -977,7 +1119,12 @@ function PanelAsignar({ data, onDone }: { data: IncidentData; onDone: () => void
                 </p>
               ) : (
                 catalogo.map((b) => {
-                  const rec = esRecomendado(b.parroquia);
+                  const sug = sugScores.get(b.id);
+                  const rec = haySugerencias ? sug?.rank === 0 : esRecomendado(b.parroquia);
+                  const scorePct =
+                    sug?.score != null
+                      ? Math.round(sug.score <= 1 ? sug.score * 100 : sug.score)
+                      : null;
                   return (
                     <button
                       type="button"
@@ -1003,6 +1150,16 @@ function PanelAsignar({ data, onDone }: { data: IncidentData; onDone: () => void
                           {rec && (
                             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700">
                               <Star className="w-3 h-3 fill-amber-500 text-amber-500" /> RECOMENDADO
+                            </span>
+                          )}
+                          {scorePct != null && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-[var(--caritas-green)]/10 text-[var(--caritas-green)]">
+                              <Sparkles className="w-3 h-3" /> {scorePct}%
+                            </span>
+                          )}
+                          {sug?.dist != null && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700">
+                              <Navigation className="w-3 h-3" /> {sug.dist.toFixed(1)} km
                             </span>
                           )}
                           {b.disponibilidad === "EN CAMPO" && (
