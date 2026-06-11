@@ -30,7 +30,7 @@ type Movimiento = {
   observaciones: string | null;
 };
 
-const TIPOS = ["INGRESO", "ENTREGA", "REPOSICION"] as const;
+const TIPOS = ["INGRESO", "ENTREGA"] as const;
 const KIT_PAGE_SIZE = 5;
 const MOV_PAGE_SIZE = 5;
 
