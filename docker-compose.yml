@@ -108,6 +108,8 @@ services:
     volumes:
       # El realm se importa al primer arranque
       - ./keycloak/realm-caritas.json:/opt/keycloak/data/import/realm-caritas.json:ro
+      # Tema de login con la marca Cáritas (el usuario no ve Keycloak)
+      - ./keycloak/themes:/opt/keycloak/themes:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
