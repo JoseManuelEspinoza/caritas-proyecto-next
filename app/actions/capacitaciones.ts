@@ -8,8 +8,44 @@ import { DomainError } from "@/core/domain/errors/DomainError";
 import { logGRDAction } from "@/app/lib/audit";
 import { prisma } from "@/app/lib/prisma";
 import type { ParticipanteData } from "@/core/domain/repositories/ICursoRepository";
+import { sendCertificadoEmail } from "@/app/lib/email";
 
 const REVALIDATE = "/capacitaciones";
+
+// Fire-and-forget: envía constancia por email al participante tras certificación.
+function notificarCertificado(idInscripcion: string) {
+  prisma.inscripcionCurso
+    .findUnique({
+      where: { idInscripcionCurso: idInscripcion },
+      select: {
+        participante: { select: { nombres: true, apellidos: true, correo: true } },
+        curso: { select: { nombreCurso: true, codigoCurso: true } },
+        certificacion: { select: { fechaCertificacion: true, idCertificacionCurso: true } },
+        evaluaciones: {
+          orderBy: { fechaEvaluacion: "desc" },
+          take: 1,
+          select: { nota: true },
+        },
+      },
+    })
+    .then(async (ins) => {
+      if (!ins || !ins.certificacion || !ins.participante.correo) return;
+      const constanciaData = {
+        nombreParticipante: `${ins.participante.nombres} ${ins.participante.apellidos ?? ""}`.trim(),
+        nombreCurso: ins.curso.nombreCurso,
+        codigoCurso: ins.curso.codigoCurso,
+        fechaCertificacion: ins.certificacion.fechaCertificacion?.toISOString() ?? null,
+        idCertificacion: ins.certificacion.idCertificacionCurso,
+        nota: ins.evaluaciones[0]?.nota != null ? Number(ins.evaluaciones[0].nota) : null,
+      };
+      await sendCertificadoEmail(
+        ins.participante.correo,
+        ins.participante.nombres,
+        constanciaData
+      );
+    })
+    .catch((e) => console.error("[Capacitaciones] Error enviando constancia por email:", e));
+}
 
 function fail(err: unknown, fallback: string) {
   if (err instanceof DomainError) return { message: err.message };
@@ -996,6 +1032,7 @@ export async function registrarEvaluacion(
       try {
         const constanciaUrl = `/capacitaciones/constancia/${idInscripcion}`;
         await makeCursoUseCases().certificar.execute(idInscripcion, constanciaUrl);
+        notificarCertificado(idInscripcion);
       } catch {
         // Ya certificado o sin evaluación aprobada — no bloquea
       }
@@ -1257,6 +1294,7 @@ export async function enviarRespuestasExamen(
       try {
         const constanciaUrl = `/capacitaciones/constancia/${idInscripcion}`;
         await makeCursoUseCases().certificar.execute(idInscripcion, constanciaUrl);
+        notificarCertificado(idInscripcion);
       } catch {
         // Si ya está certificado o falla, no bloquear el resultado
       }
