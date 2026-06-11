@@ -146,7 +146,10 @@ export default async function SimulacrosPage() {
           .map((e) => ({
             id: e.idEvidenciaGRD,
             nombreArchivo: e.nombreArchivo,
-            urlArchivo: e.urlArchivo,
+            // urlArchivo guarda el key de S3; el enlace estable lo resuelve al abrir.
+            urlArchivo: e.urlArchivo.startsWith("http")
+              ? e.urlArchivo
+              : `/api/archivos?key=${encodeURIComponent(e.urlArchivo)}`,
             formato: e.formatoArchivo,
             tamano: e.tamanoArchivo,
             descripcion: e.descripcion,

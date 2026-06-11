@@ -1,0 +1,50 @@
+/* ── Identidad Cáritas Lima sobre el tema keycloak.v2 (PatternFly 5) ────────
+   Recolorea la paleta primaria, reemplaza el fondo y el texto del header por
+   el logo institucional. Sin rastro visual del proveedor de identidad. */
+
+:root {
+  --pf-v5-global--primary-color--100: #009850;
+  --pf-v5-global--primary-color--200: #007a40;
+  --pf-v5-global--primary-color--dark-100: #007a40;
+  --pf-v5-global--link--Color: #009850;
+  --pf-v5-global--link--Color--hover: #007a40;
+  --pf-v5-global--active-color--100: #009850;
+}
+
+/* Fondo claro institucional (reemplaza la imagen de fondo del proveedor) */
+.login-pf body {
+  background: #f5f5f5 none;
+}
+
+/* Logo de Cáritas en lugar del nombre del realm en texto */
+#kc-header-wrapper {
+  background: url("../img/caritas-logo.png") no-repeat center;
+  background-size: contain;
+  height: 110px;
+  margin: 28px auto 4px;
+  text-indent: -9999px;
+  overflow: hidden;
+  letter-spacing: 0;
+}
+
+/* Tarjeta del formulario */
+.pf-v5-c-login__main {
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+}
+
+#kc-page-title {
+  color: #49494a;
+  font-size: 1.25rem;
+}
+
+/* Botón primario verde Cáritas */
+.pf-v5-c-button.pf-m-primary {
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+/* Pie discreto */
+.pf-v5-c-login__footer {
+  color: #9ca3af;
+}

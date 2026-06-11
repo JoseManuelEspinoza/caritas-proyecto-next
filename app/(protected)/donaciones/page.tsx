@@ -51,7 +51,7 @@ export default async function DonacionesPage() {
       solicitudesAyuda: {
         orderBy: { fechaSolicitud: "desc" },
         take: 1,
-        select: { tipoAyudaSolicitada: true, descripcionNecesidad: true },
+        select: { idSolicitud: true, tipoAyudaSolicitada: true, descripcionNecesidad: true },
       },
       informes: {
         orderBy: { fechaElaboracion: "desc" },
@@ -157,6 +157,7 @@ export default async function DonacionesPage() {
       reportadoPor: r.aviso?.nombreInformante ?? null,
       familias: r.gruposFamiliares.length,
       personas: totalPersonas,
+      idSolicitud: r.solicitudesAyuda[0]?.idSolicitud ?? null,
       solicitudTipo: r.solicitudesAyuda[0]?.tipoAyudaSolicitada ?? null,
       solicitudNecesidad: r.solicitudesAyuda[0]?.descripcionNecesidad ?? null,
       reporte,
