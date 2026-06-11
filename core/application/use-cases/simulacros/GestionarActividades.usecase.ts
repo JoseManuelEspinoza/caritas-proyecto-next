@@ -229,8 +229,6 @@ export class AutoasignarmeSimulacroUseCase {
     idUsuarioGRD: string,
     indicaciones?: string
   ): Promise<ActividadOutput> {
-    validarEjecucion(datos);
-
     const actividad = await cargar(this.repo, id);
     actividad.autoasignarme(idUsuarioGRD, indicaciones);
     await this.repo.update(actividad);

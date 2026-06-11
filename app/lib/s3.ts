@@ -33,20 +33,27 @@ export function isS3Configured(): boolean {
 }
 
 let _client: S3Client | null = null;
+
 function client(): S3Client {
   if (!isS3Configured()) {
     throw new Error(
       "S3 no está configurado. Define AWS_REGION, AWS_S3_BUCKET, AWS_ACCESS_KEY_ID y AWS_SECRET_ACCESS_KEY."
     );
   }
+
   if (!_client) {
     _client = new S3Client({
       region: REGION,
       endpoint: ENDPOINT,
       forcePathStyle: FORCE_PATH_STYLE,
-      credentials: { accessKeyId: ACCESS_KEY!, secretAccessKey: SECRET_KEY!, sessionToken: SESSION_TOKEN },
+      credentials: {
+        accessKeyId: ACCESS_KEY!,
+        secretAccessKey: SECRET_KEY!,
+        ...(SESSION_TOKEN ? { sessionToken: SESSION_TOKEN } : {}),
+      },
     });
   }
+
   return _client;
 }
 
@@ -74,6 +81,7 @@ export async function presignGet(key: string, expiresIn = 900): Promise<string> 
   // Si el bucket sirve público, devolvemos la URL pública directa.
   const publicBase = process.env.AWS_S3_PUBLIC_BASE_URL;
   if (publicBase) return `${publicBase.replace(/\/$/, "")}/${key}`;
+
   const cmd = new GetObjectCommand({ Bucket: BUCKET, Key: key });
   return getSignedUrl(client(), cmd, { expiresIn });
 }
