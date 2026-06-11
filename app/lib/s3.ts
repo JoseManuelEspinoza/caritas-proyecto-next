@@ -12,6 +12,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
  *   AWS_S3_BUCKET         nombre del bucket
  *   AWS_ACCESS_KEY_ID     access key del usuario IAM
  *   AWS_SECRET_ACCESS_KEY secret del usuario IAM
+ *   AWS_SESSION_TOKEN     (opcional) token de sesión temporal — requerido en AWS Academy
  *   AWS_S3_ENDPOINT       (opcional) endpoint S3-compatible (MinIO/R2). Si se usa,
  *                         conviene AWS_S3_FORCE_PATH_STYLE=true
  *   AWS_S3_PUBLIC_BASE_URL (opcional) base pública si el bucket sirve archivos
@@ -22,6 +23,7 @@ const REGION = process.env.AWS_REGION;
 const BUCKET = process.env.AWS_S3_BUCKET;
 const ACCESS_KEY = process.env.AWS_ACCESS_KEY_ID;
 const SECRET_KEY = process.env.AWS_SECRET_ACCESS_KEY;
+const SESSION_TOKEN = process.env.AWS_SESSION_TOKEN || undefined;
 const ENDPOINT = process.env.AWS_S3_ENDPOINT || undefined;
 const FORCE_PATH_STYLE = process.env.AWS_S3_FORCE_PATH_STYLE === "true";
 
@@ -42,7 +44,7 @@ function client(): S3Client {
       region: REGION,
       endpoint: ENDPOINT,
       forcePathStyle: FORCE_PATH_STYLE,
-      credentials: { accessKeyId: ACCESS_KEY!, secretAccessKey: SECRET_KEY! },
+      credentials: { accessKeyId: ACCESS_KEY!, secretAccessKey: SECRET_KEY!, sessionToken: SESSION_TOKEN },
     });
   }
   return _client;
