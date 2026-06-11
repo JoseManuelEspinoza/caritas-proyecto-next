@@ -13,6 +13,8 @@ type Kit = {
   descripcion: string | null;
   stockActual: number;
   estadoKit: string;
+  codigoAlmacen: string | null;
+  ubicacionAlmacen: string | null;
 };
 type Parroquia = { id: string; nombre: string };
 type Movimiento = {
@@ -39,11 +41,13 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
   const [kitPage, setKitPage] = useState(1);
   const [movementPage, setMovementPage] = useState(1);
 
-  const [kitForm, setKitForm] = useState({ tipoKit: "", descripcion: "", stockInicial: 0 });
+  const [kitForm, setKitForm] = useState({ tipoKit: "", descripcion: "", stockInicial: 0, codigoAlmacen: "", ubicacionAlmacen: "" });
   const [movForm, setMovForm] = useState({
     tipo: "ENTREGA" as (typeof TIPOS)[number],
     cantidad: 1,
     idParroquiaDestino: parroquias[0]?.id ?? "",
+    destinatario: "",
+    incidenciaId: "",
     motivoMovimiento: "",
     observaciones: "",
   });
@@ -165,17 +169,18 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
 
     startTransition(async () => {
       const res = await crearKit({
-        ...kitForm,
         tipoKit: kitForm.tipoKit.trim(),
         descripcion: kitForm.descripcion.trim(),
         stockInicial: Number(kitForm.stockInicial),
+        codigoAlmacen: kitForm.codigoAlmacen.trim() || undefined,
+        ubicacionAlmacen: kitForm.ubicacionAlmacen.trim() || undefined,
       });
 
       if (res?.message) toast.error(res.message);
       else {
         toast.success("Kit creado.");
         setShowKitForm(false);
-        setKitForm({ tipoKit: "", descripcion: "", stockInicial: 0 });
+        setKitForm({ tipoKit: "", descripcion: "", stockInicial: 0, codigoAlmacen: "", ubicacionAlmacen: "" });
         router.refresh();
       }
     });
@@ -192,13 +197,20 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
     if (!current) return;
 
     startTransition(async () => {
+      const extras: string[] = [];
+      if (movForm.tipo === "ENTREGA" && movForm.destinatario.trim())
+        extras.push(`Destinatario: ${movForm.destinatario.trim()}`);
+      if (movForm.tipo === "ENTREGA" && movForm.incidenciaId.trim())
+        extras.push(`Incidencia: ${movForm.incidenciaId.trim()}`);
+      if (movForm.observaciones.trim()) extras.push(movForm.observaciones.trim());
+
       const res = await registrarMovimientoKit(current.id, {
         tipo: movForm.tipo,
         cantidad: Number(movForm.cantidad),
         idParroquiaDestino:
           movForm.tipo === "ENTREGA" ? movForm.idParroquiaDestino || undefined : undefined,
         motivoMovimiento: movForm.motivoMovimiento.trim() || undefined,
-        observaciones: movForm.observaciones.trim() || undefined,
+        observaciones: extras.join(" | ") || undefined,
       });
 
       if (res?.message && /insuficiente|no se pudo|no tiene|válid|obligatori|selecciona/i.test(res.message)) {
@@ -208,7 +220,7 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
 
       toast.success(res?.message ?? "Movimiento registrado.");
       setShowMovForm(false);
-      setMovForm({ ...movForm, cantidad: 1, motivoMovimiento: "", observaciones: "" });
+      setMovForm({ ...movForm, cantidad: 1, destinatario: "", incidenciaId: "", motivoMovimiento: "", observaciones: "" });
       const movs = await listarMovimientosKit(current.id);
       setMovimientos(movs);
       router.refresh();
@@ -247,6 +259,16 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
             type="number"
             value={String(kitForm.stockInicial)}
             onChange={(v) => setKitForm({ ...kitForm, stockInicial: Number(v) })}
+          />
+          <Input
+            label="Código de almacén"
+            value={kitForm.codigoAlmacen}
+            onChange={(v) => setKitForm({ ...kitForm, codigoAlmacen: v })}
+          />
+          <Input
+            label="Ubicación de almacén"
+            value={kitForm.ubicacionAlmacen}
+            onChange={(v) => setKitForm({ ...kitForm, ubicacionAlmacen: v })}
           />
           <label className="block md:col-span-2">
             <span className="text-xs text-gray-600">Contenido / descripción</span>
@@ -316,9 +338,21 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
                 <div>
                   <h2 className="text-[var(--caritas-text)]">{current.tipoKit}</h2>
                   <p className="text-sm text-gray-700 mt-1">{current.descripcion}</p>
-                  <p className="text-sm text-gray-600 mt-1">
-                    Stock actual: <span className="font-semibold">{current.stockActual}</span>
-                  </p>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+                    <p className="text-sm text-gray-600">
+                      Stock actual: <span className="font-semibold">{current.stockActual}</span>
+                    </p>
+                    {current.codigoAlmacen && (
+                      <p className="text-sm text-gray-600">
+                        Cód. almacén: <span className="font-semibold">{current.codigoAlmacen}</span>
+                      </p>
+                    )}
+                    {current.ubicacionAlmacen && (
+                      <p className="text-sm text-gray-600">
+                        Ubicación: <span className="font-semibold">{current.ubicacionAlmacen}</span>
+                      </p>
+                    )}
+                  </div>
                 </div>
                 <button
                   onClick={() => setShowMovForm((s) => !s)}
@@ -343,23 +377,35 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
                     onChange={(v) => setMovForm({ ...movForm, cantidad: Number(v) })}
                   />
                   {movForm.tipo === "ENTREGA" && (
-                    <label className="block">
-                      <span className="text-xs text-gray-600">Parroquia destino</span>
-                      <select
-                        value={movForm.idParroquiaDestino}
-                        onChange={(e) =>
-                          setMovForm({ ...movForm, idParroquiaDestino: e.target.value })
-                        }
-                        className="mt-1 w-full px-3 py-2 border border-[var(--caritas-border)] rounded text-sm bg-white"
-                      >
-                        <option value="">— Selecciona —</option>
-                        {parroquias.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.nombre}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                    <>
+                      <label className="block">
+                        <span className="text-xs text-gray-600">Parroquia destino</span>
+                        <select
+                          value={movForm.idParroquiaDestino}
+                          onChange={(e) =>
+                            setMovForm({ ...movForm, idParroquiaDestino: e.target.value })
+                          }
+                          className="mt-1 w-full px-3 py-2 border border-[var(--caritas-border)] rounded text-sm bg-white"
+                        >
+                          <option value="">— Selecciona —</option>
+                          {parroquias.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.nombre}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <Input
+                        label="Destinatario (persona que recibe)"
+                        value={movForm.destinatario}
+                        onChange={(v) => setMovForm({ ...movForm, destinatario: v })}
+                      />
+                      <Input
+                        label="Código de incidencia (opcional)"
+                        value={movForm.incidenciaId}
+                        onChange={(v) => setMovForm({ ...movForm, incidenciaId: v })}
+                      />
+                    </>
                   )}
                   <Input
                     label="Motivo"
