@@ -168,6 +168,8 @@ export class PrismaIncidenciaRepository implements IIncidenciaRepository {
           direccionPreliminar: data.direccion.trim(),
           medioAviso: clean(data.reportaRol),
           ...this.camposAvisoExplicitos(data),
+          ...(idParroquiaDb ? { idParroquia: idParroquiaDb } : {}),
+          ...coords(data),
         },
       });
     } else if (data.reportaNombre.trim()) {
@@ -184,6 +186,7 @@ export class PrismaIncidenciaRepository implements IIncidenciaRepository {
           ...coords(data),
         },
       });
+
       await prisma.incidencia.update({
         where: { idIncidencia: id },
         data: { idAviso: aviso.idAviso },

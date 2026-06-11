@@ -244,6 +244,10 @@ export default async function IncidentePage({ params }: { params: Promise<{ id: 
     reportanteRol: inc.aviso?.medioAviso ?? null,
     fechaRegistro: inc.fechaRegistro.toISOString(),
     parroquia: inc.parroquia?.nombre ?? null,
+    // RF36 — datos que necesita el algoritmo de sugerencia de brigadistas
+    idParroquia: inc.idParroquia ?? null,
+    lat: inc.latitud != null ? Number(inc.latitud) : null,
+    lng: inc.longitud != null ? Number(inc.longitud) : null,
 
     aviso: inc.aviso
       ? {

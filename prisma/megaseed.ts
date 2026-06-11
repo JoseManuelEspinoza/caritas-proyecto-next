@@ -246,11 +246,11 @@ async function ensureDemoMasivo(idUsuarioGRD: string) {
   const estados = [
     "ABIERTO",
     "ASIGNADO",
-    "DATA_RECOPILADA",
-    "EN_EVALUACION",
+    "DATA RECOPILADA",
+    "EN EVALUACION",
     "APROBADO",
     "ATENDIDO",
-    "SEGUIMIENTO_ABIERTO",
+    "SEGUIMIENTO ABIERTO",
     "CERRADO",
     "RECHAZADO",
   ];

@@ -20,6 +20,8 @@ export default async function KitsPage() {
         descripcion: k.descripcion,
         stockActual: k.stockActual,
         estadoKit: k.estadoKit,
+        codigoAlmacen: k.codigoAlmacen,
+        ubicacionAlmacen: k.ubicacionAlmacen,
       }))}
       parroquias={parroquias.map((p) => ({ id: p.idParroquia, nombre: p.nombre }))}
     />
