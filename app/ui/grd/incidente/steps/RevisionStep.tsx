@@ -593,14 +593,6 @@ export function RevisionStep({
                 </option>
               ))}
             </datalist>
-            {/* Composición real de cada kit del sistema (gestionada en el módulo Kits) */}
-            {data.kitsEmergencia.map((k) => (
-              <datalist key={k.id} id={`kitcomp-${k.id}`}>
-                {k.articulos.map((a, i) => (
-                  <option key={i} value={a.descripcion} />
-                ))}
-              </datalist>
-            ))}
 
             {/* Header morado + resumen del evento */}
             <div className="rounded-xl bg-purple-600 text-white p-4">
@@ -860,36 +852,49 @@ export function RevisionStep({
                                     key={ai}
                                     className="flex items-center gap-1 bg-white border border-purple-100 rounded px-1.5 py-1"
                                   >
-                                    <input
-                                      list={
-                                        kit.idKit
-                                          ? undefined
-                                          : KIT_TIPOS.includes(kit.tipoKit)
-                                            ? `cat-${KIT_TIPOS.indexOf(kit.tipoKit)}`
-                                            : "cat-all"
-                                      }
-                                      className="w-16 px-1.5 py-0.5 text-[11px] border border-gray-200 rounded text-gray-500"
-                                      placeholder="Cód."
-                                      value={a.codigo}
-                                      onChange={(e) => {
-                                        const codigo = e.target.value;
-                                        const cat =
-                                          data.catalogoArticulos.find(
-                                            (c) => c.codigo === codigo && c.catalogo === kit.tipoKit
-                                          ) ?? data.catalogoArticulos.find((c) => c.codigo === codigo);
-                                        updArt(g.id, ki, ai, {
-                                          codigo,
-                                          ...(cat ? { descripcion: cat.valor } : {}),
-                                        });
-                                      }}
-                                    />
-                                    <input
-                                      className="flex-1 min-w-0 px-1.5 py-0.5 text-[11px] border border-gray-200 rounded"
-                                      placeholder="Artículo"
-                                      list={kit.idKit ? `kitcomp-${kit.idKit}` : undefined}
-                                      value={a.descripcion}
-                                      onChange={(e) => updArt(g.id, ki, ai, { descripcion: e.target.value })}
-                                    />
+                                    {kit.idKit ? (
+                                      <>
+                                        {/* Elementos del kit del sistema: solo lectura (se gestionan en el módulo Kits) */}
+                                        {a.codigo && (
+                                          <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-mono bg-purple-50 text-purple-500 rounded">
+                                            {a.codigo}
+                                          </span>
+                                        )}
+                                        <span className="flex-1 min-w-0 truncate text-[11px] text-gray-700">
+                                          {a.descripcion}
+                                        </span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <input
+                                          list={
+                                            KIT_TIPOS.includes(kit.tipoKit)
+                                              ? `cat-${KIT_TIPOS.indexOf(kit.tipoKit)}`
+                                              : "cat-all"
+                                          }
+                                          className="w-16 px-1.5 py-0.5 text-[11px] border border-gray-200 rounded text-gray-500"
+                                          placeholder="Cód."
+                                          value={a.codigo}
+                                          onChange={(e) => {
+                                            const codigo = e.target.value;
+                                            const cat =
+                                              data.catalogoArticulos.find(
+                                                (c) => c.codigo === codigo && c.catalogo === kit.tipoKit
+                                              ) ?? data.catalogoArticulos.find((c) => c.codigo === codigo);
+                                            updArt(g.id, ki, ai, {
+                                              codigo,
+                                              ...(cat ? { descripcion: cat.valor } : {}),
+                                            });
+                                          }}
+                                        />
+                                        <input
+                                          className="flex-1 min-w-0 px-1.5 py-0.5 text-[11px] border border-gray-200 rounded"
+                                          placeholder="Artículo"
+                                          value={a.descripcion}
+                                          onChange={(e) => updArt(g.id, ki, ai, { descripcion: e.target.value })}
+                                        />
+                                      </>
+                                    )}
                                     <div className="flex items-center shrink-0">
                                       <button
                                         type="button"
@@ -924,13 +929,16 @@ export function RevisionStep({
                                   </div>
                                 ))}
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => addArt(g.id, ki)}
-                                className="text-[10px] text-purple-600 flex items-center gap-0.5 mt-1.5"
-                              >
-                                <Plus className="w-3 h-3" /> Agregar artículo
-                              </button>
+                              {/* Solo los kits ad-hoc ("Otros") permiten agregar artículos libres */}
+                              {!kit.idKit && (
+                                <button
+                                  type="button"
+                                  onClick={() => addArt(g.id, ki)}
+                                  className="text-[10px] text-purple-600 flex items-center gap-0.5 mt-1.5"
+                                >
+                                  <Plus className="w-3 h-3" /> Agregar artículo
+                                </button>
+                              )}
                             </div>
                           ))}
 
