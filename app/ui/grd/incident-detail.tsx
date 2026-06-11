@@ -188,6 +188,15 @@ type IncidentData = {
     cargadoPor: string | null;
   }[];
   catalogoArticulos: { codigo: string; valor: string; descripcion: string | null; catalogo: string }[];
+
+  kitsEmergencia: {
+  id: string;
+  tipoKit: string;
+  descripcion: string | null;
+  stockActual: number;
+  codigoAlmacen: string | null;
+  ubicacionAlmacen: string | null;
+}[];
   parroquias: string[];
   role: FrontendRole;
   userId: string;
@@ -2221,13 +2230,10 @@ function PanelRevisar({ data, onDone }: { data: IncidentData; onDone: () => void
   // ── Informe enriquecido del Especialista ──
   type ArtLocal = { codigo: string; descripcion: string; cantidad: number };
   type KitLocal = { tipoKit: string; articulos: ArtLocal[] };
-  const KIT_TIPOS = [
-    "Kit de Víveres",
-    "Kit de Higiene",
-    "Kit de Dormitorio",
-    "Kit de Complementos",
-    "Otros",
-  ];
+  const KIT_TIPOS =
+    data.kitsEmergencia.length > 0
+      ? data.kitsEmergencia.map((k) => k.tipoKit)
+      : ["Kit de Víveres", "Kit de Higiene", "Kit de Dormitorio", "Kit de Complementos"];
   const [report, setReport] = useState({
     motivo: typeof sc?.motivo === "string" ? sc.motivo : "",
     dirigidoA: typeof sc?.dirigidoA === "string" ? sc.dirigidoA : "Comité de donaciones",
@@ -3002,16 +3008,33 @@ function PanelRevisar({ data, onDone }: { data: IncidentData; onDone: () => void
                           ))}
 
                           <div className="flex flex-wrap gap-1.5">
-                            {KIT_TIPOS.map((t) => (
-                              <button
-                                key={t}
-                                type="button"
-                                onClick={() => addKit(g.id, t)}
-                                className="text-[11px] px-2 py-1 border border-dashed border-purple-300 text-purple-700 rounded-lg hover:bg-purple-50 flex items-center gap-1"
-                              >
-                                <Plus className="w-3 h-3" /> {t}
-                              </button>
-                            ))}
+                              {data.kitsEmergencia.length > 0 ? (
+                                data.kitsEmergencia.map((k) => (
+                                  <button
+                                    key={k.id}
+                                    type="button"
+                                    onClick={() => addKit(g.id, k.tipoKit)}
+                                    disabled={k.stockActual <= 0}
+                                    title={k.descripcion ?? undefined}
+                                    className="text-[11px] px-2 py-1 border border-dashed border-purple-300 text-purple-700 rounded-lg hover:bg-purple-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                                  >
+                                    <Plus className="w-3 h-3" />
+                                    {k.tipoKit}
+                                    <span className="text-[10px] text-gray-500">({k.stockActual})</span>
+                                  </button>
+                                ))
+                              ) : (
+                                KIT_TIPOS.map((t) => (
+                                  <button
+                                    key={t}
+                                    type="button"
+                                    onClick={() => addKit(g.id, t)}
+                                    className="text-[11px] px-2 py-1 border border-dashed border-purple-300 text-purple-700 rounded-lg hover:bg-purple-50 flex items-center gap-1"
+                                  >
+                                    <Plus className="w-3 h-3" /> {t}
+                                  </button>
+                                ))
+                              )}
                           </div>
                         </div>
                       );

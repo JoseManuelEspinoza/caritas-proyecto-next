@@ -162,6 +162,19 @@ export default async function IncidentePage({ params }: { params: Promise<{ id: 
     take: 300,
   });
 
+  const kitsEmergencia = await prisma.kitEmergencia.findMany({
+    where: { estadoKit: "ACTIVO" },
+    select: {
+      idKitEmergencia: true,
+      tipoKit: true,
+      descripcion: true,
+      stockActual: true,
+      codigoAlmacen: true,
+      ubicacionAlmacen: true,
+    },
+    orderBy: { tipoKit: "asc" },
+  });
+  
   const parroquiasDisp = await prisma.parroquia.findMany({
     where: { estado: "ACTIVO" },
     select: { nombre: true },
@@ -369,6 +382,14 @@ export default async function IncidentePage({ params }: { params: Promise<{ id: 
       catalogo: c.catalogo?.nombreCatalogo ?? "",
     })),
 
+    kitsEmergencia: kitsEmergencia.map((k) => ({
+      id: k.idKitEmergencia,
+      tipoKit: k.tipoKit,
+      descripcion: k.descripcion,
+      stockActual: k.stockActual,
+      codigoAlmacen: k.codigoAlmacen,
+      ubicacionAlmacen: k.ubicacionAlmacen,
+    })),    
     parroquias: parroquiasDisp.map((p) => p.nombre),
 
     // Contexto del usuario actual
