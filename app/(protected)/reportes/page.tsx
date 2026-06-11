@@ -15,93 +15,139 @@ export default async function ReportesPage({
   const role = toFrontendRole(session.role);
   if (!["admin", "especialistaGRD", "comite", "jefaOGP"].includes(role)) redirect("/dashboard");
 
-  // 1. Manejo de Filtros de Fecha (RF100, RF104)
-  // Por defecto muestra los últimos 30 días si no se selecciona nada
   const hoy = new Date();
   const haceUnMes = new Date();
   haceUnMes.setMonth(hoy.getMonth() - 1);
 
-  // Compatibilidad con Next.js 14 y 15 (searchParams puede ser asíncrono en v15)
-  const params = await searchParams; 
+  const params = await searchParams;
   const desde = params?.desde ? new Date(params.desde) : haceUnMes;
   const hasta = params?.hasta ? new Date(params.hasta) : hoy;
-  
-  // Ajustamos 'hasta' para incluir todo el día hasta las 23:59:59
   hasta.setHours(23, 59, 59, 999);
   const filtroFecha = { gte: desde, lte: hasta };
 
-  // 2. Consultas a la Base de Datos (Paralelizadas para máxima velocidad)
   const [
-    // Incidencias filtradas por fecha
     totalIncidencias,
     incidenciasList,
     estadoGroups,
     tipoGroups,
-    
-    // Indicadores globales (RF98, RF99, RF102, RF103)
     totalBrigadistas,
     brigadistasCapacitados,
     totalParroquias,
     parroquiasConPlanAprobado,
     totalActividades,
     actividadesEjecutadas,
-    movimientosKitsEntregados
+    movimientosKitsEntregados,
   ] = await Promise.all([
-    // Incidencias
     prisma.incidencia.count({ where: { fechaRegistro: filtroFecha } }),
-    prisma.incidencia.findMany({ 
+    prisma.incidencia.findMany({
       where: { fechaRegistro: filtroFecha },
       include: { parroquia: true, usuarioResponsable: true },
-      orderBy: { fechaRegistro: 'desc' }
+      orderBy: { fechaRegistro: "asc" },
     }),
-    prisma.incidencia.groupBy({ by: ["estadoActual"], where: { fechaRegistro: filtroFecha }, _count: { _all: true } }),
-    prisma.incidencia.groupBy({ by: ["tipoEvento"], where: { fechaRegistro: filtroFecha }, _count: { _all: true } }),
-    
-    // KPIs Generales
+    prisma.incidencia.groupBy({
+      by: ["estadoActual"],
+      where: { fechaRegistro: filtroFecha },
+      _count: { _all: true },
+    }),
+    prisma.incidencia.groupBy({
+      by: ["tipoEvento"],
+      where: { fechaRegistro: filtroFecha },
+      _count: { _all: true },
+    }),
     prisma.brigadistaParroquial.count(),
-    prisma.brigadistaParroquial.count({ where: { idCertificacionCurso: { not: null } } }), // RF98
-    
+    prisma.brigadistaParroquial.count({ where: { idCertificacionCurso: { not: null } } }),
     prisma.parroquia.count(),
-    prisma.parroquia.count({ where: { planesTrabajo: { some: { estadoAprobacion: "APROBADO" } } } }), // RF99
-    
+    prisma.parroquia.count({
+      where: { planesTrabajo: { some: { estadoAprobacion: "APROBADO" } } },
+    }),
     prisma.actividadPreventiva.count(),
-    prisma.actividadPreventiva.count({ where: { estadoActividad: "EJECUTADA" } }), // RF103
-
-    prisma.movimientoKit.aggregate({ 
-      where: { tipoMovimiento: "SALIDA" }, 
-      _sum: { cantidad: true } 
-    }) // RF102 (Salidas de almacén)
+    prisma.actividadPreventiva.count({ where: { estadoActividad: "EJECUTADA" } }),
+    prisma.movimientoKit.aggregate({
+      where: { tipoMovimiento: "SALIDA" },
+      _sum: { cantidad: true },
+    }),
   ]);
 
-  // 3. Formateo de Datos para Recharts
-  const porEstado = estadoGroups.map((g) => ({ label: g.estadoActual || "Sin estado", value: g._count._all }));
+  // Derived data from incidenciasList (no extra DB round-trips)
+  const tendenciaMap = new Map<string, number>();
+  for (const inc of incidenciasList) {
+    const day = inc.fechaRegistro.toISOString().split("T")[0];
+    tendenciaMap.set(day, (tendenciaMap.get(day) ?? 0) + 1);
+  }
+  const porDia = Array.from(tendenciaMap.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([d, v]) => ({ label: d.slice(5), value: v }));
+
+  const parroquiaMap = new Map<string, number>();
+  for (const inc of incidenciasList) {
+    if (!inc.parroquia) continue;
+    parroquiaMap.set(inc.parroquia.nombre, (parroquiaMap.get(inc.parroquia.nombre) ?? 0) + 1);
+  }
+  const topParroquias = Array.from(parroquiaMap.entries())
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 5)
+    .map(([label, value]) => ({ label, value }));
+
+  const gravedadMap = new Map<string, number>();
+  for (const inc of incidenciasList) {
+    const g = inc.gravedad ?? "Sin definir";
+    gravedadMap.set(g, (gravedadMap.get(g) ?? 0) + 1);
+  }
+  const porGravedad = Array.from(gravedadMap.entries())
+    .map(([label, value]) => ({ label, value }))
+    .sort((a, b) => b.value - a.value);
+
+  // Normalize underscore variants (e.g. DATA_RECOPILADA → DATA RECOPILADA) and merge duplicate groups
+  const estadoMerged = new Map<string, number>();
+  for (const g of estadoGroups) {
+    const label = (g.estadoActual || "Sin estado").replace(/_/g, " ");
+    estadoMerged.set(label, (estadoMerged.get(label) ?? 0) + g._count._all);
+  }
+  const porEstado = Array.from(estadoMerged.entries()).map(([label, value]) => ({ label, value }));
   const porTipo = tipoGroups
     .filter((g) => g.tipoEvento)
     .map((g) => ({ label: g.tipoEvento as string, value: g._count._all }));
 
-  // 4. Formateo de Tabla de Exportación (RF35)
-  const dataExportacion = incidenciasList.map(inc => ({
+  const dataExportacion = incidenciasList.map((inc) => ({
     Codigo: inc.codigoCaso || "-",
-    Fecha: inc.fechaRegistro.toLocaleDateString(),
+    Fecha: inc.fechaRegistro.toLocaleDateString("es-PE"),
     Tipo: inc.tipoEvento || "-",
     Gravedad: inc.gravedad || "-",
     Estado: inc.estadoActual,
     Parroquia: inc.parroquia?.nombre || "No asignada",
-    Ubicacion: inc.direccionEvento || "-"
+    Ubicacion: inc.direccionEvento || "-",
   }));
 
   return (
     <ReportesModule
-      filtros={{ desde: desde.toISOString().split('T')[0], hasta: hasta.toISOString().split('T')[0] }}
+      filtros={{
+        desde: desde.toISOString().split("T")[0],
+        hasta: hasta.toISOString().split("T")[0],
+      }}
       totales={{
         incidencias: totalIncidencias,
-        pctBrigadistasCapacitados: totalBrigadistas > 0 ? Math.round((brigadistasCapacitados / totalBrigadistas) * 100) : 0,
-        pctParroquiasPlan: totalParroquias > 0 ? Math.round((parroquiasConPlanAprobado / totalParroquias) * 100) : 0,
-        pctActividadesEjecutadas: totalActividades > 0 ? Math.round((actividadesEjecutadas / totalActividades) * 100) : 0,
-        kitsEntregados: movimientosKitsEntregados._sum.cantidad || 0
+        pctBrigadistasCapacitados:
+          totalBrigadistas > 0
+            ? Math.round((brigadistasCapacitados / totalBrigadistas) * 100)
+            : 0,
+        pctParroquiasPlan:
+          totalParroquias > 0
+            ? Math.round((parroquiasConPlanAprobado / totalParroquias) * 100)
+            : 0,
+        pctActividadesEjecutadas:
+          totalActividades > 0
+            ? Math.round((actividadesEjecutadas / totalActividades) * 100)
+            : 0,
+        kitsEntregados: movimientosKitsEntregados._sum.cantidad || 0,
+        totalBrigadistas,
+        totalParroquias,
+        totalActividades,
       }}
       porEstado={porEstado}
       porTipo={porTipo}
+      porDia={porDia}
+      topParroquias={topParroquias}
+      porGravedad={porGravedad}
       dataExportacion={dataExportacion}
     />
   );
