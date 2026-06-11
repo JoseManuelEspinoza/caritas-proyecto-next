@@ -250,6 +250,9 @@ export async function cargarDetalleIncidencia(
     reportanteRol: inc.aviso?.medioAviso ?? null,
     fechaRegistro: inc.fechaRegistro.toISOString(),
     parroquia: inc.parroquia?.nombre ?? null,
+    idParroquia: inc.idParroquia ?? null,
+    latitud: inc.latitud != null ? Number(inc.latitud) : null,
+    longitud: inc.longitud != null ? Number(inc.longitud) : null,
 
     aviso: inc.aviso
       ? {

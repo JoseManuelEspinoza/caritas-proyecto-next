@@ -1,23 +1,15 @@
-import { presignEvidencia } from "@/app/actions/evidencias";
+import { subirArchivoS3 } from "@/app/ui/shared/file-upload";
 
 /**
- * Sube un archivo de evidencia a S3 (presign + PUT) y devuelve el object key.
- * Lanza Error si el presign falla o el PUT no es 2xx.
- * Centraliza el patrón que antes estaba duplicado en varios paneles.
+ * Sube un archivo de evidencia a S3 y devuelve el object key.
+ * Lanza Error con mensaje legible si el archivo no es válido o la subida falla.
+ * Usa el flujo estándar del sistema (upload-config + presign + PUT directo),
+ * que valida tipo y tamaño igual en cliente y servidor.
  */
 export async function subirEvidencia(file: File, incidenciaId: string): Promise<string> {
-  const contentType = file.type || "application/octet-stream";
-  const res = await presignEvidencia({
-    nombreArchivo: file.name,
-    contentType,
-    incidenciaId,
+  const subido = await subirArchivoS3(file, {
+    tipo: "evidencia-incidencia",
+    entidadId: incidenciaId,
   });
-  if (!res.ok) throw new Error(res.message);
-  const put = await fetch(res.uploadUrl, {
-    method: "PUT",
-    body: file,
-    headers: { "Content-Type": contentType },
-  });
-  if (!put.ok) throw new Error(`Error al subir (${put.status})`);
-  return res.key;
+  return subido.key;
 }

@@ -139,6 +139,10 @@ export type IncidenciaDetalleOutput = {
   reportanteRol: string | null;
   fechaRegistro: string;
   parroquia: string | null;
+  /** Para el algoritmo de sugerencia (RF36): parroquia y coordenadas del incidente. */
+  idParroquia: string | null;
+  latitud: number | null;
+  longitud: number | null;
   aviso: AvisoDetalle | null;
   asignaciones: AsignacionDetalle[];
   responsableGRD: { id: string; nombre: string; correo: string | null } | null;
