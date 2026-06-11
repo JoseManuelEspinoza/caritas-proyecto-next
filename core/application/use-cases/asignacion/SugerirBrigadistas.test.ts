@@ -223,6 +223,22 @@ function makeRepo(escenario: "E1" | "E2" | "E3" | "E4"): ISugerenciaBrigadistasR
       return INCIDENCIAS[id] ?? 0;
     },
 
+    async getCargaActual() {
+      return 0; // en los datos de prueba nadie tiene carga actual
+    },
+
+    async getTiempoRespuestaPromedioHoras() {
+      return null; // sin historial de tiempos en el dataset
+    },
+
+    async getParroquiasConCoords() {
+      return Object.values(PARROQUIAS).map((p) => ({
+        idParroquia: p.idParroquia,
+        latitud: p.latitud,
+        longitud: p.longitud,
+      }));
+    },
+
     async registrarIntentoFallido() {
       // En tests no hace nada
     },
@@ -347,43 +363,55 @@ describe("✅ Escenario 1 — Fase 1: brigadistas en la parroquia del incidente"
 // ════════════════════════════════════════════════════════════════════════════
 // TESTS — Escenario 2: Fase 2
 // ════════════════════════════════════════════════════════════════════════════
-describe("🔍 Escenario 2 — Fase 2: búsqueda en todas las parroquias", () => {
+describe("🔍 Escenario 2 — Fase 2: cascada por niveles del grafo + score combinado", () => {
   test("retorna faseResultado = F2", async () => {
     const res = await ejecutar(makeRepo("E2"), ENTRADA_BASE);
     expect(res.faseResultado).toBe("F2");
   });
 
-  test("lista ordenada por distanciaKm ASC", async () => {
+  test("todos los candidatos traen scoreFinal y nivel", async () => {
     const res = await ejecutar(makeRepo("E2"), ENTRADA_BASE);
-    const dists = res.listaSugerida.map((c) => c.distanciaKm).filter((d) => d !== null) as number[];
-    for (let i = 0; i < dists.length - 1; i++) {
-      expect(dists[i]).toBeLessThanOrEqual(dists[i + 1]);
-    }
+    expect(res.listaSugerida.length).toBeGreaterThan(0);
+    res.listaSugerida.forEach((c) => {
+      expect(typeof c.scoreFinal).toBe("number");
+      expect(typeof c.nivel).toBe("number");
+    });
   });
 
-  test("BRI-07 (PAR-02, ~0.48 km) aparece primero", async () => {
+  test("BRI-07 (más cercano y sin carga) aparece primero", async () => {
     const res = await ejecutar(makeRepo("E2"), ENTRADA_BASE);
     expect(res.listaSugerida[0].idBrigadistaParroquial).toBe("BRI-07");
   });
 
-  test("BRI-09 (PAR-04, otra zona pastoral) tiene mismaZonaPastoral=false", async () => {
+  test("orden: nivel ASC y, dentro del nivel, scoreFinal DESC", async () => {
     const res = await ejecutar(makeRepo("E2"), ENTRADA_BASE);
-    const bri09 = res.listaSugerida.find((c) => c.idBrigadistaParroquial === "BRI-09");
-    expect(bri09).toBeDefined();
-    expect(bri09!.mismaZonaPastoral).toBe(false);
+    for (let i = 0; i < res.listaSugerida.length - 1; i++) {
+      const a = res.listaSugerida[i];
+      const b = res.listaSugerida[i + 1];
+      const na = a.nivel ?? 99;
+      const nb = b.nivel ?? 99;
+      if (na === nb) {
+        expect(a.scoreFinal ?? 0).toBeGreaterThanOrEqual(b.scoreFinal ?? 0);
+      } else {
+        expect(na).toBeLessThanOrEqual(nb);
+      }
+    }
   });
 
-  test("BRI-07 (PAR-02, misma zona pastoral) tiene mismaZonaPastoral=true", async () => {
+  test("los candidatos de Fase 2 caen en niveles del grafo (≥ 2)", async () => {
     const res = await ejecutar(makeRepo("E2"), ENTRADA_BASE);
     const bri07 = res.listaSugerida.find((c) => c.idBrigadistaParroquial === "BRI-07");
-    expect(bri07!.mismaZonaPastoral).toBe(true);
+    expect(bri07!.nivel).toBe(2); // PAR-02, vecina directa de PAR-01 (~0.48 km)
+    // Ningún candidato de F2 es de la parroquia del incidente → nivel ≥ 2.
+    res.listaSugerida.forEach((c) => expect(c.nivel ?? 99).toBeGreaterThanOrEqual(2));
   });
 
-  test("BRI-09 (otra zona, ~1.1 km) aparece antes que BRI-08 (misma zona, ~2.2 km)", async () => {
+  test("indicador mismaZonaPastoral se calcula (BRI-07 true, BRI-09 false)", async () => {
     const res = await ejecutar(makeRepo("E2"), ENTRADA_BASE);
-    const idxBri09 = res.listaSugerida.findIndex((c) => c.idBrigadistaParroquial === "BRI-09");
-    const idxBri08 = res.listaSugerida.findIndex((c) => c.idBrigadistaParroquial === "BRI-08");
-    expect(idxBri09).toBeLessThan(idxBri08);
+    const bri07 = res.listaSugerida.find((c) => c.idBrigadistaParroquial === "BRI-07");
+    const bri09 = res.listaSugerida.find((c) => c.idBrigadistaParroquial === "BRI-09");
+    expect(bri07!.mismaZonaPastoral).toBe(true);
+    expect(bri09!.mismaZonaPastoral).toBe(false);
   });
 });
 

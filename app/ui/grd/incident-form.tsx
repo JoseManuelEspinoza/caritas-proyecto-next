@@ -832,11 +832,18 @@ interface IncidentFormProps {
   incidenciaId?: string;
   /** Código de caso para mostrar en el header */
   codigoCaso?: string;
+  /** Parroquias REALES del sistema (las únicas asignables, para que se guarde idParroquia). */
+  parroquiasSistema?: { nombre: string; lat: number | null; lng: number | null }[];
 }
 
 // ─── Formulario principal ─────────────────────────────────────────────────────
 
-export function IncidentForm({ initialData, incidenciaId, codigoCaso }: IncidentFormProps = {}) {
+export function IncidentForm({
+  initialData,
+  incidenciaId,
+  codigoCaso,
+  parroquiasSistema = [],
+}: IncidentFormProps = {}) {
   const isEdit = Boolean(incidenciaId);
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -1068,46 +1075,27 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
   }
 
   /**
-   * Busca las parroquias/iglesias REALES más cercanas al punto vía Overpass (OSM)
-   * y las deja como únicas opciones del desplegable de parroquia, ordenadas por cercanía.
+   * Ordena las parroquias REALES DEL SISTEMA por cercanía al punto seleccionado.
+   * Solo se ofrecen parroquias que existen en la BD (para que se guarde idParroquia
+   * y el algoritmo de asignación funcione). Las que no tienen coordenadas no se
+   * pueden ordenar pero siguen disponibles en el catálogo completo.
    */
   async function buscarParroquiasCercanas(la: number, lo: number) {
     setCargandoParroquias(true);
     try {
-      for (const radio of [2000, 5000, 12000]) {
-        const query = `[out:json][timeout:25];(node["amenity"="place_of_worship"]["religion"="christian"](around:${radio},${la},${lo});way["amenity"="place_of_worship"]["religion"="christian"](around:${radio},${la},${lo}););out center tags;`;
-        const res = await fetch("https://overpass-api.de/api/interpreter", {
-          method: "POST",
-          body: query,
-        });
-        if (!res.ok) continue;
-        const data = await res.json();
-        type El = {
-          lat?: number;
-          lon?: number;
-          center?: { lat: number; lon: number };
-          tags?: { name?: string };
-        };
-        const items = ((data.elements ?? []) as El[])
-          .map((e) => {
-            const elat = e.lat ?? e.center?.lat;
-            const elon = e.lon ?? e.center?.lon;
-            const name = e.tags?.name;
-            if (!name || elat == null || elon == null) return null;
-            return { name: name.trim(), dist: distanciaMetros(la, lo, elat, elon) };
-          })
-          .filter((x): x is { name: string; dist: number } => x !== null)
-          .sort((a, b) => a.dist - b.dist);
-        // Dedupe por nombre, conservando la más cercana
-        const unicas = Array.from(new Map(items.map((i) => [i.name.toLowerCase(), i])).values());
-        if (unicas.length > 0) {
-          setParroquiasCercanas(unicas.slice(0, 12).map((u) => u.name));
-          return;
-        }
+      const conCoords = parroquiasSistema.filter((p) => p.lat != null && p.lng != null);
+      if (conCoords.length === 0) {
+        setParroquiasCercanas(null); // sin coords → usar catálogo completo del sistema
+        return;
       }
-      setParroquiasCercanas([]); // no se encontraron cercanas
-    } catch {
-      setParroquiasCercanas(null); // error → vuelve al catálogo general
+      const ordenadas = conCoords
+        .map((p) => ({
+          nombre: p.nombre,
+          dist: distanciaMetros(la, lo, p.lat as number, p.lng as number),
+        }))
+        .sort((a, b) => a.dist - b.dist)
+        .map((p) => p.nombre);
+      setParroquiasCercanas(ordenadas);
     } finally {
       setCargandoParroquias(false);
     }
@@ -1816,16 +1804,16 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
                       options={
                         parroquiasCercanas && parroquiasCercanas.length > 0
                           ? parroquiasCercanas
-                          : PARROQUIAS_LIMA
+                          : parroquiasSistema.length > 0
+                            ? parroquiasSistema.map((p) => p.nombre)
+                            : PARROQUIAS_LIMA
                       }
-                      placeholder="Buscar parroquia (opcional)…"
+                      placeholder="Buscar parroquia del sistema…"
                     />
                     <p className="text-[11px] text-gray-400 mt-1">
                       {parroquiasCercanas && parroquiasCercanas.length > 0
-                        ? "Mostrando solo las parroquias más cercanas al punto seleccionado."
-                        : parroquiasCercanas?.length === 0
-                          ? "No se encontraron parroquias cercanas; se muestra el listado general."
-                          : "Marca un punto en el mapa para ver las parroquias más cercanas."}
+                        ? "Solo parroquias registradas en el sistema, ordenadas por cercanía al punto."
+                        : "Solo se pueden asignar parroquias registradas en el sistema. Marca un punto en el mapa para ordenarlas por cercanía."}
                     </p>
                   </div>
 
