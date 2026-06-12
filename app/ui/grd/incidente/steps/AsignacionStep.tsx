@@ -1,11 +1,63 @@
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Pencil, UserCheck, Users, UserPlus, Search, Star, Plus, Loader2 } from "lucide-react";
+import {
+  Pencil,
+  UserCheck,
+  Users,
+  UserPlus,
+  Search,
+  Star,
+  Plus,
+  Loader2,
+  Sparkles,
+  Navigation,
+} from "lucide-react";
 import { assignEquipo, autoasignarme } from "@/app/actions/incidents";
-import type { IncidenciaDetalleOutput } from "@/core/application/dtos/IncidenciaDetalleDTO";
+import type {
+  IncidenciaDetalleOutput,
+  BrigadistaDisponible,
+} from "@/core/application/dtos/IncidenciaDetalleDTO";
+import type {
+  CandidatoSugerido,
+  FaseResultado,
+} from "@/core/application/dtos/SugerenciaBrigadistasDTO";
 import { permisosDeDetalle } from "@/app/lib/permisos-incidencia";
 import { BrigCard } from "@/app/ui/grd/incidente/components/BrigadistaCard";
 import { avatarColor, iniciales } from "@/app/ui/grd/incidente/lib/avatar";
+
+// ── Algoritmo de sugerencia (RF36) ────────────────────────────────────────────
+
+/** El endpoint valida un enum cerrado; el tipoEvento del caso es texto libre. */
+const TIPO_INCIDENTE_MAP: Record<string, string> = {
+  incendio: "INCENDIO",
+  inundacion: "INUNDACION",
+  inundación: "INUNDACION",
+  derrumbe: "DERRUMBE",
+  deslizamiento: "DERRUMBE",
+  huaico: "DERRUMBE",
+  tsunami: "TSUNAMI",
+  sismo: "COLAPSO_INFRAESTRUCTURA",
+  terremoto: "COLAPSO_INFRAESTRUCTURA",
+  vendaval: "PERDIDA_VIVIENDA",
+};
+
+function mapTipoIncidente(tipoEvento: string | null): string {
+  const t = (tipoEvento ?? "").trim().toLowerCase();
+  for (const [clave, valor] of Object.entries(TIPO_INCIDENTE_MAP)) {
+    if (t.includes(clave)) return valor;
+  }
+  return "COLAPSO_INFRAESTRUCTURA";
+}
+
+const FASE_LABEL: Record<FaseResultado, string> = {
+  F1: "Fase 1 — brigadistas de la misma parroquia, ordenados por confianza",
+  F2: "Fase 2 — parroquias cercanas (grafo), por score combinado",
+  F2B: "Fase 2B — voluntarios/aliados de la zona",
+  F3: "Sin candidatos disponibles",
+};
+
+type SugerenciaInfo = { fase: FaseResultado; mensaje: string | null; total: number };
+type ScoreSugerido = { rank: number; score: number | null; dist: number | null; nivel: number | null };
 
 /** Paso "Asignar Equipo": designa responsable + integrantes (drag&drop) o autoasignación. */
 export function AsignacionStep({
@@ -39,13 +91,81 @@ export function AsignacionStep({
     from: "responsable" | "equipo" | "catalogo";
   } | null>(null);
 
+  // ── Sugerencia con algoritmo (RF36) ──
+  const [sugiriendo, setSugiriendo] = useState(false);
+  const [sugInfo, setSugInfo] = useState<SugerenciaInfo | null>(null);
+  const [sugScores, setSugScores] = useState<Map<string, ScoreSugerido>>(new Map());
+  const [extraSug, setExtraSug] = useState<BrigadistaDisponible[]>([]);
+
+  async function handleSugerir() {
+    if (!data.idParroquia) {
+      toast.error(
+        "El incidente no tiene una parroquia del sistema registrada; el algoritmo necesita una parroquia de partida."
+      );
+      return;
+    }
+    setSugiriendo(true);
+    try {
+      const res = await fetch("/api/grd/asignar-brigadista", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          idParroquia: data.idParroquia,
+          latitud: data.latitud,
+          longitud: data.longitud,
+          tipoIncidente: mapTipoIncidente(data.tipoEvento),
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.message ?? "No se pudo generar la sugerencia.");
+
+      const lista = (json.listaSugerida ?? []) as CandidatoSugerido[];
+      const scores = new Map<string, ScoreSugerido>();
+      lista.forEach((c, i) =>
+        scores.set(c.idBrigadistaParroquial, {
+          rank: i,
+          score: c.scoreFinal ?? c.scoreConfianza ?? null,
+          dist: c.distanciaKm,
+          nivel: c.nivel ?? null,
+        })
+      );
+      setSugScores(scores);
+      setSugInfo({ fase: json.faseResultado, mensaje: json.mensaje ?? null, total: lista.length });
+
+      // Candidatos sugeridos que no estaban en la lista visible (top 100 por nombre)
+      const conocidos = new Set(data.brigadistasDisponibles.map((b) => b.id));
+      setExtraSug(
+        lista
+          .filter((c) => !conocidos.has(c.idBrigadistaParroquial))
+          .map((c) => ({
+            id: c.idBrigadistaParroquial,
+            nombres: c.nombres,
+            apellidos: c.apellidos,
+            celular: c.celular,
+            disponibilidad: c.disponibilidad,
+            parroquia: c.nombreParroquia,
+          }))
+      );
+
+      if (lista.length === 0) {
+        toast.info(json.mensaje ?? "El algoritmo no encontró candidatos disponibles.");
+      } else {
+        toast.success(`El algoritmo sugirió ${lista.length} candidato(s), ordenados al inicio.`);
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo generar la sugerencia.");
+    } finally {
+      setSugiriendo(false);
+    }
+  }
+
   const seleccionados = [responsable, ...equipo].filter(Boolean);
   const esRecomendado = (parroquia: string | null) =>
     !!data.parroquia &&
     !!parroquia &&
     parroquia.trim().toLowerCase() === data.parroquia.trim().toLowerCase();
 
-  const catalogo = data.brigadistasDisponibles
+  const catalogo = [...data.brigadistasDisponibles, ...extraSug]
     .filter((b) => !seleccionados.includes(b.id))
     .filter((b) => {
       const q = query.trim().toLowerCase();
@@ -56,6 +176,10 @@ export function AsignacionStep({
       );
     })
     .sort((a, b) => {
+      // Los sugeridos por el algoritmo van primero, en su orden de ranking.
+      const ra = sugScores.get(a.id)?.rank ?? Infinity;
+      const rb = sugScores.get(b.id)?.rank ?? Infinity;
+      if (ra !== rb) return ra - rb;
       const aDisp = a.disponibilidad === "DISPONIBLE" ? 1 : 0;
       const bDisp = b.disponibilidad === "DISPONIBLE" ? 1 : 0;
       if (bDisp !== aDisp) return bDisp - aDisp;
@@ -65,6 +189,7 @@ export function AsignacionStep({
   function findBrig(id: string) {
     return (
       data.brigadistasDisponibles.find((b) => b.id === id) ??
+      extraSug.find((b) => b.id === id) ??
       data.asignaciones.find((a) => a.brigadistaId === id)
     );
   }
@@ -398,15 +523,47 @@ export function AsignacionStep({
               </div>
             )}
 
-            <div className="relative">
-              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Buscar por nombre o parroquia..."
-                className="w-full pl-9 pr-3 py-2 text-sm border border-[#DDDDDD] rounded-lg focus:outline-none focus:border-[var(--caritas-green)]"
-              />
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Buscar por nombre o parroquia..."
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-[#DDDDDD] rounded-lg focus:outline-none focus:border-[var(--caritas-green)]"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleSugerir}
+                disabled={sugiriendo}
+                title="Ordena la lista con el algoritmo de sugerencia (confianza + disponibilidad + cercanía)"
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border border-[var(--caritas-green)]/40 text-[var(--caritas-green)] hover:bg-[var(--caritas-green)]/5 transition-colors disabled:opacity-50 whitespace-nowrap"
+              >
+                {sugiriendo ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Sparkles className="w-4 h-4" />
+                )}
+                Sugerir con algoritmo
+              </button>
             </div>
+
+            {sugInfo && (
+              <div
+                className={`px-3 py-2 rounded-lg border text-xs ${
+                  sugInfo.fase === "F3" || sugInfo.total === 0
+                    ? "bg-amber-50 border-amber-200 text-amber-800"
+                    : "bg-[var(--caritas-green)]/5 border-[var(--caritas-green)]/30 text-[#007a40]"
+                }`}
+              >
+                <p className="font-semibold flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  {FASE_LABEL[sugInfo.fase] ?? "Sugerencia del algoritmo"}
+                </p>
+                {sugInfo.mensaje && <p className="mt-0.5">{sugInfo.mensaje}</p>}
+              </div>
+            )}
 
             <div className="space-y-2 max-h-60 overflow-y-auto pr-1 border border-gray-100 rounded-xl">
               {catalogo.length === 0 ? (
@@ -414,6 +571,7 @@ export function AsignacionStep({
               ) : (
                 catalogo.map((b) => {
                   const rec = esRecomendado(b.parroquia);
+                  const sug = sugScores.get(b.id);
                   return (
                     <button
                       type="button"
@@ -436,6 +594,21 @@ export function AsignacionStep({
                           <p className="text-sm font-medium text-gray-800 truncate">
                             {b.nombres} {b.apellidos ?? ""}
                           </p>
+                          {sug && (
+                            <span
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-[var(--caritas-green)]/10 text-[#007a40]"
+                              title={`Sugerido por el algoritmo (puesto ${sug.rank + 1})`}
+                            >
+                              <Sparkles className="w-3 h-3" />
+                              {sug.score != null ? `${Math.round(sug.score * 10)}%` : `#${sug.rank + 1}`}
+                            </span>
+                          )}
+                          {sug?.dist != null && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700">
+                              <Navigation className="w-3 h-3" />
+                              {sug.dist.toFixed(1)} km
+                            </span>
+                          )}
                           {rec && (
                             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700">
                               <Star className="w-3 h-3 fill-amber-500 text-amber-500" /> RECOMENDADO

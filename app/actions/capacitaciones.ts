@@ -7,6 +7,7 @@ import { makeCursoUseCases } from "@/core/infrastructure/factories/makeCursoUseC
 import { DomainError } from "@/core/domain/errors/DomainError";
 import { logGRDAction } from "@/app/lib/audit";
 import { prisma } from "@/app/lib/prisma";
+import { TIPOS_MATERIAL as TIPOS_MATERIAL_VALIDOS } from "@/app/lib/capacitaciones-tipos";
 import type { ParticipanteData } from "@/core/domain/repositories/ICursoRepository";
 import { sendCertificadoEmail } from "@/app/lib/email";
 
@@ -52,13 +53,6 @@ function fail(err: unknown, fallback: string) {
   console.error("[Capacitaciones] Error inesperado:", err);
   return { message: fallback };
 }
-const TIPOS_MATERIAL_VALIDOS = [
-  "Documento (PDF, Word, Excel)",
-  "Presentación",
-  "Video",
-  "Enlace web",
-  "Otro",
-];
 
 const TIPOS_EVALUACION_VALIDOS = ["INICIAL", "FINAL", "UNICO"];
 

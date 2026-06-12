@@ -115,6 +115,15 @@ export type CatalogoArticuloDetalle = {
   catalogo: string;
 };
 
+/** Kit real del módulo de Kits de Emergencia, con su composición y stock. */
+export type KitEmergenciaDetalle = {
+  id: string;
+  tipoKit: string;
+  descripcion: string | null;
+  stockActual: number;
+  articulos: { codigo: string | null; descripcion: string; cantidad: number }[];
+};
+
 /** Contexto del usuario que abre el detalle (sesión + relación con el caso). */
 export type ContextoUsuarioDetalle = {
   role: Rol;
@@ -139,6 +148,10 @@ export type IncidenciaDetalleOutput = {
   reportanteRol: string | null;
   fechaRegistro: string;
   parroquia: string | null;
+  /** Para el algoritmo de sugerencia (RF36): parroquia y coordenadas del incidente. */
+  idParroquia: string | null;
+  latitud: number | null;
+  longitud: number | null;
   aviso: AvisoDetalle | null;
   asignaciones: AsignacionDetalle[];
   responsableGRD: { id: string; nombre: string; correo: string | null } | null;
@@ -152,5 +165,6 @@ export type IncidenciaDetalleOutput = {
   brigadistasDisponibles: BrigadistaDisponible[];
   evidencias: EvidenciaDetalle[];
   catalogoArticulos: CatalogoArticuloDetalle[];
+  kitsEmergencia: KitEmergenciaDetalle[];
   parroquias: string[];
 } & ContextoUsuarioDetalle;

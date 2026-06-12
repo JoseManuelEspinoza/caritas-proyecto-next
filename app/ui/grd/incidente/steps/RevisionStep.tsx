@@ -71,14 +71,12 @@ export function RevisionStep({
 
   // ── Informe enriquecido del Especialista ──
   type ArtLocal = { codigo: string; descripcion: string; cantidad: number };
-  type KitLocal = { tipoKit: string; articulos: ArtLocal[] };
-  const KIT_TIPOS = [
-    "Kit de Víveres",
-    "Kit de Higiene",
-    "Kit de Dormitorio",
-    "Kit de Complementos",
-    "Otros",
-  ];
+  type KitLocal = { tipoKit: string; idKit?: string; articulos: ArtLocal[] };
+  // Nombres de catálogo presentes en los artículos cargados (módulo Catálogos):
+  // solo se usan para los datalists de códigos de los kits "Otros"/legacy.
+  const KIT_TIPOS = Array.from(new Set(data.catalogoArticulos.map((a) => a.catalogo))).filter(
+    Boolean
+  );
   const [report, setReport] = useState({
     motivo: typeof sc?.motivo === "string" ? sc.motivo : "",
     dirigidoA: typeof sc?.dirigidoA === "string" ? sc.dirigidoA : "Comité de donaciones",
@@ -108,6 +106,7 @@ export function RevisionStep({
           const kit = k as Record<string, unknown>;
           return {
             tipoKit: typeof kit.tipoKit === "string" ? kit.tipoKit : "",
+            idKit: typeof kit.idKit === "string" ? kit.idKit : undefined,
             articulos: Array.isArray(kit.articulos)
               ? (kit.articulos as unknown[]).map((art) => {
                   const ar = art as Record<string, unknown>;
@@ -146,6 +145,30 @@ export function RevisionStep({
       ...p,
       [refId]: [...(p[refId] ?? []), { tipoKit: tipo, articulos: [{ codigo: "", descripcion: "", cantidad: 1 }] }],
     }));
+  // Kit del sistema: precarga su composición real (editable por familia).
+  const addKitSistema = (refId: string, k: (typeof data.kitsEmergencia)[number]) =>
+    setAsignaciones((p) => ({
+      ...p,
+      [refId]: [
+        ...(p[refId] ?? []),
+        {
+          tipoKit: k.tipoKit,
+          idKit: k.id,
+          articulos: k.articulos.length
+            ? k.articulos.map((a) => ({
+                codigo: a.codigo ?? "",
+                descripcion: a.descripcion,
+                cantidad: a.cantidad,
+              }))
+            : [{ codigo: "", descripcion: "", cantidad: 1 }],
+        },
+      ],
+    }));
+  // Uso total de cada kit del sistema en el informe (para avisar si excede stock).
+  const usoKits = new Map<string, number>();
+  for (const kitsFam of Object.values(asignaciones))
+    for (const k of kitsFam) if (k.idKit) usoKits.set(k.idKit, (usoKits.get(k.idKit) ?? 0) + 1);
+  const kitsExcedidos = data.kitsEmergencia.filter((k) => (usoKits.get(k.id) ?? 0) > k.stockActual);
   const removeKit = (refId: string, ki: number) =>
     setAsignaciones((p) => ({ ...p, [refId]: (p[refId] ?? []).filter((_, i) => i !== ki) }));
   const addArt = (refId: string, ki: number) =>
@@ -162,6 +185,13 @@ export function RevisionStep({
         i === ki
           ? { ...k, articulos: k.articulos.map((a, j) => (j === ai ? { ...a, ...patch } : a)) }
           : k
+      ),
+    }));
+  const removeArt = (refId: string, ki: number, ai: number) =>
+    setAsignaciones((p) => ({
+      ...p,
+      [refId]: (p[refId] ?? []).map((k, i) =>
+        i === ki ? { ...k, articulos: k.articulos.filter((_, j) => j !== ai) } : k
       ),
     }));
 
@@ -187,6 +217,8 @@ export function RevisionStep({
     return (asignaciones[refId] ?? [])
       .map((k) => ({
         tipoKit: k.tipoKit,
+        // Referencia al kit real del módulo de Kits (trazabilidad y stock).
+        ...(k.idKit ? { idKit: k.idKit } : {}),
         articulos: k.articulos
           .filter((a) => a.descripcion.trim() || a.codigo.trim())
           .map((a) => ({
@@ -549,6 +581,14 @@ export function RevisionStep({
                   ))}
               </datalist>
             ))}
+            {/* Catálogo completo: para kits del sistema sin catálogo propio */}
+            <datalist id="cat-all">
+              {data.catalogoArticulos.map((a) => (
+                <option key={`${a.catalogo}-${a.codigo}`} value={a.codigo}>
+                  {a.valor}
+                </option>
+              ))}
+            </datalist>
 
             {/* Header morado + resumen del evento */}
             <div className="rounded-xl bg-purple-600 text-white p-4">
@@ -802,66 +842,157 @@ export function RevisionStep({
                                   <X className="w-3.5 h-3.5" />
                                 </button>
                               </div>
-                              {kit.articulos.map((a, ai) => (
-                                <div key={ai} className="flex items-center gap-1.5 mb-1">
-                                  <input
-                                    list={`cat-${KIT_TIPOS.indexOf(kit.tipoKit)}`}
-                                    className="w-20 px-2 py-1 text-xs border border-gray-200 rounded"
-                                    placeholder="Código"
-                                    value={a.codigo}
-                                    onChange={(e) => {
-                                      const codigo = e.target.value;
-                                      const cat = data.catalogoArticulos.find(
-                                        (c) => c.codigo === codigo && c.catalogo === kit.tipoKit
-                                      );
-                                      updArt(g.id, ki, ai, {
-                                        codigo,
-                                        ...(cat ? { descripcion: cat.valor } : {}),
-                                      });
-                                    }}
-                                  />
-                                  <input
-                                    className="flex-1 px-2 py-1 text-xs border border-gray-200 rounded"
-                                    placeholder="Descripción del artículo"
-                                    value={a.descripcion}
-                                    onChange={(e) => updArt(g.id, ki, ai, { descripcion: e.target.value })}
-                                  />
-                                  <input
-                                    type="number"
-                                    min={1}
-                                    className="w-14 px-2 py-1 text-xs border border-gray-200 rounded"
-                                    value={a.cantidad}
-                                    onChange={(e) =>
-                                      updArt(g.id, ki, ai, { cantidad: parseInt(e.target.value, 10) || 1 })
-                                    }
-                                  />
-                                </div>
-                              ))}
-                              <button
-                                type="button"
-                                onClick={() => addArt(g.id, ki)}
-                                className="text-[11px] text-purple-600 flex items-center gap-1 mt-1"
-                              >
-                                <Plus className="w-3 h-3" /> Artículo
-                              </button>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+                                {kit.articulos.map((a, ai) => (
+                                  <div
+                                    key={ai}
+                                    className="flex items-center gap-1 bg-white border border-purple-100 rounded px-1.5 py-1"
+                                  >
+                                    {kit.idKit ? (
+                                      <>
+                                        {/* Elementos del kit del sistema: solo lectura (se gestionan en el módulo Kits) */}
+                                        {a.codigo && (
+                                          <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-mono bg-purple-50 text-purple-500 rounded">
+                                            {a.codigo}
+                                          </span>
+                                        )}
+                                        <span className="flex-1 min-w-0 truncate text-[11px] text-gray-700">
+                                          {a.descripcion}
+                                        </span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <input
+                                          list={
+                                            KIT_TIPOS.includes(kit.tipoKit)
+                                              ? `cat-${KIT_TIPOS.indexOf(kit.tipoKit)}`
+                                              : "cat-all"
+                                          }
+                                          className="w-16 px-1.5 py-0.5 text-[11px] border border-gray-200 rounded text-gray-500"
+                                          placeholder="Cód."
+                                          value={a.codigo}
+                                          onChange={(e) => {
+                                            const codigo = e.target.value;
+                                            const cat =
+                                              data.catalogoArticulos.find(
+                                                (c) => c.codigo === codigo && c.catalogo === kit.tipoKit
+                                              ) ?? data.catalogoArticulos.find((c) => c.codigo === codigo);
+                                            updArt(g.id, ki, ai, {
+                                              codigo,
+                                              ...(cat ? { descripcion: cat.valor } : {}),
+                                            });
+                                          }}
+                                        />
+                                        <input
+                                          className="flex-1 min-w-0 px-1.5 py-0.5 text-[11px] border border-gray-200 rounded"
+                                          placeholder="Artículo"
+                                          value={a.descripcion}
+                                          onChange={(e) => updArt(g.id, ki, ai, { descripcion: e.target.value })}
+                                        />
+                                      </>
+                                    )}
+                                    <div className="flex items-center shrink-0">
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          updArt(g.id, ki, ai, { cantidad: Math.max(1, a.cantidad - 1) })
+                                        }
+                                        className="w-5 h-5 flex items-center justify-center rounded border border-gray-200 text-gray-500 hover:bg-purple-50 text-xs leading-none"
+                                        title="Quitar uno"
+                                      >
+                                        −
+                                      </button>
+                                      <span className="w-7 text-center text-[11px] font-semibold text-gray-700">
+                                        {a.cantidad}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => updArt(g.id, ki, ai, { cantidad: a.cantidad + 1 })}
+                                        className="w-5 h-5 flex items-center justify-center rounded border border-gray-200 text-gray-500 hover:bg-purple-50 text-xs leading-none"
+                                        title="Agregar uno"
+                                      >
+                                        +
+                                      </button>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => removeArt(g.id, ki, ai)}
+                                      className="shrink-0 p-0.5 text-gray-300 hover:text-red-500"
+                                      title="Quitar artículo"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                              {/* Solo los kits ad-hoc ("Otros") permiten agregar artículos libres */}
+                              {!kit.idKit && (
+                                <button
+                                  type="button"
+                                  onClick={() => addArt(g.id, ki)}
+                                  className="text-[10px] text-purple-600 flex items-center gap-0.5 mt-1.5"
+                                >
+                                  <Plus className="w-3 h-3" /> Agregar artículo
+                                </button>
+                              )}
                             </div>
                           ))}
 
                           <div className="flex flex-wrap gap-1.5">
-                            {KIT_TIPOS.map((t) => (
-                              <button
-                                key={t}
-                                type="button"
-                                onClick={() => addKit(g.id, t)}
-                                className="text-[11px] px-2 py-1 border border-dashed border-purple-300 text-purple-700 rounded-lg hover:bg-purple-50 flex items-center gap-1"
-                              >
-                                <Plus className="w-3 h-3" /> {t}
-                              </button>
-                            ))}
+                            {/* Kits reales del módulo de Kits de Emergencia (con stock) */}
+                            {data.kitsEmergencia.map((k) => {
+                              const usados = usoKits.get(k.id) ?? 0;
+                              const sinStock = k.stockActual - usados <= 0;
+                              return (
+                                <button
+                                  key={k.id}
+                                  type="button"
+                                  onClick={() => addKitSistema(g.id, k)}
+                                  title={k.descripcion ?? undefined}
+                                  className={`text-[11px] px-2 py-1 border border-dashed rounded-lg flex items-center gap-1 ${
+                                    sinStock
+                                      ? "border-amber-300 text-amber-700 hover:bg-amber-50"
+                                      : "border-purple-300 text-purple-700 hover:bg-purple-50"
+                                  }`}
+                                >
+                                  <Plus className="w-3 h-3" /> {k.tipoKit}
+                                  <span className={`font-semibold ${sinStock ? "text-amber-600" : "text-purple-400"}`}>
+                                    · stock {k.stockActual - usados}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                            <button
+                              type="button"
+                              onClick={() => addKit(g.id, "Otros")}
+                              className="text-[11px] px-2 py-1 border border-dashed border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 flex items-center gap-1"
+                            >
+                              <Plus className="w-3 h-3" /> Otros
+                            </button>
                           </div>
+                          {data.kitsEmergencia.length === 0 && (
+                            <p className="text-[11px] text-gray-400">
+                              No hay kits activos en el módulo de Kits de Emergencia; usa
+                              &quot;Otros&quot; o registra kits en ese módulo primero.
+                            </p>
+                          )}
                         </div>
                       );
                     })
+                  )}
+                  {kitsExcedidos.length > 0 && (
+                    <div className="mt-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+                      <p className="font-semibold">⚠ Asignación supera el stock disponible:</p>
+                      {kitsExcedidos.map((k) => (
+                        <p key={k.id}>
+                          {k.tipoKit}: asignados {usoKits.get(k.id)} · stock {k.stockActual}
+                        </p>
+                      ))}
+                      <p className="mt-0.5">
+                        El comité verá esta diferencia; ajusta la asignación o repón stock en el
+                        módulo de Kits.
+                      </p>
+                    </div>
                   )}
                 </Seccion>
 

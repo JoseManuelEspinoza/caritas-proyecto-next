@@ -237,6 +237,23 @@ export async function cargarDetalleIncidencia(
     take: 100,
   });
 
+  // Kits reales del módulo de Kits de Emergencia (con composición y stock),
+  // para que el informe asigne kits del sistema en lugar de una lista fija.
+  const kitsEmergencia = await prisma.kitEmergencia.findMany({
+    where: { estadoKit: "ACTIVO" },
+    select: {
+      idKitEmergencia: true,
+      tipoKit: true,
+      descripcion: true,
+      stockActual: true,
+      articulos: {
+        orderBy: { orden: "asc" },
+        select: { codigo: true, descripcion: true, cantidad: true },
+      },
+    },
+    orderBy: { tipoKit: "asc" },
+  });
+
   const data: IncidenciaDetalleOutput = {
     idIncidencia: inc.idIncidencia,
     codigoCaso: inc.codigoCaso,
@@ -250,6 +267,9 @@ export async function cargarDetalleIncidencia(
     reportanteRol: inc.aviso?.medioAviso ?? null,
     fechaRegistro: inc.fechaRegistro.toISOString(),
     parroquia: inc.parroquia?.nombre ?? null,
+    idParroquia: inc.idParroquia ?? null,
+    latitud: inc.latitud != null ? Number(inc.latitud) : null,
+    longitud: inc.longitud != null ? Number(inc.longitud) : null,
 
     aviso: inc.aviso
       ? {
@@ -368,6 +388,14 @@ export async function cargarDetalleIncidencia(
       valor: c.valor,
       descripcion: c.descripcion,
       catalogo: c.catalogo?.nombreCatalogo ?? "",
+    })),
+
+    kitsEmergencia: kitsEmergencia.map((k) => ({
+      id: k.idKitEmergencia,
+      tipoKit: k.tipoKit,
+      descripcion: k.descripcion,
+      stockActual: k.stockActual,
+      articulos: k.articulos,
     })),
 
     parroquias: parroquiasDisp.map((p) => p.nombre),

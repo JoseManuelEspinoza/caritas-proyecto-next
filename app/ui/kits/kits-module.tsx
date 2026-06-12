@@ -2,9 +2,16 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Package, Plus, ArrowDownCircle, ArrowUpCircle, RefreshCw } from "lucide-react";
+import { Package, Plus, ArrowDownCircle, ArrowUpCircle, RefreshCw, X, ListChecks } from "lucide-react";
 import { toast } from "sonner";
-import { crearKit, registrarMovimientoKit, listarMovimientosKit } from "@/app/actions/kits";
+import {
+  crearKit,
+  registrarMovimientoKit,
+  listarMovimientosKit,
+  listarArticulosKit,
+  guardarArticulosKit,
+  type ArticuloKit,
+} from "@/app/actions/kits";
 import { registrarEvidenciaKit, listarEvidenciasKit } from "@/app/actions/evidencias";
 import { subirArchivoS3 } from "@/app/ui/shared/file-upload";
 import { PaginationControls } from "@/app/ui/shared/pagination-controls";
@@ -40,6 +47,9 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
   const [selected, setSelected] = useState<string | null>(kits[0]?.id ?? null);
   const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
   const [evidencias, setEvidencias] = useState<Evidencia[]>([]);
+  const [articulos, setArticulos] = useState<ArticuloKit[]>([]);
+  const [editandoComposicion, setEditandoComposicion] = useState(false);
+  const [artDraft, setArtDraft] = useState<ArticuloKit[]>([]);
   const [evidenciaFile, setEvidenciaFile] = useState<File | null>(null);
   const [showKitForm, setShowKitForm] = useState(false);
   const [showMovForm, setShowMovForm] = useState(false);
@@ -93,6 +103,8 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
     if (!selected) {
       setMovimientos([]);
       setEvidencias([]);
+      setArticulos([]);
+      setEditandoComposicion(false);
       return () => {
         active = false;
       };
@@ -106,10 +118,29 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
       .then((items) => { if (active) setEvidencias(items); })
       .catch(() => { if (active) setEvidencias([]); });
 
+    setEditandoComposicion(false);
+    listarArticulosKit(selected)
+      .then((items) => { if (active) setArticulos(items); })
+      .catch(() => { if (active) setArticulos([]); });
+
     return () => {
       active = false;
     };
   }, [selected]);
+
+  function guardarComposicion() {
+    if (!selected) return;
+    startTransition(async () => {
+      const res = await guardarArticulosKit(selected, artDraft);
+      if (res && "message" in res) {
+        toast.error(res.message);
+        return;
+      }
+      setArticulos(await listarArticulosKit(selected));
+      setEditandoComposicion(false);
+      toast.success("Composición del kit guardada.");
+    });
+  }
 
   function validarKitForm(): string | null {
     const tipoKit = kitForm.tipoKit.trim();
@@ -468,6 +499,108 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
                   </div>
                 </div>
               )}
+
+              {/* Composición del kit (contenido y cantidades) */}
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm text-gray-600 flex items-center gap-1.5">
+                    <ListChecks className="w-4 h-4 text-[var(--caritas-green)]" />
+                    Composición del kit
+                  </h3>
+                  {!editandoComposicion && (
+                    <button
+                      onClick={() => {
+                        setArtDraft(
+                          articulos.length
+                            ? articulos.map((a) => ({ ...a }))
+                            : [{ codigo: "", descripcion: "", cantidad: 1 }]
+                        );
+                        setEditandoComposicion(true);
+                      }}
+                      className="text-xs font-medium text-[var(--caritas-green)] hover:underline"
+                    >
+                      {articulos.length ? "Editar" : "Definir contenido"}
+                    </button>
+                  )}
+                </div>
+
+                {!editandoComposicion ? (
+                  articulos.length === 0 ? (
+                    <p className="text-xs text-gray-400 border border-dashed border-gray-200 rounded p-3">
+                      Este kit aún no tiene contenido definido. Defínelo para que el informe de
+                      ayuda humanitaria precargue sus artículos al asignarlo a una familia.
+                    </p>
+                  ) : (
+                    <ul className="border border-[var(--caritas-border)] rounded divide-y divide-gray-100">
+                      {articulos.map((a, i) => (
+                        <li key={i} className="flex items-center gap-2 px-3 py-1.5 text-sm">
+                          {a.codigo && (
+                            <span className="text-[10px] font-mono bg-gray-100 px-1.5 py-0.5 rounded text-gray-500">
+                              {a.codigo}
+                            </span>
+                          )}
+                          <span className="flex-1 text-gray-700">{a.descripcion}</span>
+                          <span className="text-xs font-semibold text-gray-500">x{a.cantidad}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )
+                ) : (
+                  <div className="border border-[var(--caritas-border)] rounded p-3 space-y-2">
+                    {artDraft.map((a, i) => (
+                      <div key={i} className="flex items-center gap-1.5">
+                        <input
+                          value={a.descripcion}
+                          onChange={(e) =>
+                            setArtDraft((p) => p.map((x, j) => (j === i ? { ...x, descripcion: e.target.value } : x)))
+                          }
+                          placeholder="Elemento (ej. Arroz 1kg, Frazada...)"
+                          className="flex-1 px-2 py-1.5 text-xs border border-[var(--caritas-border)] rounded"
+                        />
+                        <input
+                          type="number"
+                          min={1}
+                          value={a.cantidad}
+                          onChange={(e) =>
+                            setArtDraft((p) =>
+                              p.map((x, j) => (j === i ? { ...x, cantidad: parseInt(e.target.value, 10) || 1 } : x))
+                            )
+                          }
+                          className="w-16 px-2 py-1.5 text-xs border border-[var(--caritas-border)] rounded"
+                        />
+                        <button
+                          onClick={() => setArtDraft((p) => p.filter((_, j) => j !== i))}
+                          className="p-1 text-gray-400 hover:text-red-500"
+                          title="Quitar artículo"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      onClick={() => setArtDraft((p) => [...p, { codigo: "", descripcion: "", cantidad: 1 }])}
+                      className="text-xs text-[var(--caritas-green)] flex items-center gap-1"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Agregar artículo
+                    </button>
+                    <div className="flex justify-end gap-2 pt-1">
+                      <button
+                        onClick={() => setEditandoComposicion(false)}
+                        className="px-3 py-1.5 text-xs border border-[var(--caritas-border)] rounded"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={guardarComposicion}
+                        disabled={pending}
+                        className="px-3 py-1.5 text-xs bg-[var(--caritas-green)] text-white rounded disabled:opacity-50"
+                      >
+                        Guardar composición
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               <h3 className="text-sm text-gray-600 mb-2">Historial de movimientos</h3>
               <ul className="space-y-2">

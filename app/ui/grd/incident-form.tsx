@@ -506,12 +506,15 @@ function PersonaModal({
   editing,
   familias,
   activeFamiliaId,
+  situaciones = SITUACIONES_ESPECIALES,
 }: {
   onSave: (p: PersonaForm) => void;
   onClose: () => void;
   editing?: PersonaForm;
   familias: FamiliaForm[];
   activeFamiliaId?: string;
+  /** Catálogo "Grupos Vulnerables" (respaldo: lista estática). */
+  situaciones?: string[];
 }) {
   const [form, setForm] = useState<PersonaForm>(
     editing ?? {
@@ -747,7 +750,7 @@ function PersonaModal({
             <SearchableSelect
               value={form.situacionActual}
               onChange={(v) => set("situacionActual", v)}
-              options={SITUACIONES_ESPECIALES}
+              options={situaciones}
               placeholder="Ninguna / buscar…"
             />
           </div>
@@ -826,6 +829,15 @@ function ObsFamiliaModal({
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
+/** Listas administradas en el módulo Catálogos (/catalogos). */
+export type CatalogosForm = {
+  fuentesAlerta: string[];
+  tiposEvento: string[];
+  necesidades: string[];
+  nivelesAfectacion: string[];
+  gruposVulnerables: string[];
+};
+
 interface IncidentFormProps {
   /** Datos iniciales cuando se edita un incidente existente */
   initialData?: CreateIncidenteData;
@@ -835,6 +847,8 @@ interface IncidentFormProps {
   codigoCaso?: string;
   /** Parroquias REALES del sistema (las únicas asignables, para que se guarde idParroquia). */
   parroquiasSistema?: { nombre: string; lat: number | null; lng: number | null }[];
+  /** Catálogos del sistema; si uno viene vacío se usa la lista de respaldo. */
+  catalogos?: CatalogosForm;
 }
 
 // ─── Formulario principal ─────────────────────────────────────────────────────
@@ -844,10 +858,27 @@ export function IncidentForm({
   incidenciaId,
   codigoCaso,
   parroquiasSistema = [],
+  catalogos,
 }: IncidentFormProps = {}) {
   const isEdit = Boolean(incidenciaId);
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+
+  // ── Listas desde el módulo Catálogos (las constantes son solo respaldo) ──
+  const conOpcion = (lista: string[], extra: string) =>
+    lista.includes(extra) ? lista : [...lista, extra];
+  const fuentesAlerta = catalogos?.fuentesAlerta?.length
+    ? conOpcion(catalogos.fuentesAlerta, "Otro")
+    : FUENTES_ALERTA;
+  const necesidadesChips = catalogos?.necesidades?.length
+    ? conOpcion(catalogos.necesidades, "Otros")
+    : NECESIDADES_CHIPS;
+  const situacionesEspeciales = catalogos?.gruposVulnerables?.length
+    ? catalogos.gruposVulnerables
+    : SITUACIONES_ESPECIALES;
+  const nivelesAfectacion = catalogos?.nivelesAfectacion?.length
+    ? catalogos.nivelesAfectacion
+    : ["Leve", "Moderado", "Severo"];
 
   const PHONE_COUNTRY_CODES = [
     { code: "+51", label: "PE" },
@@ -924,8 +955,8 @@ export function IncidentForm({
   >([]);
 
   // Sección 7
-  const [nivelAfectacion, setNivelAfectacion] = useState<"Leve" | "Moderado" | "Severo">(
-    (initialData?.nivelAfectacion as "Leve" | "Moderado" | "Severo") ?? "Moderado"
+  const [nivelAfectacion, setNivelAfectacion] = useState<string>(
+    initialData?.nivelAfectacion ?? nivelesAfectacion[1] ?? nivelesAfectacion[0] ?? "Moderado"
   );
 
   // Alias autogenerado
@@ -1657,7 +1688,7 @@ export function IncidentForm({
                   <SearchableSelect
                     value={reportaRol}
                     onChange={setReportaRol}
-                    options={FUENTES_ALERTA}
+                    options={fuentesAlerta}
                     placeholder="Buscar rol / institución…"
                     error={intentoEnvio && !reportaRol.trim()}
                   />
@@ -1705,6 +1736,7 @@ export function IncidentForm({
                     value={categoria}
                     onChange={setCategoria}
                     error={intentoEnvio && !categoria.trim()}
+                    categorias={catalogos?.tiposEvento}
                   />
                 </div>
               </div>
@@ -2054,7 +2086,7 @@ export function IncidentForm({
                 <MultiSelect
                   values={necesidades}
                   onChange={setNecesidades}
-                  options={NECESIDADES_CHIPS}
+                  options={necesidadesChips}
                   placeholder="Buscar y seleccionar necesidades…"
                   accent="orange"
                 />
@@ -2096,7 +2128,7 @@ export function IncidentForm({
                 <MultiSelect
                   values={fuentesEvidencia.map((f) => f.fuente)}
                   onChange={setFuentesSeleccion}
-                  options={FUENTES_ALERTA}
+                  options={fuentesAlerta}
                   placeholder="Seleccionar fuentes…"
                   accent="green"
                   chips="none"
@@ -2279,24 +2311,29 @@ export function IncidentForm({
                 Nivel de afectación estimado
               </label>
               <div className="flex gap-2">
-                {(["Leve", "Moderado", "Severo"] as const).map((nivel) => (
-                  <button
-                    key={nivel}
-                    type="button"
-                    onClick={() => setNivelAfectacion(nivel)}
-                    className={`flex-1 px-4 py-3 rounded-lg border-2 font-semibold text-sm transition-all ${
-                      nivelAfectacion === nivel
-                        ? nivel === "Leve"
-                          ? "bg-yellow-100 text-yellow-800 border-yellow-500"
-                          : nivel === "Moderado"
-                            ? "bg-orange-100 text-orange-800 border-orange-500"
-                            : "bg-red-100 text-red-800 border-red-500"
-                        : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"
-                    }`}
-                  >
-                    {nivel}
-                  </button>
-                ))}
+                {nivelesAfectacion.map((nivel, i) => {
+                  // Colores por severidad: primero suave → último intenso.
+                  const NIVEL_COLORES = [
+                    "bg-yellow-100 text-yellow-800 border-yellow-500",
+                    "bg-orange-100 text-orange-800 border-orange-500",
+                    "bg-red-100 text-red-800 border-red-500",
+                  ];
+                  const color = NIVEL_COLORES[Math.min(i, NIVEL_COLORES.length - 1)];
+                  return (
+                    <button
+                      key={nivel}
+                      type="button"
+                      onClick={() => setNivelAfectacion(nivel)}
+                      className={`flex-1 px-4 py-3 rounded-lg border-2 font-semibold text-sm transition-all ${
+                        nivelAfectacion === nivel
+                          ? color
+                          : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"
+                      }`}
+                    >
+                      {nivel}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </FormSection>
@@ -2342,6 +2379,7 @@ export function IncidentForm({
       {/* Modales */}
       {showPersonaModal && (
         <PersonaModal
+          situaciones={situacionesEspeciales}
           onSave={(p) => {
             if (editingPersona) setPersonas((prev) => prev.map((x) => (x.id === p.id ? p : x)));
             else setPersonas((prev) => [...prev, p]);

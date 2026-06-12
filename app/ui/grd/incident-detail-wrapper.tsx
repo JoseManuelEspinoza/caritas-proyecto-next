@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import type { IncidentData } from "./incident-detail";
+import type { IncidenciaDetalleOutput as IncidentData } from "@/core/application/dtos/IncidenciaDetalleDTO";
 
 // ssr: false eliminates hydration mismatches from browser extensions
 // (password managers inject fdprocessedid onto buttons/inputs)
