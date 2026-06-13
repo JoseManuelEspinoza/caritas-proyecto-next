@@ -8,6 +8,7 @@ import { getUsuarioGRDId } from "@/app/lib/usuario-grd";
 import { makeIncidenciaUseCases } from "@/core/infrastructure/factories/makeIncidenciaUseCases";
 import { DomainError } from "@/core/domain/errors/DomainError";
 import { logGRDAction } from "@/app/lib/audit";
+import { sendAsignacionEmergenciaEmail } from "@/app/lib/email";
 import type {
   CreateIncidenteData,
   InfoCampoData,
@@ -37,6 +38,39 @@ function asMessage(err: unknown): { message: string } {
 function revalidar(incidenciaId: string): void {
   revalidatePath("/grd");
   revalidatePath(`/grd/${incidenciaId}`);
+}
+
+// Fire-and-forget: notifica por correo a los brigadistas asignados a la incidencia.
+function notificarAsignacion(incidenciaId: string, brigadistaIds: string[], instrucciones?: string) {
+  prisma.incidencia
+    .findUnique({
+      where: { idIncidencia: incidenciaId },
+      select: { tituloIncidencia: true, tipoEvento: true, fechaRegistro: true, direccionEvento: true },
+    })
+    .then(async (inc) => {
+      if (!inc) return;
+      const nombreActividad =
+        inc.tituloIncidencia ?? inc.tipoEvento ?? "Incidencia de emergencia";
+      const brigadistas = await prisma.brigadistaParroquial.findMany({
+        where: { idBrigadistaParroquial: { in: brigadistaIds } },
+        select: { correo: true, nombres: true, apellidos: true },
+      });
+      await Promise.allSettled(
+        brigadistas
+          .filter((b) => b.correo)
+          .map((b) =>
+            sendAsignacionEmergenciaEmail(
+              b.correo!,
+              b.nombres,
+              nombreActividad,
+              inc.fechaRegistro?.toISOString() ?? null,
+              inc.direccionEvento ?? null,
+              instrucciones ?? ""
+            )
+          )
+      );
+    })
+    .catch((e) => console.error("[GRD] Error enviando notificaciones de asignación:", e));
 }
 
 async function nombreUsuario(): Promise<string | undefined> {
@@ -125,6 +159,7 @@ export async function assignBrigadista(
   } catch (err) {
     return asMessage(err);
   }
+  notificarAsignacion(incidenciaId, [brigadistaId], instrucciones);
   revalidar(incidenciaId);
 }
 
@@ -151,6 +186,8 @@ export async function assignEquipo(
   } catch (err) {
     return asMessage(err);
   }
+  const todosIds = [...new Set([responsableId, ...equipoIds])];
+  notificarAsignacion(incidenciaId, todosIds, instrucciones);
   revalidar(incidenciaId);
 }
 

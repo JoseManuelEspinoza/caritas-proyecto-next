@@ -27,6 +27,7 @@ import {
   MoreVertical,
 } from "lucide-react";
 import { CuestionarioModal } from "@/app/ui/capacitaciones/cuestionario-modal";
+import { TIPOS_MATERIAL } from "@/app/lib/capacitaciones-tipos";
 import { toast } from "sonner";
 import {
   crearCurso,
@@ -141,14 +142,6 @@ function getMaterialMeta(tipo: string | null): { rowIcon: React.ReactNode; btnIc
     btnLabel: "Abrir",
   };
 }
-
-const TIPOS_MATERIAL = [
-  "Documento (PDF, Word, Excel)",
-  "Presentación",
-  "Video",
-  "Enlace web",
-  "Otro",
-];
 
 type SesionItem = CursoDetalle["sesiones"][number];
 

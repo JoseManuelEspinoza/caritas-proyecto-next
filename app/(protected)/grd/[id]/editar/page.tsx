@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { verifySession } from "@/app/lib/dal";
 import { prisma } from "@/app/lib/prisma";
+import { cargarCatalogosIncidente } from "@/app/lib/grd/catalogos-form";
 import { toFrontendRole } from "@/app/lib/roles";
 import { IncidentForm } from "@/app/ui/grd/incident-form";
 import type { CreateIncidenteData, FamiliaForm, PersonaForm } from "@/app/actions/incidents";
@@ -87,8 +88,11 @@ export default async function EditarIncidentePage({ params }: { params: Promise<
     });
   });
 
-  // ─── Necesidades desde el contexto ───────────────────────────────────────
-  const necesidadesBase = ["Alimentos", "Ropa", "Atención médica", "Materiales de construcción"];
+  // ─── Necesidades desde el contexto (la base viene del catálogo "Necesidades") ──
+  const catalogos = await cargarCatalogosIncidente();
+  const necesidadesBase = catalogos.necesidades.length
+    ? catalogos.necesidades
+    : ["Alimentos", "Ropa", "Atención médica", "Materiales de construcción"];
   const necesidadesGuardadas: string[] = ctx.necesidades ?? [];
   const necesidades = necesidadesGuardadas.filter((n) => necesidadesBase.includes(n));
   const necesidadOtra = necesidadesGuardadas.find((n) => !necesidadesBase.includes(n)) ?? "";
@@ -137,6 +141,7 @@ export default async function EditarIncidentePage({ params }: { params: Promise<
         lat: p.latitud != null ? Number(p.latitud) : null,
         lng: p.longitud != null ? Number(p.longitud) : null,
       }))}
+      catalogos={catalogos}
     />
   );
 }

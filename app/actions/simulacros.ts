@@ -134,6 +134,7 @@ export async function asignarEquipoSimulacro(
     field: "Estado",
     newValue: "ASIGNADA",
   });
+
   revalidatePath(REVALIDATE);
 }
 

@@ -942,11 +942,28 @@ model KitEmergencia {
 
   parroquiaBeneficiaria Parroquia?      @relation(fields: [idParroquiaBeneficiaria], references: [idParroquia])
   movimientos           MovimientoKit[]
+  articulos             KitArticulo[]
 
   @@index([idParroquiaBeneficiaria], map: "idx_kit_parroquia")
   @@index([tipoKit, estadoKit], map: "idx_kit_tipo_estado")
   @@index([estadoKit, fechaRegistro], map: "idx_kit_estado_fecha")
   @@map("kit_emergencia")
+}
+
+/// Composición de un kit: qué artículos contiene y en qué cantidad.
+/// Permite que el informe de incidencias precargue el contenido real del kit.
+model KitArticulo {
+  idKitArticulo   String  @id @default(uuid())
+  idKitEmergencia String
+  codigo          String?
+  descripcion     String
+  cantidad        Int     @default(1)
+  orden           Int     @default(0)
+
+  kitEmergencia KitEmergencia @relation(fields: [idKitEmergencia], references: [idKitEmergencia], onDelete: Cascade)
+
+  @@index([idKitEmergencia], map: "idx_kit_articulo_kit")
+  @@map("kit_articulo")
 }
 
 model MovimientoKit {

@@ -534,6 +534,7 @@ export function GrdList({ items, role }: GrdListProps) {
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={safePage === 1}
                 className="px-3 py-1.5 text-xs font-medium rounded-lg border border-[#DDDDDD] bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                suppressHydrationWarning
               >
                 Anterior
               </button>
@@ -545,6 +546,7 @@ export function GrdList({ items, role }: GrdListProps) {
                 onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                 disabled={safePage === totalPages}
                 className="px-3 py-1.5 text-xs font-medium rounded-lg border border-[#DDDDDD] bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                suppressHydrationWarning
               >
                 Siguiente
               </button>

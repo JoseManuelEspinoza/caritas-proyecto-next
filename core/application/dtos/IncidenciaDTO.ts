@@ -86,8 +86,8 @@ export type InfoCampoData = {
 
 /** Artículo asignado dentro de un kit. */
 export type ArticuloKit = { codigo: string; descripcion: string; cantidad: number };
-/** Kit asignado a una familia/persona. */
-export type KitAsignado = { tipoKit: string; articulos: ArticuloKit[] };
+/** Kit asignado a una familia/persona. `idKit` referencia al KitEmergencia real (trazabilidad/stock). */
+export type KitAsignado = { tipoKit: string; idKit?: string; articulos: ArticuloKit[] };
 /** Asignación de ayuda por familia/persona. */
 export type AsignacionFamilia = {
   refId: string; // id de grupo familiar o persona
