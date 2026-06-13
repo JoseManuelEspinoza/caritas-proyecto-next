@@ -308,6 +308,7 @@ export function ParroquiasList({ parroquias, canEdit = false }: Props) {
             onClick={openCreate}
             className="flex items-center gap-2 px-4 py-2 text-white text-sm font-medium rounded-lg hover:opacity-90 transition-all"
             style={{ background: "#009850" }}
+            suppressHydrationWarning
           >
             <Plus className="w-4 h-4" />
             Registrar parroquia
@@ -348,6 +349,7 @@ export function ParroquiasList({ parroquias, canEdit = false }: Props) {
             value={search}
             onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
             className="w-full pl-9 pr-3 py-2 text-sm bg-[#F5F5F5] border border-[#DDDDDD] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#009850]/20 focus:border-[#009850]"
+            suppressHydrationWarning
           />
         </div>
         <div className="flex items-center gap-2">
@@ -356,6 +358,7 @@ export function ParroquiasList({ parroquias, canEdit = false }: Props) {
             value={filterEstado}
             onChange={(e) => { setFilterEstado(e.target.value); setCurrentPage(1); }}
             className="flex-1 px-3 py-2 text-sm bg-[#F5F5F5] border border-[#DDDDDD] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#009850]/20 focus:border-[#009850]"
+            suppressHydrationWarning
           >
             <option value="all">Todos los estados</option>
             <option value="ACTIVO">Activas</option>
@@ -459,6 +462,7 @@ export function ParroquiasList({ parroquias, canEdit = false }: Props) {
                           disabled={isPending}
                           className="flex items-center gap-1.5 text-xs font-medium hover:opacity-80 transition-opacity disabled:opacity-50"
                           title="Clic para cambiar estado"
+                          suppressHydrationWarning
                         >
                           {p.estado === "ACTIVO" ? (
                             <>
@@ -484,6 +488,7 @@ export function ParroquiasList({ parroquias, canEdit = false }: Props) {
                           onClick={() => openEdit(p)}
                           className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-600 transition-colors"
                           title="Editar"
+                          suppressHydrationWarning
                         >
                           <Edit3 className="w-4 h-4" />
                         </button>
@@ -526,7 +531,7 @@ export function ParroquiasList({ parroquias, canEdit = false }: Props) {
                 </div>
                 <div className="flex items-center gap-1">
                   {canEdit && (
-                    <button onClick={() => openEdit(p)} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-600">
+                    <button onClick={() => openEdit(p)} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-600" suppressHydrationWarning>
                       <Edit3 className="w-4 h-4" />
                     </button>
                   )}
@@ -558,6 +563,7 @@ export function ParroquiasList({ parroquias, canEdit = false }: Props) {
                   onClick={() => handleToggleEstado(p)}
                   disabled={isPending}
                   className="w-full py-2 border border-[#DDDDDD] rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  suppressHydrationWarning
                 >
                   {p.estado === "ACTIVO" ? "Marcar como inactiva" : "Marcar como activa"}
                 </button>
