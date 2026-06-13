@@ -135,7 +135,9 @@ function BrigadistaModal({
     nombres: editing?.nombres ?? "",
     apellidos: editing?.apellidos ?? "",
     dni: editing?.dni ?? "",
-    celular: editing?.celular ?? "",
+    celular: editing?.celular
+      ? editing.celular.startsWith("+") ? editing.celular : `+51${editing.celular}`
+      : "",
     correo: editing?.correo ?? "",
     idParroquia: editing?.parroquia?.id ?? "",
     disponibilidad: editing?.disponibilidad ?? "DISPONIBLE",
