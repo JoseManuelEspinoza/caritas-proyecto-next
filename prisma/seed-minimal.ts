@@ -190,7 +190,7 @@ async function ensureKit(tipoKit: string, descripcion: string, stockActual: numb
   });
 
   if (existing) {
-    await prisma.kitEmergencia.update({
+    return prisma.kitEmergencia.update({
       where: { idKitEmergencia: existing.idKitEmergencia },
       data: {
         descripcion,
@@ -199,10 +199,9 @@ async function ensureKit(tipoKit: string, descripcion: string, stockActual: numb
         ubicacionAlmacen: "Almacén Central",
       },
     });
-    return;
   }
 
-  await prisma.kitEmergencia.create({
+  return prisma.kitEmergencia.create({
     data: {
       tipoKit,
       descripcion,
@@ -210,6 +209,31 @@ async function ensureKit(tipoKit: string, descripcion: string, stockActual: numb
       estadoKit: "ACTIVO",
       ubicacionAlmacen: "Almacén Central",
     },
+  });
+}
+
+
+async function reemplazarArticulosKit(
+  idKitEmergencia: string,
+  articulos: Array<{
+    codigo?: string;
+    descripcion: string;
+    cantidad: number;
+    orden: number;
+  }>
+) {
+  await prisma.kitArticulo.deleteMany({
+    where: { idKitEmergencia },
+  });
+
+  await prisma.kitArticulo.createMany({
+    data: articulos.map((articulo) => ({
+      idKitEmergencia,
+      codigo: articulo.codigo,
+      descripcion: articulo.descripcion,
+      cantidad: articulo.cantidad,
+      orden: articulo.orden,
+    })),
   });
 }
 
@@ -378,31 +402,73 @@ if (!usuarioGRD) {
   await ensureTipoReferencia("KIT_EMERGENCIA", "Kit de emergencia");
   await ensureTipoReferencia("PLAN_TRABAJO_GRD", "Plan de trabajo GRD");
 
-  await ensureKit(
-    "Kit de Limpieza",
-    "Lejía, detergente, escoba, recogedor y artículos básicos de desinfección",
-    20
-  );
-  await ensureKit(
-    "Kit de Higiene",
-    "Jabón, papel higiénico, pasta dental, cepillo dental y alcohol en gel",
-    20
-  );
-  await ensureKit(
-    "Kit de Víveres",
-    "Alimentos no perecibles para atención inicial",
-    20
-  );
-  await ensureKit(
-    "Kit de Abrigo",
-    "Frazadas, ropa de abrigo y artículos de protección térmica",
-    15
-  );
-  await ensureKit(
-    "Kit de Agua Segura",
-    "Bidones, pastillas potabilizadoras y elementos para consumo seguro",
-    15
-  );
+const kitLimpieza = await ensureKit(
+  "Kit de Limpieza",
+  "Lejía, detergente, escoba, recogedor y artículos básicos de desinfección",
+  20
+);
+
+await reemplazarArticulosKit(kitLimpieza.idKitEmergencia, [
+  { codigo: "LEJIA", descripcion: "Lejía", cantidad: 2, orden: 1 },
+  { codigo: "DETERGENTE", descripcion: "Detergente", cantidad: 1, orden: 2 },
+  { codigo: "ESCOBA", descripcion: "Escoba", cantidad: 1, orden: 3 },
+  { codigo: "RECOGEDOR", descripcion: "Recogedor", cantidad: 1, orden: 4 },
+  { codigo: "GUANTES", descripcion: "Guantes de limpieza", cantidad: 2, orden: 5 },
+]);
+
+const kitHigiene = await ensureKit(
+  "Kit de Higiene",
+  "Jabón, papel higiénico, pasta dental, cepillo dental y alcohol en gel",
+  20
+);
+
+await reemplazarArticulosKit(kitHigiene.idKitEmergencia, [
+  { codigo: "JABON", descripcion: "Jabón", cantidad: 4, orden: 1 },
+  { codigo: "PAPEL_HIGIENICO", descripcion: "Papel higiénico", cantidad: 4, orden: 2 },
+  { codigo: "PASTA_DENTAL", descripcion: "Pasta dental", cantidad: 2, orden: 3 },
+  { codigo: "CEPILLO_DENTAL", descripcion: "Cepillo dental", cantidad: 4, orden: 4 },
+  { codigo: "ALCOHOL_GEL", descripcion: "Alcohol en gel", cantidad: 2, orden: 5 },
+]);
+
+const kitViveres = await ensureKit(
+  "Kit de Víveres",
+  "Alimentos no perecibles para atención inicial",
+  20
+);
+
+await reemplazarArticulosKit(kitViveres.idKitEmergencia, [
+  { codigo: "ARROZ", descripcion: "Arroz", cantidad: 2, orden: 1 },
+  { codigo: "MENESTRA", descripcion: "Menestra", cantidad: 2, orden: 2 },
+  { codigo: "CONSERVA", descripcion: "Conservas", cantidad: 4, orden: 3 },
+  { codigo: "GALLETAS", descripcion: "Galletas de emergencia", cantidad: 2, orden: 4 },
+  { codigo: "ACEITE", descripcion: "Aceite", cantidad: 1, orden: 5 },
+]);
+
+const kitAbrigo = await ensureKit(
+  "Kit de Abrigo",
+  "Frazadas, ropa de abrigo y artículos de protección térmica",
+  15
+);
+
+await reemplazarArticulosKit(kitAbrigo.idKitEmergencia, [
+  { codigo: "FRAZADA", descripcion: "Frazada", cantidad: 2, orden: 1 },
+  { codigo: "ROPA_ABRIGO", descripcion: "Ropa de abrigo", cantidad: 2, orden: 2 },
+  { codigo: "PONCHO", descripcion: "Poncho impermeable", cantidad: 2, orden: 3 },
+  { codigo: "MEDIAS", descripcion: "Medias", cantidad: 2, orden: 4 },
+]);
+
+const kitAguaSegura = await ensureKit(
+  "Kit de Agua Segura",
+  "Bidones, pastillas potabilizadoras y elementos para consumo seguro",
+  15
+);
+
+await reemplazarArticulosKit(kitAguaSegura.idKitEmergencia, [
+  { codigo: "BIDON", descripcion: "Bidón para agua", cantidad: 2, orden: 1 },
+  { codigo: "PASTILLA_POTABILIZADORA", descripcion: "Pastillas potabilizadoras", cantidad: 10, orden: 2 },
+  { codigo: "RECIPIENTE", descripcion: "Recipiente con tapa", cantidad: 1, orden: 3 },
+  { codigo: "CLORO", descripcion: "Cloro para desinfección", cantidad: 1, orden: 4 },
+]);
 
   console.log("\n✅ Seed mínimo completado.");
   console.log(`Contraseña de prueba: ${password}`);
