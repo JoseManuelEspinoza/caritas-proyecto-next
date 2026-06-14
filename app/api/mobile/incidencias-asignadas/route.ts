@@ -236,6 +236,69 @@ export async function GET(request: Request) {
       },
     });
 
+    const idsIncidencia = asignaciones
+      .map((asignacion) => asignacion.incidencia.idIncidencia)
+      .filter(Boolean);
+
+    const tiposReferenciaIncidencia = await prisma.tipoReferencia.findMany({
+      where: {
+        estado: "ACTIVO",
+        OR: ["INCIDENCIA", "INCIDENCIA_GRD"].map((codigo) => ({
+          codigoEntidad: {
+            equals: codigo,
+            mode: "insensitive" as const,
+          },
+        })),
+      },
+      select: {
+        idTipoReferencia: true,
+      },
+    });
+
+    const idsTipoReferencia = tiposReferenciaIncidencia.map(
+      (tipo) => tipo.idTipoReferencia
+    );
+
+    const observaciones = idsIncidencia.length && idsTipoReferencia.length
+      ? await prisma.observacionGRD.findMany({
+          where: {
+            idReferencia: {
+              in: idsIncidencia,
+            },
+            idTipoReferencia: {
+              in: idsTipoReferencia,
+            },
+            estado: "ACTIVO",
+          },
+          orderBy: {
+            fechaRegistro: "desc",
+          },
+          select: {
+            idObservacionGRD: true,
+            idTipoReferencia: true,
+            idReferencia: true,
+            uuidMovil: true,
+            textoObservacion: true,
+            estado: true,
+            syncEstado: true,
+            fechaRegistro: true,
+            fechaSincronizacion: true,
+          },
+        })
+      : [];
+
+    const observacionesPorIncidencia = new Map<
+      string,
+      (typeof observaciones)[number][]
+    >();
+
+    for (const observacion of observaciones) {
+      const lista =
+        observacionesPorIncidencia.get(observacion.idReferencia) ?? [];
+
+      lista.push(observacion);
+      observacionesPorIncidencia.set(observacion.idReferencia, lista);
+    }    
     const incidencias = asignaciones.map((asignacion) => {
       const incidencia = asignacion.incidencia;
 
@@ -261,6 +324,8 @@ export async function GET(request: Request) {
           ...incidencia,
           latitud: decimalToNumber(incidencia.latitud),
           longitud: decimalToNumber(incidencia.longitud),
+          observaciones:
+            observacionesPorIncidencia.get(incidencia.idIncidencia) ?? [],
           parroquia: incidencia.parroquia
             ? {
                 ...incidencia.parroquia,
