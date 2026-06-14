@@ -41,6 +41,7 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { CategorySelector } from "./category-selector";
 import { LocationPicker } from "./location-picker";
+import { PersonaModal } from "./persona-modal";
 import {
   createIncidente,
   updateIncidente,
@@ -498,283 +499,6 @@ function FormSection({
   );
 }
 
-// ─── Modal de persona ─────────────────────────────────────────────────────────
-
-function PersonaModal({
-  onSave,
-  onClose,
-  editing,
-  familias,
-  activeFamiliaId,
-  situaciones = SITUACIONES_ESPECIALES,
-}: {
-  onSave: (p: PersonaForm) => void;
-  onClose: () => void;
-  editing?: PersonaForm;
-  familias: FamiliaForm[];
-  activeFamiliaId?: string;
-  /** Catálogo "Grupos Vulnerables" (respaldo: lista estática). */
-  situaciones?: string[];
-}) {
-  const [form, setForm] = useState<PersonaForm>(
-    editing ?? {
-      id: `PER-${Date.now()}`,
-      tipoDoc: "DNI",
-      dni: "",
-      nombre: "",
-      apellidoPaterno: "",
-      apellidoMaterno: "",
-      edad: "",
-      genero: "Femenino",
-      celular: "",
-      parentesco: "",
-      situacionActual: "",
-      familiaId: activeFamiliaId,
-    }
-  );
-
-  function set(key: keyof PersonaForm, value: string) {
-    setForm((p) => ({ ...p, [key]: value }));
-  }
-
-  function validateDocumento(tipo: string, valor: string): string | null {
-    const v = (valor ?? "").trim();
-    if (tipo === "DNI") {
-      const digits = v.replace(/\D/g, "");
-      if (digits.length < 8) return "El DNI debe tener al menos 8 dígitos.";
-      if (digits.length > 9) return "El DNI no debe exceder 9 dígitos (8 + dígito verificador).";
-      return null;
-    }
-    if (tipo === "CE") {
-      const digits = v.replace(/\D/g, "");
-      if (digits.length < 9) return "El Carnet de Extranjería debe tener al menos 9 dígitos.";
-      if (digits.length > 12) return "El Carnet de Extranjería no debe exceder 12 dígitos.";
-      return null;
-    }
-    if (tipo === "Pasaporte") {
-      const alnum = v.replace(/[^A-Za-z0-9]/g, "");
-      if (alnum.length < 6) return "El pasaporte debe tener al menos 6 caracteres alfanuméricos.";
-      if (alnum.length > 12) return "El pasaporte no debe exceder 12 caracteres.";
-      return null;
-    }
-    return null;
-  }
-
-  function handleSubmit() {
-    if (!form.nombre.trim()) {
-      toast.error("Ingresa el nombre de la persona");
-      return;
-    }
-    if (!form.edad) {
-      toast.error("Ingresa la edad");
-      return;
-    }
-    // Validación del documento según tipo
-    const docErr = validateDocumento(form.tipoDoc, form.dni);
-    if (docErr) {
-      toast.error(docErr);
-      return;
-    }
-    onSave({ ...form, id: editing?.id || `PER-${Date.now()}` });
-    onClose();
-  }
-
-  const familiaActual = familias.find((f) => f.id === activeFamiliaId);
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl max-w-lg w-full max-h-[90vh] overflow-auto shadow-xl">
-        <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-          <h3 className="font-bold text-gray-900">
-            {editing
-              ? "Editar persona"
-              : activeFamiliaId
-                ? `Agregar integrante — ${familiaActual?.nombre ?? ""}`
-                : "Agregar persona afectada"}
-          </h3>
-          <button onClick={onClose} className="text-gray-500 hover:bg-gray-100 rounded p-1">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {activeFamiliaId && (
-          <div className="bg-blue-50 border-b border-blue-100 px-4 py-2 text-xs text-blue-800">
-            Integrante de: <strong>{familiaActual?.nombre}</strong>
-          </div>
-        )}
-
-        <div className="p-4 space-y-3">
-          <div className="grid grid-cols-3 gap-2">
-            <div>
-              <label className="text-xs font-semibold text-gray-600 block mb-1">Tipo Doc.</label>
-              <select
-                value={form.tipoDoc}
-                onChange={(e) => set("tipoDoc", e.target.value)}
-                className="w-full px-2 py-2 text-sm border border-gray-200 rounded-lg"
-              >
-                {["DNI", "CE", "Pasaporte", "Otro"].map((t) => (
-                  <option key={t}>{t}</option>
-                ))}
-              </select>
-            </div>
-            <div className="col-span-2">
-              <label className="text-xs font-semibold text-gray-600 block mb-1">N° Documento</label>
-              <input
-                type="text"
-                value={form.dni}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (form.tipoDoc === "DNI" || form.tipoDoc === "CE") {
-                    const digits = val.replace(/\D/g, "");
-                    // limit to 12 digits for safety
-                    set("dni", digits.slice(0, 12));
-                  } else {
-                    // pasaporte / otro → alfanumérico, mayúsculas
-                    const a = val.toUpperCase().replace(/[^A-Z0-9]/g, "");
-                    set("dni", a.slice(0, 12));
-                  }
-                }}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
-                placeholder={
-                  form.tipoDoc === "DNI"
-                    ? "12345678"
-                    : form.tipoDoc === "CE"
-                      ? "123456789"
-                      : "A12345678"
-                }
-                maxLength={12}
-              />
-              <p className="text-[11px] text-gray-400 mt-1">
-                {form.tipoDoc === "DNI" &&
-                  "DNI: 8 dígitos (opcionalmente seguido de dígito verificador)."}
-                {form.tipoDoc === "Pasaporte" &&
-                  "Pasaporte: código alfanumérico (usualmente 9 caracteres, hasta 12)."}
-                {form.tipoDoc === "CE" && "Carnet de Extranjería: 9 a 12 dígitos numéricos."}
-              </p>
-            </div>
-          </div>
-
-          <div>
-            <label className="text-xs font-semibold text-gray-600 block mb-1">
-              Nombres <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={form.nombre}
-              onChange={(e) => set("nombre", e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
-              placeholder="Ej: María Elena"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs font-semibold text-gray-600 block mb-1">
-                Apellido Paterno
-              </label>
-              <input
-                type="text"
-                value={form.apellidoPaterno}
-                onChange={(e) => set("apellidoPaterno", e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-gray-600 block mb-1">
-                Apellido Materno
-              </label>
-              <input
-                type="text"
-                value={form.apellidoMaterno}
-                onChange={(e) => set("apellidoMaterno", e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs font-semibold text-gray-600 block mb-1">
-                Edad <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="number"
-                value={form.edad}
-                onChange={(e) => set("edad", e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
-                placeholder="0"
-                min="0"
-                max="120"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-gray-600 block mb-1">Género</label>
-              <select
-                value={form.genero}
-                onChange={(e) => set("genero", e.target.value)}
-                className="w-full px-2 py-2 text-sm border border-gray-200 rounded-lg"
-              >
-                {["Femenino", "Masculino", "Otro", "Prefiere no decir"].map((g) => (
-                  <option key={g}>{g}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs font-semibold text-gray-600 block mb-1">Celular</label>
-              <input
-                type="tel"
-                value={form.celular}
-                onChange={(e) => set("celular", e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
-                placeholder="987654321"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-gray-600 block mb-1">Parentesco</label>
-              <SearchableSelect
-                value={form.parentesco}
-                onChange={(v) => set("parentesco", v)}
-                options={PARENTESCOS}
-                placeholder="Buscar parentesco…"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="text-xs font-semibold text-gray-600 block mb-1">
-              Situación especial
-            </label>
-            <SearchableSelect
-              value={form.situacionActual}
-              onChange={(v) => set("situacionActual", v)}
-              options={situaciones}
-              placeholder="Ninguna / buscar…"
-            />
-          </div>
-
-          <div className="flex gap-2 pt-2">
-            <button
-              onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium"
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={handleSubmit}
-              className="flex-1 px-4 py-2 bg-[#009850] text-white rounded-lg text-sm font-medium"
-            >
-              Guardar
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Modal observaciones familia ──────────────────────────────────────────────
 
 function ObsFamiliaModal({
@@ -1167,8 +891,17 @@ export function IncidentForm({
     }
   }
 
+  const PHONE_MAX_LENGTH: Record<string, number> = {
+    "+51": 9,  // Perú
+    "+52": 10, // México
+    "+54": 10, // Argentina
+    "+56": 9,  // Chile
+    "+57": 10, // Colombia
+  };
+
   function handleTelefonoChange(val: string) {
-    setReportaTel(val.replace(/\D/g, ""));
+    const max = PHONE_MAX_LENGTH[reportaTelCodigo] ?? 12;
+    setReportaTel(val.replace(/\D/g, "").slice(0, max));
   }
 
   // Familia
@@ -1674,7 +1407,7 @@ export function IncidentForm({
                       inputMode="numeric"
                       pattern="[0-9]*"
                       placeholder="987654321"
-                      maxLength={12}
+                      maxLength={PHONE_MAX_LENGTH[reportaTelCodigo] ?? 12}
                       value={reportaTel}
                       onChange={(e) => handleTelefonoChange(e.target.value)}
                       className={`${inputCls} flex-1 ${errBorde(!reportaTel.trim())}`}
