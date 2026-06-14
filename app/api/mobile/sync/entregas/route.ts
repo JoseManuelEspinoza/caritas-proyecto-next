@@ -33,6 +33,13 @@ type EntregaMovilPayload = {
 
   uuidAfectadoMovil?: string;
 
+
+  idKitEmergencia?: string;
+  idKitEmergenciaRemoto?: string;
+  idKit?: string;
+  idKitRemoto?: string;
+  tipoKit?: string | null;
+    
   fechaEntrega?: string | null;
   lugarEntrega?: string | null;
   tipoAyuda?: string | null;
@@ -41,6 +48,8 @@ type EntregaMovilPayload = {
   conformidadRecepcion?: boolean | string | null;
   entregaParcial?: boolean | string | null;
   observaciones?: string | null;
+
+  
 };
 
 class MobileSyncError extends Error {
@@ -150,6 +159,7 @@ function validarPayload(body: EntregaMovilPayload): string {
 async function resolveIncidencia(body: EntregaMovilPayload): Promise<{
   idIncidencia: string;
   codigoCaso: string | null;
+  idParroquia: string | null;
 }> {
   const idIncidencia =
     texto(body.idIncidenciaRemota) ||
@@ -162,6 +172,7 @@ async function resolveIncidencia(body: EntregaMovilPayload): Promise<{
       select: {
         idIncidencia: true,
         codigoCaso: true,
+        idParroquia: true,
       },
     });
 
@@ -179,6 +190,7 @@ async function resolveIncidencia(body: EntregaMovilPayload): Promise<{
       select: {
         idIncidencia: true,
         codigoCaso: true,
+        idParroquia: true,
       },
     });
 
@@ -193,6 +205,7 @@ async function resolveIncidencia(body: EntregaMovilPayload): Promise<{
       select: {
         idIncidencia: true,
         codigoCaso: true,
+        idParroquia: true,
       },
     });
 
@@ -219,6 +232,41 @@ async function resolveSolicitudId(body: EntregaMovilPayload): Promise<string | n
   }
 
   return solicitud.idSolicitud;
+}
+
+async function resolveKit(body: EntregaMovilPayload): Promise<{
+  idKitEmergencia: string;
+  tipoKit: string;
+  stockActual: number;
+  estadoKit: string;
+} | null> {
+  const idKitEmergencia =
+    texto(body.idKitEmergenciaRemoto) ||
+    texto(body.idKitEmergencia) ||
+    texto(body.idKitRemoto) ||
+    texto(body.idKit);
+
+  if (!idKitEmergencia) return null;
+
+  const kit = await prisma.kitEmergencia.findUnique({
+    where: { idKitEmergencia },
+    select: {
+      idKitEmergencia: true,
+      tipoKit: true,
+      stockActual: true,
+      estadoKit: true,
+    },
+  });
+
+  if (!kit) {
+    throw new MobileSyncError("No se encontró el kit de emergencia indicado.");
+  }
+
+  if (kit.estadoKit !== "ACTIVO") {
+    throw new MobileSyncError("El kit de emergencia no está activo.");
+  }
+
+  return kit;
 }
 
 async function resolveUsuarioResponsableId(
@@ -462,6 +510,21 @@ export async function POST(request: Request) {
     });
 
     if (existente) {
+      const movimientoExistente = await prisma.movimientoKit.findUnique({
+        where: {
+          uuidMovil: `mov-kit-${uuidMovil}`,
+        },
+        select: {
+          idMovimientoKit: true,
+          idKitEmergencia: true,
+          kitEmergencia: {
+            select: {
+              tipoKit: true,
+              stockActual: true,
+            },
+          },
+        },
+      });
       return NextResponse.json({
         ok: true,
         duplicated: true,
@@ -482,13 +545,31 @@ export async function POST(request: Request) {
         fechaSincronizacion: existente.fechaSincronizacion,
         idGrupoFamiliar: existente.idGrupoFamiliar,
         idPersonaAfectada: existente.idPersonaAfectada,
-        uuidAfectadoMovil: existente.uuidAfectadoMovil,        
+        uuidAfectadoMovil: existente.uuidAfectadoMovil,  
+        movimientoKit: movimientoExistente
+          ? {
+              idMovimientoKit: movimientoExistente.idMovimientoKit,
+              idKitEmergencia: movimientoExistente.idKitEmergencia,
+              tipoKit: movimientoExistente.kitEmergencia.tipoKit,
+              stockActual: movimientoExistente.kitEmergencia.stockActual,
+            }
+          : null,      
       });
     }
 
     const incidencia = await resolveIncidencia(body);
     const idSolicitud = await resolveSolicitudId(body);
     const idUsuarioResponsableGRD = await resolveUsuarioResponsableId(body);
+
+  const kit = await resolveKit(body);
+
+  if (kit && !idUsuarioResponsableGRD) {
+    throw new MobileSyncError(
+      "idUsuarioGRD es obligatorio para registrar entrega de kits."
+    );
+  }
+
+  const cantidadEntregada = parseCantidad(body.cantidadEntregada) ?? 1;
 
     const idGrupoFamiliarInicial = await resolveGrupoFamiliarId(
       body,
@@ -509,66 +590,149 @@ export async function POST(request: Request) {
 
     const fechaSincronizacion = new Date();
 
-    const entrega = await prisma.entregaAyudaHumanitaria.create({
+const resultado = await prisma.$transaction(async (tx) => {
+  const entrega = await tx.entregaAyudaHumanitaria.create({
+    data: {
+      idSolicitud,
+      idIncidencia: incidencia.idIncidencia,
+      idUsuarioResponsableGRD,
+      codigoEntrega: texto(body.codigoEntrega) || null,
+      fechaEntrega: parseFecha(body.fechaEntrega),
+      lugarEntrega: texto(body.lugarEntrega) || null,
+      tipoAyuda:
+        texto(body.tipoAyuda) ||
+        texto(body.tipoKit) ||
+        kit?.tipoKit ||
+        null,
+      descripcionAyuda:
+        texto(body.descripcionAyuda) ||
+        (kit ? `Entrega móvil de ${kit.tipoKit} x${cantidadEntregada}` : null),
+      cantidadEntregada,
+      conformidadRecepcion: parseBooleanOpcional(body.conformidadRecepcion),
+      entregaParcial: parseBooleanOpcional(body.entregaParcial) ?? false,
+      observaciones: texto(body.observaciones) || null,
+      idGrupoFamiliar,
+      idPersonaAfectada,
+      uuidAfectadoMovil,
+      uuidMovil,
+      syncEstado: "SINCRONIZADO",
+      fechaSincronizacion,
+    },
+    select: {
+      idEntrega: true,
+      idIncidencia: true,
+      codigoEntrega: true,
+      fechaEntrega: true,
+      tipoAyuda: true,
+      descripcionAyuda: true,
+      cantidadEntregada: true,
+      conformidadRecepcion: true,
+      entregaParcial: true,
+      idGrupoFamiliar: true,
+      idPersonaAfectada: true,
+      uuidAfectadoMovil: true,
+      syncEstado: true,
+      fechaSincronizacion: true,
+    },
+  });
+
+  let movimientoKit: {
+    idMovimientoKit: string;
+    idKitEmergencia: string;
+    tipoKit: string;
+    stockAnterior: number;
+    stockActual: number;
+  } | null = null;
+
+  if (kit) {
+    const stockAnterior = kit.stockActual;
+    const stockNuevo = stockAnterior - cantidadEntregada;
+
+    if (stockNuevo < 0) {
+      throw new MobileSyncError(
+        `Stock insuficiente: hay ${stockAnterior} y se intentan entregar ${cantidadEntregada}.`
+      );
+    }
+
+    const kitActualizado = await tx.kitEmergencia.update({
+      where: {
+        idKitEmergencia: kit.idKitEmergencia,
+      },
       data: {
-        idSolicitud,
-        idIncidencia: incidencia.idIncidencia,
-        idUsuarioResponsableGRD,
-        codigoEntrega: texto(body.codigoEntrega) || null,
-        fechaEntrega: parseFecha(body.fechaEntrega),
-        lugarEntrega: texto(body.lugarEntrega) || null,
-        tipoAyuda: texto(body.tipoAyuda) || null,
-        descripcionAyuda: texto(body.descripcionAyuda) || null,
-        cantidadEntregada: parseCantidad(body.cantidadEntregada),
-        conformidadRecepcion: parseBooleanOpcional(body.conformidadRecepcion),
-        entregaParcial: parseBooleanOpcional(body.entregaParcial) ?? false,
-        observaciones: texto(body.observaciones) || null,
-        idGrupoFamiliar,
-        idPersonaAfectada,
-        uuidAfectadoMovil,
-        uuidMovil,
+        stockActual: stockNuevo,
+      },
+      select: {
+        idKitEmergencia: true,
+        tipoKit: true,
+        stockActual: true,
+      },
+    });
+
+    const movimiento = await tx.movimientoKit.create({
+      data: {
+        idKitEmergencia: kit.idKitEmergencia,
+        idUsuarioResponsableGRD: idUsuarioResponsableGRD!,
+        idParroquiaDestino: incidencia.idParroquia,
+        tipoMovimiento: "ENTREGA",
+        cantidad: cantidadEntregada,
+        motivoMovimiento: "Entrega de ayuda humanitaria desde móvil",
+        observaciones: [
+          `uuidEntrega=${uuidMovil}`,
+          `idEntrega=${entrega.idEntrega}`,
+          incidencia.codigoCaso ? `codigoCaso=${incidencia.codigoCaso}` : null,
+          idGrupoFamiliar ? `idGrupoFamiliar=${idGrupoFamiliar}` : null,
+          texto(body.observaciones) || null,
+        ]
+          .filter(Boolean)
+          .join(" | "),
+        fechaMovimiento: parseFecha(body.fechaEntrega) ?? new Date(),
+        uuidMovil: `mov-kit-${uuidMovil}`,
         syncEstado: "SINCRONIZADO",
         fechaSincronizacion,
       },
       select: {
-        idEntrega: true,
-        idIncidencia: true,
-        codigoEntrega: true,
-        fechaEntrega: true,
-        tipoAyuda: true,
-        descripcionAyuda: true,
-        cantidadEntregada: true,
-        conformidadRecepcion: true,
-        entregaParcial: true,
-        idGrupoFamiliar: true,
-        idPersonaAfectada: true,
-        uuidAfectadoMovil: true,
-        syncEstado: true,
-        fechaSincronizacion: true,
+        idMovimientoKit: true,
+        idKitEmergencia: true,
       },
     });
 
-    return NextResponse.json({
-      ok: true,
-      duplicated: false,
-      uuidEntrega: uuidMovil,
-      idEntregaRemota: entrega.idEntrega,
-      idServidor: entrega.idEntrega,
-      idIncidenciaRemota: entrega.idIncidencia,
-      codigoCaso: incidencia.codigoCaso,
-      codigoEntrega: entrega.codigoEntrega,
-      fechaEntrega: entrega.fechaEntrega,
-      tipoAyuda: entrega.tipoAyuda,
-      descripcionAyuda: entrega.descripcionAyuda,
-      cantidadEntregada: entrega.cantidadEntregada,
-      conformidadRecepcion: entrega.conformidadRecepcion,
-      entregaParcial: entrega.entregaParcial,
-      idGrupoFamiliar: entrega.idGrupoFamiliar,
-      idPersonaAfectada: entrega.idPersonaAfectada,
-      uuidAfectadoMovil: entrega.uuidAfectadoMovil,
-      syncEstado: entrega.syncEstado,
-      fechaSincronizacion: entrega.fechaSincronizacion,
-    });
+    movimientoKit = {
+      idMovimientoKit: movimiento.idMovimientoKit,
+      idKitEmergencia: movimiento.idKitEmergencia,
+      tipoKit: kitActualizado.tipoKit,
+      stockAnterior,
+      stockActual: kitActualizado.stockActual,
+    };
+  }
+
+  return {
+    entrega,
+    movimientoKit,
+  };
+});
+
+return NextResponse.json({
+  ok: true,
+  duplicated: false,
+  uuidEntrega: uuidMovil,
+  idEntregaRemota: resultado.entrega.idEntrega,
+  idServidor: resultado.entrega.idEntrega,
+  idIncidenciaRemota: resultado.entrega.idIncidencia,
+  codigoCaso: incidencia.codigoCaso,
+  codigoEntrega: resultado.entrega.codigoEntrega,
+  fechaEntrega: resultado.entrega.fechaEntrega,
+  tipoAyuda: resultado.entrega.tipoAyuda,
+  descripcionAyuda: resultado.entrega.descripcionAyuda,
+  cantidadEntregada: resultado.entrega.cantidadEntregada,
+  conformidadRecepcion: resultado.entrega.conformidadRecepcion,
+  entregaParcial: resultado.entrega.entregaParcial,
+  idGrupoFamiliar: resultado.entrega.idGrupoFamiliar,
+  idPersonaAfectada: resultado.entrega.idPersonaAfectada,
+  uuidAfectadoMovil: resultado.entrega.uuidAfectadoMovil,
+  syncEstado: resultado.entrega.syncEstado,
+  fechaSincronizacion: resultado.entrega.fechaSincronizacion,
+  movimientoKit: resultado.movimientoKit,
+});
   } catch (err) {
     if (err instanceof MobileSyncError) {
       return jsonError(err.message, err.status);
