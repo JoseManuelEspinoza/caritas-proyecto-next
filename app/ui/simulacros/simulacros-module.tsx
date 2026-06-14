@@ -6,7 +6,7 @@ import {
   ShieldCheck, Plus, Calendar, MapPin, CheckCircle2, XCircle, Clock,
   Search, ChevronLeft, ChevronRight, Users, MoreVertical, ChevronDown,
   ChevronUp, Activity, Check, Pencil, AlertTriangle, X, FileText,
-  Send, Eye, User, MessageSquare, Upload, ExternalLink, Timer,
+  Send, Eye, User, MessageSquare, Upload, ExternalLink, Timer, Camera, Loader2,
   UserCheck, UserPlus,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -355,18 +355,26 @@ function EvidenciasPanel({
       )}
 
       {canUpload && (
-        <>
-          <input ref={fileRef} type="file" multiple className="hidden" accept={ACCEPT.evidencia}
-            onChange={e => handleFiles(e.target.files)} />
+        <div className="space-y-2">
           {subiendo.length > 0 ? (
-            <div className="text-xs text-gray-500 italic">Subiendo {subiendo.length} archivo(s)...</div>
+            <p className="text-xs text-blue-600 flex items-center gap-1">
+              <Loader2 className="w-3 h-3 animate-spin" /> Subiendo {subiendo.length} archivo(s)…
+            </p>
           ) : (
-            <button type="button" onClick={() => fileRef.current?.click()}
-              className="w-full flex items-center justify-center gap-2 py-2 border border-dashed border-[var(--caritas-green)]/40 rounded-lg text-xs font-medium text-[var(--caritas-green)] hover:bg-[var(--caritas-green)]/5 transition-colors">
-              <Upload className="w-3.5 h-3.5" /> Adjuntar archivo
-            </button>
+            <div className="flex gap-2">
+              <label className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#91D723] text-[#009850] rounded-lg cursor-pointer hover:bg-[#91D723]/10 text-xs font-medium transition-colors">
+                <Camera className="w-3.5 h-3.5" /> Cámara
+                <input type="file" accept={ACCEPT.evidencia} capture="environment" multiple className="hidden"
+                  onChange={e => handleFiles(e.target.files)} />
+              </label>
+              <label className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 text-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 text-xs font-medium transition-colors">
+                <Upload className="w-3.5 h-3.5" /> Galería
+                <input type="file" accept={ACCEPT.evidencia} multiple className="hidden"
+                  onChange={e => handleFiles(e.target.files)} />
+              </label>
+            </div>
           )}
-        </>
+        </div>
       )}
     </div>
   );
