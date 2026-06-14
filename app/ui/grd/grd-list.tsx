@@ -139,12 +139,12 @@ const STATUS: Record<string, StatusCfg> = {
 };
 
 const CATEGORY_ICONS: Record<string, any> = {
-  Incendios: Flame,
-  Inundaciones: Waves,
-  Derrumbes: Mountain,
-  Tsunamis: Waves,
-  Sismos: Zap,
-  Deslizamientos: TrendingDown,
+  Incendio: Flame,
+  Inundación: Waves,
+  Derrumbe: Mountain,
+  Sismo: Zap,
+  Deslizamiento: TrendingDown,
+  Vendaval: Zap,
 };
 
 function CatIcon({ cat, className = "w-4 h-4" }: { cat: string | null; className?: string }) {
@@ -315,14 +315,12 @@ export function GrdList({ items, role }: GrdListProps) {
               className="flex-1 px-3 py-2 text-sm bg-[#F5F5F5] border border-[#DDDDDD] rounded focus:outline-none focus:ring-2 focus:ring-[#009850]/20 focus:border-[#009850]"
             >
               <option value="all">Todas las categorías</option>
-              <option value="Incendios">Incendios</option>
-              <option value="Inundaciones">Inundaciones</option>
-              <option value="Derrumbes">Derrumbes</option>
-              <option value="Deslizamientos">Deslizamientos</option>
-              <option value="Sismos">Sismos</option>
-              <option value="Tsunamis">Tsunamis</option>
-              <option value="Pérdida parcial de la vivienda">Pérdida parcial de vivienda</option>
-              <option value="Colapso de infraestructura">Colapso de infraestructura</option>
+              <option value="Incendio">Incendio</option>
+              <option value="Inundación">Inundación</option>
+              <option value="Derrumbe">Derrumbe</option>
+              <option value="Deslizamiento">Deslizamiento</option>
+              <option value="Sismo">Sismo</option>
+              <option value="Vendaval">Vendaval</option>
             </select>
 
             <button
@@ -463,16 +461,10 @@ export function GrdList({ items, role }: GrdListProps) {
                           {item.tituloIncidencia ?? "Sin título"}
                         </p>
                         <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-400">
-                          {item.direccionEvento && (
-                            <span className="flex items-center gap-1">
-                              <MapPin className="w-3 h-3" />
-                              {item.direccionEvento}
-                            </span>
-                          )}
-                          {item.totalPersonas > 0 && (
+                          {item.totalFamilias > 0 && (
                             <span className="flex items-center gap-1">
                               <Users className="w-3 h-3" />
-                              {item.totalPersonas} personas
+                              {item.totalFamilias} fam · {item.totalPersonas} pers
                             </span>
                           )}
                         </div>
@@ -492,10 +484,16 @@ export function GrdList({ items, role }: GrdListProps) {
                           <span className="text-gray-400 text-xs">—</span>
                         )}
                       </td>
-                      <td className="px-5 py-4 whitespace-nowrap">
-                        <span className="text-sm text-gray-700">
+                      <td className="px-5 py-4 max-w-xs">
+                        <p className="text-sm text-gray-700 truncate">
                           {item.parroquia ?? item.direccionEvento ?? "—"}
-                        </span>
+                        </p>
+                        {item.parroquia && item.direccionEvento && (
+                          <p className="flex items-center gap-1 text-xs text-gray-400 mt-0.5 truncate">
+                            <MapPin className="w-3 h-3 flex-shrink-0" />
+                            {item.direccionEvento}
+                          </p>
+                        )}
                       </td>
                       <td className="px-5 py-4 whitespace-nowrap">
                         <div className="flex flex-col gap-1 items-start">
