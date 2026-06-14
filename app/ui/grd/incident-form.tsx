@@ -2350,8 +2350,8 @@ export function IncidentForm({
       </div>
 
       {/* ── Footer sticky ─────────────────────────────────────────────── */}
-      <div className="fixed bottom-0 left-0 right-0 z-20 bg-white/95 backdrop-blur-sm border-t border-[#DDDDDD] shadow-[0_-2px_16px_rgba(0,0,0,0.08)]">
-        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
+      <div className="sticky bottom-0 z-20 bg-white/95 backdrop-blur-sm border-t border-[#DDDDDD] shadow-[0_-2px_16px_rgba(0,0,0,0.08)]">
+        <div className="px-6 py-3 flex items-center justify-between gap-4">
           <Link
             href={isEdit && incidenciaId ? `/grd/${incidenciaId}` : "/grd"}
             className="flex items-center gap-2 px-5 py-2.5 border border-[#DDDDDD] rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
