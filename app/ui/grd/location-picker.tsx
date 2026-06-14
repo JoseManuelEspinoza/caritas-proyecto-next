@@ -60,8 +60,10 @@ export function LocationPicker({ lat, lng, onChange, onAddressResolved }: Props)
       const direccion =
         [calleNumero, zona].filter(Boolean).join(", ") || (data.display_name as string) || "";
       // Candidatos de distrito (en Lima el distrito aparece en distintos campos según la zona).
+      // Se incluye `county` porque Nominatim frecuentemente pone el distrito ahí en Lima.
       const candidatosDistrito = [
         a.city_district,
+        a.county,
         a.suburb,
         a.town,
         a.quarter,

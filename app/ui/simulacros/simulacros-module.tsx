@@ -28,6 +28,7 @@ import { subirArchivoS3 } from "@/app/ui/shared/file-upload";
 import { ACCEPT } from "@/app/lib/upload-config";
 import { PaginationControls, PageSizeSelector } from "@/app/ui/shared/pagination-controls";
 import type { FrontendRole } from "@/app/lib/roles";
+import { LocationPicker } from "@/app/ui/grd/location-picker";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type EvidenciaItem = {
@@ -1365,6 +1366,8 @@ function NuevaActividadForm({ parroquias, onCancel, onSaved }: {
     recomendaciones: "",      // recursos (opcional)
   });
   const [errors, setErrors] = useState<string[]>([]);
+  const [mapLat, setMapLat] = useState<number | null>(null);
+  const [mapLng, setMapLng] = useState<number | null>(null);
 
   const required = ["nombreActividad", "idParroquia", "fechaProgramada", "descripcionActividad"] as const;
 
@@ -1459,6 +1462,21 @@ function NuevaActividadForm({ parroquias, onCancel, onSaved }: {
             <input value={form.lugarActividad} onChange={e => setForm({ ...form, lugarActividad: e.target.value })}
               placeholder="Ej. Plaza principal, nave de la parroquia..." className={`mt-1 ${INPUT}`} />
           </label>
+        </div>
+
+        {/* Mapa de ubicación */}
+        <div>
+          <span className="text-xs text-gray-500 block mb-1">Ubicación en el mapa <span className="text-[10px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-full ml-1">Opcional</span></span>
+          <div className="h-56">
+            <LocationPicker
+              lat={mapLat}
+              lng={mapLng}
+              onChange={(lat, lng) => { setMapLat(lat); setMapLng(lng); }}
+              onAddressResolved={({ direccion }) => {
+                if (direccion) setForm(f => ({ ...f, lugarActividad: direccion }));
+              }}
+            />
+          </div>
         </div>
 
         {/* Línea 4: Objetivos */}
@@ -1573,6 +1591,43 @@ export function SimulacrosModule({
           onCancel={() => setShowForm(false)} onSaved={() => setShowForm(false)} />
       )}
 
+      {/* Cards de indicadores */}
+      {!showForm && (
+        <div className="grid grid-cols-3 gap-4 mb-6">
+          <div className="bg-white border border-gray-200 rounded-xl p-4 flex items-center gap-4">
+            <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+              <ShieldCheck className="w-5 h-5 text-gray-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-gray-900">{actividades.length}</p>
+              <p className="text-xs text-gray-500">Total</p>
+            </div>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-xl p-4 flex items-center gap-4">
+            <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center flex-shrink-0">
+              <Calendar className="w-5 h-5 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-blue-700">
+                {actividades.filter(a => a.estadoActividad === "PROGRAMADA").length}
+              </p>
+              <p className="text-xs text-gray-500">Programadas</p>
+            </div>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-xl p-4 flex items-center gap-4">
+            <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center flex-shrink-0">
+              <Activity className="w-5 h-5 text-[var(--caritas-green)]" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-[var(--caritas-green)]">
+                {actividades.filter(a => a.estadoActividad === "EJECUTADA").length}
+              </p>
+              <p className="text-xs text-gray-500">Ejecutadas</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Filtros */}
       <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6 space-y-3">
         <div className="flex flex-col lg:flex-row lg:items-center gap-3">
@@ -1591,11 +1646,23 @@ export function SimulacrosModule({
           <div className="flex items-center gap-2 flex-1">
             <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0" />
             <span className="text-xs text-gray-500 flex-shrink-0">Desde</span>
-            <input type="date" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)} className={`flex-1 ${fieldBase} border-gray-200 px-3 py-2`} />
+            <input
+              type="date"
+              value={fechaDesde}
+              max={fechaHasta || undefined}
+              onChange={e => { setFechaDesde(e.target.value); if (fechaHasta && e.target.value > fechaHasta) setFechaHasta(e.target.value); }}
+              className={`flex-1 ${fieldBase} border-gray-200 px-3 py-2`}
+            />
           </div>
           <div className="flex items-center gap-2 flex-1">
             <span className="text-xs text-gray-500 flex-shrink-0">Hasta</span>
-            <input type="date" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)} className={`flex-1 ${fieldBase} border-gray-200 px-3 py-2`} />
+            <input
+              type="date"
+              value={fechaHasta}
+              min={fechaDesde || undefined}
+              onChange={e => { setFechaHasta(e.target.value); if (fechaDesde && e.target.value < fechaDesde) setFechaDesde(e.target.value); }}
+              className={`flex-1 ${fieldBase} border-gray-200 px-3 py-2`}
+            />
           </div>
           {(fechaDesde || fechaHasta) && (
             <button type="button" onClick={() => { setFechaDesde(""); setFechaHasta(""); }}

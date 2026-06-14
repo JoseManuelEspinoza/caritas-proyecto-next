@@ -1822,7 +1822,11 @@ export function IncidentForm({
                       )}
                     </div>
                     <p className="text-[11px] text-gray-400 mt-1">
-                      Sugerencias basadas en el distrito seleccionado.
+                      Sugerencias basadas en el distrito seleccionado. Escribe con el formato correcto:{" "}
+                      <span className="text-gray-500 font-medium">Av. Nombre 123</span>,{" "}
+                      <span className="text-gray-500 font-medium">Jr. Nombre 456</span>,{" "}
+                      <span className="text-gray-500 font-medium">Calle Nombre 789</span>,{" "}
+                      <span className="text-gray-500 font-medium">Psj. Nombre 10</span>
                     </p>
                   </div>
                   <div>
@@ -1877,10 +1881,14 @@ export function IncidentForm({
                         if (la != null && lo != null) buscarParroquiasCercanas(la, lo);
                       }}
                       onAddressResolved={({ direccion: dir, candidatosDistrito }) => {
-                        setDireccion(dir);
+                        // Fix #1: preserva el número que el usuario pudo haber escrito
+                        setDireccion((prev) => fusionarNumero(prev, dir) || dir);
                         setMapSugerencias([]);
+                        // Fix #2: normaliza acentos y espacios para comparar con DISTRITOS_LIMA
+                        const norm = (s: string) =>
+                          s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
                         const match = DISTRITOS_LIMA.find((d) =>
-                          candidatosDistrito.some((c) => c.toLowerCase() === d.toLowerCase())
+                          candidatosDistrito.some((c) => norm(c) === norm(d))
                         );
                         if (match) setDistrito(match);
                       }}
