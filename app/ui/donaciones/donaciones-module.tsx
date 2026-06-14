@@ -520,12 +520,7 @@ export function DonacionesModule({ casos, canEvaluate }: { casos: Caso[]; canEva
                           <span className="text-xs text-gray-600 block mb-1">Acta firmada <span className="text-gray-400">(opcional)</span></span>
                           <div className="flex gap-2">
                             <label className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#91D723] text-[#009850] rounded-lg cursor-pointer hover:bg-[#91D723]/10 text-xs font-medium transition-colors">
-                              <Camera className="w-3.5 h-3.5" /> Cámara
-                              <input type="file" accept="image/*,application/pdf" capture="environment" className="hidden"
-                                onChange={(e) => setActaFile(e.target.files?.[0] ?? null)} />
-                            </label>
-                            <label className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 text-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 text-xs font-medium transition-colors">
-                              <Upload className="w-3.5 h-3.5" /> Galería
+                              <Upload className="w-3.5 h-3.5" /> Adjuntar archivo
                               <input type="file" accept="image/*,application/pdf" className="hidden"
                                 onChange={(e) => setActaFile(e.target.files?.[0] ?? null)} />
                             </label>

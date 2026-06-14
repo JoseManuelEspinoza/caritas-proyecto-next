@@ -363,12 +363,7 @@ function EvidenciasPanel({
           ) : (
             <div className="flex gap-2">
               <label className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#91D723] text-[#009850] rounded-lg cursor-pointer hover:bg-[#91D723]/10 text-xs font-medium transition-colors">
-                <Camera className="w-3.5 h-3.5" /> Cámara
-                <input type="file" accept={ACCEPT.evidencia} capture="environment" multiple className="hidden"
-                  onChange={e => handleFiles(e.target.files)} />
-              </label>
-              <label className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 text-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 text-xs font-medium transition-colors">
-                <Upload className="w-3.5 h-3.5" /> Galería
+                <Upload className="w-3.5 h-3.5" /> Adjuntar archivo
                 <input type="file" accept={ACCEPT.evidencia} multiple className="hidden"
                   onChange={e => handleFiles(e.target.files)} />
               </label>
@@ -839,6 +834,28 @@ function PanelEjecucion({ sim, onDone }: { sim: Actividad; onDone: () => void })
   const [participantes, setParticipantes] = useState(String(sim.participantesReales ?? ""));
   const [hallazgos, setHallazgos] = useState(sim.hallazgos ?? sim.reporteBrigadista ?? "");
   const [errors, setErrors] = useState<string[]>([]);
+  const [subiendoEv, setSubiendoEv] = useState<string[]>([]);
+
+  async function handleEvidencias(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const arr = Array.from(files);
+    setSubiendoEv(arr.map(f => f.name));
+    const subidas: Parameters<typeof addEvidenciasSimulacro>[1] = [];
+    for (const file of arr) {
+      try {
+        const s = await subirArchivoS3(file, { tipo: "evidencia-simulacro", entidadId: sim.id });
+        subidas.push({ key: s.key, nombreArchivo: s.nombre, formato: s.formato, tamano: s.tamano });
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : `No se pudo subir ${file.name}.`);
+      }
+    }
+    setSubiendoEv([]);
+    if (subidas.length) {
+      const r = await addEvidenciasSimulacro(sim.id, subidas);
+      if (r?.message) { toast.error(r.message); return; }
+      toast.success(subidas.length === 1 ? "Evidencia adjuntada." : `${subidas.length} evidencias adjuntadas.`);
+    }
+  }
 
   const validate = () => {
     const e: string[] = [];
@@ -909,7 +926,23 @@ function PanelEjecucion({ sim, onDone }: { sim: Actividad; onDone: () => void })
           className={`mt-1 resize-none ${errors.includes("hallazgos") ? `${fieldBase} border-red-400` : `${fieldBase} border-gray-200`} px-3 py-2`} />
       </label>
 
-      <button onClick={registrar} disabled={pending}
+      <div>
+        <p className="text-xs text-gray-500 mb-1.5">Pruebas visuales <span className="text-gray-400">(opcional)</span></p>
+        <div className="flex gap-2">
+          <label className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#91D723] text-[#009850] rounded-lg cursor-pointer hover:bg-[#91D723]/10 text-xs font-medium transition-colors">
+            <Upload className="w-3.5 h-3.5" /> Adjuntar archivo
+            <input type="file" accept={ACCEPT.evidencia} multiple className="hidden"
+              onChange={e => handleEvidencias(e.target.files)} />
+          </label>
+        </div>
+        {subiendoEv.length > 0 && (
+          <p className="text-xs text-blue-600 flex items-center gap-1 mt-1.5">
+            <Loader2 className="w-3 h-3 animate-spin" /> Subiendo {subiendoEv.length} archivo(s)…
+          </p>
+        )}
+      </div>
+
+      <button onClick={registrar} disabled={pending || subiendoEv.length > 0}
         className="w-full py-2.5 bg-[var(--caritas-green)] text-white text-sm font-semibold rounded-xl hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2">
         <CheckCircle2 className="w-4 h-4" /> {esReenvio ? "Reenviar ejecución corregida" : "Registrar ejecución"}
       </button>
