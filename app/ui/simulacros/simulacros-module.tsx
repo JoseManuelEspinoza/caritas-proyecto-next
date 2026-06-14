@@ -26,6 +26,7 @@ import {
 } from "@/app/actions/simulacros";
 import { subirArchivoS3 } from "@/app/ui/shared/file-upload";
 import { ACCEPT } from "@/app/lib/upload-config";
+import { PaginationControls, PageSizeSelector } from "@/app/ui/shared/pagination-controls";
 import type { FrontendRole } from "@/app/lib/roles";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -73,7 +74,6 @@ const TIPOS = [
   "Charla de Prevención", "Taller", "Campaña",
 ];
 const ESTADOS = ["PROGRAMADA", "ASIGNADA", "EJECUTADA", "OBSERVADA", "VALIDADA", "CANCELADA"];
-const PAGE_SIZE = 10;
 
 const ESTADO_CFG: Record<string, { cls: string; label: string; icon: React.ReactNode }> = {
   PROGRAMADA: { cls: "bg-blue-50 text-blue-700 border border-blue-200",      label: "Programada", icon: <Clock className="w-3 h-3" /> },
@@ -1515,6 +1515,7 @@ export function SimulacrosModule({
   const [fechaDesde, setFechaDesde] = useState("");
   const [fechaHasta, setFechaHasta] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5);
 
   useEffect(() => setCurrentPage(1), [search, estadoFilter, parroquiaFilter, tipoFilter, fechaDesde, fechaHasta]);
 
@@ -1536,12 +1537,12 @@ export function SimulacrosModule({
     return true;
   });
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(currentPage, totalPages);
-  const startIdx = (safePage - 1) * PAGE_SIZE;
-  const paginated = filtered.slice(startIdx, startIdx + PAGE_SIZE);
+  const startIdx = (safePage - 1) * pageSize;
+  const paginated = filtered.slice(startIdx, startIdx + pageSize);
   const visibleFrom = filtered.length === 0 ? 0 : startIdx + 1;
-  const visibleTo = Math.min(startIdx + PAGE_SIZE, filtered.length);
+  const visibleTo = Math.min(startIdx + pageSize, filtered.length);
   const hasFilters = search || estadoFilter.length > 0 || parroquiaFilter.length > 0 || tipoFilter.length > 0 || fechaDesde || fechaHasta;
 
   return (
@@ -1605,16 +1606,20 @@ export function SimulacrosModule({
         </div>
         <div className="flex items-center justify-between">
           <p className="text-sm text-gray-600">
-            Mostrando{" "}
-            <span className="font-semibold text-base text-[var(--caritas-text)]">{visibleFrom}</span>–<span className="font-semibold text-base text-[var(--caritas-text)]">{visibleTo}</span>
-            {" "}de <span className="font-semibold text-base text-[var(--caritas-text)]">{filtered.length}</span> actividades
+            <span className="font-semibold text-base text-[var(--caritas-text)]">{filtered.length}</span> actividades encontradas
           </p>
-          {hasFilters && (
-            <button onClick={() => { setSearch(""); setEstadoFilter([]); setParroquiaFilter([]); setTipoFilter([]); setFechaDesde(""); setFechaHasta(""); }}
-              className="text-xs font-medium text-[var(--caritas-green)] hover:underline">
-              Limpiar filtros
-            </button>
-          )}
+          <div className="flex items-center gap-3">
+            {hasFilters && (
+              <button onClick={() => { setSearch(""); setEstadoFilter([]); setParroquiaFilter([]); setTipoFilter([]); setFechaDesde(""); setFechaHasta(""); }}
+                className="text-xs font-medium text-[var(--caritas-green)] hover:underline">
+                Limpiar filtros
+              </button>
+            )}
+            <PageSizeSelector
+              pageSize={pageSize}
+              onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
+            />
+          </div>
         </div>
       </div>
 
@@ -1633,22 +1638,18 @@ export function SimulacrosModule({
             currentBrigadistaId={currentBrigadistaId}
             currentNombre={currentNombre} />
         ))}
-        {filtered.length > 0 && (
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white border border-gray-200 rounded-xl px-4 py-3">
-            <p className="text-xs text-gray-500">Página {safePage} de {totalPages}</p>
-            <div className="flex items-center gap-2">
-              <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={safePage === 1}
-                className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium border border-gray-200 rounded-lg bg-white text-gray-700 disabled:opacity-50 hover:bg-gray-50">
-                <ChevronLeft className="w-3.5 h-3.5" /> Anterior
-              </button>
-              <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={safePage === totalPages}
-                className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium border border-gray-200 rounded-lg bg-white text-gray-700 disabled:opacity-50 hover:bg-gray-50">
-                Siguiente <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-        )}
       </div>
+
+      <PaginationControls
+        total={filtered.length}
+        start={visibleFrom}
+        end={visibleTo}
+        page={safePage}
+        totalPages={totalPages}
+        onPrevious={() => setCurrentPage((p) => Math.max(1, p - 1))}
+        onNext={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+        className="mt-4"
+      />
     </div>
   );
 }

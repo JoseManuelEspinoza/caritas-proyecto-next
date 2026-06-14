@@ -29,7 +29,7 @@ import {
   toggleDisponibilidadBrigadista,
   type BrigadistaFormData,
 } from "@/app/actions/brigadistas";
-import { PaginationControls } from "@/app/ui/shared/pagination-controls";
+import { PaginationControls, PageSizeSelector } from "@/app/ui/shared/pagination-controls";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -59,7 +59,6 @@ const DISPONIBILIDAD_CFG: Record<string, { label: string; badge: string }> = {
   "NO DISPONIBLE": { label: "No disponible", badge: "bg-gray-100 text-gray-600" },
 };
 
-const PAGE_SIZE = 10;
 
 const inputCls =
   "w-full px-3 py-2 text-sm bg-[#F5F5F5] border border-[#DDDDDD] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#009850]/20 focus:border-[#009850] transition-colors";
@@ -395,6 +394,7 @@ export function BrigadistasList({ brigadistas, parroquias, stats, canEdit = true
   const [filterParroquia, setFilterParroquia] = useState("all");
   const [filterEstado, setFilterEstado] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5);
 
   const filtered = brigadistas.filter((b) => {
     if (filterEstado !== "all" && b.estado !== filterEstado) return false;
@@ -407,12 +407,12 @@ export function BrigadistasList({ brigadistas, parroquias, stats, canEdit = true
     return true;
   });
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(currentPage, totalPages);
-  const startIndex = (safePage - 1) * PAGE_SIZE;
-  const paginated = filtered.slice(startIndex, startIndex + PAGE_SIZE);
+  const startIndex = (safePage - 1) * pageSize;
+  const paginated = filtered.slice(startIndex, startIndex + pageSize);
   const visibleFrom = filtered.length === 0 ? 0 : startIndex + 1;
-  const visibleTo = Math.min(startIndex + PAGE_SIZE, filtered.length);
+  const visibleTo = Math.min(startIndex + pageSize, filtered.length);
 
   function openCreate() {
     setEditing(undefined);
@@ -570,6 +570,10 @@ export function BrigadistasList({ brigadistas, parroquias, stats, canEdit = true
             <option value="ACTIVO">Activos</option>
             <option value="INACTIVO">Inactivos</option>
           </select>
+          <PageSizeSelector
+            pageSize={pageSize}
+            onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
+          />
         </div>
       </div>
 
@@ -785,8 +789,8 @@ export function BrigadistasList({ brigadistas, parroquias, stats, canEdit = true
         end={visibleTo}
         page={safePage}
         totalPages={totalPages}
-        onPrevious={() => setCurrentPage((page) => Math.max(1, page - 1))}
-        onNext={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+        onPrevious={() => setCurrentPage((p) => Math.max(1, p - 1))}
+        onNext={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
       />
 
       {/* Modal */}

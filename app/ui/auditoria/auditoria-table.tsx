@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import type { AuditEntry } from "@/app/actions/auditoria";
+import { PaginationControls, PageSizeSelector } from "@/app/ui/shared/pagination-controls";
 
 const SOURCE_LABELS: Record<string, string> = {
   grd: "GRD",
@@ -28,13 +29,12 @@ function ActionBadge({ action }: { action: string }) {
   return <span className={`px-2 py-0.5 rounded text-xs font-medium ${cls}`}>{action}</span>;
 }
 
-const PAGE_SIZE = 25;
-
 export function AuditoriaTable({ entries }: { entries: AuditEntry[] }) {
   const [query, setQuery] = useState("");
   const [actionFilter, setActionFilter] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5);
 
   const actions = useMemo(
     () => Array.from(new Set(entries.map((e) => e.action))).sort(),
@@ -54,9 +54,12 @@ export function AuditoriaTable({ entries }: { entries: AuditEntry[] }) {
     });
   }, [entries, query, actionFilter, sourceFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, totalPages);
-  const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const startIndex = (currentPage - 1) * pageSize;
+  const paginated = filtered.slice(startIndex, startIndex + pageSize);
+  const visibleFrom = filtered.length === 0 ? 0 : startIndex + 1;
+  const visibleTo = Math.min(startIndex + pageSize, filtered.length);
 
   return (
     <div className="bg-white border border-[#DDDDDD] rounded-xl">
@@ -102,9 +105,14 @@ export function AuditoriaTable({ entries }: { entries: AuditEntry[] }) {
           <option value="grd">GRD</option>
           <option value="auth">Autenticación</option>
         </select>
-        <span className="text-xs text-gray-400 ml-auto">
+        <span className="text-xs text-gray-400">
           {filtered.length} registro{filtered.length !== 1 ? "s" : ""}
         </span>
+        <PageSizeSelector
+          pageSize={pageSize}
+          onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
+          className="ml-auto"
+        />
       </div>
 
       {/* Tabla */}
@@ -186,48 +194,16 @@ export function AuditoriaTable({ entries }: { entries: AuditEntry[] }) {
         </table>
       </div>
 
-      {/* Paginación */}
-      {totalPages > 1 && (
-        <div className="px-4 py-3 border-t border-[#DDDDDD] flex items-center justify-between text-sm text-gray-500">
-          <span>
-            {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filtered.length)}{" "}
-            de {filtered.length} registros
-          </span>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setPage(1)}
-              disabled={currentPage === 1}
-              className="px-2 py-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              «
-            </button>
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
-              className="px-2 py-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              ‹
-            </button>
-            <span className="px-3 py-1 font-medium text-gray-700">
-              {currentPage} / {totalPages}
-            </span>
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
-              className="px-2 py-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              ›
-            </button>
-            <button
-              onClick={() => setPage(totalPages)}
-              disabled={currentPage === totalPages}
-              className="px-2 py-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              »
-            </button>
-          </div>
-        </div>
-      )}
+      <PaginationControls
+        total={filtered.length}
+        start={visibleFrom}
+        end={visibleTo}
+        page={currentPage}
+        totalPages={totalPages}
+        onPrevious={() => setPage((p) => Math.max(1, p - 1))}
+        onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
+        className="rounded-t-none border-t border-x-0 border-b-0 rounded-b-xl"
+      />
     </div>
   );
 }

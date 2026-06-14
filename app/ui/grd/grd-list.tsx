@@ -24,6 +24,7 @@ import {
   SendHorizonal,
 } from "lucide-react";
 import type { FrontendRole } from "@/app/lib/roles";
+import { PaginationControls, PageSizeSelector } from "@/app/ui/shared/pagination-controls";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -176,9 +177,9 @@ export function GrdList({ items, role }: GrdListProps) {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(5);
 
   const canCreate = role === "admin" || role === "especialistaGRD";
-  const rowsPerPage = 10;
 
   const handleExport = () => {
     const headers = ["Código", "Incidente", "Categoría", "Estado", "Ubicación", "Parroquia", "Familias", "Personas", "Brigadistas", "Fecha"];
@@ -342,6 +343,11 @@ export function GrdList({ items, role }: GrdListProps) {
               Ver todos ({items.length})
             </button>
           )}
+          <PageSizeSelector
+            pageSize={rowsPerPage}
+            onPageSizeChange={(s) => { setRowsPerPage(s); setCurrentPage(1); }}
+            className="ml-auto"
+          />
         </div>
       </div>
 
@@ -522,37 +528,16 @@ export function GrdList({ items, role }: GrdListProps) {
           </div>
         )}
 
-        {filtered.length > 0 && (
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 border-t border-[#DDDDDD] bg-[#F5F5F5]">
-            <p className="text-xs text-gray-500">
-              Mostrando {startIndex + 1}-{Math.min(startIndex + rowsPerPage, filtered.length)} de{" "}
-              {filtered.length}
-            </p>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={safePage === 1}
-                className="px-3 py-1.5 text-xs font-medium rounded-lg border border-[#DDDDDD] bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                suppressHydrationWarning
-              >
-                Anterior
-              </button>
-              <span className="text-xs text-gray-600 font-medium">
-                Página {safePage} de {totalPages}
-              </span>
-              <button
-                type="button"
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                disabled={safePage === totalPages}
-                className="px-3 py-1.5 text-xs font-medium rounded-lg border border-[#DDDDDD] bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                suppressHydrationWarning
-              >
-                Siguiente
-              </button>
-            </div>
-          </div>
-        )}
+        <PaginationControls
+          total={filtered.length}
+          start={filtered.length === 0 ? 0 : startIndex + 1}
+          end={Math.min(startIndex + rowsPerPage, filtered.length)}
+          page={safePage}
+          totalPages={totalPages}
+          onPrevious={() => setCurrentPage((p) => Math.max(1, p - 1))}
+          onNext={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+          className="rounded-t-none border-t border-x-0 border-b-0 rounded-b-xl"
+        />
       </div>
 
       {/* FAB móvil */}

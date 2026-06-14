@@ -116,8 +116,6 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 const PENDIENTES = ["EN EVALUACION", "OBSERVADO"];
-const QUEUE_PAGE_SIZE = 9;
-const HISTORY_PAGE_SIZE = 9;
 
 export function DonacionesModule({ casos, canEvaluate }: { casos: Caso[]; canEvaluate: boolean }) {
   const router = useRouter();
@@ -128,6 +126,8 @@ export function DonacionesModule({ casos, canEvaluate }: { casos: Caso[]; canEva
   const [notes, setNotes] = useState("");
   const [queuePage, setQueuePage] = useState(1);
   const [historyPage, setHistoryPage] = useState(1);
+  const [queuePageSize, setQueuePageSize] = useState(5);
+  const [historyPageSize, setHistoryPageSize] = useState(5);
   const [descargandoPdf, setDescargandoPdf] = useState(false);
   const [entregas, setEntregas] = useState<Entrega[]>([]);
   const [evidenciasEntrega, setEvidenciasEntrega] = useState<{idEvidenciaGRD:string;nombreArchivo:string;urlArchivo:string;fechaCarga:string}[]>([]);
@@ -147,19 +147,19 @@ export function DonacionesModule({ casos, canEvaluate }: { casos: Caso[]; canEva
   const closed = casos.filter((c) => !PENDIENTES.includes(c.estado));
   const current = casos.find((c) => c.id === selectedId) ?? null;
 
-  const totalQueuePages = Math.max(1, Math.ceil(queue.length / QUEUE_PAGE_SIZE));
+  const totalQueuePages = Math.max(1, Math.ceil(queue.length / queuePageSize));
   const safeQueuePage = Math.min(queuePage, totalQueuePages);
-  const queueStart = (safeQueuePage - 1) * QUEUE_PAGE_SIZE;
-  const paginatedQueue = queue.slice(queueStart, queueStart + QUEUE_PAGE_SIZE);
+  const queueStart = (safeQueuePage - 1) * queuePageSize;
+  const paginatedQueue = queue.slice(queueStart, queueStart + queuePageSize);
   const queueFrom = queue.length === 0 ? 0 : queueStart + 1;
-  const queueTo = Math.min(queueStart + QUEUE_PAGE_SIZE, queue.length);
+  const queueTo = Math.min(queueStart + queuePageSize, queue.length);
 
-  const totalHistoryPages = Math.max(1, Math.ceil(closed.length / HISTORY_PAGE_SIZE));
+  const totalHistoryPages = Math.max(1, Math.ceil(closed.length / historyPageSize));
   const safeHistoryPage = Math.min(historyPage, totalHistoryPages);
-  const historyStart = (safeHistoryPage - 1) * HISTORY_PAGE_SIZE;
-  const paginatedHistory = closed.slice(historyStart, historyStart + HISTORY_PAGE_SIZE);
+  const historyStart = (safeHistoryPage - 1) * historyPageSize;
+  const paginatedHistory = closed.slice(historyStart, historyStart + historyPageSize);
   const historyFrom = closed.length === 0 ? 0 : historyStart + 1;
-  const historyTo = Math.min(historyStart + HISTORY_PAGE_SIZE, closed.length);
+  const historyTo = Math.min(historyStart + historyPageSize, closed.length);
 
   useEffect(() => {
     if (queuePage > totalQueuePages) setQueuePage(totalQueuePages);
@@ -350,8 +350,10 @@ export function DonacionesModule({ casos, canEvaluate }: { casos: Caso[]; canEva
             end={queueTo}
             page={safeQueuePage}
             totalPages={totalQueuePages}
-            onPrevious={() => setQueuePage((page) => Math.max(1, page - 1))}
-            onNext={() => setQueuePage((page) => Math.min(totalQueuePages, page + 1))}
+            onPrevious={() => setQueuePage((p) => Math.max(1, p - 1))}
+            onNext={() => setQueuePage((p) => Math.min(totalQueuePages, p + 1))}
+            pageSize={queuePageSize}
+            onPageSizeChange={(s) => { setQueuePageSize(s); setQueuePage(1); }}
             className="rounded-none border-x-0 border-b-0"
           />
           {closed.length > 0 && (
@@ -378,8 +380,10 @@ export function DonacionesModule({ casos, canEvaluate }: { casos: Caso[]; canEva
                 end={historyTo}
                 page={safeHistoryPage}
                 totalPages={totalHistoryPages}
-                onPrevious={() => setHistoryPage((page) => Math.max(1, page - 1))}
-                onNext={() => setHistoryPage((page) => Math.min(totalHistoryPages, page + 1))}
+                onPrevious={() => setHistoryPage((p) => Math.max(1, p - 1))}
+                onNext={() => setHistoryPage((p) => Math.min(totalHistoryPages, p + 1))}
+                pageSize={historyPageSize}
+                onPageSizeChange={(s) => { setHistoryPageSize(s); setHistoryPage(1); }}
                 className="rounded-none border-x-0 border-b-0"
               />
             </>
