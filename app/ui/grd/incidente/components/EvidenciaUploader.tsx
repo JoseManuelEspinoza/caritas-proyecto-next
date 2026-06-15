@@ -45,18 +45,7 @@ export function EvidenciaUploader({
     <div className="space-y-2">
       <div className="flex gap-2">
         <label className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#91D723] text-[#009850] rounded-lg cursor-pointer hover:bg-[#91D723]/10 text-xs font-medium transition-colors">
-          <Camera className="w-3.5 h-3.5" /> Cámara
-          <input
-            type="file"
-            accept={accept}
-            capture="environment"
-            multiple
-            className="hidden"
-            onChange={(e) => onFiles(e.target.files)}
-          />
-        </label>
-        <label className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 text-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 text-xs font-medium transition-colors">
-          <Upload className="w-3.5 h-3.5" /> Galería
+          <Upload className="w-3.5 h-3.5" /> Adjuntar archivo
           <input
             type="file"
             accept={accept}
