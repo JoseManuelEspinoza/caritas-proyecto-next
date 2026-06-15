@@ -46,7 +46,7 @@ const ALL_NAV = [
     icon: HandHeart,
     label: "Donaciones",
     exact: false,
-    roles: ["admin", "comite", "jefaOGP"],
+    roles: ["admin", "comite"],
   },
   {
     href: "/capacitaciones",

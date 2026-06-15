@@ -28,6 +28,8 @@ import { PaginationControls, PageSizeSelector } from "@/app/ui/shared/pagination
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
+export type GlobalCounts = Record<string, number>;
+
 export type IncidenteItem = {
   idIncidencia: string;
   codigoCaso: string | null;
@@ -179,9 +181,10 @@ const SUMMARY_STATES = [
 interface GrdListProps {
   items: IncidenteItem[];
   role: FrontendRole;
+  globalCounts?: GlobalCounts;
 }
 
-export function GrdList({ items, role }: GrdListProps) {
+export function GrdList({ items, role, globalCounts }: GrdListProps) {
   const [statusFilter, setStatusFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -255,10 +258,12 @@ export function GrdList({ items, role }: GrdListProps) {
     if (currentPage > totalPages) setCurrentPage(totalPages);
   }, [currentPage, totalPages]);
 
-  // Conteos por estado
-  const counts: Record<string, number> = {};
-  for (const item of items) {
-    counts[item.estadoActual] = (counts[item.estadoActual] ?? 0) + 1;
+  // Conteos por estado — usa globalCounts si se pasa (para roles con vista filtrada)
+  const counts: Record<string, number> = globalCounts ?? {};
+  if (!globalCounts) {
+    for (const item of items) {
+      counts[item.estadoActual] = (counts[item.estadoActual] ?? 0) + 1;
+    }
   }
 
   return (
@@ -286,7 +291,7 @@ export function GrdList({ items, role }: GrdListProps) {
       </div>
 
       {/* Tarjetas de estado */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2 md:gap-3">
+      {role !== "jefaOGP" && <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2 md:gap-3">
         {SUMMARY_STATES.map((s) => {
           const cfg = STATUS[s];
           const Icon = cfg.icon;
@@ -311,7 +316,7 @@ export function GrdList({ items, role }: GrdListProps) {
             </button>
           );
         })}
-      </div>
+      </div>}
 
       {/* Filtros */}
       <div className="bg-white rounded-xl border border-gray-200 p-3 md:p-4">
