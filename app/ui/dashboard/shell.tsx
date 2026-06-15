@@ -46,7 +46,7 @@ const ALL_NAV = [
     icon: HandHeart,
     label: "Donaciones",
     exact: false,
-    roles: ["admin", "comite", "jefaOGP"],
+    roles: ["admin", "comite"],
   },
   {
     href: "/capacitaciones",
@@ -262,7 +262,7 @@ export function DashboardShell({
       {/* Sidebar */}
       <aside
         className={`
-          ${isMobile === true ? "fixed inset-y-0 left-0 z-50 w-64" : collapsed ? "w-20" : "w-64"}
+          ${isMobile === true ? "fixed inset-y-0 left-0 z-50 w-64" : collapsed ? "relative z-10 w-20" : "w-64"}
           ${isMobile === true && !mobileMenuOpen ? "-translate-x-full" : "translate-x-0"}
           bg-white border-r border-[#DDDDDD] transition-all duration-300 flex flex-col
         `}
@@ -308,7 +308,7 @@ export function DashboardShell({
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 py-4 overflow-y-auto space-y-0.5">
+        <nav className={`flex-1 py-4 space-y-0.5 ${collapsed ? "overflow-visible" : "overflow-y-auto"}`}>
           {navItems.map((item) => (
             <NavLink
               key={item.href}

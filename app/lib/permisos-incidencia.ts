@@ -25,7 +25,7 @@ export interface PermisosIncidencia {
 }
 
 const ES_GRD = (rol: FrontendRole) => rol === "admin" || rol === "especialistaGRD";
-const ES_COMITE = (rol: FrontendRole) => rol === "admin" || rol === "comite" || rol === "jefaOGP";
+const ES_COMITE = (rol: FrontendRole) => rol === "admin" || rol === "comite";
 
 /**
  * Única fuente de verdad para los permisos del flujo de incidencias.

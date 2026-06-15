@@ -6,7 +6,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=postgresql://postgres:admin123@db:5432/caritas_db
       - SESSION_SECRET=${SESSION_SECRET:-dev-secret-minimo-32-caracteres-cambiar-en-prod}
       - APP_URL=http://localhost:3000
       - NODE_ENV=development

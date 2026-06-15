@@ -24,7 +24,7 @@ function asStringArray(v: unknown): string[] {
 export default async function DonacionesPage() {
   const session = await verifySession();
   const role = toFrontendRole(session.role);
-  if (!["admin", "comite", "jefaOGP"].includes(role)) redirect("/dashboard");
+  if (!["admin", "comite"].includes(role)) redirect("/dashboard");
 
   const rows = await prisma.incidencia.findMany({
     where: { estadoActual: { in: ESTADOS } },
@@ -164,7 +164,7 @@ export default async function DonacionesPage() {
     };
   });
 
-  const canEvaluate = ["comite", "admin", "jefaOGP"].includes(role);
+  const canEvaluate = ["comite", "admin"].includes(role);
 
   return <DonacionesModule casos={casos} canEvaluate={canEvaluate} />;
 }
