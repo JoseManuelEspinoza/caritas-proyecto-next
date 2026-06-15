@@ -195,6 +195,25 @@ export function SearchableSelect({
   );
 }
 
+// ─── Configuración por tipo de documento ──────────────────────────────────────
+
+const DOC_CONFIG: Record<string, { max: number; onlyDigits: boolean; placeholder: string; hint: string }> = {
+  DNI:       { max: 8,  onlyDigits: true,  placeholder: "12345678",  hint: "8 dígitos" },
+  CE:        { max: 12, onlyDigits: true,  placeholder: "123456789", hint: "9 a 12 dígitos" },
+  Pasaporte: { max: 12, onlyDigits: false, placeholder: "A12345678", hint: "6 a 12 caracteres alfanuméricos" },
+  Otro:      { max: 20, onlyDigits: false, placeholder: "—",         hint: "" },
+};
+
+const PHONE_CODES = [
+  { code: "+51", label: "PE", max: 9 },
+  { code: "+52", label: "MX", max: 10 },
+  { code: "+54", label: "AR", max: 10 },
+  { code: "+56", label: "CL", max: 9 },
+  { code: "+57", label: "CO", max: 10 },
+];
+
+const SOLO_NUMEROS_SIMBOLOS = /[\d!@#$%^&*()+=[\]{};:"\\|<>?/]/g;
+
 // ─── Modal de persona ─────────────────────────────────────────────────────────
 
 export function PersonaModal({
@@ -203,13 +222,23 @@ export function PersonaModal({
   editing,
   familias,
   activeFamiliaId,
+  situaciones = SITUACIONES_ESPECIALES_MODAL,
 }: {
   onSave: (p: PersonaForm) => void;
   onClose: () => void;
   editing?: PersonaForm;
   familias: FamiliaForm[];
   activeFamiliaId?: string;
+  situaciones?: string[];
 }) {
+  // Separar código de país del celular al editar
+  const _celStored = editing?.celular ?? "";
+  const _celParsed = _celStored.match(/^(\+\d+)\s+(.*)$/);
+  const [celCodigo, setCelCodigo] = useState(_celParsed?.[1] ?? "+51");
+  const [celNumero, setCelNumero] = useState(
+    _celParsed ? _celParsed[2].replace(/\D/g, "") : _celStored.replace(/\D/g, "")
+  );
+
   const [form, setForm] = useState<PersonaForm>(
     editing ?? {
       id: `PER-${Date.now()}`,
@@ -231,48 +260,81 @@ export function PersonaModal({
     setForm((p) => ({ ...p, [key]: value }));
   }
 
+  function handleDocChange(val: string) {
+    const cfg = DOC_CONFIG[form.tipoDoc] ?? DOC_CONFIG.Otro;
+    const clean = cfg.onlyDigits
+      ? val.replace(/\D/g, "").slice(0, cfg.max)
+      : val.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, cfg.max);
+    set("dni", clean);
+  }
+
+  function handleTipoDocChange(tipo: string) {
+    set("tipoDoc", tipo);
+    set("dni", ""); // limpiar al cambiar tipo
+  }
+
+  function handleNombreChange(val: string) {
+    set("nombre", val.replace(SOLO_NUMEROS_SIMBOLOS, "").slice(0, 60));
+  }
+
+  function handleApellidoChange(key: "apellidoPaterno" | "apellidoMaterno", val: string) {
+    set(key, val.replace(SOLO_NUMEROS_SIMBOLOS, "").slice(0, 40));
+  }
+
+  function handleEdadChange(val: string) {
+    const digits = val.replace(/\D/g, "").slice(0, 3);
+    if (digits === "" || (Number(digits) >= 0 && Number(digits) <= 120)) {
+      set("edad", digits);
+    }
+  }
+
+  function handleCelChange(val: string) {
+    const phoneEntry = PHONE_CODES.find((p) => p.code === celCodigo);
+    const max = phoneEntry?.max ?? 12;
+    const digits = val.replace(/\D/g, "").slice(0, max);
+    setCelNumero(digits);
+    set("celular", digits ? `${celCodigo} ${digits}` : "");
+  }
+
+  function handleCelCodigoChange(code: string) {
+    setCelCodigo(code);
+    const phoneEntry = PHONE_CODES.find((p) => p.code === code);
+    const max = phoneEntry?.max ?? 12;
+    const trimmed = celNumero.slice(0, max);
+    setCelNumero(trimmed);
+    set("celular", trimmed ? `${code} ${trimmed}` : "");
+  }
+
   function validateDocumento(tipo: string, valor: string): string | null {
     const v = (valor ?? "").trim();
+    if (!v) return null; // documento opcional
     if (tipo === "DNI") {
-      const digits = v.replace(/\D/g, "");
-      if (digits.length < 8) return "El DNI debe tener al menos 8 dígitos.";
-      if (digits.length > 9) return "El DNI no debe exceder 9 dígitos.";
+      if (v.length < 8) return "El DNI debe tener 8 dígitos.";
       return null;
     }
     if (tipo === "CE") {
-      const digits = v.replace(/\D/g, "");
-      if (digits.length < 9) return "El CE debe tener al menos 9 dígitos.";
-      if (digits.length > 12) return "El CE no debe exceder 12 dígitos.";
+      if (v.length < 9) return "El CE debe tener al menos 9 dígitos.";
       return null;
     }
     if (tipo === "Pasaporte") {
-      const alnum = v.replace(/[^A-Za-z0-9]/g, "");
-      if (alnum.length < 6) return "El pasaporte debe tener al menos 6 caracteres.";
-      if (alnum.length > 12) return "El pasaporte no debe exceder 12 caracteres.";
+      if (v.length < 6) return "El pasaporte debe tener al menos 6 caracteres.";
       return null;
     }
     return null;
   }
 
   function handleSubmit() {
-    if (!form.nombre.trim()) {
-      toast.error("Ingresa el nombre de la persona");
-      return;
-    }
-    if (!form.edad) {
-      toast.error("Ingresa la edad");
-      return;
-    }
+    if (!form.nombre.trim()) { toast.error("Ingresa el nombre de la persona"); return; }
+    if (!form.edad) { toast.error("Ingresa la edad"); return; }
     const docErr = validateDocumento(form.tipoDoc, form.dni);
-    if (docErr) {
-      toast.error(docErr);
-      return;
-    }
+    if (docErr) { toast.error(docErr); return; }
     onSave({ ...form, id: editing?.id || `PER-${Date.now()}` });
     onClose();
   }
 
   const familiaActual = familias.find((f) => f.id === activeFamiliaId);
+  const docCfg = DOC_CONFIG[form.tipoDoc] ?? DOC_CONFIG.Otro;
+  const celMax = PHONE_CODES.find((p) => p.code === celCodigo)?.max ?? 12;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -297,12 +359,13 @@ export function PersonaModal({
         )}
 
         <div className="p-4 space-y-3">
+          {/* Documento */}
           <div className="grid grid-cols-3 gap-2">
             <div>
               <label className="text-xs font-semibold text-gray-600 block mb-1">Tipo Doc.</label>
               <select
                 value={form.tipoDoc}
-                onChange={(e) => set("tipoDoc", e.target.value)}
+                onChange={(e) => handleTipoDocChange(e.target.value)}
                 className="w-full px-2 py-2 text-sm border border-gray-200 rounded-lg"
               >
                 {["DNI", "CE", "Pasaporte", "Otro"].map((t) => (
@@ -314,24 +377,20 @@ export function PersonaModal({
               <label className="text-xs font-semibold text-gray-600 block mb-1">N° Documento</label>
               <input
                 type="text"
+                inputMode={docCfg.onlyDigits ? "numeric" : "text"}
                 value={form.dni}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (form.tipoDoc === "DNI" || form.tipoDoc === "CE") {
-                    set("dni", val.replace(/\D/g, "").slice(0, 12));
-                  } else {
-                    set("dni", val.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12));
-                  }
-                }}
+                onChange={(e) => handleDocChange(e.target.value)}
                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
-                placeholder={
-                  form.tipoDoc === "DNI" ? "12345678" : form.tipoDoc === "CE" ? "123456789" : "A12345678"
-                }
-                maxLength={12}
+                placeholder={docCfg.placeholder}
+                maxLength={docCfg.max}
               />
+              {docCfg.hint && (
+                <p className="text-[10px] text-gray-400 mt-0.5">{docCfg.hint}</p>
+              )}
             </div>
           </div>
 
+          {/* Nombres */}
           <div>
             <label className="text-xs font-semibold text-gray-600 block mb-1">
               Nombres <span className="text-red-500">*</span>
@@ -339,20 +398,23 @@ export function PersonaModal({
             <input
               type="text"
               value={form.nombre}
-              onChange={(e) => set("nombre", e.target.value)}
+              onChange={(e) => handleNombreChange(e.target.value)}
               className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
               placeholder="Ej: María Elena"
+              maxLength={60}
             />
           </div>
 
+          {/* Apellidos */}
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-xs font-semibold text-gray-600 block mb-1">Apellido Paterno</label>
               <input
                 type="text"
                 value={form.apellidoPaterno}
-                onChange={(e) => set("apellidoPaterno", e.target.value)}
+                onChange={(e) => handleApellidoChange("apellidoPaterno", e.target.value)}
                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
+                maxLength={40}
               />
             </div>
             <div>
@@ -360,25 +422,27 @@ export function PersonaModal({
               <input
                 type="text"
                 value={form.apellidoMaterno}
-                onChange={(e) => set("apellidoMaterno", e.target.value)}
+                onChange={(e) => handleApellidoChange("apellidoMaterno", e.target.value)}
                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
+                maxLength={40}
               />
             </div>
           </div>
 
+          {/* Edad y Género */}
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-xs font-semibold text-gray-600 block mb-1">
                 Edad <span className="text-red-500">*</span>
               </label>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 value={form.edad}
-                onChange={(e) => set("edad", e.target.value)}
+                onChange={(e) => handleEdadChange(e.target.value)}
                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
                 placeholder="0"
-                min="0"
-                max="120"
+                maxLength={3}
               />
             </div>
             <div>
@@ -388,23 +452,41 @@ export function PersonaModal({
                 onChange={(e) => set("genero", e.target.value)}
                 className="w-full px-2 py-2 text-sm border border-gray-200 rounded-lg"
               >
-                {["Femenino", "Masculino", "Otro", "Prefiere no decir"].map((g) => (
+                {["Femenino", "Masculino"].map((g) => (
                   <option key={g}>{g}</option>
                 ))}
               </select>
             </div>
           </div>
 
+          {/* Celular y Parentesco */}
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-xs font-semibold text-gray-600 block mb-1">Celular</label>
-              <input
-                type="tel"
-                value={form.celular}
-                onChange={(e) => set("celular", e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
-                placeholder="987654321"
-              />
+              <div className="flex items-stretch gap-1.5">
+                <div className="relative flex-shrink-0">
+                  <select
+                    value={celCodigo}
+                    onChange={(e) => handleCelCodigoChange(e.target.value)}
+                    className="h-full px-2 py-2 text-xs border border-gray-200 rounded-lg appearance-none pr-5 bg-white"
+                    aria-label="Código de país"
+                  >
+                    {PHONE_CODES.map((p) => (
+                      <option key={p.code} value={p.code}>{p.label} {p.code}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-1 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
+                </div>
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  value={celNumero}
+                  onChange={(e) => handleCelChange(e.target.value)}
+                  className="flex-1 min-w-0 px-2 py-2 text-sm border border-gray-200 rounded-lg"
+                  placeholder="987654321"
+                  maxLength={celMax}
+                />
+              </div>
             </div>
             <div>
               <label className="text-xs font-semibold text-gray-600 block mb-1">Parentesco</label>
@@ -417,12 +499,13 @@ export function PersonaModal({
             </div>
           </div>
 
+          {/* Situación especial */}
           <div>
             <label className="text-xs font-semibold text-gray-600 block mb-1">Situación especial</label>
             <SearchableSelect
               value={form.situacionActual}
               onChange={(v) => set("situacionActual", v)}
-              options={SITUACIONES_ESPECIALES_MODAL}
+              options={situaciones}
               placeholder="Ninguna / buscar…"
             />
           </div>

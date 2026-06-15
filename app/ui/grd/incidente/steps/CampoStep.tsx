@@ -34,6 +34,7 @@ import type {
 import { parseInforme } from "@/core/application/dtos/InformeContenidoDTO";
 import { PersonaModal } from "@/app/ui/grd/persona-modal";
 import { EvidenciasRegistro, EvidenciaChip } from "@/app/ui/grd/incidente/components/EvidenciasRegistro";
+import { EvidenciaUploader } from "@/app/ui/grd/incidente/components/EvidenciaUploader";
 import { subirEvidencia } from "@/app/ui/grd/incidente/lib/subir-evidencia";
 import { fmtDate } from "@/app/ui/grd/incidente/lib/format";
 import { inputCls, textareaCls } from "@/app/ui/grd/incidente/lib/ui-classes";
@@ -692,40 +693,14 @@ export function CampoStep({
             </ul>
           </div>
 
-          {canUpload ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <label className="flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-600 hover:border-[#009850] hover:text-[#009850] cursor-pointer transition-colors">
-                <Camera className="w-4 h-4" /> Tomar foto
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  className="hidden"
-                  onChange={(e) => handleUploadCampo(e.target.files)}
-                />
-              </label>
-              <label className="flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-600 hover:border-[#009850] hover:text-[#009850] cursor-pointer transition-colors">
-                <Upload className="w-4 h-4" /> Cargar foto / video
-                <input
-                  type="file"
-                  multiple
-                  accept="image/*,video/*,.pdf"
-                  className="hidden"
-                  onChange={(e) => handleUploadCampo(e.target.files)}
-                />
-              </label>
-            </div>
-          ) : (
-            <p className="text-xs text-gray-400 italic text-center py-1">
-              Solo el equipo asignado puede cargar evidencias.
-            </p>
-          )}
-
-          {subiendo.length > 0 && (
-            <p className="text-xs text-blue-600 flex items-center gap-1">
-              <Loader2 className="w-3 h-3 animate-spin" /> Subiendo {subiendo.length} archivo(s)…
-            </p>
-          )}
+          <EvidenciaUploader
+            onFiles={handleUploadCampo}
+            accept="image/*,video/*,.pdf"
+            loading={subiendo.length > 0}
+            loadingCount={subiendo.length}
+            disabled={!canUpload}
+            disabledMessage="Solo el equipo asignado puede cargar evidencias."
+          />
 
           {evidCampo.length === 0 && subiendo.length === 0 ? (
             <p className="text-center text-xs text-gray-400 py-2">

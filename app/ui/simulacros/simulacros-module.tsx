@@ -6,7 +6,7 @@ import {
   ShieldCheck, Plus, Calendar, MapPin, CheckCircle2, XCircle, Clock,
   Search, ChevronLeft, ChevronRight, Users, MoreVertical, ChevronDown,
   ChevronUp, Activity, Check, Pencil, AlertTriangle, X, FileText,
-  Send, Eye, User, MessageSquare, Upload, ExternalLink, Timer,
+  Send, Eye, User, MessageSquare, Upload, ExternalLink, Timer, Camera, Loader2,
   UserCheck, UserPlus,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -26,7 +26,9 @@ import {
 } from "@/app/actions/simulacros";
 import { subirArchivoS3 } from "@/app/ui/shared/file-upload";
 import { ACCEPT } from "@/app/lib/upload-config";
+import { PaginationControls, PageSizeSelector } from "@/app/ui/shared/pagination-controls";
 import type { FrontendRole } from "@/app/lib/roles";
+import { LocationPicker } from "@/app/ui/grd/location-picker";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type EvidenciaItem = {
@@ -73,7 +75,6 @@ const TIPOS = [
   "Charla de Prevención", "Taller", "Campaña",
 ];
 const ESTADOS = ["PROGRAMADA", "ASIGNADA", "EJECUTADA", "OBSERVADA", "VALIDADA", "CANCELADA"];
-const PAGE_SIZE = 10;
 
 const ESTADO_CFG: Record<string, { cls: string; label: string; icon: React.ReactNode }> = {
   PROGRAMADA: { cls: "bg-blue-50 text-blue-700 border border-blue-200",      label: "Programada", icon: <Clock className="w-3 h-3" /> },
@@ -354,18 +355,21 @@ function EvidenciasPanel({
       )}
 
       {canUpload && (
-        <>
-          <input ref={fileRef} type="file" multiple className="hidden" accept={ACCEPT.evidencia}
-            onChange={e => handleFiles(e.target.files)} />
+        <div className="space-y-2">
           {subiendo.length > 0 ? (
-            <div className="text-xs text-gray-500 italic">Subiendo {subiendo.length} archivo(s)...</div>
+            <p className="text-xs text-blue-600 flex items-center gap-1">
+              <Loader2 className="w-3 h-3 animate-spin" /> Subiendo {subiendo.length} archivo(s)…
+            </p>
           ) : (
-            <button type="button" onClick={() => fileRef.current?.click()}
-              className="w-full flex items-center justify-center gap-2 py-2 border border-dashed border-[var(--caritas-green)]/40 rounded-lg text-xs font-medium text-[var(--caritas-green)] hover:bg-[var(--caritas-green)]/5 transition-colors">
-              <Upload className="w-3.5 h-3.5" /> Adjuntar archivo
-            </button>
+            <div className="flex gap-2">
+              <label className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#91D723] text-[#009850] rounded-lg cursor-pointer hover:bg-[#91D723]/10 text-xs font-medium transition-colors">
+                <Upload className="w-3.5 h-3.5" /> Adjuntar archivo
+                <input type="file" accept={ACCEPT.evidencia} multiple className="hidden"
+                  onChange={e => handleFiles(e.target.files)} />
+              </label>
+            </div>
           )}
-        </>
+        </div>
       )}
     </div>
   );
@@ -830,6 +834,28 @@ function PanelEjecucion({ sim, onDone }: { sim: Actividad; onDone: () => void })
   const [participantes, setParticipantes] = useState(String(sim.participantesReales ?? ""));
   const [hallazgos, setHallazgos] = useState(sim.hallazgos ?? sim.reporteBrigadista ?? "");
   const [errors, setErrors] = useState<string[]>([]);
+  const [subiendoEv, setSubiendoEv] = useState<string[]>([]);
+
+  async function handleEvidencias(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const arr = Array.from(files);
+    setSubiendoEv(arr.map(f => f.name));
+    const subidas: Parameters<typeof addEvidenciasSimulacro>[1] = [];
+    for (const file of arr) {
+      try {
+        const s = await subirArchivoS3(file, { tipo: "evidencia-simulacro", entidadId: sim.id });
+        subidas.push({ key: s.key, nombreArchivo: s.nombre, formato: s.formato, tamano: s.tamano });
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : `No se pudo subir ${file.name}.`);
+      }
+    }
+    setSubiendoEv([]);
+    if (subidas.length) {
+      const r = await addEvidenciasSimulacro(sim.id, subidas);
+      if (r?.message) { toast.error(r.message); return; }
+      toast.success(subidas.length === 1 ? "Evidencia adjuntada." : `${subidas.length} evidencias adjuntadas.`);
+    }
+  }
 
   const validate = () => {
     const e: string[] = [];
@@ -900,7 +926,23 @@ function PanelEjecucion({ sim, onDone }: { sim: Actividad; onDone: () => void })
           className={`mt-1 resize-none ${errors.includes("hallazgos") ? `${fieldBase} border-red-400` : `${fieldBase} border-gray-200`} px-3 py-2`} />
       </label>
 
-      <button onClick={registrar} disabled={pending}
+      <div>
+        <p className="text-xs text-gray-500 mb-1.5">Pruebas visuales <span className="text-gray-400">(opcional)</span></p>
+        <div className="flex gap-2">
+          <label className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#91D723] text-[#009850] rounded-lg cursor-pointer hover:bg-[#91D723]/10 text-xs font-medium transition-colors">
+            <Upload className="w-3.5 h-3.5" /> Adjuntar archivo
+            <input type="file" accept={ACCEPT.evidencia} multiple className="hidden"
+              onChange={e => handleEvidencias(e.target.files)} />
+          </label>
+        </div>
+        {subiendoEv.length > 0 && (
+          <p className="text-xs text-blue-600 flex items-center gap-1 mt-1.5">
+            <Loader2 className="w-3 h-3 animate-spin" /> Subiendo {subiendoEv.length} archivo(s)…
+          </p>
+        )}
+      </div>
+
+      <button onClick={registrar} disabled={pending || subiendoEv.length > 0}
         className="w-full py-2.5 bg-[var(--caritas-green)] text-white text-sm font-semibold rounded-xl hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2">
         <CheckCircle2 className="w-4 h-4" /> {esReenvio ? "Reenviar ejecución corregida" : "Registrar ejecución"}
       </button>
@@ -1365,6 +1407,8 @@ function NuevaActividadForm({ parroquias, onCancel, onSaved }: {
     recomendaciones: "",      // recursos (opcional)
   });
   const [errors, setErrors] = useState<string[]>([]);
+  const [mapLat, setMapLat] = useState<number | null>(null);
+  const [mapLng, setMapLng] = useState<number | null>(null);
 
   const required = ["nombreActividad", "idParroquia", "fechaProgramada", "descripcionActividad"] as const;
 
@@ -1461,6 +1505,21 @@ function NuevaActividadForm({ parroquias, onCancel, onSaved }: {
           </label>
         </div>
 
+        {/* Mapa de ubicación */}
+        <div>
+          <span className="text-xs text-gray-500 block mb-1">Ubicación en el mapa <span className="text-[10px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-full ml-1">Opcional</span></span>
+          <div className="h-56">
+            <LocationPicker
+              lat={mapLat}
+              lng={mapLng}
+              onChange={(lat, lng) => { setMapLat(lat); setMapLng(lng); }}
+              onAddressResolved={({ direccion }) => {
+                if (direccion) setForm(f => ({ ...f, lugarActividad: direccion }));
+              }}
+            />
+          </div>
+        </div>
+
         {/* Línea 4: Objetivos */}
         <label className="block">
           <span className="text-xs text-gray-500">Objetivos del simulacro *</span>
@@ -1515,6 +1574,7 @@ export function SimulacrosModule({
   const [fechaDesde, setFechaDesde] = useState("");
   const [fechaHasta, setFechaHasta] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5);
 
   useEffect(() => setCurrentPage(1), [search, estadoFilter, parroquiaFilter, tipoFilter, fechaDesde, fechaHasta]);
 
@@ -1536,12 +1596,12 @@ export function SimulacrosModule({
     return true;
   });
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(currentPage, totalPages);
-  const startIdx = (safePage - 1) * PAGE_SIZE;
-  const paginated = filtered.slice(startIdx, startIdx + PAGE_SIZE);
+  const startIdx = (safePage - 1) * pageSize;
+  const paginated = filtered.slice(startIdx, startIdx + pageSize);
   const visibleFrom = filtered.length === 0 ? 0 : startIdx + 1;
-  const visibleTo = Math.min(startIdx + PAGE_SIZE, filtered.length);
+  const visibleTo = Math.min(startIdx + pageSize, filtered.length);
   const hasFilters = search || estadoFilter.length > 0 || parroquiaFilter.length > 0 || tipoFilter.length > 0 || fechaDesde || fechaHasta;
 
   return (
@@ -1572,6 +1632,43 @@ export function SimulacrosModule({
           onCancel={() => setShowForm(false)} onSaved={() => setShowForm(false)} />
       )}
 
+      {/* Cards de indicadores */}
+      {!showForm && (
+        <div className="grid grid-cols-3 gap-4 mb-6">
+          <div className="bg-white border border-gray-200 rounded-xl p-4 flex items-center gap-4">
+            <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+              <ShieldCheck className="w-5 h-5 text-gray-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-gray-900">{actividades.length}</p>
+              <p className="text-xs text-gray-500">Total</p>
+            </div>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-xl p-4 flex items-center gap-4">
+            <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center flex-shrink-0">
+              <Calendar className="w-5 h-5 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-blue-700">
+                {actividades.filter(a => a.estadoActividad === "PROGRAMADA").length}
+              </p>
+              <p className="text-xs text-gray-500">Programadas</p>
+            </div>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-xl p-4 flex items-center gap-4">
+            <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center flex-shrink-0">
+              <Activity className="w-5 h-5 text-[var(--caritas-green)]" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-[var(--caritas-green)]">
+                {actividades.filter(a => a.estadoActividad === "EJECUTADA").length}
+              </p>
+              <p className="text-xs text-gray-500">Ejecutadas</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Filtros */}
       <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6 space-y-3">
         <div className="flex flex-col lg:flex-row lg:items-center gap-3">
@@ -1590,11 +1687,23 @@ export function SimulacrosModule({
           <div className="flex items-center gap-2 flex-1">
             <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0" />
             <span className="text-xs text-gray-500 flex-shrink-0">Desde</span>
-            <input type="date" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)} className={`flex-1 ${fieldBase} border-gray-200 px-3 py-2`} />
+            <input
+              type="date"
+              value={fechaDesde}
+              max={fechaHasta || undefined}
+              onChange={e => { setFechaDesde(e.target.value); if (fechaHasta && e.target.value > fechaHasta) setFechaHasta(e.target.value); }}
+              className={`flex-1 ${fieldBase} border-gray-200 px-3 py-2`}
+            />
           </div>
           <div className="flex items-center gap-2 flex-1">
             <span className="text-xs text-gray-500 flex-shrink-0">Hasta</span>
-            <input type="date" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)} className={`flex-1 ${fieldBase} border-gray-200 px-3 py-2`} />
+            <input
+              type="date"
+              value={fechaHasta}
+              min={fechaDesde || undefined}
+              onChange={e => { setFechaHasta(e.target.value); if (fechaDesde && e.target.value < fechaDesde) setFechaDesde(e.target.value); }}
+              className={`flex-1 ${fieldBase} border-gray-200 px-3 py-2`}
+            />
           </div>
           {(fechaDesde || fechaHasta) && (
             <button type="button" onClick={() => { setFechaDesde(""); setFechaHasta(""); }}
@@ -1605,16 +1714,20 @@ export function SimulacrosModule({
         </div>
         <div className="flex items-center justify-between">
           <p className="text-sm text-gray-600">
-            Mostrando{" "}
-            <span className="font-semibold text-base text-[var(--caritas-text)]">{visibleFrom}</span>–<span className="font-semibold text-base text-[var(--caritas-text)]">{visibleTo}</span>
-            {" "}de <span className="font-semibold text-base text-[var(--caritas-text)]">{filtered.length}</span> actividades
+            <span className="font-semibold text-base text-[var(--caritas-text)]">{filtered.length}</span> actividades encontradas
           </p>
-          {hasFilters && (
-            <button onClick={() => { setSearch(""); setEstadoFilter([]); setParroquiaFilter([]); setTipoFilter([]); setFechaDesde(""); setFechaHasta(""); }}
-              className="text-xs font-medium text-[var(--caritas-green)] hover:underline">
-              Limpiar filtros
-            </button>
-          )}
+          <div className="flex items-center gap-3">
+            {hasFilters && (
+              <button onClick={() => { setSearch(""); setEstadoFilter([]); setParroquiaFilter([]); setTipoFilter([]); setFechaDesde(""); setFechaHasta(""); }}
+                className="text-xs font-medium text-[var(--caritas-green)] hover:underline">
+                Limpiar filtros
+              </button>
+            )}
+            <PageSizeSelector
+              pageSize={pageSize}
+              onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
+            />
+          </div>
         </div>
       </div>
 
@@ -1633,22 +1746,18 @@ export function SimulacrosModule({
             currentBrigadistaId={currentBrigadistaId}
             currentNombre={currentNombre} />
         ))}
-        {filtered.length > 0 && (
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white border border-gray-200 rounded-xl px-4 py-3">
-            <p className="text-xs text-gray-500">Página {safePage} de {totalPages}</p>
-            <div className="flex items-center gap-2">
-              <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={safePage === 1}
-                className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium border border-gray-200 rounded-lg bg-white text-gray-700 disabled:opacity-50 hover:bg-gray-50">
-                <ChevronLeft className="w-3.5 h-3.5" /> Anterior
-              </button>
-              <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={safePage === totalPages}
-                className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium border border-gray-200 rounded-lg bg-white text-gray-700 disabled:opacity-50 hover:bg-gray-50">
-                Siguiente <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-        )}
       </div>
+
+      <PaginationControls
+        total={filtered.length}
+        start={visibleFrom}
+        end={visibleTo}
+        page={safePage}
+        totalPages={totalPages}
+        onPrevious={() => setCurrentPage((p) => Math.max(1, p - 1))}
+        onNext={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+        className="mt-4"
+      />
     </div>
   );
 }
