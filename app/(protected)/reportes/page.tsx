@@ -5,6 +5,7 @@ import { prisma } from "@/app/lib/prisma";
 import { ReportesModule } from "@/app/ui/reportes/reportes-module";
 
 export const dynamic = "force-dynamic";
+//holi
 
 export default async function ReportesPage({
   searchParams,
