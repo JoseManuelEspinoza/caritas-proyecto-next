@@ -46,15 +46,16 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
 
-    const idUsuarioGRD = searchParams.get("idUsuarioGRD")?.trim();
+    const FALLBACK_USUARIO_GRD = "d6deaf92-a3a3-46e6-a3ce-efed1a75c21d";
+
+    const idUsuarioGRD =
+      searchParams.get("idUsuarioGRD")?.trim() ||
+      process.env.MOBILE_SYNC_USUARIO_GRD_ID?.trim() ||
+      FALLBACK_USUARIO_GRD;
     const idBrigadistaParroquial = searchParams.get("idBrigadistaParroquial")?.trim();
     const estadoAsignacion = searchParams.get("estadoAsignacion")?.trim();
     const incluirCerradas = searchParams.get("incluirCerradas") === "true";
     const take = parseTake(searchParams.get("limit"));
-
-    if (!idUsuarioGRD && !idBrigadistaParroquial) {
-      return jsonError("Debe indicar idUsuarioGRD o idBrigadistaParroquial.", 400);
-    }
 
     const brigadista = idBrigadistaParroquial
       ? await prisma.brigadistaParroquial.findUnique({
@@ -72,10 +73,7 @@ export async function GET(request: Request) {
           },
         })
       : await prisma.brigadistaParroquial.findFirst({
-          where: {
-            idUsuarioGRD,
-            estado: "ACTIVO",
-          },
+          where: { idUsuarioGRD, estado: "ACTIVO" },
           select: {
             idBrigadistaParroquial: true,
             idUsuarioGRD: true,
@@ -89,190 +87,179 @@ export async function GET(request: Request) {
           },
         });
 
-    if (!brigadista) {
-      return NextResponse.json({
-        ok: true,
-        serverTime: new Date().toISOString(),
-        total: 0,
-        brigadista: null,
-        incidencias: [],
-        message: "No se encontró un brigadista activo para el usuario indicado.",
-      });
-    }
+    const estadoFiltro = incluirCerradas
+      ? {}
+      : { estadoActual: { notIn: ["CERRADA", "CANCELADA", "ANULADA"] } };
 
-    const asignaciones = await prisma.asignacionBrigadistaIncidencia.findMany({
-      where: {
-        idBrigadistaParroquial: brigadista.idBrigadistaParroquial,
-        deletedAt: null,
-        ...(estadoAsignacion
-          ? { estadoAsignacion }
-          : incluirCerradas
-            ? {}
-            : { estadoAsignacion: { notIn: ["CANCELADA", "ANULADA"] } }),
-        incidencia: {
-          deletedAt: null,
-          ...(incluirCerradas
-            ? {}
-            : { estadoActual: { notIn: ["CERRADA", "CANCELADA", "ANULADA"] } }),
+    const incidenciaSelect = {
+      idIncidencia: true,
+      codigoCaso: true,
+      tipoEvento: true,
+      descripcionEvento: true,
+      estadoActual: true,
+      fechaRegistro: true,
+      fechaSuceso: true,
+      horaSuceso: true,
+      distritoEvento: true,
+      direccionEvento: true,
+      referenciaEvento: true,
+      latitud: true,
+      longitud: true,
+      gravedad: true,
+      numAfectadosReportado: true,
+      tituloIncidencia: true,
+      relatoActual: true,
+      causaEvento: true,
+      necesidades: true,
+      necesidadesObs: true,
+      observacionesGenerales: true,
+      reportadoPorNombre: true,
+      reportadoPorDni: true,
+      reportadoPorCelular: true,
+      reportadoPorRol: true,
+      parroquiaNombreSnapshot: true,
+      contextoCaso: true,
+      uuidMovil: true,
+      syncEstado: true,
+      fechaSincronizacion: true,
+      idUsuarioResponsableGRD: true,
+      parroquia: {
+        select: {
+          idParroquia: true,
+          nombre: true,
+          direccion: true,
+          referencia: true,
+          latitud: true,
+          longitud: true,
+          telefono: true,
+          correo: true,
+          estado: true,
         },
       },
-      orderBy: {
-        fechaAsignacion: "desc",
+      gruposFamiliares: {
+        where: { deletedAt: null },
+        orderBy: { createdAt: "asc" as const },
+        select: {
+          idGrupoFamiliar: true,
+          codigoGrupo: true,
+          nombreReferencia: true,
+          direccion: true,
+          condicionVivienda: true,
+          condicionFinal: true,
+          observaciones: true,
+          uuidMovil: true,
+          syncEstado: true,
+          fechaSincronizacion: true,
+          personas: {
+            where: { deletedAt: null },
+            orderBy: { createdAt: "asc" as const },
+            select: {
+              idPersonaAfectada: true,
+              tipoDocumento: true,
+              numeroDocumento: true,
+              nombres: true,
+              apellidos: true,
+              fechaNacimiento: true,
+              sexo: true,
+              parentesco: true,
+              condicionSalud: true,
+              condicionEspecial: true,
+              esVulnerable: true,
+              telefono: true,
+              observaciones: true,
+              uuidMovil: true,
+              syncEstado: true,
+              fechaSincronizacion: true,
+            },
+          },
+        },
       },
-      take,
-      select: {
-        idAsignacionBrigadista: true,
-        idIncidencia: true,
-        idBrigadistaParroquial: true,
-        fechaAsignacion: true,
-        fechaInicioCampo: true,
-        fechaLlegadaCampo: true,
-        fechaCierreCampo: true,
-        estadoAsignacion: true,
-        rolEnEquipo: true,
-        esResponsableEquipo: true,
-        origenAsignacion: true,
-        progresoEvidencias: true,
-        observaciones: true,
-        uuidMovil: true,
-        syncEstado: true,
-        fechaSincronizacion: true,
-        incidencia: {
+    } as const;
+
+    // ── 1. Por asignación de equipo (brigadista_parroquial) ──────────────────
+    const asignaciones = brigadista
+      ? await prisma.asignacionBrigadistaIncidencia.findMany({
+          where: {
+            idBrigadistaParroquial: brigadista.idBrigadistaParroquial,
+            deletedAt: null,
+            ...(estadoAsignacion
+              ? { estadoAsignacion }
+              : incluirCerradas
+                ? {}
+                : { estadoAsignacion: { notIn: ["CANCELADA", "ANULADA", "CERRADA"] } }),
+            incidencia: {
+              deletedAt: null,
+              ...estadoFiltro,
+            },
+          },
+          orderBy: { fechaAsignacion: "desc" },
+          take,
           select: {
+            idAsignacionBrigadista: true,
             idIncidencia: true,
-            idParroquia: true,
-            idUsuarioResponsableGRD: true,
-            codigoCaso: true,
-            fechaRegistro: true,
-            tituloIncidencia: true,
-            relatoActual: true,
-            direccionEvento: true,
-            contextoCaso: true,
-            tipoEvento: true,
-            descripcionEvento: true,
-            gravedad: true,
-            estadoActual: true,
-            latitud: true,
-            longitud: true,
-            observacionesGenerales: true,
+            idBrigadistaParroquial: true,
+            fechaAsignacion: true,
+            fechaInicioCampo: true,
+            fechaLlegadaCampo: true,
+            fechaCierreCampo: true,
+            estadoAsignacion: true,
+            rolEnEquipo: true,
+            esResponsableEquipo: true,
+            origenAsignacion: true,
+            progresoEvidencias: true,
+            observaciones: true,
             uuidMovil: true,
             syncEstado: true,
             fechaSincronizacion: true,
-            reportadoPorNombre: true,
-            reportadoPorDni: true,
-            reportadoPorCelular: true,
-            reportadoPorRol: true,
-            fechaSuceso: true,
-            horaSuceso: true,
-            distritoEvento: true,
-            referenciaEvento: true,
-            parroquiaNombreSnapshot: true,
-            causaEvento: true,
-            necesidades: true,
-            necesidadesObs: true,
-            numAfectadosReportado: true,
-            origenRegistro: true,
-            parroquia: {
-              select: {
-                idParroquia: true,
-                nombre: true,
-                direccion: true,
-                referencia: true,
-                latitud: true,
-                longitud: true,
-                telefono: true,
-                correo: true,
-                estado: true,
-              },
-            },
-            gruposFamiliares: {
-              where: {
-                deletedAt: null,
-              },
-              orderBy: {
-                createdAt: "asc",
-              },
-              select: {
-                idGrupoFamiliar: true,
-                codigoGrupo: true,
-                nombreReferencia: true,
-                direccion: true,
-                condicionVivienda: true,
-                condicionFinal: true,
-                observaciones: true,
-                uuidMovil: true,
-                syncEstado: true,
-                fechaSincronizacion: true,
-                personas: {
-                  where: {
-                    deletedAt: null,
-                  },
-                  orderBy: {
-                    createdAt: "asc",
-                  },
-                  select: {
-                    idPersonaAfectada: true,
-                    tipoDocumento: true,
-                    numeroDocumento: true,
-                    nombres: true,
-                    apellidos: true,
-                    fechaNacimiento: true,
-                    sexo: true,
-                    parentesco: true,
-                    condicionSalud: true,
-                    condicionEspecial: true,
-                    esVulnerable: true,
-                    telefono: true,
-                    observaciones: true,
-                    uuidMovil: true,
-                    syncEstado: true,
-                    fechaSincronizacion: true,
-                  },
-                },
-              },
-            },
+            incidencia: { select: incidenciaSelect },
           },
-        },
+        })
+      : [];
+
+    // ── 2. Por responsable directo (idUsuarioResponsableGRD) ─────────────────
+    const idsYaIncluidos = new Set(asignaciones.map((a) => a.idIncidencia));
+
+    const incidenciasResponsable = await prisma.incidencia.findMany({
+      where: {
+        idUsuarioResponsableGRD: idUsuarioGRD,
+        deletedAt: null,
+        ...estadoFiltro,
+        // Excluir las que ya vienen por asignación para no duplicar
+        ...(idsYaIncluidos.size > 0
+          ? { idIncidencia: { notIn: [...idsYaIncluidos] } }
+          : {}),
       },
+      orderBy: { fechaRegistro: "desc" },
+      take,
+      select: incidenciaSelect,
     });
 
-    const idsIncidencia = asignaciones
-      .map((asignacion) => asignacion.incidencia.idIncidencia)
-      .filter(Boolean);
+    // ── 3. Combinar y mapear ──────────────────────────────────────────────────
+    const allIds = [
+      ...asignaciones.map((a) => a.incidencia.idIncidencia),
+      ...incidenciasResponsable.map((i) => i.idIncidencia),
+    ].filter(Boolean);
 
-    const tiposReferenciaIncidencia = await prisma.tipoReferencia.findMany({
+    const tiposRef = await prisma.tipoReferencia.findMany({
       where: {
         estado: "ACTIVO",
         OR: ["INCIDENCIA", "INCIDENCIA_GRD"].map((codigo) => ({
-          codigoEntidad: {
-            equals: codigo,
-            mode: "insensitive" as const,
-          },
+          codigoEntidad: { equals: codigo, mode: "insensitive" as const },
         })),
       },
-      select: {
-        idTipoReferencia: true,
-      },
+      select: { idTipoReferencia: true },
     });
 
-    const idsTipoReferencia = tiposReferenciaIncidencia.map(
-      (tipo) => tipo.idTipoReferencia
-    );
+    const idsTipoReferencia = tiposRef.map((t) => t.idTipoReferencia);
 
-    const observaciones = idsIncidencia.length && idsTipoReferencia.length
+    const observaciones = allIds.length && idsTipoReferencia.length
       ? await prisma.observacionGRD.findMany({
           where: {
-            idReferencia: {
-              in: idsIncidencia,
-            },
-            idTipoReferencia: {
-              in: idsTipoReferencia,
-            },
+            idReferencia: { in: allIds },
+            idTipoReferencia: { in: idsTipoReferencia },
             estado: "ACTIVO",
           },
-          orderBy: {
-            fechaRegistro: "desc",
-          },
+          orderBy: { fechaRegistro: "desc" },
           select: {
             idObservacionGRD: true,
             idTipoReferencia: true,
@@ -287,22 +274,32 @@ export async function GET(request: Request) {
         })
       : [];
 
-    const observacionesPorIncidencia = new Map<
-      string,
-      (typeof observaciones)[number][]
-    >();
+    const obsPorIncidencia = new Map<string, (typeof observaciones)[number][]>();
+    for (const obs of observaciones) {
+      const lista = obsPorIncidencia.get(obs.idReferencia) ?? [];
+      lista.push(obs);
+      obsPorIncidencia.set(obs.idReferencia, lista);
+    }
 
-    for (const observacion of observaciones) {
-      const lista =
-        observacionesPorIncidencia.get(observacion.idReferencia) ?? [];
+    const mapIncidencia = (inc: typeof incidenciasResponsable[number]) => ({
+      asignacion: null,
+      incidencia: {
+        ...inc,
+        latitud: decimalToNumber(inc.latitud),
+        longitud: decimalToNumber(inc.longitud),
+        observaciones: obsPorIncidencia.get(inc.idIncidencia) ?? [],
+        parroquia: inc.parroquia
+          ? {
+              ...inc.parroquia,
+              latitud: decimalToNumber(inc.parroquia.latitud),
+              longitud: decimalToNumber(inc.parroquia.longitud),
+            }
+          : null,
+      },
+    });
 
-      lista.push(observacion);
-      observacionesPorIncidencia.set(observacion.idReferencia, lista);
-    }    
-    const incidencias = asignaciones.map((asignacion) => {
-      const incidencia = asignacion.incidencia;
-
-      return {
+    const incidencias = [
+      ...asignaciones.map((asignacion) => ({
         asignacion: {
           idAsignacionBrigadista: asignacion.idAsignacionBrigadista,
           idBrigadistaParroquial: asignacion.idBrigadistaParroquial,
@@ -321,21 +318,21 @@ export async function GET(request: Request) {
           fechaSincronizacion: asignacion.fechaSincronizacion,
         },
         incidencia: {
-          ...incidencia,
-          latitud: decimalToNumber(incidencia.latitud),
-          longitud: decimalToNumber(incidencia.longitud),
-          observaciones:
-            observacionesPorIncidencia.get(incidencia.idIncidencia) ?? [],
-          parroquia: incidencia.parroquia
+          ...asignacion.incidencia,
+          latitud: decimalToNumber(asignacion.incidencia.latitud),
+          longitud: decimalToNumber(asignacion.incidencia.longitud),
+          observaciones: obsPorIncidencia.get(asignacion.incidencia.idIncidencia) ?? [],
+          parroquia: asignacion.incidencia.parroquia
             ? {
-                ...incidencia.parroquia,
-                latitud: decimalToNumber(incidencia.parroquia.latitud),
-                longitud: decimalToNumber(incidencia.parroquia.longitud),
+                ...asignacion.incidencia.parroquia,
+                latitud: decimalToNumber(asignacion.incidencia.parroquia.latitud),
+                longitud: decimalToNumber(asignacion.incidencia.parroquia.longitud),
               }
             : null,
         },
-      };
-    });
+      })),
+      ...incidenciasResponsable.map(mapIncidencia),
+    ];
 
     return NextResponse.json({
       ok: true,
