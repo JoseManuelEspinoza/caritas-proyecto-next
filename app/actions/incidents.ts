@@ -8,7 +8,8 @@ import { getUsuarioGRDId } from "@/app/lib/usuario-grd";
 import { makeIncidenciaUseCases } from "@/core/infrastructure/factories/makeIncidenciaUseCases";
 import { DomainError } from "@/core/domain/errors/DomainError";
 import { logGRDAction } from "@/app/lib/audit";
-import { sendAsignacionEmergenciaEmail } from "@/app/lib/email";
+import { sendAsignacionEmergenciaEmail, sendDecisionComiteEmail } from "@/app/lib/email";
+import { notificarUsuario, notificarRoles, notificarBrigadistas } from "@/app/lib/notificaciones";
 import type {
   CreateIncidenteData,
   InfoCampoData,
@@ -38,6 +39,46 @@ function asMessage(err: unknown): { message: string } {
 function revalidar(incidenciaId: string): void {
   revalidatePath("/grd");
   revalidatePath(`/grd/${incidenciaId}`);
+}
+
+function notificarEquipoAsignado(
+  incidenciaId: string,
+  responsableId: string,
+  equipoIds: string[],
+  instrucciones?: string
+) {
+  prisma.incidencia
+    .findUnique({
+      where: { idIncidencia: incidenciaId },
+      select: { tituloIncidencia: true, tipoEvento: true, direccionEvento: true },
+    })
+    .then((inc) => {
+      const nombreCaso =
+        inc?.tituloIncidencia ?? inc?.tipoEvento ?? "emergencia registrada";
+      const lugar = inc?.direccionEvento ? ` en ${inc.direccionEvento}` : "";
+      const detalle = instrucciones?.trim()
+        ? `Instrucciones: ${instrucciones.trim()}`
+        : `Caso: "${nombreCaso}"${lugar}. Ingresa al sistema para revisar los detalles.`;
+
+      notificarBrigadistas(
+        [responsableId],
+        "RESPONSABLE_ASIGNADO",
+        "Eres el responsable del equipo de respuesta",
+        detalle,
+        `/grd/${incidenciaId}`
+      );
+
+      if (equipoIds.length > 0) {
+        notificarBrigadistas(
+          equipoIds,
+          "BRIGADISTA_ASIGNADO",
+          "Has sido asignado a un caso de emergencia",
+          detalle,
+          `/grd/${incidenciaId}`
+        );
+      }
+    })
+    .catch((e) => console.error("[GRD] Error enviando notificaciones de equipo:", e));
 }
 
 // Fire-and-forget: notifica por correo a los brigadistas asignados a la incidencia.
@@ -101,6 +142,13 @@ export async function createIncidente(data: CreateIncidenteData) {
     entityName: `${data.categoria} en ${data.distrito}`,
     module: "GRD",
   });
+  notificarRoles(
+    ["ESPECIALISTAGRD", "ADMINISTRADOR"],
+    "INCIDENCIA_NUEVA",
+    "Nueva incidencia registrada",
+    `Se registró: ${data.categoria} en ${data.distrito}`,
+    `/grd/${id}`
+  );
   redirect(`/grd/${id}`);
 }
 
@@ -160,6 +208,15 @@ export async function assignBrigadista(
     return asMessage(err);
   }
   notificarAsignacion(incidenciaId, [brigadistaId], instrucciones);
+  notificarBrigadistas(
+    [brigadistaId],
+    "BRIGADISTA_ASIGNADO",
+    "Has sido asignado a una incidencia",
+    instrucciones?.trim()
+      ? `Instrucciones: ${instrucciones.trim()}`
+      : "Revisa el sistema para ver los detalles.",
+    `/grd/${incidenciaId}`
+  );
   revalidar(incidenciaId);
 }
 
@@ -188,6 +245,7 @@ export async function assignEquipo(
   }
   const todosIds = [...new Set([responsableId, ...equipoIds])];
   notificarAsignacion(incidenciaId, todosIds, instrucciones);
+  notificarEquipoAsignado(incidenciaId, responsableId, equipoIds, instrucciones);
   revalidar(incidenciaId);
 }
 
@@ -274,7 +332,7 @@ export async function saveInformeEvaluacion(incidenciaId: string, data: InformeE
   // Si ya está EN EVALUACION solo actualizamos el informe, sin re-transicionar
   const inc = await prisma.incidencia.findUnique({
     where: { idIncidencia: incidenciaId },
-    select: { estadoActual: true },
+    select: { estadoActual: true, tituloIncidencia: true, tipoEvento: true },
   });
   if (inc?.estadoActual === "EN EVALUACION") {
     return saveBorradorInformeEvaluacion(incidenciaId, data);
@@ -285,6 +343,14 @@ export async function saveInformeEvaluacion(incidenciaId: string, data: InformeE
   } catch (err) {
     return asMessage(err);
   }
+  const titulo = inc?.tituloIncidencia ?? inc?.tipoEvento ?? "Incidencia GRD";
+  notificarRoles(
+    ["COMITEDONACIONES", "JEFAOGP"],
+    "INFORME_ENVIADO_COMITE",
+    "Informe enviado al Comité",
+    `El especialista GRD envió el informe del caso "${titulo}" para su evaluación.`,
+    `/grd/${incidenciaId}`
+  );
   revalidar(incidenciaId);
 }
 
@@ -337,6 +403,64 @@ export async function corregirYReenviar(incidenciaId: string, data: CorreccionDa
 
 // ─── Decisiones del Comité ──────────────────────────────────────────────────
 
+// Fire-and-forget: notifica al especialista GRD responsable sobre la decisión del comité.
+function notificarDecisionComite(
+  incidenciaId: string,
+  decision: "APROBAR" | "OBSERVAR" | "RECHAZAR",
+  observaciones?: string | null
+) {
+  prisma.incidencia
+    .findUnique({
+      where: { idIncidencia: incidenciaId },
+      select: {
+        tituloIncidencia: true,
+        tipoEvento: true,
+        usuarioResponsable: {
+          select: {
+            nombres: true,
+            correoReferencia: true,
+            credencial: { select: { id: true, email: true } },
+          },
+        },
+      },
+    })
+    .then(async (inc) => {
+      if (!inc?.usuarioResponsable) return;
+      const resp = inc.usuarioResponsable;
+      const email = resp.correoReferencia ?? resp.credencial?.email;
+      const userId = resp.credencial?.id;
+      const incTitulo = inc.tituloIncidencia ?? inc.tipoEvento ?? "Incidencia GRD";
+
+      if (email) {
+        await sendDecisionComiteEmail(email, resp.nombres, incTitulo, decision, observaciones);
+      }
+
+      if (userId) {
+        const tipoNotif =
+          decision === "APROBAR"
+            ? "DECISION_APROBADO"
+            : decision === "OBSERVAR"
+            ? "DECISION_OBSERVADO"
+            : "DECISION_RECHAZADO";
+        const titulos = {
+          APROBAR: "Caso aprobado por el Comité",
+          OBSERVAR: "Caso devuelto con observaciones",
+          RECHAZAR: "Caso rechazado por el Comité",
+        };
+        notificarUsuario(
+          userId,
+          tipoNotif,
+          titulos[decision],
+          observaciones?.trim()
+            ? `"${incTitulo}" — ${observaciones.trim()}`
+            : `"${incTitulo}"`,
+          `/grd/${incidenciaId}`
+        );
+      }
+    })
+    .catch((e) => console.error("[GRD] Error notificando decisión del comité:", e));
+}
+
 export async function aprobarCaso(incidenciaId: string, observaciones?: string) {
   await verifySession();
   try {
@@ -344,6 +468,7 @@ export async function aprobarCaso(incidenciaId: string, observaciones?: string) 
   } catch (err) {
     return asMessage(err);
   }
+  notificarDecisionComite(incidenciaId, "APROBAR", observaciones);
   revalidar(incidenciaId);
 }
 
@@ -354,6 +479,7 @@ export async function observarCaso(incidenciaId: string, observaciones: string) 
   } catch (err) {
     return asMessage(err);
   }
+  notificarDecisionComite(incidenciaId, "OBSERVAR", observaciones);
   revalidar(incidenciaId);
 }
 
@@ -364,6 +490,7 @@ export async function rechazarCaso(incidenciaId: string, observaciones: string) 
   } catch (err) {
     return asMessage(err);
   }
+  notificarDecisionComite(incidenciaId, "RECHAZAR", observaciones);
   revalidar(incidenciaId);
 }
 

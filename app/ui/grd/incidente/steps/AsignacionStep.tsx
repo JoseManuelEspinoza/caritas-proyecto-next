@@ -73,6 +73,7 @@ export function AsignacionStep({
     (data.estadoActual === "ABIERTO" ||
       (data.estadoActual === "ASIGNADO" && !data.informes.some((i) => i.tipo === "CAMPO")));
   const tieneEquipo = data.asignaciones.length > 0 || Boolean(data.responsableGRD);
+  const puedeAutoasignarse = data.role === "especialistaGRD";
 
   const respInicial = data.asignaciones.find((a) => a.esResponsable)?.brigadistaId ?? "";
   const equipoInicial = data.asignaciones
@@ -384,17 +385,19 @@ export function AsignacionStep({
           >
             <Users className="w-4 h-4" /> Asignar brigadistas
           </button>
-          <button
-            type="button"
-            onClick={() => setTab("auto")}
-            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors ${
-              tab === "auto"
-                ? "bg-white text-[var(--caritas-green)] shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            <UserPlus className="w-4 h-4" /> Autoasignarme
-          </button>
+          {puedeAutoasignarse && (
+            <button
+              type="button"
+              onClick={() => setTab("auto")}
+              className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors ${
+                tab === "auto"
+                  ? "bg-white text-[var(--caritas-green)] shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              <UserPlus className="w-4 h-4" /> Autoasignarme
+            </button>
+          )}
         </div>
 
         {tab === "equipo" ? (

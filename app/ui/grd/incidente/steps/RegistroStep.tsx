@@ -1,4 +1,4 @@
-import { MapPin, Phone, Users } from "lucide-react";
+import { MapPin, Phone, Users, UserCircle } from "lucide-react";
 import type { IncidenciaDetalleOutput } from "@/core/application/dtos/IncidenciaDetalleDTO";
 import { InfoField } from "@/app/ui/grd/incidente/components/InfoField";
 import { iconoCategoria } from "@/app/ui/grd/incidente/config/estado-ui";
@@ -64,9 +64,9 @@ export function RegistroStep({ data }: { data: IncidenciaDetalleOutput }) {
           <div className="space-y-2">
             {data.gruposFamiliares.map((g) => (
               <div key={g.id} className="border border-blue-200 rounded-lg bg-blue-50 overflow-hidden">
-                <div className="bg-blue-100 px-3 py-1.5 flex items-center gap-2">
-                  <Users className="w-3.5 h-3.5 text-blue-600" />
-                  <span className="text-xs font-semibold text-blue-900">
+                <div className="bg-blue-100 px-3 py-2 flex items-center gap-2">
+                  <Users className="w-4 h-4 text-blue-600" />
+                  <span className="text-sm font-semibold text-blue-900">
                     {g.nombreReferencia ?? "Grupo familiar"}
                   </span>
                   <span className="text-xs text-blue-600">({g.totalPersonas} integrantes)</span>
@@ -74,22 +74,41 @@ export function RegistroStep({ data }: { data: IncidenciaDetalleOutput }) {
                 {g.personas.length > 0 && (
                   <div className="p-2 space-y-1">
                     {g.personas.map((p) => (
-                      <div
-                        key={p.id}
-                        className="bg-white rounded px-3 py-1.5 text-xs flex items-center gap-3"
-                      >
-                        <span className="font-medium text-gray-800">
-                          {p.nombres} {p.apellidos ?? ""}
-                        </span>
-                        {p.edad && <span className="text-gray-500">{p.edad} años</span>}
-                        {p.numeroDocumento && (
-                          <span className="text-gray-400">DNI: {p.numeroDocumento}</span>
-                        )}
-                        {p.condicionEspecial && (
-                          <span className="px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded font-medium">
-                            {p.condicionEspecial}
+                      <div key={p.id} className="bg-white border border-gray-200 rounded px-3 py-2">
+                        <div className="flex items-center gap-2 mb-1">
+                          <UserCircle className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                          <span className="text-sm font-medium text-gray-900 truncate">
+                            {p.nombres} {p.apellidos ?? ""}
                           </span>
-                        )}
+                          {p.parentesco && (
+                            <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-[10px] font-medium flex-shrink-0">
+                              {p.parentesco}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-gray-500 ml-6">
+                          <span>
+                            Edad: <strong className="text-gray-700">{p.edad ?? "—"}</strong> años
+                          </span>
+                          {p.tipoDocumento && (
+                            <span>
+                              {p.tipoDocumento}: <strong className="text-gray-700">{p.numeroDocumento ?? "—"}</strong>
+                            </span>
+                          )}
+                          <span>
+                            Género: <strong className="text-gray-700">{p.sexo ?? "—"}</strong>
+                          </span>
+                          {p.telefono && (
+                            <span>
+                              Cel: <strong className="text-gray-700">{p.telefono}</strong>
+                            </span>
+                          )}
+                          {p.condicionEspecial && (
+                            <span className="px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded text-[10px] font-medium">
+                              {p.condicionEspecial}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>

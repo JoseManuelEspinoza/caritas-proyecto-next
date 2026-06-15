@@ -347,7 +347,6 @@ export class PrismaIncidenciaRepository implements IIncidenciaRepository {
     idUsuarioGRD: string,
     instrucciones?: string
   ): Promise<void> {
-    await this.liberarBrigadistas(idIncidencia);
     await prisma.incidencia.update({
       where: { idIncidencia },
       data: {
