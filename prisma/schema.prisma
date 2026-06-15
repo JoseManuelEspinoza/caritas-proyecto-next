@@ -45,6 +45,7 @@ model User {
   sesiones        Sesion[]
   intentosLogin   IntentoLogin[]
   recuperaciones  RecuperacionContrasena[]
+  notificaciones  Notificacion[]
 
   @@map("users")
 }
@@ -1256,4 +1257,20 @@ model AuditLog {
   createdAt DateTime @default(now())
 
   @@map("audit_logs")
+}
+
+model Notificacion {
+  idNotificacion String   @id @default(uuid())
+  userId         String
+  tipo           String
+  titulo         String
+  mensaje        String   @db.Text
+  enlace         String?
+  leida          Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, leida, createdAt])
+  @@map("notificaciones")
 }

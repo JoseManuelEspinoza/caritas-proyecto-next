@@ -18,11 +18,6 @@ interface Props {
   onRemove?: (index: number) => void;
 }
 
-/**
- * Botones estándar "Cámara / Galería" para adjuntar evidencias en los steps de incidentes.
- * - Cámara: abre la cámara del dispositivo (`capture="environment"`).
- * - Galería: abre el selector de archivos normal.
- */
 export function EvidenciaUploader({
   onFiles,
   accept = "image/*,video/*,.pdf",

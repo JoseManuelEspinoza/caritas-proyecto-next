@@ -200,6 +200,8 @@ export function RevisionStep({
 
   const { puedeEvaluar: canEvaluar, puedeDecidir: canDecidir } = permisosDeDetalle(data);
   const solicitud = data.solicitudComite;
+  // El informe ya fue enviado al comité cuando existe informe de evaluación y el estado avanzó a EN EVALUACION
+  const informeYaEnviado = !!informeEval && data.estadoActual === "EN EVALUACION";
 
   // Anotaciones por familia registradas en el levantamiento de campo
   const notasFamiliasRef: { id: string; nota: string }[] = (() => {
@@ -1137,6 +1139,14 @@ export function RevisionStep({
                   </div>
                 )}
 
+                {informeYaEnviado && (
+                  <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
+                    <span className="text-sm text-green-800">
+                      Informe enviado al Comité — en espera de decisión. No se puede reenviar.
+                    </span>
+                  </div>
+                )}
                 <div className="flex flex-col sm:flex-row gap-2">
                   <button
                     type="button"
@@ -1153,11 +1163,13 @@ export function RevisionStep({
                   <button
                     type="button"
                     onClick={handleClickEnviar}
-                    disabled={isPending}
-                    className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-white font-semibold disabled:opacity-50"
+                    disabled={isPending || informeYaEnviado}
+                    title={informeYaEnviado ? "El informe ya fue enviado al Comité" : undefined}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                     style={{ background: "#7c3aed" }}
                   >
-                    <FileCheck className="w-4 h-4" /> Enviar Informe al Comité
+                    <FileCheck className="w-4 h-4" />
+                    {informeYaEnviado ? "Informe ya enviado" : "Enviar Informe al Comité"}
                   </button>
                 </div>
 
