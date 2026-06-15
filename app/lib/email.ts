@@ -160,6 +160,64 @@ export async function sendCertificadoEmail(
   });
 }
 
+export async function sendDecisionComiteEmail(
+  to: string,
+  nombres: string,
+  incidenciaTitulo: string,
+  decision: "APROBAR" | "OBSERVAR" | "RECHAZAR",
+  observaciones?: string | null
+) {
+  const loginUrl = `${process.env.AUTH_URL ?? "http://localhost:3000"}/login`;
+  const transporter = createTransporter();
+
+  const labels: Record<typeof decision, { titulo: string; color: string; mensaje: string }> = {
+    APROBAR: {
+      titulo: "Caso Aprobado por el Comité",
+      color: "#009850",
+      mensaje: "El Comité de donaciones ha <strong>aprobado</strong> el caso. Puedes proceder con la etapa de atención.",
+    },
+    OBSERVAR: {
+      titulo: "Caso Devuelto con Observaciones",
+      color: "#d97706",
+      mensaje: "El Comité de donaciones ha devuelto el caso con observaciones. Por favor revisa las indicaciones y corrige el informe.",
+    },
+    RECHAZAR: {
+      titulo: "Caso Rechazado por el Comité",
+      color: "#dc2626",
+      mensaje: "El Comité de donaciones ha <strong>rechazado</strong> el caso. Revisa el motivo indicado.",
+    },
+  };
+
+  const { titulo, color, mensaje } = labels[decision];
+
+  await transporter.sendMail({
+    from: process.env.SMTP_FROM ?? "no-reply@caritas-lima.pe",
+    to,
+    subject: `${titulo} — Cáritas Lima`,
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px">
+        <h2 style="color:#009850;margin-bottom:4px">Cáritas Lima</h2>
+        <p style="color:#6b7280;margin-top:0">Sistema de Gestión de Riesgo de Desastres</p>
+        <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0"/>
+        <p>Hola <strong>${nombres}</strong>,</p>
+        <p>${mensaje}</p>
+        <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin:16px 0">
+          <p style="margin:0 0 8px"><strong>Incidencia:</strong> ${incidenciaTitulo}</p>
+          ${observaciones ? `<p style="margin:8px 0 0"><strong>Observaciones del Comité:</strong> ${observaciones}</p>` : ""}
+        </div>
+        <a href="${loginUrl}"
+           style="display:inline-block;background:${color};color:#fff;padding:12px 28px;
+                  text-decoration:none;border-radius:6px;font-weight:600;margin:16px 0">
+          Ver caso en el sistema
+        </a>
+        <p style="color:#9ca3af;font-size:12px;margin-top:24px">
+          Si no esperabas este correo, comunícate con el administrador del sistema.
+        </p>
+      </div>
+    `,
+  });
+}
+
 export async function sendPasswordResetEmail(to: string, token: string) {
   const resetUrl = `${process.env.APP_URL}/recuperar/${token}`;
   const transporter = createTransporter();

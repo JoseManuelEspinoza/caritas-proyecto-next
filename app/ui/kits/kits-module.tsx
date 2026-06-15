@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Package, Plus, ArrowDownCircle, ArrowUpCircle, RefreshCw, X, ListChecks } from "lucide-react";
+import { Package, Plus, ArrowDownCircle, ArrowUpCircle, RefreshCw, X, ListChecks, Camera, Upload } from "lucide-react";
 import { toast } from "sonner";
 import {
   crearKit,
@@ -38,8 +38,6 @@ type Movimiento = {
 };
 
 const TIPOS = ["INGRESO", "ENTREGA"] as const;
-const KIT_PAGE_SIZE = 5;
-const MOV_PAGE_SIZE = 5;
 
 export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parroquia[] }) {
   const router = useRouter();
@@ -55,6 +53,8 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
   const [showMovForm, setShowMovForm] = useState(false);
   const [kitPage, setKitPage] = useState(1);
   const [movementPage, setMovementPage] = useState(1);
+  const [kitPageSize, setKitPageSize] = useState(5);
+  const [movPageSize, setMovPageSize] = useState(5);
 
   const [kitForm, setKitForm] = useState({ tipoKit: "", descripcion: "", stockInicial: 0, codigoAlmacen: "", ubicacionAlmacen: "" });
   const [movForm, setMovForm] = useState({
@@ -69,19 +69,19 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
 
   const current = kits.find((k) => k.id === selected) ?? null;
 
-  const totalKitPages = Math.max(1, Math.ceil(kits.length / KIT_PAGE_SIZE));
+  const totalKitPages = Math.max(1, Math.ceil(kits.length / kitPageSize));
   const safeKitPage = Math.min(kitPage, totalKitPages);
-  const kitStart = (safeKitPage - 1) * KIT_PAGE_SIZE;
-  const visibleKits = kits.slice(kitStart, kitStart + KIT_PAGE_SIZE);
+  const kitStart = (safeKitPage - 1) * kitPageSize;
+  const visibleKits = kits.slice(kitStart, kitStart + kitPageSize);
   const kitFrom = kits.length === 0 ? 0 : kitStart + 1;
-  const kitTo = Math.min(kitStart + KIT_PAGE_SIZE, kits.length);
+  const kitTo = Math.min(kitStart + kitPageSize, kits.length);
 
-  const totalMovementPages = Math.max(1, Math.ceil(movimientos.length / MOV_PAGE_SIZE));
+  const totalMovementPages = Math.max(1, Math.ceil(movimientos.length / movPageSize));
   const safeMovementPage = Math.min(movementPage, totalMovementPages);
-  const movementStart = (safeMovementPage - 1) * MOV_PAGE_SIZE;
-  const visibleMovimientos = movimientos.slice(movementStart, movementStart + MOV_PAGE_SIZE);
+  const movementStart = (safeMovementPage - 1) * movPageSize;
+  const visibleMovimientos = movimientos.slice(movementStart, movementStart + movPageSize);
   const movementFrom = movimientos.length === 0 ? 0 : movementStart + 1;
-  const movementTo = Math.min(movementStart + MOV_PAGE_SIZE, movimientos.length);
+  const movementTo = Math.min(movementStart + movPageSize, movimientos.length);
 
   useEffect(() => {
     if (kitPage > totalKitPages) setKitPage(totalKitPages);
@@ -374,8 +374,10 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
             end={kitTo}
             page={safeKitPage}
             totalPages={totalKitPages}
-            onPrevious={() => setKitPage((page) => Math.max(1, page - 1))}
-            onNext={() => setKitPage((page) => Math.min(totalKitPages, page + 1))}
+            onPrevious={() => setKitPage((p) => Math.max(1, p - 1))}
+            onNext={() => setKitPage((p) => Math.min(totalKitPages, p + 1))}
+            pageSize={kitPageSize}
+            onPageSizeChange={(s) => { setKitPageSize(s); setKitPage(1); }}
             className="mt-4"
           />
         </div>
@@ -472,16 +474,24 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
                       className="mt-1 w-full px-3 py-2 border border-[var(--caritas-border)] rounded text-sm"
                     />
                   </label>
-                  <label className="md:col-span-2 block">
-                    <span className="text-xs text-gray-600">Evidencia fotográfica <span className="text-gray-400">(opcional)</span></span>
-                    <input
-                      type="file"
-                      accept="image/*,application/pdf"
-                      onChange={(e) => setEvidenciaFile(e.target.files?.[0] ?? null)}
-                      className="mt-1 block w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
-                    />
-                    {evidenciaFile && <p className="text-xs text-green-700 mt-1">📎 {evidenciaFile.name}</p>}
-                  </label>
+                  <div className="md:col-span-2">
+                    <span className="text-xs text-gray-600 block mb-1">Evidencia fotográfica <span className="text-gray-400">(opcional)</span></span>
+                    <div className="flex gap-2">
+                      <label className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#91D723] text-[#009850] rounded-lg cursor-pointer hover:bg-[#91D723]/10 text-xs font-medium transition-colors">
+                        <Upload className="w-3.5 h-3.5" /> Adjuntar archivo
+                        <input type="file" accept="image/*,application/pdf" className="hidden"
+                          onChange={(e) => setEvidenciaFile(e.target.files?.[0] ?? null)} />
+                      </label>
+                    </div>
+                    {evidenciaFile && (
+                      <span className="inline-flex items-center gap-1 text-[10px] bg-gray-100 border border-gray-200 rounded-full pl-2 pr-1 py-0.5 text-gray-700 mt-2">
+                        {evidenciaFile.name}
+                        <button type="button" onClick={() => setEvidenciaFile(null)} className="text-gray-400 hover:text-red-500 transition-colors">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    )}
+                  </div>
                   <div className="md:col-span-2 flex justify-end gap-2">
                     <button
                       onClick={() => { setShowMovForm(false); setEvidenciaFile(null); }}
@@ -641,8 +651,10 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
                 end={movementTo}
                 page={safeMovementPage}
                 totalPages={totalMovementPages}
-                onPrevious={() => setMovementPage((page) => Math.max(1, page - 1))}
-                onNext={() => setMovementPage((page) => Math.min(totalMovementPages, page + 1))}
+                onPrevious={() => setMovementPage((p) => Math.max(1, p - 1))}
+                onNext={() => setMovementPage((p) => Math.min(totalMovementPages, p + 1))}
+                pageSize={movPageSize}
+                onPageSizeChange={(s) => { setMovPageSize(s); setMovementPage(1); }}
                 className="mt-4"
               />
 

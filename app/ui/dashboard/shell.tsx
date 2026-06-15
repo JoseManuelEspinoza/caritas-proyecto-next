@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Image from "next/image";
 import {
   LayoutDashboard,
@@ -11,7 +11,6 @@ import {
   Menu,
   X,
   LogOut,
-  User,
   GraduationCap,
   ClipboardList,
   Map,
@@ -86,6 +85,134 @@ interface ShellProps {
   userRole: string;
   frontendRole: FrontendRole;
 }
+
+// ─── Campana de notificaciones ───────────────────────────────────────────────
+
+type Notif = {
+  idNotificacion: string;
+  tipo: string;
+  titulo: string;
+  mensaje: string;
+  enlace: string | null;
+  leida: boolean;
+  createdAt: string;
+};
+
+function NotificationBell() {
+  const [open, setOpen] = useState(false);
+  const [notifs, setNotifs] = useState<Notif[]>([]);
+  const ref = useRef<HTMLDivElement>(null);
+
+  const fetchNotifs = useCallback(async () => {
+    try {
+      const res = await fetch("/api/notificaciones", { cache: "no-store" });
+      if (res.ok) setNotifs(await res.json());
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    fetchNotifs();
+    const interval = setInterval(fetchNotifs, 60_000);
+    return () => clearInterval(interval);
+  }, [fetchNotifs]);
+
+  // Cierra al hacer click fuera
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const noLeidas = notifs.filter((n) => !n.leida).length;
+
+  async function handleOpen() {
+    setOpen((v) => !v);
+    if (!open && noLeidas > 0) {
+      await fetch("/api/notificaciones", { method: "PATCH", body: JSON.stringify({}) });
+      setNotifs((prev) => prev.map((n) => ({ ...n, leida: true })));
+    }
+  }
+
+  function fmtRelativo(iso: string) {
+    const diff = Date.now() - new Date(iso).getTime();
+    const min = Math.floor(diff / 60_000);
+    if (min < 1) return "Ahora mismo";
+    if (min < 60) return `Hace ${min} min`;
+    const h = Math.floor(min / 60);
+    if (h < 24) return `Hace ${h}h`;
+    return `Hace ${Math.floor(h / 24)}d`;
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={handleOpen}
+        className="relative p-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors"
+        title="Notificaciones"
+      >
+        <Bell className="w-4 h-4" />
+        {noLeidas > 0 && (
+          <span className="absolute top-0.5 right-0.5 min-w-[14px] h-[14px] bg-red-500 rounded-full flex items-center justify-center text-[9px] font-bold text-white px-0.5">
+            {noLeidas > 9 ? "9+" : noLeidas}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-9 w-80 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
+            <span className="text-sm font-semibold text-gray-800">Notificaciones</span>
+            {noLeidas === 0 && notifs.length > 0 && (
+              <span className="text-[10px] text-gray-400">Todo leído</span>
+            )}
+          </div>
+
+          {notifs.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-8">Sin notificaciones</p>
+          ) : (
+            <ul className="max-h-80 overflow-y-auto divide-y divide-gray-50">
+              {notifs.map((n) => (
+                <li key={n.idNotificacion}>
+                  {n.enlace ? (
+                    <a
+                      href={n.enlace}
+                      onClick={() => setOpen(false)}
+                      className={`flex gap-3 px-4 py-3 hover:bg-gray-50 transition-colors ${!n.leida ? "bg-blue-50/60" : ""}`}
+                    >
+                      {!n.leida && (
+                        <span className="mt-1.5 w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
+                      )}
+                      <div className={!n.leida ? "" : "ml-5"}>
+                        <p className="text-xs font-semibold text-gray-800">{n.titulo}</p>
+                        <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-2">{n.mensaje}</p>
+                        <p className="text-[10px] text-gray-400 mt-1">{fmtRelativo(n.createdAt)}</p>
+                      </div>
+                    </a>
+                  ) : (
+                    <div className={`flex gap-3 px-4 py-3 ${!n.leida ? "bg-blue-50/60" : ""}`}>
+                      {!n.leida && (
+                        <span className="mt-1.5 w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
+                      )}
+                      <div className={!n.leida ? "" : "ml-5"}>
+                        <p className="text-xs font-semibold text-gray-800">{n.titulo}</p>
+                        <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-2">{n.mensaje}</p>
+                        <p className="text-[10px] text-gray-400 mt-1">{fmtRelativo(n.createdAt)}</p>
+                      </div>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export function DashboardShell({
   children,
@@ -218,10 +345,7 @@ export function DashboardShell({
 
           <div className="flex items-center gap-2 md:gap-3 ml-auto">
             {/* Notifications */}
-            <button suppressHydrationWarning className="relative p-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors">
-              <Bell className="w-4 h-4" />
-              <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-red-500 rounded-full" />
-            </button>
+            <NotificationBell />
 
             {/* User menu */}
             <div className="relative">
@@ -252,14 +376,6 @@ export function DashboardShell({
                           <div className="text-xs text-gray-400 mt-0.5">{roleLabel}</div>
                         </div>
                       </div>
-                    </div>
-
-                    {/* Profile link */}
-                    <div className="py-2">
-                      <button className="w-full flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50 transition-colors">
-                        <User className="w-4 h-4" />
-                        <span className="text-sm">Mi Perfil</span>
-                      </button>
                     </div>
 
                     {/* Logout */}

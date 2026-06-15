@@ -17,6 +17,9 @@ import {
   Package,
   Plus,
   ClipboardList,
+  Camera,
+  Upload,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { aprobarCaso, observarCaso, rechazarCaso } from "@/app/actions/incidents";
@@ -116,8 +119,6 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 const PENDIENTES = ["EN EVALUACION", "OBSERVADO"];
-const QUEUE_PAGE_SIZE = 9;
-const HISTORY_PAGE_SIZE = 9;
 
 export function DonacionesModule({ casos, canEvaluate }: { casos: Caso[]; canEvaluate: boolean }) {
   const router = useRouter();
@@ -128,6 +129,8 @@ export function DonacionesModule({ casos, canEvaluate }: { casos: Caso[]; canEva
   const [notes, setNotes] = useState("");
   const [queuePage, setQueuePage] = useState(1);
   const [historyPage, setHistoryPage] = useState(1);
+  const [queuePageSize, setQueuePageSize] = useState(5);
+  const [historyPageSize, setHistoryPageSize] = useState(5);
   const [descargandoPdf, setDescargandoPdf] = useState(false);
   const [entregas, setEntregas] = useState<Entrega[]>([]);
   const [evidenciasEntrega, setEvidenciasEntrega] = useState<{idEvidenciaGRD:string;nombreArchivo:string;urlArchivo:string;fechaCarga:string}[]>([]);
@@ -147,19 +150,19 @@ export function DonacionesModule({ casos, canEvaluate }: { casos: Caso[]; canEva
   const closed = casos.filter((c) => !PENDIENTES.includes(c.estado));
   const current = casos.find((c) => c.id === selectedId) ?? null;
 
-  const totalQueuePages = Math.max(1, Math.ceil(queue.length / QUEUE_PAGE_SIZE));
+  const totalQueuePages = Math.max(1, Math.ceil(queue.length / queuePageSize));
   const safeQueuePage = Math.min(queuePage, totalQueuePages);
-  const queueStart = (safeQueuePage - 1) * QUEUE_PAGE_SIZE;
-  const paginatedQueue = queue.slice(queueStart, queueStart + QUEUE_PAGE_SIZE);
+  const queueStart = (safeQueuePage - 1) * queuePageSize;
+  const paginatedQueue = queue.slice(queueStart, queueStart + queuePageSize);
   const queueFrom = queue.length === 0 ? 0 : queueStart + 1;
-  const queueTo = Math.min(queueStart + QUEUE_PAGE_SIZE, queue.length);
+  const queueTo = Math.min(queueStart + queuePageSize, queue.length);
 
-  const totalHistoryPages = Math.max(1, Math.ceil(closed.length / HISTORY_PAGE_SIZE));
+  const totalHistoryPages = Math.max(1, Math.ceil(closed.length / historyPageSize));
   const safeHistoryPage = Math.min(historyPage, totalHistoryPages);
-  const historyStart = (safeHistoryPage - 1) * HISTORY_PAGE_SIZE;
-  const paginatedHistory = closed.slice(historyStart, historyStart + HISTORY_PAGE_SIZE);
+  const historyStart = (safeHistoryPage - 1) * historyPageSize;
+  const paginatedHistory = closed.slice(historyStart, historyStart + historyPageSize);
   const historyFrom = closed.length === 0 ? 0 : historyStart + 1;
-  const historyTo = Math.min(historyStart + HISTORY_PAGE_SIZE, closed.length);
+  const historyTo = Math.min(historyStart + historyPageSize, closed.length);
 
   useEffect(() => {
     if (queuePage > totalQueuePages) setQueuePage(totalQueuePages);
@@ -350,8 +353,10 @@ export function DonacionesModule({ casos, canEvaluate }: { casos: Caso[]; canEva
             end={queueTo}
             page={safeQueuePage}
             totalPages={totalQueuePages}
-            onPrevious={() => setQueuePage((page) => Math.max(1, page - 1))}
-            onNext={() => setQueuePage((page) => Math.min(totalQueuePages, page + 1))}
+            onPrevious={() => setQueuePage((p) => Math.max(1, p - 1))}
+            onNext={() => setQueuePage((p) => Math.min(totalQueuePages, p + 1))}
+            pageSize={queuePageSize}
+            onPageSizeChange={(s) => { setQueuePageSize(s); setQueuePage(1); }}
             className="rounded-none border-x-0 border-b-0"
           />
           {closed.length > 0 && (
@@ -378,8 +383,10 @@ export function DonacionesModule({ casos, canEvaluate }: { casos: Caso[]; canEva
                 end={historyTo}
                 page={safeHistoryPage}
                 totalPages={totalHistoryPages}
-                onPrevious={() => setHistoryPage((page) => Math.max(1, page - 1))}
-                onNext={() => setHistoryPage((page) => Math.min(totalHistoryPages, page + 1))}
+                onPrevious={() => setHistoryPage((p) => Math.max(1, p - 1))}
+                onNext={() => setHistoryPage((p) => Math.min(totalHistoryPages, p + 1))}
+                pageSize={historyPageSize}
+                onPageSizeChange={(s) => { setHistoryPageSize(s); setHistoryPage(1); }}
                 className="rounded-none border-x-0 border-b-0"
               />
             </>
@@ -509,16 +516,24 @@ export function DonacionesModule({ casos, canEvaluate }: { casos: Caso[]; canEva
                           <span className="text-xs text-gray-600">Observaciones</span>
                           <textarea value={entregaForm.observaciones} onChange={(e) => setEntregaForm({ ...entregaForm, observaciones: e.target.value })} rows={2} className="mt-1 w-full px-3 py-2 border border-green-200 rounded text-sm bg-white" />
                         </label>
-                        <label className="md:col-span-2 block">
-                          <span className="text-xs text-gray-600">Acta firmada <span className="text-gray-400">(opcional)</span></span>
-                          <input
-                            type="file"
-                            accept="image/*,application/pdf"
-                            onChange={(e) => setActaFile(e.target.files?.[0] ?? null)}
-                            className="mt-1 block w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
-                          />
-                          {actaFile && <p className="text-xs text-green-700 mt-1">📎 {actaFile.name}</p>}
-                        </label>
+                        <div className="md:col-span-2">
+                          <span className="text-xs text-gray-600 block mb-1">Acta firmada <span className="text-gray-400">(opcional)</span></span>
+                          <div className="flex gap-2">
+                            <label className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#91D723] text-[#009850] rounded-lg cursor-pointer hover:bg-[#91D723]/10 text-xs font-medium transition-colors">
+                              <Upload className="w-3.5 h-3.5" /> Adjuntar archivo
+                              <input type="file" accept="image/*,application/pdf" className="hidden"
+                                onChange={(e) => setActaFile(e.target.files?.[0] ?? null)} />
+                            </label>
+                          </div>
+                          {actaFile && (
+                            <span className="inline-flex items-center gap-1 text-[10px] bg-gray-100 border border-gray-200 rounded-full pl-2 pr-1 py-0.5 text-gray-700 mt-2">
+                              {actaFile.name}
+                              <button type="button" onClick={() => setActaFile(null)} className="text-gray-400 hover:text-red-500 transition-colors">
+                                <X className="w-3 h-3" />
+                              </button>
+                            </span>
+                          )}
+                        </div>
                         <div className="md:col-span-2 flex justify-end gap-2">
                           <button onClick={() => { setShowEntregaForm(false); setActaFile(null); }} className="px-4 py-2 border border-gray-300 rounded text-sm">Cancelar</button>
                           <button onClick={submitEntrega} disabled={pending} className="px-4 py-2 bg-green-700 text-white rounded text-sm disabled:opacity-50">Registrar entrega</button>

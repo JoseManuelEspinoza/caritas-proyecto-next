@@ -20,6 +20,17 @@ import { ResumenBloque } from "@/app/ui/grd/incidente/components/ResumenBloque";
 import { EvidenciasRegistro } from "@/app/ui/grd/incidente/components/EvidenciasRegistro";
 import { fmtDate, fmtDateTime } from "@/app/ui/grd/incidente/lib/format";
 
+function parseCausa(raw: string | null | undefined): string {
+  if (!raw) return "—";
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed.causa === "string") return parsed.causa || "—";
+  } catch {
+    // not JSON, return as-is
+  }
+  return raw;
+}
+
 /** Paso "Resumen Final": recorre todas las etapas del caso con sus documentos (solo lectura). */
 export function ResumenStep({ data }: { data: IncidenciaDetalleOutput }) {
   const [descargando, setDescargando] = useState(false);
@@ -152,7 +163,7 @@ export function ResumenStep({ data }: { data: IncidenciaDetalleOutput }) {
           <InfoField label="Fecha del suceso" value={fmtDate(data.fechaRegistro)} />
           <InfoField label="Parroquia / Distrito" value={data.parroquia ?? "—"} />
           <InfoField label="Dirección" value={data.direccionEvento ?? "—"} />
-          <InfoField label="Causa" value={data.causa ?? "—"} />
+          <InfoField label="Causa" value={parseCausa(data.causa)} />
         </div>
         {data.descripcionEvento && <InfoField label="Descripción" value={data.descripcionEvento} />}
         {data.aviso && (
