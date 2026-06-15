@@ -1327,7 +1327,7 @@ export function ReportesModule({
                 <YAxis type="category" dataKey="label" tick={{ fontSize: 10, fill: "#6B7280" }} axisLine={false} tickLine={false} width={110} />
                 <Tooltip content={<CustomTooltip />} cursor={{ fill: "#F8FAFC" }} />
                 <Bar dataKey="value" fill="#3B82F6" radius={[0, 4, 4, 0]} maxBarSize={22}>
-                  <LabelList dataKey="value" position="right" style={{ fontSize: 10, fill: "#6B7280" }} formatter={(v: number) => `${v} brig.`} />
+                  <LabelList dataKey="value" position="right" style={{ fontSize: 10, fill: "#6B7280" }} formatter={(v) => `${Number(v ?? 0)} brig.`} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -1452,7 +1452,7 @@ export function ReportesModule({
                 <YAxis type="category" dataKey="label" tick={{ fontSize: 10, fill: "#6B7280" }} axisLine={false} tickLine={false} width={110} />
                 <Tooltip content={<CustomTooltip />} cursor={{ fill: "#F8FAFC" }} />
                 <Bar dataKey="value" fill="#F59E0B" radius={[0, 4, 4, 0]} maxBarSize={22}>
-                  <LabelList dataKey="value" position="right" style={{ fontSize: 10, fill: "#6B7280" }} formatter={(v: number) => `${v} act.`} />
+                  <LabelList dataKey="value" position="right" style={{ fontSize: 10, fill: "#6B7280" }} formatter={(v) => `${Number(v ?? 0)} act.`} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -1602,7 +1602,7 @@ export function ReportesModule({
                   <YAxis type="category" dataKey="label" tick={{ fontSize: 10, fill: "#6B7280" }} axisLine={false} tickLine={false} width={100} />
                   <Tooltip content={<CustomTooltip />} cursor={{ fill: "#F8FAFC" }} />
                   <Bar dataKey="value" fill="#EF4444" radius={[0, 4, 4, 0]} maxBarSize={22}>
-                    <LabelList dataKey="value" position="right" style={{ fontSize: 10, fill: "#6B7280" }} formatter={(v: number) => `${v} casos`} />
+                    <LabelList dataKey="value" position="right" style={{ fontSize: 10, fill: "#6B7280" }} formatter={(v) => `${Number(v ?? 0)} casos`} />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -1711,7 +1711,7 @@ export function ReportesModule({
                     <YAxis type="category" dataKey="label" tick={{ fontSize: 10, fill: "#6B7280" }} axisLine={false} tickLine={false} width={110} />
                     <Tooltip content={<CustomTooltip />} cursor={{ fill: "#F8FAFC" }} />
                     <Bar dataKey="value" fill="#9155A8" radius={[0, 4, 4, 0]} maxBarSize={22}>
-                      <LabelList dataKey="value" position="right" style={{ fontSize: 10, fill: "#6B7280" }} formatter={(v: number) => `${v} u.`} />
+                      <LabelList dataKey="value" position="right" style={{ fontSize: 10, fill: "#6B7280" }} formatter={(v) => `${Number(v ?? 0)} u.`} />
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
