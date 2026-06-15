@@ -6,7 +6,7 @@ import {
   Plus,
   Filter,
   Search,
-  Download,
+  FileSpreadsheet,
   MapPin,
   Users,
   Calendar,
@@ -190,8 +190,20 @@ export function GrdList({ items, role }: GrdListProps) {
 
   const canCreate = role === "admin" || role === "especialistaGRD";
 
-  const handleExport = () => {
-    const headers = ["Código", "Incidente", "Categoría", "Estado", "Ubicación", "Parroquia", "Familias", "Personas", "Brigadistas", "Fecha"];
+  // Datos a exportar.
+  const buildExportData = () => {
+    const headers = [
+      "Código",
+      "Incidente",
+      "Categoría",
+      "Estado",
+      "Ubicación",
+      "Parroquia",
+      "Familias",
+      "Personas",
+      "Brigadistas",
+      "Fecha",
+    ];
     const rows = filtered.map((i) => [
       i.codigoCaso ?? "",
       i.tituloIncidencia ?? "",
@@ -204,16 +216,17 @@ export function GrdList({ items, role }: GrdListProps) {
       i.brigadistas.join("; "),
       new Date(i.fechaRegistro).toLocaleDateString("es-PE", { timeZone: "America/Lima" }),
     ]);
-    const csv = [headers, ...rows]
-      .map((row) => row.map((v) => `"${v.replace(/"/g, '""')}"`).join(","))
-      .join("\n");
-    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `incidencias_${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    return { headers, rows };
+  };
+
+  // xlsx se carga de forma dinámica para no aumentar el bundle inicial.
+  const handleExportExcel = async () => {
+    const XLSX = await import("xlsx");
+    const { headers, rows } = buildExportData();
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Incidencias");
+    XLSX.writeFile(wb, `incidencias_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   // Filtros
@@ -333,12 +346,12 @@ export function GrdList({ items, role }: GrdListProps) {
             </select>
 
             <button
-              onClick={handleExport}
+              onClick={handleExportExcel}
               suppressHydrationWarning
               className="hidden md:flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 bg-[#F5F5F5] border border-[#DDDDDD] rounded hover:bg-gray-200 transition-colors"
             >
-              <Download className="w-4 h-4" />
-              Exportar
+              <FileSpreadsheet className="w-4 h-4" />
+              Excel
             </button>
           </div>
 
@@ -352,7 +365,10 @@ export function GrdList({ items, role }: GrdListProps) {
           )}
           <PageSizeSelector
             pageSize={rowsPerPage}
-            onPageSizeChange={(s) => { setRowsPerPage(s); setCurrentPage(1); }}
+            onPageSizeChange={(s) => {
+              setRowsPerPage(s);
+              setCurrentPage(1);
+            }}
             className="ml-auto"
           />
         </div>
