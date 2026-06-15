@@ -34,12 +34,14 @@ import {
 } from "@/app/lib/import-personas";
 import { extraerTextoPdf } from "@/app/lib/pdf-text";
 import { consultarDni } from "@/app/actions/reniec";
-import { presignEvidencia } from "@/app/actions/evidencias";
+import { subirArchivoS3 } from "@/app/ui/shared/file-upload";
+import { ACCEPT, validarArchivo } from "@/app/lib/upload-config";
 // xlsx se carga de forma dinámica para no aumentar el bundle inicial.
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { CategorySelector } from "./category-selector";
 import { LocationPicker } from "./location-picker";
+import { PersonaModal } from "./persona-modal";
 import {
   createIncidente,
   updateIncidente,
@@ -145,7 +147,7 @@ const PARENTESCOS = [
   "Otro",
 ];
 
-// ─── SearchableSelect ─────────────────────────────────────────────────────────
+// ─── SearchableSelect ────────────────────────────────────────────────────────
 
 function SearchableSelect({
   value,
@@ -367,8 +369,10 @@ function MultiSelect({
       <div
         className="w-full flex items-center gap-2 px-3 py-2.5 bg-white border border-[#DDDDDD] rounded-lg text-sm focus-within:ring-2 focus-within:ring-[#009850]/20 focus-within:border-[#009850] transition-colors cursor-text"
         onClick={() => {
-          setOpen(true);
-          inputRef.current?.focus();
+          if (!open) {
+            setOpen(true);
+            inputRef.current?.focus();
+          }
         }}
       >
         <Search className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
@@ -385,9 +389,24 @@ function MultiSelect({
           className="flex-1 min-w-0 outline-none bg-transparent placeholder:text-gray-400"
           autoComplete="off"
         />
-        <ChevronDown
-          className={`w-4 h-4 text-gray-400 flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
-        />
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (open) {
+              setOpen(false);
+              setQuery("");
+            } else {
+              setOpen(true);
+              inputRef.current?.focus();
+            }
+          }}
+          className="flex-shrink-0 p-0.5 hover:opacity-60 transition-opacity"
+        >
+          <ChevronDown
+            className={`w-4 h-4 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`}
+          />
+        </button>
       </div>
 
       {/* Chips seleccionados, debajo de la caja */}
@@ -480,280 +499,6 @@ function FormSection({
   );
 }
 
-// ─── Modal de persona ─────────────────────────────────────────────────────────
-
-function PersonaModal({
-  onSave,
-  onClose,
-  editing,
-  familias,
-  activeFamiliaId,
-}: {
-  onSave: (p: PersonaForm) => void;
-  onClose: () => void;
-  editing?: PersonaForm;
-  familias: FamiliaForm[];
-  activeFamiliaId?: string;
-}) {
-  const [form, setForm] = useState<PersonaForm>(
-    editing ?? {
-      id: `PER-${Date.now()}`,
-      tipoDoc: "DNI",
-      dni: "",
-      nombre: "",
-      apellidoPaterno: "",
-      apellidoMaterno: "",
-      edad: "",
-      genero: "Femenino",
-      celular: "",
-      parentesco: "",
-      situacionActual: "",
-      familiaId: activeFamiliaId,
-    }
-  );
-
-  function set(key: keyof PersonaForm, value: string) {
-    setForm((p) => ({ ...p, [key]: value }));
-  }
-
-  function validateDocumento(tipo: string, valor: string): string | null {
-    const v = (valor ?? "").trim();
-    if (tipo === "DNI") {
-      const digits = v.replace(/\D/g, "");
-      if (digits.length < 8) return "El DNI debe tener al menos 8 dígitos.";
-      if (digits.length > 9) return "El DNI no debe exceder 9 dígitos (8 + dígito verificador).";
-      return null;
-    }
-    if (tipo === "CE") {
-      const digits = v.replace(/\D/g, "");
-      if (digits.length < 9) return "El Carnet de Extranjería debe tener al menos 9 dígitos.";
-      if (digits.length > 12) return "El Carnet de Extranjería no debe exceder 12 dígitos.";
-      return null;
-    }
-    if (tipo === "Pasaporte") {
-      const alnum = v.replace(/[^A-Za-z0-9]/g, "");
-      if (alnum.length < 6) return "El pasaporte debe tener al menos 6 caracteres alfanuméricos.";
-      if (alnum.length > 12) return "El pasaporte no debe exceder 12 caracteres.";
-      return null;
-    }
-    return null;
-  }
-
-  function handleSubmit() {
-    if (!form.nombre.trim()) {
-      toast.error("Ingresa el nombre de la persona");
-      return;
-    }
-    if (!form.edad) {
-      toast.error("Ingresa la edad");
-      return;
-    }
-    // Validación del documento según tipo
-    const docErr = validateDocumento(form.tipoDoc, form.dni);
-    if (docErr) {
-      toast.error(docErr);
-      return;
-    }
-    onSave({ ...form, id: editing?.id || `PER-${Date.now()}` });
-    onClose();
-  }
-
-  const familiaActual = familias.find((f) => f.id === activeFamiliaId);
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl max-w-lg w-full max-h-[90vh] overflow-auto shadow-xl">
-        <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-          <h3 className="font-bold text-gray-900">
-            {editing
-              ? "Editar persona"
-              : activeFamiliaId
-                ? `Agregar integrante — ${familiaActual?.nombre ?? ""}`
-                : "Agregar persona afectada"}
-          </h3>
-          <button onClick={onClose} className="text-gray-500 hover:bg-gray-100 rounded p-1">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {activeFamiliaId && (
-          <div className="bg-blue-50 border-b border-blue-100 px-4 py-2 text-xs text-blue-800">
-            Integrante de: <strong>{familiaActual?.nombre}</strong>
-          </div>
-        )}
-
-        <div className="p-4 space-y-3">
-          <div className="grid grid-cols-3 gap-2">
-            <div>
-              <label className="text-xs font-semibold text-gray-600 block mb-1">Tipo Doc.</label>
-              <select
-                value={form.tipoDoc}
-                onChange={(e) => set("tipoDoc", e.target.value)}
-                className="w-full px-2 py-2 text-sm border border-gray-200 rounded-lg"
-              >
-                {["DNI", "CE", "Pasaporte", "Otro"].map((t) => (
-                  <option key={t}>{t}</option>
-                ))}
-              </select>
-            </div>
-            <div className="col-span-2">
-              <label className="text-xs font-semibold text-gray-600 block mb-1">N° Documento</label>
-              <input
-                type="text"
-                value={form.dni}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (form.tipoDoc === "DNI" || form.tipoDoc === "CE") {
-                    const digits = val.replace(/\D/g, "");
-                    // limit to 12 digits for safety
-                    set("dni", digits.slice(0, 12));
-                  } else {
-                    // pasaporte / otro → alfanumérico, mayúsculas
-                    const a = val.toUpperCase().replace(/[^A-Z0-9]/g, "");
-                    set("dni", a.slice(0, 12));
-                  }
-                }}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
-                placeholder={
-                  form.tipoDoc === "DNI"
-                    ? "12345678"
-                    : form.tipoDoc === "CE"
-                      ? "123456789"
-                      : "A12345678"
-                }
-                maxLength={12}
-              />
-              <p className="text-[11px] text-gray-400 mt-1">
-                {form.tipoDoc === "DNI" &&
-                  "DNI: 8 dígitos (opcionalmente seguido de dígito verificador)."}
-                {form.tipoDoc === "Pasaporte" &&
-                  "Pasaporte: código alfanumérico (usualmente 9 caracteres, hasta 12)."}
-                {form.tipoDoc === "CE" && "Carnet de Extranjería: 9 a 12 dígitos numéricos."}
-              </p>
-            </div>
-          </div>
-
-          <div>
-            <label className="text-xs font-semibold text-gray-600 block mb-1">
-              Nombres <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={form.nombre}
-              onChange={(e) => set("nombre", e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
-              placeholder="Ej: María Elena"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs font-semibold text-gray-600 block mb-1">
-                Apellido Paterno
-              </label>
-              <input
-                type="text"
-                value={form.apellidoPaterno}
-                onChange={(e) => set("apellidoPaterno", e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-gray-600 block mb-1">
-                Apellido Materno
-              </label>
-              <input
-                type="text"
-                value={form.apellidoMaterno}
-                onChange={(e) => set("apellidoMaterno", e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs font-semibold text-gray-600 block mb-1">
-                Edad <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="number"
-                value={form.edad}
-                onChange={(e) => set("edad", e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
-                placeholder="0"
-                min="0"
-                max="120"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-gray-600 block mb-1">Género</label>
-              <select
-                value={form.genero}
-                onChange={(e) => set("genero", e.target.value)}
-                className="w-full px-2 py-2 text-sm border border-gray-200 rounded-lg"
-              >
-                {["Femenino", "Masculino", "Otro", "Prefiere no decir"].map((g) => (
-                  <option key={g}>{g}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs font-semibold text-gray-600 block mb-1">Celular</label>
-              <input
-                type="tel"
-                value={form.celular}
-                onChange={(e) => set("celular", e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
-                placeholder="987654321"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-gray-600 block mb-1">Parentesco</label>
-              <SearchableSelect
-                value={form.parentesco}
-                onChange={(v) => set("parentesco", v)}
-                options={PARENTESCOS}
-                placeholder="Buscar parentesco…"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="text-xs font-semibold text-gray-600 block mb-1">
-              Situación especial
-            </label>
-            <SearchableSelect
-              value={form.situacionActual}
-              onChange={(v) => set("situacionActual", v)}
-              options={SITUACIONES_ESPECIALES}
-              placeholder="Ninguna / buscar…"
-            />
-          </div>
-
-          <div className="flex gap-2 pt-2">
-            <button
-              onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium"
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={handleSubmit}
-              className="flex-1 px-4 py-2 bg-[#009850] text-white rounded-lg text-sm font-medium"
-            >
-              Guardar
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Modal observaciones familia ──────────────────────────────────────────────
 
 function ObsFamiliaModal({
@@ -808,6 +553,15 @@ function ObsFamiliaModal({
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
+/** Listas administradas en el módulo Catálogos (/catalogos). */
+export type CatalogosForm = {
+  fuentesAlerta: string[];
+  tiposEvento: string[];
+  necesidades: string[];
+  nivelesAfectacion: string[];
+  gruposVulnerables: string[];
+};
+
 interface IncidentFormProps {
   /** Datos iniciales cuando se edita un incidente existente */
   initialData?: CreateIncidenteData;
@@ -815,14 +569,40 @@ interface IncidentFormProps {
   incidenciaId?: string;
   /** Código de caso para mostrar en el header */
   codigoCaso?: string;
+  /** Parroquias REALES del sistema (las únicas asignables, para que se guarde idParroquia). */
+  parroquiasSistema?: { nombre: string; lat: number | null; lng: number | null }[];
+  /** Catálogos del sistema; si uno viene vacío se usa la lista de respaldo. */
+  catalogos?: CatalogosForm;
 }
 
 // ─── Formulario principal ─────────────────────────────────────────────────────
 
-export function IncidentForm({ initialData, incidenciaId, codigoCaso }: IncidentFormProps = {}) {
+export function IncidentForm({
+  initialData,
+  incidenciaId,
+  codigoCaso,
+  parroquiasSistema = [],
+  catalogos,
+}: IncidentFormProps = {}) {
   const isEdit = Boolean(incidenciaId);
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+
+  // ── Listas desde el módulo Catálogos (las constantes son solo respaldo) ──
+  const conOpcion = (lista: string[], extra: string) =>
+    lista.includes(extra) ? lista : [...lista, extra];
+  const fuentesAlerta = catalogos?.fuentesAlerta?.length
+    ? conOpcion(catalogos.fuentesAlerta, "Otro")
+    : FUENTES_ALERTA;
+  const necesidadesChips = catalogos?.necesidades?.length
+    ? conOpcion(catalogos.necesidades, "Otros")
+    : NECESIDADES_CHIPS;
+  const situacionesEspeciales = catalogos?.gruposVulnerables?.length
+    ? catalogos.gruposVulnerables
+    : SITUACIONES_ESPECIALES;
+  const nivelesAfectacion = catalogos?.nivelesAfectacion?.length
+    ? catalogos.nivelesAfectacion
+    : ["Leve", "Moderado", "Severo"];
 
   const PHONE_COUNTRY_CODES = [
     { code: "+51", label: "PE" },
@@ -836,8 +616,13 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
   const [fechaReporte] = useState(initialData?.fechaReporte ?? nowLocal());
   const [reportaDni, setReportaDni] = useState(initialData?.reportaDni ?? "");
   const [reportaNombre, setReportaNombre] = useState(initialData?.reportaNombre ?? "");
-  const [reportaTel, setReportaTel] = useState(initialData?.reportaTel ?? "");
-  const [reportaTelCodigo, setReportaTelCodigo] = useState("+51");
+  // El teléfono se guarda como "+51 987654321"; al cargar en edición se separan código y número.
+  const _telStored = initialData?.reportaTel ?? "";
+  const _telParsed = _telStored.match(/^(\+\d+)\s+(.*)$/);
+  const [reportaTel, setReportaTel] = useState(
+    _telParsed ? _telParsed[2].replace(/\D/g, "") : _telStored.replace(/\D/g, "")
+  );
+  const [reportaTelCodigo, setReportaTelCodigo] = useState(_telParsed?.[1] ?? "+51");
   const [reportaRol, setReportaRol] = useState(initialData?.reportaRol ?? "");
 
   // Sección 2
@@ -879,22 +664,23 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
   const [necesidadOtra, setNecesidadOtra] = useState(initialData?.necesidadOtra ?? "");
   const [necesidadesObs, setNecesidadesObs] = useState(initialData?.necesidadesObs ?? "");
 
-  // Sección 6 — evidencias subidas a S3 (cada archivo lleva su estado de subida)
+  // Sección 6 — evidencias (se suben a S3 al momento de guardar, no al seleccionar)
   type EvidenciaArchivo = {
     uid: string;
     nombre: string;
     tamano: number;
     formato: string;
     key?: string;
-    estado: "subiendo" | "listo" | "error";
+    estado: "pendiente" | "subiendo" | "listo" | "error";
+    file?: File;
   };
   const [fuentesEvidencia, setFuentesEvidencia] = useState<
     { id: string; fuente: string; archivos: EvidenciaArchivo[] }[]
   >([]);
 
   // Sección 7
-  const [nivelAfectacion, setNivelAfectacion] = useState<"Leve" | "Moderado" | "Severo">(
-    (initialData?.nivelAfectacion as "Leve" | "Moderado" | "Severo") ?? "Moderado"
+  const [nivelAfectacion, setNivelAfectacion] = useState<string>(
+    initialData?.nivelAfectacion ?? nivelesAfectacion[1] ?? nivelesAfectacion[0] ?? "Moderado"
   );
 
   // Alias autogenerado
@@ -1045,46 +831,27 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
   }
 
   /**
-   * Busca las parroquias/iglesias REALES más cercanas al punto vía Overpass (OSM)
-   * y las deja como únicas opciones del desplegable de parroquia, ordenadas por cercanía.
+   * Ordena las parroquias REALES DEL SISTEMA por cercanía al punto seleccionado.
+   * Solo se ofrecen parroquias que existen en la BD (para que se guarde idParroquia
+   * y el algoritmo de asignación funcione). Las que no tienen coordenadas no se
+   * pueden ordenar pero siguen disponibles en el catálogo completo.
    */
   async function buscarParroquiasCercanas(la: number, lo: number) {
     setCargandoParroquias(true);
     try {
-      for (const radio of [2000, 5000, 12000]) {
-        const query = `[out:json][timeout:25];(node["amenity"="place_of_worship"]["religion"="christian"](around:${radio},${la},${lo});way["amenity"="place_of_worship"]["religion"="christian"](around:${radio},${la},${lo}););out center tags;`;
-        const res = await fetch("https://overpass-api.de/api/interpreter", {
-          method: "POST",
-          body: query,
-        });
-        if (!res.ok) continue;
-        const data = await res.json();
-        type El = {
-          lat?: number;
-          lon?: number;
-          center?: { lat: number; lon: number };
-          tags?: { name?: string };
-        };
-        const items = ((data.elements ?? []) as El[])
-          .map((e) => {
-            const elat = e.lat ?? e.center?.lat;
-            const elon = e.lon ?? e.center?.lon;
-            const name = e.tags?.name;
-            if (!name || elat == null || elon == null) return null;
-            return { name: name.trim(), dist: distanciaMetros(la, lo, elat, elon) };
-          })
-          .filter((x): x is { name: string; dist: number } => x !== null)
-          .sort((a, b) => a.dist - b.dist);
-        // Dedupe por nombre, conservando la más cercana
-        const unicas = Array.from(new Map(items.map((i) => [i.name.toLowerCase(), i])).values());
-        if (unicas.length > 0) {
-          setParroquiasCercanas(unicas.slice(0, 12).map((u) => u.name));
-          return;
-        }
+      const conCoords = parroquiasSistema.filter((p) => p.lat != null && p.lng != null);
+      if (conCoords.length === 0) {
+        setParroquiasCercanas(null); // sin coords → usar catálogo completo del sistema
+        return;
       }
-      setParroquiasCercanas([]); // no se encontraron cercanas
-    } catch {
-      setParroquiasCercanas(null); // error → vuelve al catálogo general
+      const ordenadas = conCoords
+        .map((p) => ({
+          nombre: p.nombre,
+          dist: distanciaMetros(la, lo, p.lat as number, p.lng as number),
+        }))
+        .sort((a, b) => a.dist - b.dist)
+        .map((p) => p.nombre);
+      setParroquiasCercanas(ordenadas);
     } finally {
       setCargandoParroquias(false);
     }
@@ -1124,8 +891,17 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
     }
   }
 
+  const PHONE_MAX_LENGTH: Record<string, number> = {
+    "+51": 9,  // Perú
+    "+52": 10, // México
+    "+54": 10, // Argentina
+    "+56": 9,  // Chile
+    "+57": 10, // Colombia
+  };
+
   function handleTelefonoChange(val: string) {
-    setReportaTel(val.replace(/\D/g, ""));
+    const max = PHONE_MAX_LENGTH[reportaTelCodigo] ?? 12;
+    setReportaTel(val.replace(/\D/g, "").slice(0, max));
   }
 
   // Familia
@@ -1284,69 +1060,33 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
     });
   }
 
-  async function uploadArchivos(fuenteId: string, files: FileList | null) {
+  function stageArchivos(fuenteId: string, files: FileList | null) {
     if (!files) return;
+    const aceptados: File[] = [];
     for (const file of Array.from(files)) {
-      const uid =
+      const invalido = validarArchivo(file, "evidencia");
+      if (invalido) {
+        toast.error(invalido);
+        continue;
+      }
+      aceptados.push(file);
+    }
+    const nuevos: EvidenciaArchivo[] = aceptados.map((file) => ({
+      uid:
         typeof crypto !== "undefined" && crypto.randomUUID
           ? crypto.randomUUID()
-          : `${Date.now()}-${Math.random()}`;
-      const ct = file.type || "application/octet-stream";
-      // Placeholder "subiendo"
-      setFuentesEvidencia((prev) =>
-        prev.map((f) =>
-          f.id === fuenteId
-            ? {
-                ...f,
-                archivos: [
-                  ...f.archivos,
-                  { uid, nombre: file.name, tamano: file.size, formato: ct, estado: "subiendo" },
-                ],
-              }
-            : f
-        )
-      );
-      try {
-        const res = await presignEvidencia({
-          nombreArchivo: file.name,
-          contentType: ct,
-          incidenciaId,
-        });
-        if (!res.ok) throw new Error(res.message);
-        const put = await fetch(res.uploadUrl, {
-          method: "PUT",
-          body: file,
-          headers: { "Content-Type": ct },
-        });
-        if (!put.ok) throw new Error(`Error al subir (${put.status})`);
-        setFuentesEvidencia((prev) =>
-          prev.map((f) =>
-            f.id === fuenteId
-              ? {
-                  ...f,
-                  archivos: f.archivos.map((a) =>
-                    a.uid === uid ? { ...a, estado: "listo", key: res.key } : a
-                  ),
-                }
-              : f
-          )
-        );
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "No se pudo subir el archivo.");
-        setFuentesEvidencia((prev) =>
-          prev.map((f) =>
-            f.id === fuenteId
-              ? {
-                  ...f,
-                  archivos: f.archivos.map((a) =>
-                    a.uid === uid ? { ...a, estado: "error" } : a
-                  ),
-                }
-              : f
-          )
-        );
-      }
-    }
+          : `${Date.now()}-${Math.random()}`,
+      nombre: file.name,
+      tamano: file.size,
+      formato: file.type || "application/octet-stream",
+      estado: "pendiente" as const,
+      file,
+    }));
+    setFuentesEvidencia((prev) =>
+      prev.map((f) =>
+        f.id === fuenteId ? { ...f, archivos: [...f.archivos, ...nuevos] } : f
+      )
+    );
   }
 
   function hoyLocalISO(): string {
@@ -1409,12 +1149,8 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
 
     const archivos = fuentesEvidencia.flatMap((f) => f.archivos);
 
-    if (archivos.some((a) => a.estado === "subiendo")) {
-      return "Espera a que terminen de subirse las evidencias antes de guardar.";
-    }
-
     if (archivos.some((a) => a.estado === "error")) {
-      return "Hay evidencias con error de subida. Elimínalas o vuelve a subirlas antes de guardar.";
+      return "Hay evidencias con error de subida. Elimínalas o vuelve a intentarlo.";
     }
 
     return null;
@@ -1423,7 +1159,6 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
   // ─── Guardar (crear o actualizar) ─────────────────────────────────────────
 
   function handleSave() {
-    // Validación de campos obligatorios.
     setIntentoEnvio(true);
     const errorValidacion = validarFormularioIncidencia();
     if (errorValidacion) {
@@ -1431,45 +1166,130 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
       return;
     }
 
-    const payload: CreateIncidenteData = {
-      reportaDni,
-      reportaNombre,
-      reportaTel: `${reportaTelCodigo} ${reportaTel}`.trim(),
-      reportaRol,
-      fechaReporte,
-      fechaSuceso,
-      horaSuceso,
-      categoria,
-      pais,
-      region,
-      distrito,
-      parroquia,
-      direccion,
-      referencia,
-      descripcion,
-      causa,
-      familias,
-      personas,
-      necesidades,
-      necesidadOtra,
-      necesidadesObs,
-      nivelAfectacion,
-      lat,
-      lng,
-      evidencias: fuentesEvidencia.flatMap((f) =>
-        f.archivos
-          .filter((a) => a.estado === "listo" && a.key)
-          .map((a) => ({
-            key: a.key as string,
-            nombreArchivo: a.nombre,
-            formato: a.formato || null,
-            tamano: a.tamano,
-            descripcion: f.fuente,
-          }))
-      ),
-    };
+    // Snapshot de archivos pendientes antes de la transición
+    const pendingUploads = fuentesEvidencia.flatMap((f) =>
+      f.archivos
+        .filter(
+          (a): a is EvidenciaArchivo & { file: File } =>
+            a.estado === "pendiente" && !!a.file
+        )
+        .map((a) => ({
+          fuenteId: f.id,
+          fuente: f.fuente,
+          uid: a.uid,
+          file: a.file,
+          ct: a.formato || "application/octet-stream",
+          nombre: a.nombre,
+          tamano: a.tamano,
+        }))
+    );
 
     startTransition(async () => {
+      const uploadedKeys: Record<string, string> = {};
+
+      // Subir archivos pendientes a S3
+      for (const item of pendingUploads) {
+        setFuentesEvidencia((prev) =>
+          prev.map((f) =>
+            f.id === item.fuenteId
+              ? {
+                  ...f,
+                  archivos: f.archivos.map((a) =>
+                    a.uid === item.uid ? { ...a, estado: "subiendo" as const } : a
+                  ),
+                }
+              : f
+          )
+        );
+        try {
+          const subido = await subirArchivoS3(item.file, {
+            tipo: "evidencia-incidencia",
+            entidadId: incidenciaId,
+          });
+          uploadedKeys[item.uid] = subido.key;
+          setFuentesEvidencia((prev) =>
+            prev.map((f) =>
+              f.id === item.fuenteId
+                ? {
+                    ...f,
+                    archivos: f.archivos.map((a) =>
+                      a.uid === item.uid
+                        ? { ...a, estado: "listo" as const, key: subido.key, file: undefined }
+                        : a
+                    ),
+                  }
+                : f
+            )
+          );
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : "No se pudo subir el archivo.");
+          setFuentesEvidencia((prev) =>
+            prev.map((f) =>
+              f.id === item.fuenteId
+                ? {
+                    ...f,
+                    archivos: f.archivos.map((a) =>
+                      a.uid === item.uid ? { ...a, estado: "error" as const } : a
+                    ),
+                  }
+                : f
+            )
+          );
+          return;
+        }
+      }
+
+      const payload: CreateIncidenteData = {
+        reportaDni,
+        reportaNombre,
+        reportaTel: `${reportaTelCodigo} ${reportaTel}`.trim(),
+        reportaRol,
+        fechaReporte,
+        fechaSuceso,
+        horaSuceso,
+        categoria,
+        pais,
+        region,
+        distrito,
+        parroquia,
+        direccion,
+        referencia,
+        descripcion,
+        causa,
+        familias,
+        personas,
+        necesidades,
+        necesidadOtra,
+        necesidadesObs,
+        nivelAfectacion,
+        lat,
+        lng,
+        evidencias: [
+          // Archivos ya subidos previamente
+          ...fuentesEvidencia.flatMap((f) =>
+            f.archivos
+              .filter((a) => a.estado === "listo" && a.key)
+              .map((a) => ({
+                key: a.key as string,
+                nombreArchivo: a.nombre,
+                formato: a.formato || null,
+                tamano: a.tamano,
+                descripcion: f.fuente,
+              }))
+          ),
+          // Archivos recién subidos en este guardado
+          ...pendingUploads
+            .filter((item) => uploadedKeys[item.uid])
+            .map((item) => ({
+              key: uploadedKeys[item.uid],
+              nombreArchivo: item.nombre,
+              formato: item.ct !== "application/octet-stream" ? item.ct : null,
+              tamano: item.tamano,
+              descripcion: item.fuente,
+            })),
+        ],
+      };
+
       const result =
         isEdit && incidenciaId
           ? await updateIncidente(incidenciaId, payload)
@@ -1480,7 +1300,7 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
   }
 
   return (
-    <div className="min-h-screen bg-[#F5F5F5] pb-56">
+    <div className="min-h-screen bg-[#F5F5F5] pb-24">
       {/* Header sticky */}
       <div className="bg-white border-b border-[#DDDDDD] sticky top-0 z-10 shadow-sm">
         <div className="max-w-7xl mx-auto px-6 py-3 flex items-center gap-3">
@@ -1587,7 +1407,7 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
                       inputMode="numeric"
                       pattern="[0-9]*"
                       placeholder="987654321"
-                      maxLength={12}
+                      maxLength={PHONE_MAX_LENGTH[reportaTelCodigo] ?? 12}
                       value={reportaTel}
                       onChange={(e) => handleTelefonoChange(e.target.value)}
                       className={`${inputCls} flex-1 ${errBorde(!reportaTel.trim())}`}
@@ -1601,7 +1421,7 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
                   <SearchableSelect
                     value={reportaRol}
                     onChange={setReportaRol}
-                    options={FUENTES_ALERTA}
+                    options={fuentesAlerta}
                     placeholder="Buscar rol / institución…"
                     error={intentoEnvio && !reportaRol.trim()}
                   />
@@ -1649,6 +1469,7 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
                     value={categoria}
                     onChange={setCategoria}
                     error={intentoEnvio && !categoria.trim()}
+                    categorias={catalogos?.tiposEvento}
                   />
                 </div>
               </div>
@@ -1734,7 +1555,11 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
                       )}
                     </div>
                     <p className="text-[11px] text-gray-400 mt-1">
-                      Sugerencias basadas en el distrito seleccionado.
+                      Sugerencias basadas en el distrito seleccionado. Escribe con el formato correcto:{" "}
+                      <span className="text-gray-500 font-medium">Av. Nombre 123</span>,{" "}
+                      <span className="text-gray-500 font-medium">Jr. Nombre 456</span>,{" "}
+                      <span className="text-gray-500 font-medium">Calle Nombre 789</span>,{" "}
+                      <span className="text-gray-500 font-medium">Psj. Nombre 10</span>
                     </p>
                   </div>
                   <div>
@@ -1750,16 +1575,16 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
                       options={
                         parroquiasCercanas && parroquiasCercanas.length > 0
                           ? parroquiasCercanas
-                          : PARROQUIAS_LIMA
+                          : parroquiasSistema.length > 0
+                            ? parroquiasSistema.map((p) => p.nombre)
+                            : PARROQUIAS_LIMA
                       }
-                      placeholder="Buscar parroquia (opcional)…"
+                      placeholder="Buscar parroquia del sistema…"
                     />
                     <p className="text-[11px] text-gray-400 mt-1">
                       {parroquiasCercanas && parroquiasCercanas.length > 0
-                        ? "Mostrando solo las parroquias más cercanas al punto seleccionado."
-                        : parroquiasCercanas?.length === 0
-                          ? "No se encontraron parroquias cercanas; se muestra el listado general."
-                          : "Marca un punto en el mapa para ver las parroquias más cercanas."}
+                        ? "Solo parroquias registradas en el sistema, ordenadas por cercanía al punto."
+                        : "Solo se pueden asignar parroquias registradas en el sistema. Marca un punto en el mapa para ordenarlas por cercanía."}
                     </p>
                   </div>
 
@@ -1789,10 +1614,14 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
                         if (la != null && lo != null) buscarParroquiasCercanas(la, lo);
                       }}
                       onAddressResolved={({ direccion: dir, candidatosDistrito }) => {
-                        setDireccion(dir);
+                        // Fix #1: preserva el número que el usuario pudo haber escrito
+                        setDireccion((prev) => fusionarNumero(prev, dir) || dir);
                         setMapSugerencias([]);
+                        // Fix #2: normaliza acentos y espacios para comparar con DISTRITOS_LIMA
+                        const norm = (s: string) =>
+                          s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
                         const match = DISTRITOS_LIMA.find((d) =>
-                          candidatosDistrito.some((c) => c.toLowerCase() === d.toLowerCase())
+                          candidatosDistrito.some((c) => norm(c) === norm(d))
                         );
                         if (match) setDistrito(match);
                       }}
@@ -1998,7 +1827,7 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
                 <MultiSelect
                   values={necesidades}
                   onChange={setNecesidades}
-                  options={NECESIDADES_CHIPS}
+                  options={necesidadesChips}
                   placeholder="Buscar y seleccionar necesidades…"
                   accent="orange"
                 />
@@ -2040,7 +1869,7 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
                 <MultiSelect
                   values={fuentesEvidencia.map((f) => f.fuente)}
                   onChange={setFuentesSeleccion}
-                  options={FUENTES_ALERTA}
+                  options={fuentesAlerta}
                   placeholder="Seleccionar fuentes…"
                   accent="green"
                   chips="none"
@@ -2080,15 +1909,7 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
                             ({(archivo.tamano / 1024).toFixed(1)} KB)
                           </span>
                           {archivo.estado === "subiendo" && (
-                            <span className="text-[10px] text-blue-600 flex items-center gap-1">
-                              <Loader2 className="w-3 h-3 animate-spin" /> subiendo…
-                            </span>
-                          )}
-                          {archivo.estado === "listo" && (
-                            <span className="text-[10px] text-green-600">✓ subido</span>
-                          )}
-                          {archivo.estado === "error" && (
-                            <span className="text-[10px] text-red-600">✕ error</span>
+                            <Loader2 className="w-3 h-3 animate-spin text-blue-500 flex-shrink-0" />
                           )}
                         </div>
                         <button
@@ -2111,13 +1932,13 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
                     <label className="flex items-center justify-center gap-2 px-4 py-2 border-2 border-dashed border-gray-300 rounded-lg hover:bg-white hover:border-blue-400 transition-colors cursor-pointer">
                       <Upload className="w-4 h-4 text-gray-500" />
                       <span className="text-xs text-gray-600">
-                        Subir evidencias (fotos, videos, documentos)
+                        Adjuntar evidencias (fotos, videos, documentos)
                       </span>
                       <input
                         type="file"
                         multiple
-                        accept="image/*,video/*,.pdf,.doc,.docx"
-                        onChange={(e) => uploadArchivos(fuente.id, e.target.files)}
+                        accept={ACCEPT.evidencia}
+                        onChange={(e) => stageArchivos(fuente.id, e.target.files)}
                         className="hidden"
                       />
                     </label>
@@ -2231,43 +2052,59 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
                 Nivel de afectación estimado
               </label>
               <div className="flex gap-2">
-                {(["Leve", "Moderado", "Severo"] as const).map((nivel) => (
-                  <button
-                    key={nivel}
-                    type="button"
-                    onClick={() => setNivelAfectacion(nivel)}
-                    className={`flex-1 px-4 py-3 rounded-lg border-2 font-semibold text-sm transition-all ${
-                      nivelAfectacion === nivel
-                        ? nivel === "Leve"
-                          ? "bg-yellow-100 text-yellow-800 border-yellow-500"
-                          : nivel === "Moderado"
-                            ? "bg-orange-100 text-orange-800 border-orange-500"
-                            : "bg-red-100 text-red-800 border-red-500"
-                        : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"
-                    }`}
-                  >
-                    {nivel}
-                  </button>
-                ))}
+                {nivelesAfectacion.map((nivel, i) => {
+                  // Colores por severidad: primero suave → último intenso.
+                  const NIVEL_COLORES = [
+                    "bg-yellow-100 text-yellow-800 border-yellow-500",
+                    "bg-orange-100 text-orange-800 border-orange-500",
+                    "bg-red-100 text-red-800 border-red-500",
+                  ];
+                  const color = NIVEL_COLORES[Math.min(i, NIVEL_COLORES.length - 1)];
+                  return (
+                    <button
+                      key={nivel}
+                      type="button"
+                      onClick={() => setNivelAfectacion(nivel)}
+                      className={`flex-1 px-4 py-3 rounded-lg border-2 font-semibold text-sm transition-all ${
+                        nivelAfectacion === nivel
+                          ? color
+                          : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"
+                      }`}
+                    >
+                      {nivel}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </FormSection>
 
-          {/* Acciones (en el flujo del formulario, no flotante) */}
-          <div className="flex items-center gap-3 pt-2 pb-8 border-t border-[#DDDDDD] mt-2">
-            <Link
-              href={isEdit && incidenciaId ? `/grd/${incidenciaId}` : "/grd"}
-              className="px-5 py-3 border border-[#DDDDDD] rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              Cancelar
-            </Link>
+        </div>
+      </div>
+
+      {/* ── Footer sticky ─────────────────────────────────────────────── */}
+      <div className="sticky bottom-0 z-20 bg-white/95 backdrop-blur-sm border-t border-[#DDDDDD] shadow-[0_-2px_16px_rgba(0,0,0,0.08)]">
+        <div className="px-6 py-3 flex items-center justify-between gap-4">
+          <Link
+            href={isEdit && incidenciaId ? `/grd/${incidenciaId}` : "/grd"}
+            className="flex items-center gap-2 px-5 py-2.5 border border-[#DDDDDD] rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Cancelar
+          </Link>
+
+          <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={handleSave}
               disabled={isPending}
-              className="flex-1 sm:flex-none sm:px-10 flex items-center justify-center gap-2 py-3 bg-[#009850] text-white rounded-xl hover:opacity-90 transition-all font-bold text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-8 py-2.5 bg-[#009850] text-white rounded-xl hover:bg-[#007a40] active:scale-[0.98] transition-all font-bold text-sm shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Save className="w-4 h-4" />
+              {isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Save className="w-4 h-4" />
+              )}
               {isPending
                 ? isEdit
                   ? "Guardando..."
@@ -2283,6 +2120,7 @@ export function IncidentForm({ initialData, incidenciaId, codigoCaso }: Incident
       {/* Modales */}
       {showPersonaModal && (
         <PersonaModal
+          situaciones={situacionesEspeciales}
           onSave={(p) => {
             if (editingPersona) setPersonas((prev) => prev.map((x) => (x.id === p.id ? p : x)));
             else setPersonas((prev) => [...prev, p]);

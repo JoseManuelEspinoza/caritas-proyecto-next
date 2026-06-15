@@ -193,6 +193,10 @@ export default async function ReportesPage({
       parroquias={parroquiasList.map((p) => ({ id: p.idParroquia, nombre: p.nombre }))}
       topIncidencias={topIncidencias}
       dataExportacion={dataExportacion}
+      brigadistasData={brigadistasData}
+      actividadesData={actividadesData}
+      incidenciasData={incidenciasData}
+      kitsData={kitsData}
     />
   );
 }

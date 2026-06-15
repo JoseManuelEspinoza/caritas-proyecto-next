@@ -45,6 +45,7 @@ model User {
   sesiones        Sesion[]
   intentosLogin   IntentoLogin[]
   recuperaciones  RecuperacionContrasena[]
+  notificaciones  Notificacion[]
 
   @@map("users")
 }
@@ -209,6 +210,9 @@ model UsuarioGRD {
   incidenciasResponsable Incidencia[]
   avisosRegistrados      AvisoEmergencia[]
   asignacionesRealizadas AsignacionBrigadistaIncidencia[]
+  actividadesResponsable         ActividadPreventiva[]    @relation("UsuarioResponsableActividad")
+  observacionesSimulacro         ObservacionSimulacro[]   @relation("ObservadorSimulacro")
+  asignacionesSimulacroRealizadas SimulacroBrigadista[]   @relation("AsignadorSimulacro")
 
   @@map("usuario_grd")
 }
@@ -335,6 +339,10 @@ model AvisoEmergencia {
   estadoAviso         String   @default("RECIBIDO")
   observaciones       String?
 
+  dniInformante  String?
+  rolInformante  String?
+  origenRegistro String? @default("WEB")
+
   parroquia   Parroquia?   @relation(fields: [idParroquia], references: [idParroquia])
   usuarioGRD  UsuarioGRD?  @relation(fields: [idUsuarioGRD], references: [idUsuarioGRD])
   incidencias Incidencia[]
@@ -349,6 +357,8 @@ model AvisoEmergencia {
   @@index([idParroquia, estadoAviso], map: "idx_aviso_parroquia_estado")
   @@index([idUsuarioGRD, fechaHoraAviso], map: "idx_aviso_usuario_fecha")
   @@index([estadoAviso, fechaHoraAviso], map: "idx_aviso_estado_fecha")
+  @@index([dniInformante], map: "idx_aviso_dni_informante")
+  @@index([origenRegistro], map: "idx_aviso_origen")
   @@map("aviso_emergencia")
 }
 
@@ -391,6 +401,26 @@ model Incidencia {
   updatedAt           DateTime  @updatedAt
   deletedAt           DateTime?
 
+  reportadoPorNombre  String?
+  reportadoPorDni     String?
+  reportadoPorCelular String?
+  reportadoPorRol     String?
+
+  fechaSuceso             DateTime?
+  horaSuceso              String?
+  distritoEvento          String?
+  referenciaEvento        String?
+  parroquiaNombreSnapshot String?
+  causaEvento             String?   @db.Text
+  necesidades             String?   @db.Text
+  necesidadesObs          String?   @db.Text
+  numAfectadosReportado   Int?
+  origenRegistro          String?   @default("WEB")
+
+  @@index([fechaSuceso], map: "idx_incidencia_fecha_suceso")
+  @@index([distritoEvento], map: "idx_incidencia_distrito")
+  @@index([reportadoPorDni], map: "idx_incidencia_reportante_dni")
+  @@index([origenRegistro], map: "idx_incidencia_origen")
   @@index([estadoActual, fechaRegistro], map: "idx_incidencia_estado_fecha")
   @@index([idParroquia, estadoActual, fechaRegistro], map: "idx_incidencia_parroquia_estado_fecha")
   @@index([idUsuarioResponsableGRD, estadoActual, fechaRegistro], map: "idx_incidencia_responsable_estado_fecha")
@@ -413,6 +443,13 @@ model HistorialEstadoIncidencia {
 
   incidencia Incidencia @relation(fields: [idIncidencia], references: [idIncidencia])
 
+  uuidMovil           String?   @unique
+  syncEstado          String?
+  fechaSincronizacion DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  deletedAt           DateTime?
+
   @@index([idIncidencia, fechaCambio], map: "idx_hist_estado_incidencia_fecha")
   @@index([estadoNuevo, fechaCambio], map: "idx_hist_estado_nuevo_fecha")
   @@index([idUsuarioGRD, fechaCambio], map: "idx_hist_estado_usuario_fecha")
@@ -429,9 +466,19 @@ model GrupoFamiliarAfectado {
   condicionFinal    String?
   observaciones     String?
 
-  incidencia Incidencia        @relation(fields: [idIncidencia], references: [idIncidencia])
-  personas   PersonaAfectada[]
+  incidencia       Incidencia                  @relation(fields: [idIncidencia], references: [idIncidencia])
+  personas         PersonaAfectada[]
+  entregas         EntregaAyudaHumanitaria[]
+  solicitudesAyuda SolicitudAyudaHumanitaria[]
 
+  uuidMovil           String?   @unique
+  syncEstado          String?
+  fechaSincronizacion DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  deletedAt           DateTime?
+
+  @@unique([idIncidencia, codigoGrupo], map: "grupo_familiar_incidencia_codigo_key")
   @@index([idIncidencia], map: "idx_grupo_familiar_incidencia")
   @@map("grupo_familiar_afectado")
 }
@@ -452,13 +499,15 @@ model PersonaAfectada {
   telefono          String?
   observaciones     String?
 
-  uuidMovil           String?               @unique
+  uuidMovil           String?                     @unique
   syncEstado          String?
   fechaSincronizacion DateTime?
-  createdAt           DateTime              @default(now())
-  updatedAt           DateTime              @default(now()) @updatedAt
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @default(now()) @updatedAt
   deletedAt           DateTime?
-  grupoFamiliar       GrupoFamiliarAfectado @relation(fields: [idGrupoFamiliar], references: [idGrupoFamiliar])
+  grupoFamiliar       GrupoFamiliarAfectado       @relation(fields: [idGrupoFamiliar], references: [idGrupoFamiliar])
+  entregas            EntregaAyudaHumanitaria[]
+  solicitudesAyuda    SolicitudAyudaHumanitaria[]
 
   @@index([idGrupoFamiliar], map: "idx_persona_afectada_grupo")
   @@index([numeroDocumento], map: "idx_persona_afectada_documento")
@@ -487,6 +536,13 @@ model AsignacionBrigadistaIncidencia {
   brigadista       BrigadistaParroquial @relation(fields: [idBrigadistaParroquial], references: [idBrigadistaParroquial])
   usuarioAsignador UsuarioGRD?          @relation(fields: [idUsuarioAsignadorGRD], references: [idUsuarioGRD])
 
+  uuidMovil           String?   @unique
+  syncEstado          String?
+  fechaSincronizacion DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  deletedAt           DateTime?
+
   @@index([idIncidencia, estadoAsignacion], map: "idx_asig_incidencia_estado")
   @@index([idBrigadistaParroquial, estadoAsignacion], map: "idx_asig_brigadista_estado")
   @@index([idUsuarioAsignadorGRD, fechaAsignacion], map: "idx_asig_usuario_fecha")
@@ -505,6 +561,13 @@ model AccionRespuesta {
   observaciones     String?
 
   incidencia Incidencia @relation(fields: [idIncidencia], references: [idIncidencia])
+
+  uuidMovil           String?   @unique
+  syncEstado          String?
+  fechaSincronizacion DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  deletedAt           DateTime?
 
   @@index([idIncidencia, fechaAccion], map: "idx_accion_incidencia_fecha")
   @@index([idUsuarioGRD, fechaAccion], map: "idx_accion_usuario_fecha")
@@ -527,13 +590,30 @@ model SolicitudAyudaHumanitaria {
   fechaEvaluacion         DateTime?
   observaciones           String?
 
-  incidencia Incidencia                @relation(fields: [idIncidencia], references: [idIncidencia])
-  entregas   EntregaAyudaHumanitaria[]
+  // Asociación opcional para solicitudes desde móvil/web
+  idGrupoFamiliar   String?
+  idPersonaAfectada String?
+  uuidAfectadoMovil String?
+
+  incidencia      Incidencia                @relation(fields: [idIncidencia], references: [idIncidencia])
+  grupoFamiliar   GrupoFamiliarAfectado?    @relation(fields: [idGrupoFamiliar], references: [idGrupoFamiliar])
+  personaAfectada PersonaAfectada?          @relation(fields: [idPersonaAfectada], references: [idPersonaAfectada])
+  entregas        EntregaAyudaHumanitaria[]
+
+  uuidMovil           String?   @unique
+  syncEstado          String?
+  fechaSincronizacion DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  deletedAt           DateTime?
 
   @@index([idIncidencia, estadoSolicitud], map: "idx_solicitud_incidencia_estado")
   @@index([estadoSolicitud, fechaSolicitud], map: "idx_solicitud_estado_fecha")
   @@index([idUsuarioSolicitanteGRD, fechaSolicitud], map: "idx_solicitud_solicitante_fecha")
   @@index([idUsuarioEvaluadorGRD, fechaEvaluacion], map: "idx_solicitud_evaluador_fecha")
+  @@index([idGrupoFamiliar], map: "idx_solicitud_grupo_familiar")
+  @@index([idPersonaAfectada], map: "idx_solicitud_persona_afectada")
+  @@index([uuidAfectadoMovil], map: "idx_solicitud_uuid_afectado_movil")
   @@map("solicitud_ayuda_humanitaria")
 }
 
@@ -552,8 +632,15 @@ model EntregaAyudaHumanitaria {
   entregaParcial          Boolean   @default(false)
   observaciones           String?
 
-  solicitud  SolicitudAyudaHumanitaria? @relation(fields: [idSolicitud], references: [idSolicitud])
-  incidencia Incidencia                 @relation(fields: [idIncidencia], references: [idIncidencia])
+  // Asociación opcional para entregas móviles
+  idGrupoFamiliar   String?
+  idPersonaAfectada String?
+  uuidAfectadoMovil String?
+
+  solicitud       SolicitudAyudaHumanitaria? @relation(fields: [idSolicitud], references: [idSolicitud])
+  incidencia      Incidencia                 @relation(fields: [idIncidencia], references: [idIncidencia])
+  grupoFamiliar   GrupoFamiliarAfectado?     @relation(fields: [idGrupoFamiliar], references: [idGrupoFamiliar])
+  personaAfectada PersonaAfectada?           @relation(fields: [idPersonaAfectada], references: [idPersonaAfectada])
 
   uuidMovil           String?   @unique
   syncEstado          String?
@@ -566,6 +653,9 @@ model EntregaAyudaHumanitaria {
   @@index([idSolicitud, fechaEntrega], map: "idx_entrega_solicitud_fecha")
   @@index([idUsuarioResponsableGRD, fechaEntrega], map: "idx_entrega_responsable_fecha")
   @@index([tipoAyuda, fechaEntrega], map: "idx_entrega_tipo_fecha")
+  @@index([idPersonaAfectada], map: "idx_entrega_persona_afectada")
+  @@index([idGrupoFamiliar], map: "idx_entrega_grupo_familiar")
+  @@index([uuidAfectadoMovil], map: "idx_entrega_uuid_afectado_movil")
   @@map("entrega_ayuda_humanitaria")
 }
 
@@ -757,11 +847,20 @@ model ActividadPreventiva {
   estadoActividad             String    @default("PROGRAMADA")
   fechaRegistro               DateTime  @default(now())
 
-  planTrabajo           PlanTrabajoGRD?       @relation(fields: [idPlanTrabajoGRD], references: [idPlanTrabajoGRD])
-  parroquia             Parroquia             @relation(fields: [idParroquia], references: [idParroquia])
-  brigadistaResponsable BrigadistaParroquial? @relation(fields: [idBrigadistaResponsable], references: [idBrigadistaParroquial])
-  usuarioRegistro       UsuarioGRD            @relation("UsuarioRegistroActividad", fields: [idUsuarioRegistroGRD], references: [idUsuarioGRD])
-  movimientosKit        MovimientoKit[]
+  // Asignación de equipo (nuevo flujo multi-brigadista)
+  idUsuarioResponsableGRD  String?
+  indicacionesEquipo       String?  @db.Text
+  reporteBrigadista        String?  @db.Text
+  duracionSimulacro        String?
+
+  planTrabajo              PlanTrabajoGRD?        @relation(fields: [idPlanTrabajoGRD], references: [idPlanTrabajoGRD])
+  parroquia                Parroquia              @relation(fields: [idParroquia], references: [idParroquia])
+  brigadistaResponsable    BrigadistaParroquial?  @relation("BrigadistaResponsableActividad", fields: [idBrigadistaResponsable], references: [idBrigadistaParroquial])
+  usuarioRegistro          UsuarioGRD             @relation("UsuarioRegistroActividad", fields: [idUsuarioRegistroGRD], references: [idUsuarioGRD])
+  usuarioResponsable       UsuarioGRD?            @relation("UsuarioResponsableActividad", fields: [idUsuarioResponsableGRD], references: [idUsuarioGRD])
+  movimientosKit           MovimientoKit[]
+  simulacroBrigadistas     SimulacroBrigadista[]
+  observacionesSimulacro   ObservacionSimulacro[]
 
   uuidMovil           String?   @unique
   syncEstado          String?
@@ -771,6 +870,37 @@ model ActividadPreventiva {
   deletedAt           DateTime?
 
   @@map("actividad_preventiva")
+}
+
+model SimulacroBrigadista {
+  idSimulacroBrigadista  String   @id @default(uuid())
+  idActividadPreventiva  String
+  idBrigadistaParroquial String
+  idUsuarioAsignadorGRD  String?
+  esResponsable          Boolean  @default(false)
+  estadoAsignacion       String   @default("ASIGNADA")
+  fechaAsignacion        DateTime @default(now())
+
+  actividad  ActividadPreventiva  @relation(fields: [idActividadPreventiva], references: [idActividadPreventiva])
+  brigadista BrigadistaParroquial @relation(fields: [idBrigadistaParroquial], references: [idBrigadistaParroquial])
+  asignador  UsuarioGRD?          @relation("AsignadorSimulacro", fields: [idUsuarioAsignadorGRD], references: [idUsuarioGRD])
+
+  @@map("simulacro_brigadista")
+}
+
+model ObservacionSimulacro {
+  idObservacion         String   @id @default(uuid())
+  idActividadPreventiva String
+  idUsuarioGRD          String
+  texto                 String   @db.Text
+  tipo                  String
+  fechaCreacion         DateTime @default(now())
+  fechaEdicion          DateTime?
+
+  actividad ActividadPreventiva @relation(fields: [idActividadPreventiva], references: [idActividadPreventiva])
+  usuario   UsuarioGRD          @relation("ObservadorSimulacro", fields: [idUsuarioGRD], references: [idUsuarioGRD])
+
+  @@map("observacion_simulacro")
 }
 
 model BrigadistaParroquial {
@@ -789,8 +919,9 @@ model BrigadistaParroquial {
 
   parroquia              Parroquia                        @relation(fields: [idParroquia], references: [idParroquia])
   certificacionCurso     CertificacionCurso?              @relation(fields: [idCertificacionCurso], references: [idCertificacionCurso])
-  actividadesResponsable ActividadPreventiva[]
+  actividadesResponsable ActividadPreventiva[]             @relation("BrigadistaResponsableActividad")
   asignacionesIncidencia AsignacionBrigadistaIncidencia[]
+  asignacionesSimulacro  SimulacroBrigadista[]
 
   @@index([idParroquia, disponibilidad], map: "idx_brigadista_parroquia_disp")
   @@index([estado, disponibilidad], map: "idx_brigadista_estado_disp")
@@ -812,11 +943,28 @@ model KitEmergencia {
 
   parroquiaBeneficiaria Parroquia?      @relation(fields: [idParroquiaBeneficiaria], references: [idParroquia])
   movimientos           MovimientoKit[]
+  articulos             KitArticulo[]
 
   @@index([idParroquiaBeneficiaria], map: "idx_kit_parroquia")
   @@index([tipoKit, estadoKit], map: "idx_kit_tipo_estado")
   @@index([estadoKit, fechaRegistro], map: "idx_kit_estado_fecha")
   @@map("kit_emergencia")
+}
+
+/// Composición de un kit: qué artículos contiene y en qué cantidad.
+/// Permite que el informe de incidencias precargue el contenido real del kit.
+model KitArticulo {
+  idKitArticulo   String  @id @default(uuid())
+  idKitEmergencia String
+  codigo          String?
+  descripcion     String
+  cantidad        Int     @default(1)
+  orden           Int     @default(0)
+
+  kitEmergencia KitEmergencia @relation(fields: [idKitEmergencia], references: [idKitEmergencia], onDelete: Cascade)
+
+  @@index([idKitEmergencia], map: "idx_kit_articulo_kit")
+  @@map("kit_articulo")
 }
 
 model MovimientoKit {
@@ -1109,4 +1257,20 @@ model AuditLog {
   createdAt DateTime @default(now())
 
   @@map("audit_logs")
+}
+
+model Notificacion {
+  idNotificacion String   @id @default(uuid())
+  userId         String
+  tipo           String
+  titulo         String
+  mensaje        String   @db.Text
+  enlace         String?
+  leida          Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, leida, createdAt])
+  @@map("notificaciones")
 }

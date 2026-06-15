@@ -26,7 +26,7 @@ import {
   toggleEstadoParroquia,
   type ParroquiaFormData,
 } from "@/app/actions/parroquias";
-import { PaginationControls } from "@/app/ui/shared/pagination-controls";
+import { PaginationControls, PageSizeSelector } from "@/app/ui/shared/pagination-controls";
 
 const LocationPicker = dynamic(
   () => import("./location-picker").then((m) => m.LocationPicker),
@@ -62,7 +62,6 @@ interface Props {
   canEdit?: boolean;
 }
 
-const PAGE_SIZE = 10;
 
 const inputCls =
   "w-full px-3 py-2 text-sm bg-[#F5F5F5] border border-[#DDDDDD] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#009850]/20 focus:border-[#009850] transition-colors";
@@ -182,10 +181,11 @@ function ParroquiaModal({
             <div>
               <label className={labelCls}>Teléfono</label>
               <input
-                type="text"
+                type="tel"
                 value={form.telefono}
-                onChange={(e) => set("telefono", e.target.value.replace(/[^\d+\-() ]/g, ""))}
-                placeholder="Ej: 01-234-5678"
+                onChange={(e) => set("telefono", e.target.value.replace(/\D/g, "").slice(0, 9))}
+                placeholder="Ej: 987654321"
+                maxLength={9}
                 className={inputCls}
               />
             </div>
@@ -251,6 +251,7 @@ export function ParroquiasList({ parroquias, canEdit = false }: Props) {
   const [search, setSearch] = useState("");
   const [filterEstado, setFilterEstado] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5);
 
   const filtered = parroquias.filter((p) => {
     if (filterEstado !== "all" && p.estado !== filterEstado) return false;
@@ -265,12 +266,12 @@ export function ParroquiasList({ parroquias, canEdit = false }: Props) {
     return true;
   });
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(currentPage, totalPages);
-  const startIndex = (safePage - 1) * PAGE_SIZE;
-  const paginated = filtered.slice(startIndex, startIndex + PAGE_SIZE);
+  const startIndex = (safePage - 1) * pageSize;
+  const paginated = filtered.slice(startIndex, startIndex + pageSize);
   const visibleFrom = filtered.length === 0 ? 0 : startIndex + 1;
-  const visibleTo = Math.min(startIndex + PAGE_SIZE, filtered.length);
+  const visibleTo = Math.min(startIndex + pageSize, filtered.length);
 
   const totalActivas = parroquias.filter((p) => p.estado === "ACTIVO").length;
   const totalInactivas = parroquias.filter((p) => p.estado === "INACTIVO").length;
@@ -307,6 +308,7 @@ export function ParroquiasList({ parroquias, canEdit = false }: Props) {
             onClick={openCreate}
             className="flex items-center gap-2 px-4 py-2 text-white text-sm font-medium rounded-lg hover:opacity-90 transition-all"
             style={{ background: "#009850" }}
+            suppressHydrationWarning
           >
             <Plus className="w-4 h-4" />
             Registrar parroquia
@@ -347,6 +349,7 @@ export function ParroquiasList({ parroquias, canEdit = false }: Props) {
             value={search}
             onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
             className="w-full pl-9 pr-3 py-2 text-sm bg-[#F5F5F5] border border-[#DDDDDD] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#009850]/20 focus:border-[#009850]"
+            suppressHydrationWarning
           />
         </div>
         <div className="flex items-center gap-2">
@@ -355,11 +358,16 @@ export function ParroquiasList({ parroquias, canEdit = false }: Props) {
             value={filterEstado}
             onChange={(e) => { setFilterEstado(e.target.value); setCurrentPage(1); }}
             className="flex-1 px-3 py-2 text-sm bg-[#F5F5F5] border border-[#DDDDDD] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#009850]/20 focus:border-[#009850]"
+            suppressHydrationWarning
           >
             <option value="all">Todos los estados</option>
             <option value="ACTIVO">Activas</option>
             <option value="INACTIVO">Inactivas</option>
           </select>
+          <PageSizeSelector
+            pageSize={pageSize}
+            onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
+          />
         </div>
       </div>
 
@@ -458,6 +466,7 @@ export function ParroquiasList({ parroquias, canEdit = false }: Props) {
                           disabled={isPending}
                           className="flex items-center gap-1.5 text-xs font-medium hover:opacity-80 transition-opacity disabled:opacity-50"
                           title="Clic para cambiar estado"
+                          suppressHydrationWarning
                         >
                           {p.estado === "ACTIVO" ? (
                             <>
@@ -483,6 +492,7 @@ export function ParroquiasList({ parroquias, canEdit = false }: Props) {
                           onClick={() => openEdit(p)}
                           className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-600 transition-colors"
                           title="Editar"
+                          suppressHydrationWarning
                         >
                           <Edit3 className="w-4 h-4" />
                         </button>
@@ -525,7 +535,7 @@ export function ParroquiasList({ parroquias, canEdit = false }: Props) {
                 </div>
                 <div className="flex items-center gap-1">
                   {canEdit && (
-                    <button onClick={() => openEdit(p)} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-600">
+                    <button onClick={() => openEdit(p)} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-600" suppressHydrationWarning>
                       <Edit3 className="w-4 h-4" />
                     </button>
                   )}
@@ -557,6 +567,7 @@ export function ParroquiasList({ parroquias, canEdit = false }: Props) {
                   onClick={() => handleToggleEstado(p)}
                   disabled={isPending}
                   className="w-full py-2 border border-[#DDDDDD] rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  suppressHydrationWarning
                 >
                   {p.estado === "ACTIVO" ? "Marcar como inactiva" : "Marcar como activa"}
                 </button>
@@ -572,8 +583,8 @@ export function ParroquiasList({ parroquias, canEdit = false }: Props) {
         end={visibleTo}
         page={safePage}
         totalPages={totalPages}
-        onPrevious={() => setCurrentPage((page) => Math.max(1, page - 1))}
-        onNext={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+        onPrevious={() => setCurrentPage((p) => Math.max(1, p - 1))}
+        onNext={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
       />
 
       {showModal && (

@@ -13,6 +13,8 @@ import {
   ChevronRight,
   FileText,
   Link as LinkIcon,
+  ExternalLink,
+  Play,
   X,
   ClipboardList,
   Search,
@@ -25,6 +27,7 @@ import {
   MoreVertical,
 } from "lucide-react";
 import { CuestionarioModal } from "@/app/ui/capacitaciones/cuestionario-modal";
+import { TIPOS_MATERIAL } from "@/app/lib/capacitaciones-tipos";
 import { toast } from "sonner";
 import {
   crearCurso,
@@ -37,6 +40,7 @@ import {
   editarMaterial,
   eliminarMaterial,
   obtenerCuestionarioCurso,
+  obtenerCuestionarioPorId,
   listarParticipantesCurso,
 } from "@/app/actions/capacitaciones";
 import type { CuestionarioDetalle, ParticipanteCurso } from "@/app/actions/capacitaciones";
@@ -121,13 +125,23 @@ function CursoCard({
   );
 }
 
-const TIPOS_MATERIAL = [
-  "Documento (PDF, Word, Excel)",
-  "Presentación",
-  "Video",
-  "Enlace web",
-  "Otro",
-];
+function getMaterialMeta(tipo: string | null): { rowIcon: React.ReactNode; btnIcon: React.ReactNode; btnLabel: string } {
+  if (tipo === "Video") return {
+    rowIcon: <Play className="w-4 h-4 text-[var(--caritas-green)] shrink-0" />,
+    btnIcon: <Play className="w-3 h-3" />,
+    btnLabel: "Ver video",
+  };
+  if (tipo === "Enlace web") return {
+    rowIcon: <ExternalLink className="w-4 h-4 text-[var(--caritas-green)] shrink-0" />,
+    btnIcon: <ExternalLink className="w-3 h-3" />,
+    btnLabel: "Abrir enlace",
+  };
+  return {
+    rowIcon: <FileText className="w-4 h-4 text-[var(--caritas-green)] shrink-0" />,
+    btnIcon: <FileText className="w-3 h-3" />,
+    btnLabel: "Abrir",
+  };
+}
 
 type SesionItem = CursoDetalle["sesiones"][number];
 
@@ -257,17 +271,20 @@ function UnidadRow({
             sesion.materiales.map((m) => (
               <div key={m.id} className="border-l-4 border-[var(--caritas-green)]/20">
                 <div className="flex items-center gap-3 px-4 py-2.5 pl-11 bg-white hover:bg-gray-50 transition-colors">
-                  <FileText className="w-4 h-4 text-[var(--caritas-green)] shrink-0" />
+                  {getMaterialMeta(m.tipoMaterial).rowIcon}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-[var(--caritas-text)] truncate">{m.titulo}</p>
                     {m.tipoMaterial && <p className="text-[11px] text-gray-400">{m.tipoMaterial}</p>}
                   </div>
-                  {m.enlaceMaterial && (
-                    <a href={m.enlaceMaterial} target="_blank" rel="noopener noreferrer"
-                      className="text-xs text-[var(--caritas-green)] hover:underline shrink-0 flex items-center gap-1">
-                      <LinkIcon className="w-3 h-3" /> Ver
-                    </a>
-                  )}
+                  {m.enlaceMaterial && (() => {
+                    const { btnIcon, btnLabel } = getMaterialMeta(m.tipoMaterial);
+                    return (
+                      <a href={m.enlaceMaterial} target="_blank" rel="noopener noreferrer"
+                        className="text-xs text-[var(--caritas-green)] hover:underline shrink-0 flex items-center gap-1">
+                        {btnIcon} {btnLabel}
+                      </a>
+                    );
+                  })()}
                   {/* Menú ⋮ */}
                   <div className="relative shrink-0">
                     <button
@@ -331,13 +348,16 @@ export function AdminCapacitaciones({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [selectedId, setSelectedId] = useState<string | null>(cursos[0]?.id ?? null);
+  const [selectedId, setSelectedId] = useState<string | null>(
+    cursos.find((c) => c.estadoCurso === "PUBLICADO")?.id ?? cursos[0]?.id ?? null
+  );
 
   const [showCrear, setShowCrear] = useState(false);
   const [showEditar, setShowEditar] = useState(false);
   const [showSesion, setShowSesion] = useState(false);
   const [showCuestionario, setShowCuestionario] = useState(false);
   const [cuestionarioEditar, setCuestionarioEditar] = useState<CuestionarioDetalle | null>(null);
+  const [tipoCuestionarioActivo, setTipoCuestionarioActivo] = useState<"INICIAL" | "FINAL">("FINAL");
   const [showConfirmCerrar, setShowConfirmCerrar] = useState(false);
 
   const [crearForm, setCrearForm] = useState({
@@ -556,8 +576,8 @@ export function AdminCapacitaciones({
             {/* Sección: Publicados */}
             {publicados.length > 0 && (
               <div className="space-y-2">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide px-1">
-                  Activos ({publicados.length})
+                <p className="text-xs font-semibold text-green-700 uppercase tracking-wide px-1">
+                  Publicados ({publicados.length})
                 </p>
                 {publicados.map((c) => (
                   <CursoCard key={c.id} c={c} selectedId={selectedId} onSelect={handleSelectCurso} />
@@ -574,8 +594,8 @@ export function AdminCapacitaciones({
                 >
                   <div className="flex items-center gap-1.5">
                     <EyeOff className="w-3 h-3 text-gray-400" />
-                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                      No visibles para brigadistas ({borradores.length})
+                    <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide">
+                      No publicados ({borradores.length})
                     </p>
                   </div>
                   <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${showBorradores ? "rotate-180" : ""}`} />
@@ -717,56 +737,80 @@ export function AdminCapacitaciones({
                 )}
               </div>
 
-              {/* Cuestionario Final */}
-              <div className="mb-5">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold text-[var(--caritas-text)]">Cuestionario Final</h3>
-                  {!current.cuestionario && (
-                    <button
-                      onClick={() => setShowCuestionario(true)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-[var(--caritas-border)] rounded-lg hover:bg-gray-50 transition-colors"
-                    >
-                      <Pencil className="w-3 h-3" /> Editar
-                    </button>
-                  )}
-                </div>
-                {current.cuestionario ? (
-                  <div className="flex items-center justify-between gap-3 border border-[var(--caritas-border)] rounded-xl p-4 bg-gray-50">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-lg bg-[var(--caritas-green)]/10 flex items-center justify-center shrink-0">
-                        <ClipboardList className="w-5 h-5 text-[var(--caritas-green)]" />
+              {/* Evaluaciones */}
+              <div className="mt-5 mb-5">
+                <h2 className="text-base font-semibold text-[var(--caritas-text)] mb-3">Evaluaciones del Curso</h2>
+                <div className="space-y-3">
+                  {/* Examen Inicial */}
+                  {current.cuestionarioInicial ? (
+                    <div className="flex items-center justify-between gap-3 border border-amber-200 rounded-xl p-4 bg-amber-50">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                          <ClipboardList className="w-4 h-4 text-amber-600" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-semibold text-[var(--caritas-text)]">{current.cuestionarioInicial.titulo}</p>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200 font-medium">INICIAL</span>
+                          </div>
+                          <p className="text-xs text-gray-400">{current.cuestionarioInicial.totalPreguntas} preguntas · Nota mín: {current.cuestionarioInicial.notaAprobatoria}/20</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-medium text-[var(--caritas-text)]">
-                          {current.cuestionario.titulo}
-                        </p>
-                        <p className="text-xs text-gray-400 mt-0.5">
-                          {current.cuestionario.totalPreguntas} preguntas · Nota mín: {current.cuestionario.notaAprobatoria}/20
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
                       <button
                         onClick={async () => {
-                          const detalle = await obtenerCuestionarioCurso(current.id);
-                          if (detalle) { setCuestionarioEditar(detalle); setShowCuestionario(true); }
+                          const detalle = await obtenerCuestionarioPorId(current.cuestionarioInicial!.id);
+                          if (detalle) { setCuestionarioEditar(detalle); setTipoCuestionarioActivo("INICIAL"); setShowCuestionario(true); }
                         }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-[var(--caritas-border)] rounded-lg hover:bg-white transition-colors"
+                        className="flex items-center gap-1 px-2.5 py-1 text-xs border border-[var(--caritas-border)] rounded-lg hover:bg-white transition-colors shrink-0"
                       >
                         <Pencil className="w-3 h-3" /> Editar
                       </button>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200 font-medium">ACTIVO</span>
                     </div>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setShowCuestionario(true)}
-                    className="w-full flex flex-col items-center justify-center gap-2 border-2 border-dashed border-gray-200 rounded-xl py-10 text-gray-400 hover:border-[var(--caritas-green)]/40 hover:text-[var(--caritas-green)] transition-colors"
-                  >
-                    <ClipboardList className="w-8 h-8" />
-                    <p className="text-sm">Aún no hay cuestionario. Haz clic para crear uno.</p>
-                  </button>
-                )}
+                  ) : (
+                    <div
+                      onClick={() => { setTipoCuestionarioActivo("INICIAL"); setCuestionarioEditar(null); setShowCuestionario(true); }}
+                      className="flex items-center gap-3 py-4 px-4 border-2 border-dashed border-amber-300 rounded-xl text-amber-500 cursor-pointer hover:bg-amber-50 transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <p className="text-sm">Crear examen inicial</p>
+                    </div>
+                  )}
+
+                  {/* Examen Final */}
+                  {current.cuestionarioFinal ? (
+                    <div className="flex items-center justify-between gap-3 border border-[var(--caritas-border)] rounded-xl p-4 bg-gray-50">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-[var(--caritas-green)]/10 flex items-center justify-center shrink-0">
+                          <ClipboardList className="w-4 h-4 text-[var(--caritas-green)]" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-semibold text-[var(--caritas-text)]">{current.cuestionarioFinal.titulo}</p>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 border border-green-200 font-medium">FINAL</span>
+                          </div>
+                          <p className="text-xs text-gray-400">{current.cuestionarioFinal.totalPreguntas} preguntas · Nota mín: {current.cuestionarioFinal.notaAprobatoria}/20</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          const detalle = await obtenerCuestionarioPorId(current.cuestionarioFinal!.id);
+                          if (detalle) { setCuestionarioEditar(detalle); setTipoCuestionarioActivo("FINAL"); setShowCuestionario(true); }
+                        }}
+                        className="flex items-center gap-1 px-2.5 py-1 text-xs border border-[var(--caritas-border)] rounded-lg hover:bg-white transition-colors shrink-0"
+                      >
+                        <Pencil className="w-3 h-3" /> Editar
+                      </button>
+                    </div>
+                  ) : (
+                    <div
+                      onClick={() => { setTipoCuestionarioActivo("FINAL"); setCuestionarioEditar(null); setShowCuestionario(true); }}
+                      className="flex items-center gap-3 py-4 px-4 border-2 border-dashed border-gray-300 rounded-xl text-gray-400 cursor-pointer hover:border-[var(--caritas-green)]/40 hover:bg-[var(--caritas-green)]/5 transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <p className="text-sm">Crear examen final</p>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Participantes */}

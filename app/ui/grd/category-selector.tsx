@@ -3,7 +3,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Search, ChevronDown, X } from "lucide-react";
 
-const CATEGORIES = [
+// Respaldo cuando el catálogo "Tipos de Evento" (módulo Catálogos) está vacío.
+const CATEGORIES_FALLBACK = [
   "Incendios",
   "Inundaciones",
   "Derrumbes",
@@ -22,9 +23,16 @@ interface Props {
   onChange: (v: string) => void;
   disabled?: boolean;
   error?: boolean;
+  /** Catálogo "Tipos de Evento"; si viene vacío se usa el respaldo estático. */
+  categorias?: string[];
 }
 
-export function CategorySelector({ value, onChange, disabled, error }: Props) {
+export function CategorySelector({ value, onChange, disabled, error, categorias }: Props) {
+  const CATEGORIES = categorias?.length
+    ? categorias.includes("Otros")
+      ? categorias
+      : [...categorias, "Otros"]
+    : CATEGORIES_FALLBACK;
   const [showCustom, setShowCustom] = useState(false);
   const isOtros = !!value && !CATEGORIES.includes(value);
 

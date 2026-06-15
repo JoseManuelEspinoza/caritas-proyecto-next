@@ -68,6 +68,8 @@ export type CreateIncidenteData = {
   lng?: number | null;
   // Sección 6 - Evidencias ya subidas a S3
   evidencias?: EvidenciaInput[];
+  numAfectadosReportado?: number | null;
+  origenRegistro?: string | null;
 };
 
 export type InfoCampoData = {
@@ -78,13 +80,14 @@ export type InfoCampoData = {
   necesidadesPrioritarias: string[];
   recomendacion: string;
   observaciones?: string;
+  notasFamilias?: { id: string; nota: string }[];
   condHabitabilidad: Record<string, boolean>;
 };
 
 /** Artículo asignado dentro de un kit. */
 export type ArticuloKit = { codigo: string; descripcion: string; cantidad: number };
-/** Kit asignado a una familia/persona. */
-export type KitAsignado = { tipoKit: string; articulos: ArticuloKit[] };
+/** Kit asignado a una familia/persona. `idKit` referencia al KitEmergencia real (trazabilidad/stock). */
+export type KitAsignado = { tipoKit: string; idKit?: string; articulos: ArticuloKit[] };
 /** Asignación de ayuda por familia/persona. */
 export type AsignacionFamilia = {
   refId: string; // id de grupo familiar o persona
@@ -106,6 +109,8 @@ export type InformeEvaluacionData = {
   objetivosEspecificos?: string[];
   hallazgosClave?: string[];
   asignacionFamilias?: AsignacionFamilia[];
+  evidenciasSeleccionadas?: string[]; // IDs de evidencias incluidas en el informe
+  documentoAdjunto?: string | null;   // URL o clave S3 del documento de respaldo
 };
 
 export type CorreccionData = {
@@ -120,6 +125,8 @@ export type AtencionData = {
   descripcionAyuda: string;
   lugarEntrega: string;
   observaciones?: string;
+  /** Fecha de entrega en formato ISO. Si se omite, se usa la fecha actual. */
+  fechaEntrega?: string;
 };
 
 export type SeguimientoData = {
@@ -127,4 +134,7 @@ export type SeguimientoData = {
   descripcion: string;
   necesidadesPendientes?: string;
   recomendaciones?: string;
+  observaciones?: string;
+  /** Fecha del seguimiento en formato ISO. Si se omite, se usa la fecha actual. */
+  fecha?: string;
 };

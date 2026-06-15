@@ -21,6 +21,89 @@ export async function listarMovimientosKit(idKit: string) {
   return makeKitUseCases().listarMovimientos.execute(idKit);
 }
 
+// ── Composición del kit (qué artículos contiene y en qué cantidad) ────────────
+
+export type ArticuloKit = {
+  codigo: string | null;
+  descripcion: string;
+  cantidad: number;
+};
+
+export async function listarArticulosKit(idKit: string): Promise<ArticuloKit[]> {
+  await verifySession();
+  const { prisma } = await import("@/app/lib/prisma");
+  const rows = await prisma.kitArticulo.findMany({
+    where: { idKitEmergencia: idKit },
+    orderBy: { orden: "asc" },
+    select: { codigo: true, descripcion: true, cantidad: true },
+  });
+  return rows;
+}
+
+/** Prefijo de código a partir del nombre del kit: "Kit de Alimentos Prueba" → "AP". */
+function prefijoCodigoKit(tipoKit: string): string {
+  const iniciales = tipoKit
+    .replace(/^kits?\s+de\s+/i, "")
+    .normalize("NFKD")
+    .replace(/[^a-zA-Z\s]/g, "")
+    .trim()
+    .split(/\s+/)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 3);
+  return iniciales || "KIT";
+}
+
+/** Reemplaza la composición completa del kit (borrar + crear, transaccional). */
+export async function guardarArticulosKit(
+  idKit: string,
+  articulos: ArticuloKit[]
+): Promise<void | { message: string }> {
+  const session = await verifySession();
+  const limpios = articulos
+    .map((a) => ({
+      codigo: a.codigo?.trim() || null,
+      descripcion: a.descripcion.trim(),
+      cantidad: Math.max(1, Math.floor(Number(a.cantidad) || 1)),
+    }))
+    .filter((a) => a.descripcion);
+
+  try {
+    const { prisma } = await import("@/app/lib/prisma");
+    // Todo elemento recibe código; si no lo trae, se auto-asigna <INICIALES>-<nn>.
+    const kit = await prisma.kitEmergencia.findUnique({
+      where: { idKitEmergencia: idKit },
+      select: { tipoKit: true },
+    });
+    const prefijo = prefijoCodigoKit(kit?.tipoKit ?? "Kit");
+    const conCodigo = limpios.map((a, i) => ({
+      ...a,
+      codigo: a.codigo ?? `${prefijo}-${String(i + 1).padStart(3, "0")}`,
+    }));
+
+    await prisma.$transaction([
+      prisma.kitArticulo.deleteMany({ where: { idKitEmergencia: idKit } }),
+      prisma.kitArticulo.createMany({
+        data: conCodigo.map((a, i) => ({ idKitEmergencia: idKit, ...a, orden: i })),
+      }),
+    ]);
+  } catch (err) {
+    return fail(err, "No se pudo guardar la composición del kit.");
+  }
+  await logGRDAction({
+    userId: session.userId,
+    action: "EDITAR",
+    entity: "Kit",
+    entityId: idKit,
+    entityName: idKit,
+    module: "Kits",
+    field: "Composición",
+    newValue: `${limpios.length} artículo(s)`,
+  });
+  revalidatePath(REVALIDATE);
+}
+
 export async function crearKit(input: {
   tipoKit: string;
   descripcion?: string;

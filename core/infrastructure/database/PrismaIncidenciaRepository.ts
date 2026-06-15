@@ -8,7 +8,42 @@ import { IncidenciaMapper } from "../mappers/IncidenciaMapper";
 function coords(data: CreateIncidenteData): { latitud?: number; longitud?: number } {
   return data.lat != null && data.lng != null ? { latitud: data.lat, longitud: data.lng } : {};
 }
+function clean(value?: string | null): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
 
+function parseFechaSuceso(data: CreateIncidenteData): Date | null {
+  const fecha = clean(data.fechaSuceso);
+  if (!fecha) return null;
+
+  const hora = clean(data.horaSuceso) || "00:00";
+  const parsed = new Date(`${fecha}T${hora}:00`);
+
+  if (Number.isNaN(parsed.getTime())) {
+    const fallback = new Date(fecha);
+    return Number.isNaN(fallback.getTime()) ? null : fallback;
+  }
+
+  return parsed;
+}
+
+function allNecesidades(data: CreateIncidenteData): string[] {
+  return [
+    ...data.necesidades.filter((n) => n !== "Otros"),
+    ...(data.necesidadOtra.trim() ? [data.necesidadOtra.trim()] : []),
+  ];
+}
+
+function maybeUuid(value?: string | null): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+
+  const uuidRegex =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+  return uuidRegex.test(trimmed) ? trimmed : undefined;
+}
 const SELECT_ESTADO = {
   idIncidencia: true,
   codigoCaso: true,
@@ -54,7 +89,8 @@ export class PrismaIncidenciaRepository implements IIncidenciaRepository {
         descripcion: data.descripcion || null,
         direccionPreliminar: data.direccion.trim(),
         estadoAviso: "RECIBIDO",
-        medioAviso: data.reportaRol || null,
+        medioAviso: clean(data.reportaRol),
+        ...this.camposAvisoExplicitos(data),
         ...(idParroquiaDb ? { idParroquia: idParroquiaDb } : {}),
         ...coords(data),
       },
@@ -71,6 +107,7 @@ export class PrismaIncidenciaRepository implements IIncidenciaRepository {
         descripcionEvento: data.descripcion || null,
         contextoCaso: contexto,
         gravedad: data.nivelAfectacion || null,
+        ...this.camposIncidenciaExplicitos(data),
         ...(idParroquiaDb ? { idParroquia: idParroquiaDb } : {}),
         ...coords(data),
       },
@@ -116,6 +153,7 @@ export class PrismaIncidenciaRepository implements IIncidenciaRepository {
         contextoCaso: this.contexto(data),
         gravedad: data.nivelAfectacion || null,
         idParroquia: idParroquiaDb,
+        ...this.camposIncidenciaExplicitos(data),
         ...coords(data),
       },
     });
@@ -126,9 +164,12 @@ export class PrismaIncidenciaRepository implements IIncidenciaRepository {
         data: {
           nombreInformante: data.reportaNombre.trim() || null,
           telefonoInformante: data.reportaTel.trim() || null,
-          medioAviso: data.reportaRol || null,
           descripcion: data.descripcion || null,
           direccionPreliminar: data.direccion.trim(),
+          medioAviso: clean(data.reportaRol),
+          ...this.camposAvisoExplicitos(data),
+          ...(idParroquiaDb ? { idParroquia: idParroquiaDb } : {}),
+          ...coords(data),
         },
       });
     } else if (data.reportaNombre.trim()) {
@@ -139,9 +180,13 @@ export class PrismaIncidenciaRepository implements IIncidenciaRepository {
           descripcion: data.descripcion || null,
           direccionPreliminar: data.direccion.trim(),
           estadoAviso: "RECIBIDO",
-          medioAviso: data.reportaRol || null,
+          medioAviso: clean(data.reportaRol),
+          ...this.camposAvisoExplicitos(data),
+          ...(idParroquiaDb ? { idParroquia: idParroquiaDb } : {}),
+          ...coords(data),
         },
       });
+
       await prisma.incidencia.update({
         where: { idIncidencia: id },
         data: { idAviso: aviso.idAviso },
@@ -302,7 +347,6 @@ export class PrismaIncidenciaRepository implements IIncidenciaRepository {
     idUsuarioGRD: string,
     instrucciones?: string
   ): Promise<void> {
-    await this.liberarBrigadistas(idIncidencia);
     await prisma.incidencia.update({
       where: { idIncidencia },
       data: {
@@ -477,15 +521,20 @@ export class PrismaIncidenciaRepository implements IIncidenciaRepository {
       descripcionAyuda: string;
       lugarEntrega: string;
       observaciones?: string;
+      fechaEntrega?: string;
     }
   ): Promise<void> {
+    const fechaEntrega =
+      data.fechaEntrega && !isNaN(new Date(data.fechaEntrega).getTime())
+        ? new Date(data.fechaEntrega)
+        : new Date();
     await prisma.entregaAyudaHumanitaria.create({
       data: {
         idIncidencia,
         tipoAyuda: data.tipoAyuda,
         descripcionAyuda: data.descripcionAyuda,
         lugarEntrega: data.lugarEntrega,
-        fechaEntrega: new Date(),
+        fechaEntrega,
         observaciones: data.observaciones ?? null,
         entregaParcial: false,
         conformidadRecepcion: true,
@@ -500,15 +549,21 @@ export class PrismaIncidenciaRepository implements IIncidenciaRepository {
       descripcion: string;
       necesidadesPendientes?: string;
       recomendaciones?: string;
+      observaciones?: string;
+      fecha?: string;
     }
   ): Promise<void> {
+    const fechaSeguimiento =
+      data.fecha && !isNaN(new Date(data.fecha).getTime()) ? new Date(data.fecha) : new Date();
     await prisma.seguimientoIncidencia.create({
       data: {
         idIncidencia,
+        fechaSeguimiento,
         situacion: data.situacion,
         descripcion: data.descripcion,
         necesidadesPendientes: data.necesidadesPendientes || null,
         recomendaciones: data.recomendaciones || null,
+        observaciones: data.observaciones || null,
         estado: "ACTIVO",
       },
     });
@@ -567,37 +622,95 @@ export class PrismaIncidenciaRepository implements IIncidenciaRepository {
       necesidadesObs: data.necesidadesObs,
     });
   }
+  private camposIncidenciaExplicitos(data: CreateIncidenteData) {
+    const necesidades = allNecesidades(data);
+    const origenRegistro = clean(data.origenRegistro) || "WEB";
 
+    return {
+      reportadoPorNombre: clean(data.reportaNombre),
+      reportadoPorDni: clean(data.reportaDni),
+      reportadoPorCelular: clean(data.reportaTel),
+      reportadoPorRol: clean(data.reportaRol),
+
+      fechaSuceso: parseFechaSuceso(data),
+      horaSuceso: clean(data.horaSuceso),
+      distritoEvento: clean(data.distrito),
+      referenciaEvento: clean(data.referencia),
+      parroquiaNombreSnapshot: clean(data.parroquia),
+      causaEvento: clean(data.causa),
+
+      necesidades: necesidades.length > 0 ? necesidades.join(", ") : null,
+      necesidadesObs: clean(data.necesidadesObs),
+      numAfectadosReportado:
+        data.numAfectadosReportado ?? (data.personas.length > 0 ? data.personas.length : null),
+
+      origenRegistro,
+      observacionesGenerales: clean(data.necesidadesObs),
+    };
+  }
+
+  private camposAvisoExplicitos(data: CreateIncidenteData) {
+    const origenRegistro = clean(data.origenRegistro) || "WEB";
+
+    return {
+      dniInformante: clean(data.reportaDni),
+      rolInformante: clean(data.reportaRol),
+      origenRegistro,
+    };
+  }
   private async recrearGruposYPersonas(
     idIncidencia: string,
     data: CreateIncidenteData
   ): Promise<void> {
     const familiaIdMap: Record<string, string> = {};
+    const fechaSincronizacion = new Date();
 
     for (const familia of data.familias) {
+      const uuidGrupoMovil = maybeUuid(familia.id);
+
       const grupo = await prisma.grupoFamiliarAfectado.create({
         data: {
           idIncidencia,
+          codigoGrupo: familia.id || null,
           nombreReferencia: familia.nombre,
           observaciones: familia.observaciones || null,
+          ...(uuidGrupoMovil
+            ? {
+                uuidMovil: uuidGrupoMovil,
+                syncEstado: "SINCRONIZADO",
+                fechaSincronizacion,
+              }
+            : {}),
         },
       });
+
       familiaIdMap[familia.id] = grupo.idGrupoFamiliar;
     }
 
     const sinFamilia = data.personas.filter((p) => !p.familiaId);
+
     if (sinFamilia.length > 0) {
       const grupoInd = await prisma.grupoFamiliarAfectado.create({
-        data: { idIncidencia, nombreReferencia: "Personas individuales" },
+        data: {
+          idIncidencia,
+          codigoGrupo: "SIN_FAMILIA",
+          nombreReferencia: "Personas individuales",
+        },
       });
-      for (const p of sinFamilia) familiaIdMap[`ind_${p.id}`] = grupoInd.idGrupoFamiliar;
+
+      for (const p of sinFamilia) {
+        familiaIdMap[`ind_${p.id}`] = grupoInd.idGrupoFamiliar;
+      }
     }
 
     for (const persona of data.personas) {
       const idGrupo = persona.familiaId
         ? (familiaIdMap[persona.familiaId] ?? Object.values(familiaIdMap)[0])
         : (familiaIdMap[`ind_${persona.id}`] ?? Object.values(familiaIdMap)[0]);
+
       if (!idGrupo) continue;
+
+      const uuidPersonaMovil = maybeUuid(persona.id);
 
       await prisma.personaAfectada.create({
         data: {
@@ -615,6 +728,13 @@ export class PrismaIncidenciaRepository implements IIncidenciaRepository {
           fechaNacimiento: persona.edad
             ? new Date(new Date().getFullYear() - parseInt(persona.edad), 0, 1)
             : null,
+          ...(uuidPersonaMovil
+            ? {
+                uuidMovil: uuidPersonaMovil,
+                syncEstado: "SINCRONIZADO",
+                fechaSincronizacion,
+              }
+            : {}),
         },
       });
     }

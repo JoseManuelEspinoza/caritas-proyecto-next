@@ -25,6 +25,11 @@ services:
       - AUTH_KEYCLOAK_SECRET=caritas-app-secret-dev
       - AUTH_KEYCLOAK_ISSUER=http://localhost:8085/realms/caritas
       - AUTH_KEYCLOAK_INTERNAL_URL=http://keycloak:8085/realms/caritas
+      # ─── Keycloak Admin API (para crear cuentas de brigadistas, etc.) ────────
+      - KEYCLOAK_ADMIN_URL=http://keycloak:8085
+      - KEYCLOAK_REALM=caritas
+      - KEYCLOAK_ADMIN_USER=admin
+      - KEYCLOAK_ADMIN_PASS=admin
       # SMTP — se lee desde el archivo .env del proyecto
       - SMTP_HOST=${SMTP_HOST:-mailhog}
       - SMTP_PORT=${SMTP_PORT:-1025}
@@ -108,6 +113,8 @@ services:
     volumes:
       # El realm se importa al primer arranque
       - ./keycloak/realm-caritas.json:/opt/keycloak/data/import/realm-caritas.json:ro
+      # Tema de login con la marca Cáritas (el usuario no ve Keycloak)
+      - ./keycloak/themes:/opt/keycloak/themes:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

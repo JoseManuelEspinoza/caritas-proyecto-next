@@ -244,6 +244,109 @@ export function ReportesModule({
               </PieChart>
             </ResponsiveContainer>
           )}
+        </ChartCard>
+      </>}
+
+      {/* ── Tab: Actividades Preventivas ──────────────────────────────────────── */}
+      {tab === "actividades" && <>
+
+        {/* KPI row */}
+        {(() => {
+          const pctEjec = actividadesData.total > 0 ? Math.round((actividadesData.ejecutadas / actividadesData.total) * 100) : 0;
+          const pendientes = actividadesData.total - actividadesData.ejecutadas;
+          return (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <KPICard
+                icon={<Activity className="w-4.5 h-4.5" style={{ color: "#3B82F6" }} />}
+                label="Total Actividades"
+                value={actividadesData.total}
+                sub="registradas en el sistema"
+                color="#3B82F6"
+              />
+              <KPICard
+                icon={<CheckCircle className="w-4.5 h-4.5" style={{ color: "#009850" }} />}
+                label="Ejecutadas"
+                value={actividadesData.ejecutadas}
+                sub={`${pctEjec}% del total`}
+                color="#009850"
+                pct={pctEjec}
+              />
+              <KPICard
+                icon={<Target className="w-4.5 h-4.5" style={{ color: "#F59E0B" }} />}
+                label="Pendientes / Prog."
+                value={pendientes}
+                sub="aún no ejecutadas"
+                color="#F59E0B"
+              />
+              <KPICard
+                icon={<Users className="w-4.5 h-4.5" style={{ color: "#9155A8" }} />}
+                label="Participantes"
+                value={actividadesData.totalParticipantes}
+                sub="personas alcanzadas"
+                color="#9155A8"
+              />
+            </div>
+          );
+        })()}
+
+        {/* Por estado + Por tipo */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <ChartCard title="Actividades por Estado" subtitle="Distribución según el estado de ejecución">
+            {actividadesData.porEstado.length === 0 ? (
+              <div className="flex h-56 items-center justify-center text-sm text-gray-400">Sin datos.</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={224}>
+                <PieChart>
+                  <Pie
+                    data={actividadesData.porEstado}
+                    dataKey="value"
+                    nameKey="label"
+                    cx="40%"
+                    cy="50%"
+                    outerRadius={90}
+                    innerRadius={48}
+                    strokeWidth={0}
+                  >
+                    {actividadesData.porEstado.map((entry, i) => (
+                      <Cell key={i} fill={ESTADO_ACT_COLORS[entry.label] || PALETTE[i % PALETTE.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(v) => [`${v} actividades`, ""]} />
+                  <Legend
+                    layout="vertical"
+                    align="right"
+                    verticalAlign="middle"
+                    formatter={(v) => <span style={{ fontSize: 11, color: "#4B5563" }}>{v}</span>}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </ChartCard>
+
+          <ChartCard title="Actividades por Tipo" subtitle="Distribución por tipo o modalidad de actividad">
+            {actividadesData.porTipo.length === 0 ? (
+              <div className="flex h-56 items-center justify-center text-sm text-gray-400">Sin datos.</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={224}>
+                <BarChart
+                  data={actividadesData.porTipo}
+                  layout="vertical"
+                  margin={{ top: 4, right: 50, left: 4, bottom: 4 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#F1F5F9" />
+                  <XAxis type="number" tick={{ fontSize: 10, fill: "#9CA3AF" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <YAxis type="category" dataKey="label" tick={{ fontSize: 9, fill: "#6B7280" }} axisLine={false} tickLine={false} width={105} />
+                  <Tooltip content={<CustomTooltip />} cursor={{ fill: "#F8FAFC" }} />
+                  <Bar dataKey="value" radius={[0, 4, 4, 0]} maxBarSize={20}>
+                    {actividadesData.porTipo.map((_, i) => (
+                      <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
+                    ))}
+                    <LabelList dataKey="value" position="right" style={{ fontSize: 10, fill: "#6B7280" }} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </ChartCard>
         </div>
 
         <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
@@ -265,6 +368,43 @@ export function ReportesModule({
               </BarChart>
             </ResponsiveContainer>
           )}
+        </ChartCard>
+      </>}
+
+      {/* ── Tab: Casos e Incidencias ──────────────────────────────────────────── */}
+      {tab === "incidencias" && <>
+
+        {/* KPI row */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <KPICard
+            icon={<AlertTriangle className="w-4.5 h-4.5" style={{ color: "#EF4444" }} />}
+            label="Total Casos"
+            value={totales.incidencias}
+            sub="registrados en el período"
+            color="#EF4444"
+          />
+          <KPICard
+            icon={<CheckCircle className="w-4.5 h-4.5" style={{ color: "#009850" }} />}
+            label="Resueltos"
+            value={incidenciasData.cerradas}
+            sub={`${totales.incidencias > 0 ? Math.round((incidenciasData.cerradas / totales.incidencias) * 100) : 0}% del total`}
+            color="#009850"
+            pct={totales.incidencias > 0 ? Math.round((incidenciasData.cerradas / totales.incidencias) * 100) : 0}
+          />
+          <KPICard
+            icon={<Target className="w-4.5 h-4.5" style={{ color: "#F97316" }} />}
+            label="En Seguimiento"
+            value={incidenciasData.enSeguimiento}
+            sub="requieren monitoreo"
+            color="#F97316"
+          />
+          <KPICard
+            icon={<Activity className="w-4.5 h-4.5" style={{ color: "#3B82F6" }} />}
+            label="En Proceso"
+            value={incidenciasData.activas}
+            sub="aún en atención"
+            color="#3B82F6"
+          />
         </div>
       </div>
 

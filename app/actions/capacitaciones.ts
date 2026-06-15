@@ -7,22 +7,52 @@ import { makeCursoUseCases } from "@/core/infrastructure/factories/makeCursoUseC
 import { DomainError } from "@/core/domain/errors/DomainError";
 import { logGRDAction } from "@/app/lib/audit";
 import { prisma } from "@/app/lib/prisma";
+import { TIPOS_MATERIAL as TIPOS_MATERIAL_VALIDOS } from "@/app/lib/capacitaciones-tipos";
 import type { ParticipanteData } from "@/core/domain/repositories/ICursoRepository";
+import { sendCertificadoEmail } from "@/app/lib/email";
 
 const REVALIDATE = "/capacitaciones";
+
+// Fire-and-forget: envía constancia por email al participante tras certificación.
+function notificarCertificado(idInscripcion: string) {
+  prisma.inscripcionCurso
+    .findUnique({
+      where: { idInscripcionCurso: idInscripcion },
+      select: {
+        participante: { select: { nombres: true, apellidos: true, correo: true } },
+        curso: { select: { nombreCurso: true, codigoCurso: true } },
+        certificacion: { select: { fechaCertificacion: true, idCertificacionCurso: true } },
+        evaluaciones: {
+          orderBy: { fechaEvaluacion: "desc" },
+          take: 1,
+          select: { nota: true },
+        },
+      },
+    })
+    .then(async (ins) => {
+      if (!ins || !ins.certificacion || !ins.participante.correo) return;
+      const constanciaData = {
+        nombreParticipante: `${ins.participante.nombres} ${ins.participante.apellidos ?? ""}`.trim(),
+        nombreCurso: ins.curso.nombreCurso,
+        codigoCurso: ins.curso.codigoCurso,
+        fechaCertificacion: ins.certificacion.fechaCertificacion?.toISOString() ?? null,
+        idCertificacion: ins.certificacion.idCertificacionCurso,
+        nota: ins.evaluaciones[0]?.nota != null ? Number(ins.evaluaciones[0].nota) : null,
+      };
+      await sendCertificadoEmail(
+        ins.participante.correo,
+        ins.participante.nombres,
+        constanciaData
+      );
+    })
+    .catch((e) => console.error("[Capacitaciones] Error enviando constancia por email:", e));
+}
 
 function fail(err: unknown, fallback: string) {
   if (err instanceof DomainError) return { message: err.message };
   console.error("[Capacitaciones] Error inesperado:", err);
   return { message: fallback };
 }
-const TIPOS_MATERIAL_VALIDOS = [
-  "Documento (PDF, Word, Excel)",
-  "Presentación",
-  "Video",
-  "Enlace web",
-  "Otro",
-];
 
 const TIPOS_EVALUACION_VALIDOS = ["INICIAL", "FINAL", "UNICO"];
 
@@ -118,14 +148,26 @@ export type CursoDetalle = {
   idResponsable: string;
   totalInscritos: number;
   sesiones: Sesion[];
-  cuestionarioInicial: {
+
+  // Compatibilidad con la UI actual, que usa curso.cuestionario
+  cuestionario?: {
     id: string;
     titulo: string;
     totalPreguntas: number;
     notaAprobatoria: number;
     estado: string;
   } | null;
-  cuestionarioFinal: {
+
+  // Compatibilidad con la UI que ya estaba preparada para inicial/final
+  cuestionarioInicial?: {
+    id: string;
+    titulo: string;
+    totalPreguntas: number;
+    notaAprobatoria: number;
+    estado: string;
+  } | null;
+
+  cuestionarioFinal?: {
     id: string;
     titulo: string;
     totalPreguntas: number;
@@ -152,7 +194,9 @@ export type CursoInscrito = {
   certificado: boolean;
   constanciaUrl: string | null;
   sesiones: Sesion[];
-  cuestionarioInicial: {
+
+  // Compatibilidad con la UI actual del brigadista
+  cuestionario?: {
     id: string;
     titulo: string;
     notaAprobatoria: number;
@@ -160,7 +204,18 @@ export type CursoInscrito = {
     totalPreguntas: number;
     intentosUsados: number;
   } | null;
-  cuestionarioFinal: {
+
+  // Compatibilidad futura/inicial-final
+  cuestionarioInicial?: {
+    id: string;
+    titulo: string;
+    notaAprobatoria: number;
+    maxIntentos: number;
+    totalPreguntas: number;
+    intentosUsados: number;
+  } | null;
+
+  cuestionarioFinal?: {
     id: string;
     titulo: string;
     notaAprobatoria: number;
@@ -274,8 +329,9 @@ export async function listarCursosConSesiones(idResponsable?: string): Promise<C
   });
 
   // Intentar obtener cuestionarios; si la tabla aún no existe en la BD, continuar sin ellos.
-  type CuestionarioRow = { idCursoCapacitacion: string; idCuestionarioCurso: string; titulo: string; notaAprobatoria: unknown; estado: string; _count: { preguntas: number } };
-  let cuestionariosPorCurso: Record<string, CuestionarioRow> = {};
+  type CuestionarioRow = { idCursoCapacitacion: string; idCuestionarioCurso: string; titulo: string; notaAprobatoria: unknown; tipoCuestionario: string; estado: string; _count: { preguntas: number } };
+  let inicialesPorCurso: Record<string, CuestionarioRow> = {};
+  let finalesPorCurso: Record<string, CuestionarioRow> = {};
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const cuestionarios = await (prisma as any).cuestionarioCurso.findMany({
@@ -283,50 +339,50 @@ export async function listarCursosConSesiones(idResponsable?: string): Promise<C
       include: { _count: { select: { preguntas: true } } },
     });
     for (const c of cuestionarios as CuestionarioRow[]) {
-      if (!cuestionariosPorCurso[c.idCursoCapacitacion]) {
-        cuestionariosPorCurso[c.idCursoCapacitacion] = c;
+      if (c.tipoCuestionario === "INICIAL") {
+        if (!inicialesPorCurso[c.idCursoCapacitacion]) inicialesPorCurso[c.idCursoCapacitacion] = c;
+      } else {
+        if (!finalesPorCurso[c.idCursoCapacitacion]) finalesPorCurso[c.idCursoCapacitacion] = c;
       }
     }
   } catch {
     // La tabla cuestionario_curso todavía no existe en la BD — se muestra sin cuestionario.
   }
 
-  return rows.map((r) => {
-    const c = cuestionariosPorCurso[r.idCursoCapacitacion];
-    return {
-      id: r.idCursoCapacitacion,
-      codigoCurso: r.codigoCurso,
-      nombreCurso: r.nombreCurso,
-      descripcion: r.descripcion,
-      modalidadGeneral: r.modalidadGeneral,
-      estadoCurso: r.estadoCurso,
-      fechaPublicacion: r.fechaPublicacion?.toISOString() ?? null,
-      fechaCierre: r.fechaCierre?.toISOString() ?? null,
-      responsable: `${r.usuarioResponsable.nombres} ${r.usuarioResponsable.apellidos}`.trim(),
-      idResponsable: r.idUsuarioResponsableGRD,
-      totalInscritos: r._count.inscripciones,
-      sesiones: r.unidades.map((u) => ({
-        id: u.idUnidadContenido,
-        numeroOrden: u.numeroOrden,
-        tituloUnidad: u.tituloUnidad,
-        materiales: u.materiales.map((m) => ({
-          id: m.idMaterialCapacitacion,
-          titulo: m.titulo,
-          tipoMaterial: m.tipoMaterial,
-          enlaceMaterial: m.enlaceMaterial,
-        })),
+  const mapCuestionario = (c: CuestionarioRow | undefined) => c ? {
+    id: c.idCuestionarioCurso,
+    titulo: c.titulo,
+    totalPreguntas: c._count.preguntas,
+    notaAprobatoria: Number(c.notaAprobatoria),
+    estado: c.estado,
+  } : null;
+
+  return rows.map((r) => ({
+    id: r.idCursoCapacitacion,
+    codigoCurso: r.codigoCurso,
+    nombreCurso: r.nombreCurso,
+    descripcion: r.descripcion,
+    modalidadGeneral: r.modalidadGeneral,
+    estadoCurso: r.estadoCurso,
+    fechaPublicacion: r.fechaPublicacion?.toISOString() ?? null,
+    fechaCierre: r.fechaCierre?.toISOString() ?? null,
+    responsable: `${r.usuarioResponsable.nombres} ${r.usuarioResponsable.apellidos}`.trim(),
+    idResponsable: r.idUsuarioResponsableGRD,
+    totalInscritos: r._count.inscripciones,
+    sesiones: r.unidades.map((u) => ({
+      id: u.idUnidadContenido,
+      numeroOrden: u.numeroOrden,
+      tituloUnidad: u.tituloUnidad,
+      materiales: u.materiales.map((m) => ({
+        id: m.idMaterialCapacitacion,
+        titulo: m.titulo,
+        tipoMaterial: m.tipoMaterial,
+        enlaceMaterial: m.enlaceMaterial,
       })),
-      cuestionario: c
-        ? {
-            id: c.idCuestionarioCurso,
-            titulo: c.titulo,
-            totalPreguntas: c._count.preguntas,
-            notaAprobatoria: Number(c.notaAprobatoria),
-            estado: c.estado,
-          }
-        : null,
-    };
-  });
+    })),
+    cuestionarioInicial: mapCuestionario(inicialesPorCurso[r.idCursoCapacitacion]),
+    cuestionarioFinal: mapCuestionario(finalesPorCurso[r.idCursoCapacitacion]),
+  }));
 }
 
 export async function listarEspecialistas(): Promise<{ id: string; nombre: string }[]> {
@@ -390,8 +446,9 @@ export async function listarMisCursos(): Promise<CursoInscrito[]> {
   });
 
   // Cuestionarios en tabla separada — puede no existir aún en AWS
-  type CuestionarioRow = { idCursoCapacitacion: string; idCuestionarioCurso: string; titulo: string; notaAprobatoria: unknown; maxIntentos: number; estado: string; _count: { preguntas: number } };
-  let cuestionariosPorCurso: Record<string, CuestionarioRow> = {};
+  type CuestionarioRow = { idCursoCapacitacion: string; idCuestionarioCurso: string; titulo: string; notaAprobatoria: unknown; maxIntentos: number; tipoCuestionario: string; estado: string; _count: { preguntas: number } };
+  let inicialesPorCurso: Record<string, CuestionarioRow> = {};
+  let finalesPorCurso: Record<string, CuestionarioRow> = {};
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const cuestionarios = await (prisma as any).cuestionarioCurso.findMany({
@@ -399,8 +456,10 @@ export async function listarMisCursos(): Promise<CursoInscrito[]> {
       include: { _count: { select: { preguntas: true } } },
     });
     for (const c of cuestionarios as CuestionarioRow[]) {
-      if (!cuestionariosPorCurso[c.idCursoCapacitacion]) {
-        cuestionariosPorCurso[c.idCursoCapacitacion] = c;
+      if (c.tipoCuestionario === "INICIAL") {
+        if (!inicialesPorCurso[c.idCursoCapacitacion]) inicialesPorCurso[c.idCursoCapacitacion] = c;
+      } else {
+        if (!finalesPorCurso[c.idCursoCapacitacion]) finalesPorCurso[c.idCursoCapacitacion] = c;
       }
     }
   } catch {
@@ -431,7 +490,11 @@ export async function listarMisCursos(): Promise<CursoInscrito[]> {
 
   return inscripciones.map((i) => {
     const evals = i.evaluaciones;
-    const c = cuestionariosPorCurso[i.curso.idCursoCapacitacion];
+    const cInicial = inicialesPorCurso[i.curso.idCursoCapacitacion];
+    const cFinal = finalesPorCurso[i.curso.idCursoCapacitacion];
+    const evalsInicial = evals.filter((e) => e.tipoEvaluacion === "INICIAL");
+    const evalsFinal = evals.filter((e) => e.tipoEvaluacion === "FINAL" || e.tipoEvaluacion == null);
+    const evalsAll = evals;
     return {
       id: i.curso.idCursoCapacitacion,
       codigoCurso: i.curso.codigoCurso,
@@ -444,24 +507,29 @@ export async function listarMisCursos(): Promise<CursoInscrito[]> {
       responsable: `${i.curso.usuarioResponsable.nombres} ${i.curso.usuarioResponsable.apellidos}`.trim(),
       idInscripcion: i.idInscripcionCurso,
       estadoInscripcion: i.estadoInscripcion,
-      evalInicial: evals[0]?.nota != null ? Number(evals[0].nota) : null,
-      evalFinal:
-        evals.length > 1 && evals[evals.length - 1].nota != null
-          ? Number(evals[evals.length - 1].nota)
-          : null,
-      resultado: evals.length > 0 ? (evals[evals.length - 1].resultado ?? null) : null,
+      evalInicial: evalsInicial[0]?.nota != null ? Number(evalsInicial[0].nota) : null,
+      evalFinal: evalsFinal.length > 0 && evalsFinal[evalsFinal.length - 1].nota != null
+        ? Number(evalsFinal[evalsFinal.length - 1].nota)
+        : null,
+      resultado: evalsAll.length > 0 ? (evalsAll[evalsAll.length - 1].resultado ?? null) : null,
       certificado: i.certificacion !== null,
       constanciaUrl: i.certificacion?.constanciaUrl ?? null,
-      cuestionario: c
-        ? {
-            id: c.idCuestionarioCurso,
-            titulo: c.titulo,
-            notaAprobatoria: Number(c.notaAprobatoria),
-            maxIntentos: c.maxIntentos,
-            totalPreguntas: c._count.preguntas,
-            intentosUsados: evals.length,
-          }
-        : null,
+      cuestionarioInicial: cInicial ? {
+        id: cInicial.idCuestionarioCurso,
+        titulo: cInicial.titulo,
+        notaAprobatoria: Number(cInicial.notaAprobatoria),
+        maxIntentos: cInicial.maxIntentos,
+        totalPreguntas: cInicial._count.preguntas,
+        intentosUsados: evalsInicial.length,
+      } : null,
+      cuestionarioFinal: cFinal ? {
+        id: cFinal.idCuestionarioCurso,
+        titulo: cFinal.titulo,
+        notaAprobatoria: Number(cFinal.notaAprobatoria),
+        maxIntentos: cFinal.maxIntentos,
+        totalPreguntas: cFinal._count.preguntas,
+        intentosUsados: evalsFinal.length,
+      } : null,
       sesiones: i.curso.unidades.map((u) => ({
         id: u.idUnidadContenido,
         numeroOrden: u.numeroOrden,
@@ -958,6 +1026,7 @@ export async function registrarEvaluacion(
       try {
         const constanciaUrl = `/capacitaciones/constancia/${idInscripcion}`;
         await makeCursoUseCases().certificar.execute(idInscripcion, constanciaUrl);
+        notificarCertificado(idInscripcion);
       } catch {
         // Ya certificado o sin evaluación aprobada — no bloquea
       }
@@ -1219,6 +1288,7 @@ export async function enviarRespuestasExamen(
       try {
         const constanciaUrl = `/capacitaciones/constancia/${idInscripcion}`;
         await makeCursoUseCases().certificar.execute(idInscripcion, constanciaUrl);
+        notificarCertificado(idInscripcion);
       } catch {
         // Si ya está certificado o falla, no bloquear el resultado
       }
@@ -1295,21 +1365,6 @@ export async function editarCuestionario(
     return fail(err, "No se pudo editar el cuestionario.");
   }
   revalidatePath(REVALIDATE);
-}
-
-export async function presignMaterial(nombreArchivo: string, contentType: string) {
-  await verifySession();
-  const { isS3Configured, presignPut, presignGet, safeFilename } = await import("@/app/lib/s3");
-  if (!isS3Configured()) return { ok: false as const, message: "S3 no configurado." };
-  const { randomUUID } = await import("crypto");
-  const key = `capacitaciones/materiales/${randomUUID()}-${safeFilename(nombreArchivo)}`;
-  try {
-    const uploadUrl = await presignPut(key, contentType || "application/octet-stream");
-    const publicUrl = await presignGet(key, 60 * 60 * 24 * 365);
-    return { ok: true as const, uploadUrl, publicUrl };
-  } catch {
-    return { ok: false as const, message: "No se pudo preparar la subida." };
-  }
 }
 
 export async function obtenerDatosConstancia(idInscripcion: string) {

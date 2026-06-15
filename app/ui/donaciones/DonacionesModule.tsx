@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import type { Incident, IncidentStatus, HistoryEntry } from "@/app/lib/incident-types";
 import { initialIncidents } from "@/app/lib/incident-data";
+import { PaginationControls } from "@/app/ui/shared/pagination-controls";
 
 const STATUS_COLOR: Record<IncidentStatus, string> = {
   ABIERTO: "bg-yellow-50 text-yellow-700",
@@ -75,6 +76,8 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
   const [parroquiaFilter, setParroquiaFilter] = useState("all");
   const [queuePage, setQueuePage] = useState(1);
   const [historyPage, setHistoryPage] = useState(1);
+  const [queuePageSize, setQueuePageSize] = useState(5);
+  const [historyPageSize, setHistoryPageSize] = useState(5);
 
   const queueAll = useMemo(
     () => incidents.filter((i) => ["EN EVALUACION", "OBSERVADO"].includes(i.status)),
@@ -118,16 +121,16 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
     [filteredIncidents]
   );
 
-  const queueTotalPages = Math.max(1, Math.ceil(queue.length / 10));
-  const historyTotalPages = Math.max(1, Math.ceil(closed.length / 10));
+  const queueTotalPages = Math.max(1, Math.ceil(queue.length / queuePageSize));
+  const historyTotalPages = Math.max(1, Math.ceil(closed.length / historyPageSize));
   const safeQueuePage = Math.min(queuePage, queueTotalPages);
   const safeHistoryPage = Math.min(historyPage, historyTotalPages);
-  const queueSlice = queue.slice((safeQueuePage - 1) * 10, safeQueuePage * 10);
-  const historySlice = closed.slice((safeHistoryPage - 1) * 10, safeHistoryPage * 10);
-  const queueFrom = queue.length === 0 ? 0 : (safeQueuePage - 1) * 10 + 1;
-  const queueTo = Math.min(queue.length, safeQueuePage * 10);
-  const historyFrom = closed.length === 0 ? 0 : (safeHistoryPage - 1) * 10 + 1;
-  const historyTo = Math.min(closed.length, safeHistoryPage * 10);
+  const queueSlice = queue.slice((safeQueuePage - 1) * queuePageSize, safeQueuePage * queuePageSize);
+  const historySlice = closed.slice((safeHistoryPage - 1) * historyPageSize, safeHistoryPage * historyPageSize);
+  const queueFrom = queue.length === 0 ? 0 : (safeQueuePage - 1) * queuePageSize + 1;
+  const queueTo = Math.min(queue.length, safeQueuePage * queuePageSize);
+  const historyFrom = closed.length === 0 ? 0 : (safeHistoryPage - 1) * historyPageSize + 1;
+  const historyTo = Math.min(closed.length, safeHistoryPage * historyPageSize);
 
   // El clamping de página se resuelve en render con safeQueuePage/safeHistoryPage
   // (Math.min). No se usan efectos con setState para evitar renders en cascada
@@ -433,34 +436,18 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
                   )}
                 </button>
               ))}
-              {queue.length > 0 && (
-                <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 bg-gray-50">
-                  <p className="text-xs text-gray-500">
-                    Mostrando {queueFrom}-{queueTo} de {queue.length}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setQueuePage((p) => Math.max(1, p - 1))}
-                      disabled={safeQueuePage === 1}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-[var(--caritas-border)] rounded-lg bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <ChevronLeft className="w-3.5 h-3.5" /> Anterior
-                    </button>
-                    <span className="text-xs text-gray-500 font-medium">
-                      {safeQueuePage} / {queueTotalPages}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setQueuePage((p) => Math.min(queueTotalPages, p + 1))}
-                      disabled={safeQueuePage === queueTotalPages}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-[var(--caritas-border)] rounded-lg bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Siguiente <ChevronRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              )}
+              <PaginationControls
+                total={queue.length}
+                start={queueFrom}
+                end={queueTo}
+                page={safeQueuePage}
+                totalPages={queueTotalPages}
+                onPrevious={() => setQueuePage((p) => Math.max(1, p - 1))}
+                onNext={() => setQueuePage((p) => Math.min(queueTotalPages, p + 1))}
+                pageSize={queuePageSize}
+                onPageSizeChange={(s) => { setQueuePageSize(s); setQueuePage(1); }}
+                className="rounded-none border-x-0 border-b-0"
+              />
             </div>
           )}
 
@@ -493,32 +480,18 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
                   </button>
                 ))}
               </div>
-              <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 bg-gray-50">
-                <p className="text-xs text-gray-500">
-                  Mostrando {historyFrom}-{historyTo} de {closed.length}
-                </p>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
-                    disabled={safeHistoryPage === 1}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-[var(--caritas-border)] rounded-lg bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <ChevronLeft className="w-3.5 h-3.5" /> Anterior
-                  </button>
-                  <span className="text-xs text-gray-500 font-medium">
-                    {safeHistoryPage} / {historyTotalPages}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setHistoryPage((p) => Math.min(historyTotalPages, p + 1))}
-                    disabled={safeHistoryPage === historyTotalPages}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-[var(--caritas-border)] rounded-lg bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Siguiente <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
+              <PaginationControls
+                total={closed.length}
+                start={historyFrom}
+                end={historyTo}
+                page={safeHistoryPage}
+                totalPages={historyTotalPages}
+                onPrevious={() => setHistoryPage((p) => Math.max(1, p - 1))}
+                onNext={() => setHistoryPage((p) => Math.min(historyTotalPages, p + 1))}
+                pageSize={historyPageSize}
+                onPageSizeChange={(s) => { setHistoryPageSize(s); setHistoryPage(1); }}
+                className="rounded-none border-x-0 border-b-0"
+              />
             </>
           )}
         </div>

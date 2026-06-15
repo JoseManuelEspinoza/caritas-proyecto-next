@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { verifySession } from "@/app/lib/dal";
 import { prisma } from "@/app/lib/prisma";
+import { cargarCatalogosIncidente } from "@/app/lib/grd/catalogos-form";
 import { toFrontendRole } from "@/app/lib/roles";
 import { IncidentForm } from "@/app/ui/grd/incident-form";
 import type { CreateIncidenteData, FamiliaForm, PersonaForm } from "@/app/actions/incidents";
@@ -87,21 +88,24 @@ export default async function EditarIncidentePage({ params }: { params: Promise<
     });
   });
 
-  // ─── Necesidades desde el contexto ───────────────────────────────────────
-  const necesidadesBase = ["Alimentos", "Ropa", "Atención médica", "Materiales de construcción"];
+  // ─── Necesidades desde el contexto (la base viene del catálogo "Necesidades") ──
+  const catalogos = await cargarCatalogosIncidente();
+  const necesidadesBase = catalogos.necesidades.length
+    ? catalogos.necesidades
+    : ["Alimentos", "Ropa", "Atención médica", "Materiales de construcción"];
   const necesidadesGuardadas: string[] = ctx.necesidades ?? [];
   const necesidades = necesidadesGuardadas.filter((n) => necesidadesBase.includes(n));
   const necesidadOtra = necesidadesGuardadas.find((n) => !necesidadesBase.includes(n)) ?? "";
 
   // ─── Construir initialData ────────────────────────────────────────────────
   const initialData: CreateIncidenteData = {
-    reportaDni: "", // no guardamos DNI del informante
+    reportaDni: inc.aviso?.dniInformante ?? "",
     reportaNombre: inc.aviso?.nombreInformante ?? "",
     reportaTel: inc.aviso?.telefonoInformante ?? "",
-    reportaRol: inc.aviso?.medioAviso ?? "",
+    reportaRol: inc.aviso?.rolInformante ?? inc.aviso?.medioAviso ?? "",
     fechaReporte: inc.fechaRegistro.toISOString().slice(0, 16),
-    fechaSuceso: inc.fechaRegistro.toISOString().split("T")[0],
-    horaSuceso: "",
+    fechaSuceso: (inc.fechaSuceso ?? inc.fechaRegistro).toISOString().split("T")[0],
+    horaSuceso: inc.horaSuceso ?? "",
     categoria: inc.tipoEvento ?? "",
     pais: ctx.pais ?? "Perú",
     region: ctx.region ?? "Lima Metropolitana",
@@ -121,7 +125,23 @@ export default async function EditarIncidentePage({ params }: { params: Promise<
     lng: inc.longitud != null ? Number(inc.longitud) : null,
   };
 
+  const parroquias = await prisma.parroquia.findMany({
+    where: { estado: "ACTIVO" },
+    select: { nombre: true, latitud: true, longitud: true },
+    orderBy: { nombre: "asc" },
+  });
+
   return (
-    <IncidentForm initialData={initialData} incidenciaId={id} codigoCaso={inc.codigoCaso ?? ""} />
+    <IncidentForm
+      initialData={initialData}
+      incidenciaId={id}
+      codigoCaso={inc.codigoCaso ?? ""}
+      parroquiasSistema={parroquias.map((p) => ({
+        nombre: p.nombre,
+        lat: p.latitud != null ? Number(p.latitud) : null,
+        lng: p.longitud != null ? Number(p.longitud) : null,
+      }))}
+      catalogos={catalogos}
+    />
   );
 }

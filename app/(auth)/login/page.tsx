@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { LogIn, ShieldCheck } from "lucide-react";
 import { loginConKeycloak } from "@/app/actions/auth";
 
@@ -6,7 +7,21 @@ export const metadata: Metadata = {
   title: "Iniciar sesión — Cáritas Lima",
 };
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const { error } = await searchParams;
+
+  // Keycloak's UPDATE_PASSWORD required action (contraseña temporal) completes
+  // correctamente pero devuelve authentication_expired en el primer callback.
+  // Re-iniciar el flujo OAuth recoge la sesión ya establecida sin pedir credenciales.
+  // signIn() modifica cookies → no se puede llamar en render; usar redirect en su lugar.
+  if (error === "OAuthCallbackError") {
+    redirect("/api/auth/signin/keycloak?callbackUrl=/dashboard");
+  }
+
   return (
     <div className="text-center">
       <div className="w-14 h-14 mx-auto mb-4 bg-[var(--caritas-green)]/10 rounded-2xl flex items-center justify-center">
@@ -28,12 +43,12 @@ export default function LoginPage() {
           className="w-full flex items-center justify-center gap-2 py-3 bg-[var(--caritas-green)] text-white rounded-xl font-semibold hover:opacity-90 transition-all shadow-sm"
         >
           <LogIn className="w-5 h-5" />
-          Continuar con Keycloak
+          Iniciar sesión
         </button>
       </form>
 
       <p className="text-xs text-gray-400 mt-4">
-        Serás redirigido al proveedor de identidad seguro.
+        Conexión protegida con autenticación institucional.
       </p>
     </div>
   );

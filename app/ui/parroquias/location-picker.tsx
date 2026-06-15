@@ -169,7 +169,7 @@ export function LocationPicker({ lat, lng, onLocationChange }: LocationPickerPro
 
         {/* Dropdown de sugerencias */}
         {showDropdown && suggestions.length > 0 && (
-          <div className="absolute z-300 top-full left-0 right-0 mt-1 bg-white border border-[#DDDDDD] rounded-xl shadow-lg overflow-hidden">
+          <div className="absolute z-1001 top-full left-0 right-0 mt-1 bg-white border border-[#DDDDDD] rounded-xl shadow-lg overflow-hidden">
             {suggestions.map((s, i) => (
               <button
                 key={i}
