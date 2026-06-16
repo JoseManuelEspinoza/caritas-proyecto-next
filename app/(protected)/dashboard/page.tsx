@@ -228,20 +228,20 @@ export default async function DashboardPage() {
   // Brigadista → va directo a GRD
   if (role === "brigadista") redirect("/grd");
 
-  // Comité y Jefa OGP → van a GRD también
-  if (role === "comite" || role === "jefaOGP") redirect("/grd");
+  // Comité → va a GRD
+  if (role === "comite") redirect("/grd");
 
   if (role === "admin") {
     const data = await getAdminData();
     return <AdminDashboard {...data} />;
   }
 
-  if (role === "especialistaGRD") {
+  if (role === "especialistaGRD" || role === "jefaOGP") {
     const [data, user] = await Promise.all([
       getEspecialistaData(),
       prisma.user.findUnique({ where: { id: session.userId }, select: { name: true } }),
     ]);
-    return <EspecialistaDashboard {...data} userName={user?.name ?? "Especialista"} />;
+    return <EspecialistaDashboard {...data} userName={user?.name ?? session.name} />;
   }
 
   redirect("/grd");
