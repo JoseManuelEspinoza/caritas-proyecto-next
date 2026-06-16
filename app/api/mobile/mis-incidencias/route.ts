@@ -157,6 +157,7 @@ const incidenciaSelect = {
   parroquiaNombreSnapshot: true,
   contextoCaso: true,
   uuidMovil: true,
+  idUsuarioResponsableGRD: true,
   parroquia: {
     select: {
       idParroquia: true,
