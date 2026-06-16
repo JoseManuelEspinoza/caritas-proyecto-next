@@ -8,7 +8,12 @@ export default async function GrdPage() {
   const role = toFrontendRole(session.role);
 
   // Brigadistas: filtrar solo sus incidentes asignados
+  // Jefa OGP: solo ve incidencias en estado "EN EVALUACION"
   const whereClause: Record<string, any> = { deletedAt: null };
+
+  if (role === "jefaOGP") {
+    whereClause.estadoActual = "EN EVALUACION";
+  }
 
   if (role === "brigadista") {
     const usuarioGRD = await prisma.usuarioGRD.findUnique({
