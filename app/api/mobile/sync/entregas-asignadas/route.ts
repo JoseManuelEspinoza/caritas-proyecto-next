@@ -285,6 +285,26 @@ export async function POST(request: Request) {
       texto(body.observaciones) ||
       "Avance de entrega registrado desde móvil.";
 
+
+    const kitsRecibidos = normalizarKits(body);
+
+    if (kitsRecibidos.length === 0) {
+      throw new MobileSyncError("Debe enviar al menos un kit asignado.");
+    }
+
+    const existente = await prisma.informe.findFirst({
+      where: {
+        idIncidencia: incidencia.idIncidencia,
+        tipoInforme: "ENTREGA_MOVIL",
+      },
+      orderBy: { fechaElaboracion: "desc" },
+      select: {
+        idInforme: true,
+        contenido: true,
+      },
+    });
+
+      
     const kitsEntregados = normalizarKits(body);
 
     if (kitsEntregados.length === 0) {
@@ -310,16 +330,6 @@ export async function POST(request: Request) {
       kitsEntregados,
     };
 
-    const existente = await prisma.informe.findFirst({
-      where: {
-        idIncidencia: incidencia.idIncidencia,
-        tipoInforme: "ENTREGA_MOVIL",
-      },
-      orderBy: { fechaElaboracion: "desc" },
-      select: {
-        idInforme: true,
-      },
-    });
 
     const resumen = `Avance móvil de entrega: ${estadoGeneral}. Kits reportados: ${kitsEntregados.length}.`;
 
@@ -375,4 +385,42 @@ export async function POST(request: Request) {
     console.error("[mobile/sync/entregas-asignadas][POST]", error);
     return jsonError("No se pudo registrar el avance de entrega asignada.", 500);
   }
+function parseJsonObject(raw: string | null | undefined): Record<string, unknown> | null {
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function fusionarKitsEntregados(
+  contenidoExistente: string | null | undefined,
+  kitsRecibidos: ReturnType<typeof normalizarKits>
+): ReturnType<typeof normalizarKits> {
+  const existenteJson = parseJsonObject(contenidoExistente);
+  const kitsPreviosRaw = Array.isArray(existenteJson?.kitsEntregados)
+    ? existenteJson.kitsEntregados
+    : [];
+
+  const kitsPrevios = normalizarKits({
+    kits: kitsPreviosRaw as KitEntregaMovil[],
+  });
+
+  const porUuid = new Map<string, ReturnType<typeof normalizarKits>[number]>();
+
+  for (const kit of kitsPrevios) {
+    porUuid.set(kit.uuidKitAsignado, kit);
+  }
+
+  for (const kit of kitsRecibidos) {
+    porUuid.set(kit.uuidKitAsignado, kit);
+  }
+
+  return [...porUuid.values()];
+}  
 }
