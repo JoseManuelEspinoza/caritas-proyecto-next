@@ -925,12 +925,14 @@ async function main() {
   // ── SIMULACROS / Actividades preventivas ──
   if ((await prisma.actividadPreventiva.count()) < 2) {
     console.log("🛡️  Simulacros...");
+    // Fechas relativas a hoy: evita que la validación "fecha ≥ hoy" rompa el seed con el paso del tiempo.
+    const enDiasISO = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
     const a1 = await act.programar.execute({
       idParroquia: p0.idParroquia,
       idUsuarioRegistroGRD: idUsuarioGRD,
       idTipoActividadPreventiva: "Simulacro de Sismo",
       nombreActividad: "Simulacro de Sismo Parroquial",
-      fechaProgramada: "2026-06-15",
+      fechaProgramada: enDiasISO(0),
       numeroParticipantesEstimado: 120,
     });
     await act.ejecutar.execute(a1.id, {
@@ -943,7 +945,7 @@ async function main() {
       idUsuarioRegistroGRD: idUsuarioGRD,
       idTipoActividadPreventiva: "Charla de Prevención",
       nombreActividad: "Charla: Mochila de Emergencia",
-      fechaProgramada: "2026-06-20",
+      fechaProgramada: enDiasISO(10),
       numeroParticipantesEstimado: 50,
     });
     await act.programar.execute({
@@ -951,7 +953,7 @@ async function main() {
       idUsuarioRegistroGRD: idUsuarioGRD,
       idTipoActividadPreventiva: "Simulacro de Incendio",
       nombreActividad: "Simulacro de Incendio",
-      fechaProgramada: "2026-07-01",
+      fechaProgramada: enDiasISO(20),
       numeroParticipantesEstimado: 80,
     });
     console.log("   ✓ 3 actividades (1 ejecutada, 2 programadas)");
