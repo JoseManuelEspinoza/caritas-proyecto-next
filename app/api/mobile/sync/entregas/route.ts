@@ -68,7 +68,12 @@ function jsonError(message: string, status = 400) {
 function requireMobileSyncKey(request: Request): NextResponse | null {
   const expected = process.env.MOBILE_SYNC_API_KEY?.trim();
 
-  if (!expected) return null;
+  if (!expected) {
+    return NextResponse.json(
+      { ok: false, message: "Sincronización móvil no configurada." },
+      { status: 503 }
+    );
+  }
 
   const received = request.headers.get("x-mobile-sync-key")?.trim() ?? "";
 
@@ -269,24 +274,17 @@ async function resolveKit(body: EntregaMovilPayload): Promise<{
   return kit;
 }
 
-async function resolveUsuarioResponsableId(
-  body: EntregaMovilPayload
-): Promise<string | null> {
-  const idUsuarioResponsableGRD =
-    texto(body.idUsuarioResponsableGRD) || texto(body.idUsuarioGRD);
+async function resolveUsuarioResponsableId(): Promise<string | null> {
+  const idFromEnv = process.env.MOBILE_SYNC_USUARIO_GRD_ID?.trim();
 
-  if (!idUsuarioResponsableGRD) return null;
+  if (!idFromEnv) return null;
 
   const usuario = await prisma.usuarioGRD.findUnique({
-    where: { idUsuarioGRD: idUsuarioResponsableGRD },
+    where: { idUsuarioGRD: idFromEnv },
     select: { idUsuarioGRD: true },
   });
 
-  if (!usuario) {
-    throw new MobileSyncError("No se encontró el usuario responsable GRD indicado.");
-  }
-
-  return usuario.idUsuarioGRD;
+  return usuario?.idUsuarioGRD ?? null;
 }
 
 function getUuidAfectadoMovil(body: EntregaMovilPayload): string | null {
@@ -453,7 +451,9 @@ async function resolvePersonaAfectada(
   return null;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const unauthorized = requireMobileSyncKey(request);
+  if (unauthorized) return unauthorized;
   return NextResponse.json({
     ok: true,
     endpoint: "/api/mobile/sync/entregas",
@@ -559,7 +559,7 @@ export async function POST(request: Request) {
 
     const incidencia = await resolveIncidencia(body);
     const idSolicitud = await resolveSolicitudId(body);
-    const idUsuarioResponsableGRD = await resolveUsuarioResponsableId(body);
+    const idUsuarioResponsableGRD = await resolveUsuarioResponsableId();
 
   const kit = await resolveKit(body);
 

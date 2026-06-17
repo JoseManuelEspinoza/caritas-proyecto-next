@@ -71,8 +71,11 @@ const DISTRITOS_LIMA = [
   "Ancón",
   "Ate",
   "Barranco",
+  "Bellavista",
   "Breña",
+  "Callao",
   "Carabayllo",
+  "Carmen de la Legua Reynoso",
   "Chaclacayo",
   "Chorrillos",
   "Cieneguilla",
@@ -81,12 +84,16 @@ const DISTRITOS_LIMA = [
   "Independencia",
   "Jesús María",
   "La Molina",
+  "La Perla",
+  "La Punta",
   "La Victoria",
+  "Lima Cercado",
   "Lince",
   "Los Olivos",
   "Lurigancho",
   "Lurín",
   "Magdalena del Mar",
+  "Mi Perú",
   "Miraflores",
   "Pachacámac",
   "Pueblo Libre",
@@ -102,9 +109,9 @@ const DISTRITOS_LIMA = [
   "Santa Anita",
   "Santiago de Surco",
   "Surquillo",
+  "Ventanilla",
   "Villa El Salvador",
   "Villa María del Triunfo",
-  "Lima Cercado",
 ];
 
 const PARROQUIAS_LIMA = [
@@ -616,6 +623,7 @@ export function IncidentForm({
 
   // Sección 1
   const [fechaReporte] = useState(initialData?.fechaReporte ?? nowLocal());
+  const [tipoDocReporta, setTipoDocReporta] = useState<"DNI" | "Pasaporte" | "Carnet de Extranjería">("DNI");
   const [reportaDni, setReportaDni] = useState(initialData?.reportaDni ?? "");
   const [reportaNombre, setReportaNombre] = useState(initialData?.reportaNombre ?? "");
   // El teléfono se guarda como "+51 987654321"; al cargar en edición se separan código y número.
@@ -854,6 +862,7 @@ export function IncidentForm({
         .sort((a, b) => a.dist - b.dist)
         .map((p) => p.nombre);
       setParroquiasCercanas(ordenadas);
+      if (ordenadas.length > 0) setParroquia(ordenadas[0]);
     } finally {
       setCargandoParroquias(false);
     }
@@ -1112,8 +1121,9 @@ export function IncidentForm({
     const dni = reportaDni.replace(/\D/g, "");
     const tel = reportaTel.replace(/\D/g, "");
 
-    if (!dni) return "Ingresa el DNI de la persona que reportó.";
-    if (dni.length !== 8) return "El DNI de quien reporta debe tener exactamente 8 dígitos.";
+    if (!dni) return `Ingresa el ${tipoDocReporta} de la persona que reportó.`;
+    if (tipoDocReporta === "DNI" && dni.length !== 8) return "El DNI de quien reporta debe tener exactamente 8 dígitos.";
+    if (tipoDocReporta !== "DNI" && dni.length < 5) return `El ${tipoDocReporta} debe tener al menos 5 caracteres.`;
 
     if (!reportaNombre.trim()) return "Ingresa el nombre completo de quien reportó.";
     if (reportaNombre.trim().length < 5) {
@@ -1138,6 +1148,7 @@ export function IncidentForm({
     if (!categoria.trim()) return "Selecciona la categoría del evento.";
     if (!distrito.trim()) return "Selecciona el distrito del suceso.";
 
+    if (!parroquia.trim()) return "Selecciona la parroquia de referencia.";
     if (!direccion.trim()) return "Ingresa la dirección del suceso.";
     if (direccion.trim().length < 5) return "La dirección debe tener al menos 5 caracteres.";
 
@@ -1346,43 +1357,69 @@ export function IncidentForm({
             <div className="space-y-3">
               <p className="text-xs font-semibold text-gray-600">Persona que reportó el evento</p>
               <div className="grid grid-cols-12 gap-3">
-                <div className="col-span-12 sm:col-span-3">
+                <div className="col-span-12 sm:col-span-4">
                   <label className="text-xs text-gray-500 mb-1.5 block">
-                    DNI <span className="text-red-500">*</span>
+                    Documento de identidad <span className="text-red-500">*</span>
                   </label>
                   <div className="flex gap-2">
+                    <div className="relative flex-shrink-0">
+                      <select
+                        value={tipoDocReporta}
+                        onChange={(e) => {
+                          setTipoDocReporta(e.target.value as typeof tipoDocReporta);
+                          setReportaDni("");
+                        }}
+                        className={`${inputCls} appearance-none pr-6 text-xs`}
+                        aria-label="Tipo de documento"
+                      >
+                        <option value="DNI">DNI</option>
+                        <option value="Pasaporte">Pasaporte</option>
+                        <option value="Carnet de Extranjería">C.E.</option>
+                      </select>
+                      <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                    </div>
                     <input
                       type="text"
-                      inputMode="numeric"
-                      maxLength={8}
-                      placeholder="12345678"
+                      inputMode={tipoDocReporta === "DNI" ? "numeric" : "text"}
+                      maxLength={tipoDocReporta === "DNI" ? 8 : 20}
+                      placeholder={tipoDocReporta === "DNI" ? "12345678" : tipoDocReporta === "Pasaporte" ? "AB123456" : "000123456"}
                       value={reportaDni}
-                      onChange={(e) => setReportaDni(e.target.value.replace(/\D/g, ""))}
+                      onChange={(e) => {
+                        const val = tipoDocReporta === "DNI"
+                          ? e.target.value.replace(/\D/g, "")
+                          : e.target.value.toUpperCase();
+                        setReportaDni(val);
+                      }}
                       onKeyDown={(e) => {
-                        if (e.key === "Enter") {
+                        if (e.key === "Enter" && tipoDocReporta === "DNI") {
                           e.preventDefault();
                           buscarDniReporta();
                         }
                       }}
                       className={`${inputCls} flex-1 min-w-0 ${errBorde(!reportaDni.trim())}`}
                     />
-                    <button
-                      type="button"
-                      onClick={buscarDniReporta}
-                      disabled={buscandoDniReporta}
-                      title="Consultar datos por DNI"
-                      className="flex items-center gap-1 px-3 bg-[#009850] text-white rounded-lg text-xs font-medium hover:opacity-90 disabled:opacity-50 flex-shrink-0"
-                    >
-                      {buscandoDniReporta ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Search className="w-3.5 h-3.5" />
-                      )}
-                      {buscandoDniReporta ? "Buscando…" : "Buscar"}
-                    </button>
+                    {tipoDocReporta === "DNI" && (
+                      <button
+                        type="button"
+                        onClick={buscarDniReporta}
+                        disabled={buscandoDniReporta}
+                        title="Consultar datos por DNI"
+                        className="flex items-center gap-1 px-3 bg-[#009850] text-white rounded-lg text-xs font-medium hover:opacity-90 disabled:opacity-50 flex-shrink-0"
+                      >
+                        {buscandoDniReporta ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Search className="w-3.5 h-3.5" />
+                        )}
+                        {buscandoDniReporta ? "Buscando…" : "Buscar"}
+                      </button>
+                    )}
                   </div>
+                  {tipoDocReporta !== "DNI" && (
+                    <p className="text-[10px] text-gray-400 mt-1">Ingreso manual — no disponible búsqueda automática.</p>
+                  )}
                 </div>
-                <div className="col-span-12 sm:col-span-9">
+                <div className="col-span-12 sm:col-span-8">
                   <label className="text-xs text-gray-500 mb-1.5 block">
                     Nombre y apellidos completos <span className="text-red-500">*</span>
                   </label>
@@ -1580,8 +1617,8 @@ export function IncidentForm({
                     </p>
                   </div>
                   <div>
-                    <label className="text-xs text-gray-500 mb-1.5 block">
-                      Parroquia de referencia
+                    <label className={`text-xs mb-1.5 block ${intentoEnvio && !parroquia.trim() ? "text-red-600" : "text-gray-500"}`}>
+                      Parroquia de referencia <span className="text-red-500">*</span>
                       {cargandoParroquias && (
                         <span className="ml-2 text-[11px] text-[#009850]">buscando cercanas…</span>
                       )}
@@ -1597,6 +1634,7 @@ export function IncidentForm({
                             : PARROQUIAS_LIMA
                       }
                       placeholder="Buscar parroquia del sistema…"
+                      error={intentoEnvio && !parroquia.trim()}
                     />
                     <p className="text-[11px] text-gray-400 mt-1">
                       {parroquiasCercanas && parroquiasCercanas.length > 0

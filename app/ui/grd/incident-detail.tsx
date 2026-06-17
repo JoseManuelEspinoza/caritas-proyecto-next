@@ -108,11 +108,15 @@ export function IncidentDetail({ data }: { data: IncidentData }) {
             const completed = idx < currentStepIdx;
             const current = idx === currentStepIdx;
             const active = idx === activeStep;
+            const isNextStep = idx === currentStepIdx + 1;
+            // ATENCION (idx=4) solo se habilita como "siguiente paso" si el comité aprobó
+            const nextStepAllowed =
+              isNextStep && (idx !== 4 || data.solicitudComite?.resultado === "APROBAR");
             return (
               <button
                 key={step.etapa}
                 onClick={() => setActiveStep(idx)}
-                disabled={!current && !completed && idx !== currentStepIdx + 1}
+                disabled={!current && !completed && !nextStepAllowed}
                 className={`flex flex-col items-center gap-1 px-3 md:px-4 py-3 text-xs font-medium transition-colors border-b-2 flex-shrink-0 min-w-[70px] ${
                   active
                     ? "border-[#009850] text-[#009850] bg-[#009850]/5"
@@ -120,7 +124,7 @@ export function IncidentDetail({ data }: { data: IncidentData }) {
                       ? "border-transparent text-gray-400 hover:text-gray-600 hover:bg-gray-50"
                       : current
                         ? "border-[#009850]/40 text-gray-700 hover:bg-gray-50"
-                        : idx === currentStepIdx + 1
+                        : nextStepAllowed
                           ? "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
                           : "border-transparent text-gray-300 cursor-not-allowed"
                 }`}

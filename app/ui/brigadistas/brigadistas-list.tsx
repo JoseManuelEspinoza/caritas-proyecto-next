@@ -29,7 +29,7 @@ import {
   toggleDisponibilidadBrigadista,
   type BrigadistaFormData,
 } from "@/app/actions/brigadistas";
-import { PaginationControls, PageSizeSelector } from "@/app/ui/shared/pagination-controls";
+import { PaginationControls } from "@/app/ui/shared/pagination-controls";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -490,13 +490,6 @@ export function BrigadistasList({ brigadistas, parroquias, stats, canEdit = true
           <p className="text-sm text-gray-500 mt-0.5">Padrón de brigadistas — Cáritas Lima</p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={handleExportExcel}
-            className="hidden md:flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 bg-[#F5F5F5] border border-[#DDDDDD] rounded-lg hover:bg-gray-200 transition-colors"
-          >
-            <FileSpreadsheet className="w-4 h-4" />
-            Excel
-          </button>
           {canEdit && (
             <button
               onClick={openCreate}
@@ -584,13 +577,13 @@ export function BrigadistasList({ brigadistas, parroquias, stats, canEdit = true
             <option value="ACTIVO">Activos</option>
             <option value="INACTIVO">Inactivos</option>
           </select>
-          <PageSizeSelector
-            pageSize={pageSize}
-            onPageSizeChange={(s) => {
-              setPageSize(s);
-              setCurrentPage(1);
-            }}
-          />
+          <button
+            onClick={handleExportExcel}
+            className="hidden md:flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 bg-[#F5F5F5] border border-[#DDDDDD] rounded-lg hover:bg-gray-200 transition-colors"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            Excel
+          </button>
         </div>
       </div>
 
@@ -812,6 +805,8 @@ export function BrigadistasList({ brigadistas, parroquias, stats, canEdit = true
         totalPages={totalPages}
         onPrevious={() => setCurrentPage((p) => Math.max(1, p - 1))}
         onNext={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+        pageSize={pageSize}
+        onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
       />
 
       {/* Modal */}
