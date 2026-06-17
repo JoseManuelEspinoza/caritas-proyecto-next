@@ -933,6 +933,7 @@ async function main() {
       idTipoActividadPreventiva: "Simulacro de Sismo",
       nombreActividad: "Simulacro de Sismo Parroquial",
       fechaProgramada: enDiasISO(0),
+      lugarActividad: "Local parroquial",
       numeroParticipantesEstimado: 120,
     });
     await act.ejecutar.execute(a1.id, {
@@ -946,6 +947,7 @@ async function main() {
       idTipoActividadPreventiva: "Charla de Prevención",
       nombreActividad: "Charla: Mochila de Emergencia",
       fechaProgramada: enDiasISO(10),
+      lugarActividad: "Salón parroquial",
       numeroParticipantesEstimado: 50,
     });
     await act.programar.execute({
@@ -954,6 +956,7 @@ async function main() {
       idTipoActividadPreventiva: "Simulacro de Incendio",
       nombreActividad: "Simulacro de Incendio",
       fechaProgramada: enDiasISO(20),
+      lugarActividad: "Patio principal",
       numeroParticipantesEstimado: 80,
     });
     console.log("   ✓ 3 actividades (1 ejecutada, 2 programadas)");
