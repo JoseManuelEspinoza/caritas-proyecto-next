@@ -34,6 +34,7 @@ import type {
 } from "@/core/application/dtos/IncidenciaDetalleDTO";
 import { parseInforme } from "@/core/application/dtos/InformeContenidoDTO";
 import { PersonaModal } from "@/app/ui/grd/persona-modal";
+import { useConfirm } from "@/app/ui/shared/confirm-modal";
 import { EvidenciasRegistro, EvidenciaChip } from "@/app/ui/grd/incidente/components/EvidenciasRegistro";
 import { EvidenciaUploader } from "@/app/ui/grd/incidente/components/EvidenciaUploader";
 import { subirEvidencia } from "@/app/ui/grd/incidente/lib/subir-evidencia";
@@ -52,6 +53,7 @@ export function CampoStep({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const { showConfirm, ConfirmModalJSX } = useConfirm();
   // Brigadista solo puede llenar si está asignado a ESTE incidente
   const canAct =
     data.role === "admin" ||
@@ -142,8 +144,14 @@ export function CampoStep({
     });
   }
 
-  function handleDeletePersona(personaId: string) {
-    if (!confirm("¿Eliminar esta persona del empadronamiento?")) return;
+  async function handleDeletePersona(personaId: string) {
+    const ok = await showConfirm({
+      title: "¿Eliminar persona?",
+      message: "Se eliminará esta persona del empadronamiento. Esta acción no se puede deshacer.",
+      confirmLabel: "Sí, eliminar",
+      variant: "danger",
+    });
+    if (!ok) return;
     startTransition(async () => {
       const res = await deletePersonaCampo(personaId, data.idIncidencia);
       if (res && "message" in res) {
@@ -155,8 +163,14 @@ export function CampoStep({
     });
   }
 
-  function handleDeleteFamilia(grupoId: string) {
-    if (!confirm("¿Eliminar este grupo familiar y todas sus personas?")) return;
+  async function handleDeleteFamilia(grupoId: string) {
+    const ok = await showConfirm({
+      title: "¿Eliminar grupo familiar?",
+      message: "Se eliminará el grupo familiar y todas sus personas registradas. Esta acción no se puede deshacer.",
+      confirmLabel: "Sí, eliminar",
+      variant: "danger",
+    });
+    if (!ok) return;
     startTransition(async () => {
       const res = await deleteGrupoFamiliarCampo(grupoId, data.idIncidencia);
       if (res && "message" in res) {
@@ -783,6 +797,8 @@ export function CampoStep({
           </>
         )}
       </button>
+
+      {ConfirmModalJSX}
 
       {/* Modal de persona afectada (agregar / editar) */}
       {showPersonaModal && (
