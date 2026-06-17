@@ -54,6 +54,33 @@ type MobileKitAsignado = {
   articulos: MobileKitArticuloAsignado[];
 };
 
+type MobileArticuloEntregado = {
+  codigo: string;
+  descripcion: string;
+  cantidadAsignada: number;
+  cantidadEntregada: number;
+  confirmado: boolean;
+};
+
+type MobileKitEntregado = {
+  uuidKitAsignado: string;
+  refIdFamilia: string;
+  nombreFamilia: string;
+  tipoKit: string;
+  estadoEntrega: string;
+  articulos: MobileArticuloEntregado[];
+};
+
+type MobileEntregaMovil = {
+  idInforme: string;
+  estadoGeneral: string;
+  descripcionEntrega: string;
+  fechaEntrega: string | null;
+  fechaSincronizacion: string | null;
+  idUsuarioGRD: string | null;
+  kitsEntregados: MobileKitEntregado[];
+};
+
 function parseJsonObject(raw: string | null | undefined): Record<string, unknown> | null {
   if (!raw) return null;
 
@@ -137,6 +164,76 @@ function normalizarKitsAsignados(
   }
 
   return resultado;
+}
+
+function normalizarEntregaMovil(
+  idInforme: string,
+  contenidoInforme: string | null | undefined
+): MobileEntregaMovil | null {
+  const sc = parseJsonObject(contenidoInforme);
+  if (!sc) return null;
+
+  const kitsRaw = Array.isArray(sc.kitsEntregados) ? sc.kitsEntregados : [];
+
+  const kitsEntregados = kitsRaw
+    .map((kitRaw): MobileKitEntregado | null => {
+      const kit = asRecord(kitRaw);
+      if (!kit) return null;
+
+      const uuidKitAsignado = asString(kit.uuidKitAsignado);
+      const tipoKit = asString(kit.tipoKit);
+      if (!uuidKitAsignado || !tipoKit) return null;
+
+      const articulosRaw = Array.isArray(kit.articulos) ? kit.articulos : [];
+
+      const articulos = articulosRaw
+        .map((artRaw): MobileArticuloEntregado | null => {
+          const art = asRecord(artRaw);
+          if (!art) return null;
+
+          const codigo = asString(art.codigo);
+          const descripcion = asString(art.descripcion, codigo);
+          if (!codigo && !descripcion) return null;
+
+          const cantidadAsignada = asCantidad(art.cantidadAsignada);
+          const cantidadEntregada = Number(art.cantidadEntregada);
+          const confirmado =
+            art.confirmado === true ||
+            String(art.confirmado ?? "").toLowerCase() === "true" ||
+            (Number.isFinite(cantidadEntregada) && cantidadEntregada > 0);
+
+          return {
+            codigo,
+            descripcion,
+            cantidadAsignada,
+            cantidadEntregada: Number.isFinite(cantidadEntregada)
+              ? Math.max(0, Math.trunc(cantidadEntregada))
+              : 0,
+            confirmado,
+          };
+        })
+        .filter((art): art is MobileArticuloEntregado => art !== null);
+
+      return {
+        uuidKitAsignado,
+        refIdFamilia: asString(kit.refIdFamilia),
+        nombreFamilia: asString(kit.nombreFamilia, "Familia"),
+        tipoKit,
+        estadoEntrega: asString(kit.estadoEntrega, "PENDIENTE"),
+        articulos,
+      };
+    })
+    .filter((kit): kit is MobileKitEntregado => kit !== null);
+
+  return {
+    idInforme,
+    estadoGeneral: asString(sc.estadoGeneral, "PENDIENTE"),
+    descripcionEntrega: asString(sc.descripcionEntrega),
+    fechaEntrega: asString(sc.fechaEntrega) || null,
+    fechaSincronizacion: asString(sc.fechaSincronizacion) || null,
+    idUsuarioGRD: asString(sc.idUsuarioGRD) || null,
+    kitsEntregados,
+  };
 }
 
 export async function GET(request: Request) {
@@ -407,9 +504,36 @@ export async function GET(request: Request) {
       );
     }
 
+    const informesEntregaMovil = allIds.length
+      ? await prisma.informe.findMany({
+          where: {
+            idIncidencia: { in: allIds },
+            tipoInforme: "ENTREGA_MOVIL",
+          },
+          orderBy: { fechaElaboracion: "desc" },
+          select: {
+            idInforme: true,
+            idIncidencia: true,
+            contenido: true,
+            fechaElaboracion: true,
+          },
+        })
+      : [];
+
+    const entregaMovilPorIncidencia = new Map<string, MobileEntregaMovil>();
+    for (const informe of informesEntregaMovil) {
+      if (entregaMovilPorIncidencia.has(informe.idIncidencia)) continue;
+
+      const entregaMovil = normalizarEntregaMovil(informe.idInforme, informe.contenido);
+      if (entregaMovil) {
+        entregaMovilPorIncidencia.set(informe.idIncidencia, entregaMovil);
+      }
+    }
+
     const mapIncidencia = (inc: typeof incidenciasResponsable[number]) => ({
       asignacion: null,
       kitsAsignados: kitsPorIncidencia.get(inc.idIncidencia) ?? [],
+      entregaMovil: entregaMovilPorIncidencia.get(inc.idIncidencia) ?? null,
       incidencia: {
         ...inc,
         latitud: decimalToNumber(inc.latitud),
@@ -445,6 +569,7 @@ export async function GET(request: Request) {
           fechaSincronizacion: asignacion.fechaSincronizacion,
         },
         kitsAsignados: kitsPorIncidencia.get(asignacion.incidencia.idIncidencia) ?? [],
+        entregaMovil: entregaMovilPorIncidencia.get(asignacion.incidencia.idIncidencia) ?? null,
         incidencia: {
           ...asignacion.incidencia,
           latitud: decimalToNumber(asignacion.incidencia.latitud),
