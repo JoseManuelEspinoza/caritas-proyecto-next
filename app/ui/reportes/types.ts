@@ -4,18 +4,62 @@ export type Conteo = { label: string; value: number };
 export type ExportRow = Record<string, string | number>;
 export type IncidenciaRow = { id: string } & Record<string, string | number>;
 
+export interface BrigadistaParroquiaData {
+  parroquia: string;
+  total: number;
+  capacitados: number;
+  pct: number;
+}
+
+export interface KitStockData {
+  tipoKit: string;
+  stockActual: number;
+  total: number;
+}
+
+export type RiesgoNivel = "CRÍTICO" | "ALTO" | "MEDIO" | "BAJO";
+
+export interface ParroquiaRiesgoData {
+  nombre: string;
+  latitud?: number | null;
+  longitud?: number | null;
+  incidencias: number;
+  brigadistas: number;
+  pctCapacitados: number;
+  tienePlan: boolean;
+  actividadesEjecutadas: number;
+  actividadesTotal: number;
+  riesgoNivel: RiesgoNivel;
+  riesgoScore: number;
+}
+
 export interface ActividadesData {
   total: number;
   ejecutadas: number;
   totalParticipantes: number;
   porEstado: Conteo[];
   porTipo: Conteo[];
+  porParroquia: Conteo[];
 }
 
 export interface IncidenciasData {
   cerradas: number;
   enSeguimiento: number;
   activas: number;
+  porGravedad: Conteo[];
+}
+
+export interface KitsData {
+  totalEntregados: number;
+  porTipo: Conteo[];
+  porParroquia: Conteo[];
+  stockActual: KitStockData[];
+}
+
+export interface BrigadistasData {
+  total: number;
+  capacitados: number;
+  porParroquia: BrigadistaParroquiaData[];
 }
 
 export interface ReportesProps {
@@ -27,6 +71,10 @@ export interface ReportesProps {
     pctActividadesEjecutadas: number;
     kitsEntregados: number;
     tiempoPromedio: number;
+    totalBrigadistas: number;
+    brigadistasCapacitados: number;
+    totalParroquias: number;
+    parroquiasConPlan: number;
   };
   porEstado: Conteo[];
   porTipo: Conteo[];
@@ -38,6 +86,9 @@ export interface ReportesProps {
   dataExportacion: ExportRow[];
   actividadesData: ActividadesData;
   incidenciasData: IncidenciasData;
+  brigadistasData: BrigadistasData;
+  kitsData: KitsData;
+  parroquiasRiesgo: ParroquiaRiesgoData[];
 }
 
 export const COLORS = [

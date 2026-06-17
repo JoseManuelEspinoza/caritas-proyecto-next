@@ -3,11 +3,15 @@
 import { useState, useRef, useEffect } from "react";
 import {
   ChevronDown, Check, X, Filter, Download,
-  FileText, FileSpreadsheet, Sheet,
+  FileText, FileSpreadsheet,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { jsPDF } from "jspdf";
-import { type ExportRow, unique } from "./types";
+import {
+  type ExportRow, type Conteo, type IncidenciasData,
+  type BrigadistasData, type KitsData, type ActividadesData, type ParroquiaRiesgoData,
+  unique,
+} from "./types";
 
 // ─── FilterDropdown ───────────────────────────────────────────────────────────
 function FilterDropdown({
@@ -90,96 +94,269 @@ function FilterDropdown({
   );
 }
 
+// ─── Helpers de previsualización ─────────────────────────────────────────────
+
+function PreviewHeader({ title, subtitle, periodo }: { title: string; subtitle: string; periodo: string }) {
+  return (
+    <div className="bg-[#009850] text-white px-4 py-3">
+      <p className="text-[11px] font-bold tracking-tight leading-tight">{title}</p>
+      <p className="text-[9px] text-green-100 mt-0.5">{subtitle}</p>
+      <p className="text-[9px] text-green-200 mt-0.5">Período: {periodo}</p>
+    </div>
+  );
+}
+
+function PreviewKpi({ val, label, color }: { val: string; label: string; color: string }) {
+  return (
+    <div className="flex-1 border border-gray-100 rounded p-1.5 text-center bg-gray-50/60">
+      <div className="text-sm font-bold" style={{ color }}>{val}</div>
+      <div className="text-[8px] text-gray-500 leading-tight mt-0.5">{label}</div>
+    </div>
+  );
+}
+
+function PreviewSectionTitle({ title }: { title: string }) {
+  return (
+    <div className="flex items-center gap-1.5 mb-1.5">
+      <div className="w-1.5 h-3 bg-[#009850] rounded-sm" />
+      <span className="text-[8px] font-bold text-gray-700 uppercase tracking-wide">{title}</span>
+    </div>
+  );
+}
+
+function PreviewBarRow({ label, count, total, color }: { label: string; count: number; total: number; color: string }) {
+  const pct = total > 0 ? (count / total) * 100 : 0;
+  return (
+    <tr>
+      <td className="text-[8px] text-gray-700 py-0.5 pr-1 max-w-[80px] truncate">{label}</td>
+      <td className="py-0.5 w-20">
+        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+          <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
+        </div>
+      </td>
+      <td className="text-[8px] font-bold text-gray-700 text-right pr-1 w-5">{count}</td>
+      <td className="text-[8px] text-gray-400 w-10">{pct.toFixed(1)}%</td>
+    </tr>
+  );
+}
+
+function PreviewFooter() {
+  return (
+    <div className="flex justify-between text-[7px] text-gray-400 border-t border-gray-100 pt-1 mt-auto">
+      <span>Cáritas Lima — Sistema GRD</span>
+      <span>Página 1 de 2</span>
+    </div>
+  );
+}
+
 // ─── ExportPreview ────────────────────────────────────────────────────────────
 function ExportPreview({
-  format, data, desde, hasta,
+  format, data, desde, hasta, activeTab,
+  totales, porEstado, porTipo, porParroquia, incidenciasData,
+  brigadistasData, kitsData, actividadesData, parroquiasRiesgo,
 }: {
-  format: "excel" | "csv" | "pdf";
+  format: "excel" | "pdf";
   data: ExportRow[];
   desde: string;
   hasta: string;
+  activeTab: TabId;
+  totales?: ExportModalProps["totales"];
+  porEstado?: Conteo[];
+  porTipo?: Conteo[];
+  porParroquia?: Conteo[];
+  incidenciasData?: IncidenciasData;
+  brigadistasData?: BrigadistasData;
+  kitsData?: KitsData;
+  actividadesData?: ActividadesData;
+  parroquiasRiesgo?: ParroquiaRiesgoData[];
 }) {
-  const preview = data.slice(0, 6);
+  const preview = data.slice(0, 5);
   const cols = ["Codigo", "Fecha", "Tipo", "Gravedad", "Estado", "Parroquia"];
   const headers = ["Código", "Fecha", "Tipo", "Gravedad", "Estado", "Parroquia"];
+  const periodo = `${desde} — ${hasta}`;
 
   if (format === "pdf") {
-    return (
-      <div className="bg-white shadow-xl w-full" style={{ minHeight: 480 }}>
-        <div className="bg-[#009850] text-white px-6 py-5">
-          <div className="flex justify-between items-start">
-            <div>
-              <h2 className="text-base font-bold tracking-tight">Reporte de Incidencias</h2>
-              <p className="text-xs text-green-100 mt-0.5">Cáritas Lima — Sistema GRD</p>
-            </div>
-            <div className="text-right text-[11px] text-green-100 space-y-0.5">
-              <div className="font-semibold text-white">{data.length} registros</div>
-              <div>{desde} — {hasta}</div>
-            </div>
-          </div>
-        </div>
-
-        <div className="px-4 pt-4 pb-3">
-          <table className="w-full border-collapse text-[10px]">
-            <thead>
-              <tr className="bg-[#009850]">
-                {headers.map((h) => (
-                  <th key={h} className="px-2 py-2 text-left text-white font-semibold text-[9px] uppercase tracking-wide">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {preview.map((row, i) => (
-                <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-[#F8FAF9]"}>
-                  {cols.map((c) => (
-                    <td key={c} className="px-2 py-1.5 text-gray-700 border-b border-gray-100">
-                      {String(row[c] ?? "-")}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {data.length > 6 && (
-            <div className="text-[10px] text-gray-400 text-center py-2 border-b border-gray-100">
-              ··· y {data.length - 6} registros más
-            </div>
-          )}
-        </div>
-
-        <div className="px-4 pb-4">
-          <div className="border border-dashed border-[#009850]/30 rounded-lg p-4 flex flex-col items-center gap-2.5 bg-[#009850]/3">
-            <div className="flex items-end gap-4 opacity-70">
-              <div className="flex items-end gap-0.5 h-10">
-                {[40, 70, 50, 90, 60, 35].map((h, i) => (
-                  <div key={i} className="w-2.5 rounded-sm bg-[#009850]" style={{ height: `${h}%` }} />
-                ))}
-              </div>
-              <svg width="40" height="40" viewBox="0 0 40 40">
-                <circle cx="20" cy="20" r="16" fill="none" stroke="#009850" strokeWidth="8" strokeDasharray="50 50" />
-                <circle cx="20" cy="20" r="16" fill="none" stroke="#FFC300" strokeWidth="8" strokeDasharray="25 75" strokeDashoffset="-50" />
-                <circle cx="20" cy="20" r="16" fill="none" stroke="#FF823C" strokeWidth="8" strokeDasharray="25 75" strokeDashoffset="-75" />
-              </svg>
-              <div className="flex items-end gap-0.5 h-10 opacity-70">
-                {[20, 45, 30, 65, 50, 80, 55].map((h, i) => (
-                  <div key={i} className="w-2 rounded-sm bg-[#009850]/60" style={{ height: `${h}%` }} />
-                ))}
-              </div>
-            </div>
-            <p className="text-[10px] text-gray-500 text-center leading-snug">
-              Los gráficos del dashboard se incluyen en el PDF exportado
-            </p>
-          </div>
-        </div>
-
-        <div className="px-4 pb-3 pt-1 text-[9px] text-gray-400 flex justify-between border-t border-gray-100">
-          <span>Generado el {new Date().toLocaleDateString("es-PE")}</span>
-          <span>Cáritas Lima — GRD</span>
-        </div>
+    const wrap = (children: React.ReactNode) => (
+      <div className="bg-white shadow-xl w-full flex flex-col gap-0" style={{ minHeight: 480 }}>
+        {children}
       </div>
     );
+
+    // ── Brigadistas ───────────────────────────────────────────────────────
+    if (activeTab === "brigadistas" && brigadistasData) {
+      const pct = totales?.pctBrigadistasCapacitados ?? 0;
+      return wrap(<>
+        <PreviewHeader title="REPORTE DE BRIGADISTAS CAPACITADOS" subtitle="Cáritas Lima — Sistema GRD" periodo={periodo} />
+        <div className="p-3 space-y-3 flex-1">
+          <div className="flex gap-1.5">
+            <PreviewKpi val={String(brigadistasData.total)} label="Total Brigadistas" color="#009850" />
+            <PreviewKpi val={String(brigadistasData.capacitados)} label="Certificados" color="#009850" />
+            <PreviewKpi val={String(brigadistasData.total - brigadistasData.capacitados)} label="Sin Certif." color="#F59E0B" />
+            <PreviewKpi val={`${pct}%`} label="% Capacitación" color={pct >= 70 ? "#009850" : "#EF4444"} />
+          </div>
+          <div>
+            <PreviewSectionTitle title="Brigadistas por Parroquia" />
+            <table className="w-full">
+              <thead><tr className="bg-[#009850]">
+                {["Parroquia","Total","Certif.","%","Brecha"].map(h => <th key={h} className="text-[8px] text-white font-semibold px-1.5 py-1 text-left">{h}</th>)}
+              </tr></thead>
+              <tbody>
+                {brigadistasData.porParroquia.slice(0,6).map((p,i) => (
+                  <tr key={i} className={i%2===0?"bg-white":"bg-gray-50"}>
+                    <td className="text-[8px] text-gray-700 px-1.5 py-0.5 truncate max-w-[100px]">{p.parroquia}</td>
+                    <td className="text-[8px] text-gray-700 px-1.5 py-0.5 text-center">{p.total}</td>
+                    <td className="text-[8px] text-[#009850] font-bold px-1.5 py-0.5 text-center">{p.capacitados}</td>
+                    <td className="text-[8px] font-bold px-1.5 py-0.5 text-center" style={{color: p.pct>=70?"#009850":p.pct>0?"#F59E0B":"#EF4444"}}>{p.pct}%</td>
+                    <td className="text-[8px] text-gray-500 px-1.5 py-0.5 text-center">{p.total-p.capacitados}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {brigadistasData.porParroquia.length > 6 && <p className="text-[8px] text-gray-400 text-center mt-1">··· {brigadistasData.porParroquia.length - 6} parroquias más</p>}
+          </div>
+        </div>
+        <div className="px-3 pb-2"><PreviewFooter /></div>
+      </>);
+    }
+
+    // ── Prevención ────────────────────────────────────────────────────────
+    if (activeTab === "prevencion" && actividadesData) {
+      const pct = actividadesData.total > 0 ? Math.round((actividadesData.ejecutadas/actividadesData.total)*100) : 0;
+      return wrap(<>
+        <PreviewHeader title="REPORTE DE ACCIONES PREVENTIVAS" subtitle="Cáritas Lima — Sistema GRD" periodo={periodo} />
+        <div className="p-3 space-y-3 flex-1">
+          <div className="flex gap-1.5">
+            <PreviewKpi val={String(actividadesData.total)} label="Total Actividades" color="#3B82F6" />
+            <PreviewKpi val={String(actividadesData.ejecutadas)} label="Ejecutadas" color="#009850" />
+            <PreviewKpi val={`${pct}%`} label="Tasa Ejecución" color={pct>=70?"#009850":"#F59E0B"} />
+            <PreviewKpi val={String(actividadesData.totalParticipantes)} label="Participantes" color="#9155A8" />
+          </div>
+          <div>
+            <PreviewSectionTitle title="Por Estado" />
+            <table className="w-full">
+              <tbody>{actividadesData.porEstado.slice(0,5).map((e,i) => <PreviewBarRow key={i} label={e.label} count={e.value} total={actividadesData.total} color="#3B82F6" />)}</tbody>
+            </table>
+          </div>
+          {actividadesData.porParroquia.length > 0 && <div>
+            <PreviewSectionTitle title="Top Parroquias" />
+            <table className="w-full">
+              <tbody>{actividadesData.porParroquia.slice(0,4).map((p,i) => <PreviewBarRow key={i} label={p.label} count={p.value} total={actividadesData.total} color="#9155A8" />)}</tbody>
+            </table>
+          </div>}
+        </div>
+        <div className="px-3 pb-2"><PreviewFooter /></div>
+      </>);
+    }
+
+    // ── Kits ──────────────────────────────────────────────────────────────
+    if (activeTab === "kits" && kitsData) {
+      const stock = kitsData.stockActual.reduce((s,k) => s+k.stockActual, 0);
+      return wrap(<>
+        <PreviewHeader title="REPORTE DE KITS ENTREGADOS" subtitle="Cáritas Lima — Sistema GRD" periodo={periodo} />
+        <div className="p-3 space-y-3 flex-1">
+          <div className="flex gap-1.5">
+            <PreviewKpi val={String(kitsData.totalEntregados)} label="Distribuidas" color="#9155A8" />
+            <PreviewKpi val={String(kitsData.porParroquia.length)} label="Parroquias" color="#3B82F6" />
+            <PreviewKpi val={String(kitsData.porTipo.length)} label="Tipos" color="#F59E0B" />
+            <PreviewKpi val={String(stock)} label="Stock" color="#009850" />
+          </div>
+          {kitsData.porParroquia.length > 0 && <div>
+            <PreviewSectionTitle title="Por Parroquia" />
+            <table className="w-full">
+              <tbody>{kitsData.porParroquia.slice(0,5).map((p,i) => <PreviewBarRow key={i} label={p.label} count={p.value} total={kitsData.totalEntregados} color="#9155A8" />)}</tbody>
+            </table>
+          </div>}
+          {kitsData.porTipo.length > 0 && <div>
+            <PreviewSectionTitle title="Por Tipo de Kit" />
+            <table className="w-full">
+              <tbody>{kitsData.porTipo.slice(0,4).map((t,i) => <PreviewBarRow key={i} label={t.label} count={t.value} total={kitsData.totalEntregados} color="#F59E0B" />)}</tbody>
+            </table>
+          </div>}
+        </div>
+        <div className="px-3 pb-2"><PreviewFooter /></div>
+      </>);
+    }
+
+    // ── Afectación ────────────────────────────────────────────────────────
+    if (activeTab === "riesgo" && parroquiasRiesgo) {
+      const counts = {CRÍTICO:0,ALTO:0,MEDIO:0,BAJO:0} as Record<string,number>;
+      parroquiasRiesgo.forEach(p => counts[p.riesgoNivel]++);
+      const nivelColors: Record<string,string> = {CRÍTICO:"#EF4444",ALTO:"#F97316",MEDIO:"#F59E0B",BAJO:"#009850"};
+      return wrap(<>
+        <PreviewHeader title="REPORTE DE AFECTACIÓN PARROQUIAL" subtitle="Nivel de afectación estimado" periodo={periodo} />
+        <div className="p-3 space-y-3 flex-1">
+          <div className="flex gap-1.5">
+            {(["CRÍTICO","ALTO","MEDIO","BAJO"] as const).map(n => <PreviewKpi key={n} val={String(counts[n])} label={`Riesgo ${n}`} color={nivelColors[n]} />)}
+          </div>
+          <div>
+            <PreviewSectionTitle title="Ranking de Parroquias por Nivel de Afectación Estimada" />
+            <table className="w-full">
+              <thead><tr className="bg-[#009850]">
+                {["#","Parroquia","Nivel","Casos","Brigadistas","%Cert.","Plan"].map(h => <th key={h} className="text-[7px] text-white font-semibold px-1 py-1 text-left">{h}</th>)}
+              </tr></thead>
+              <tbody>
+                {parroquiasRiesgo.slice(0,7).map((p,i) => (
+                  <tr key={i} className={i%2===0?"bg-white":"bg-gray-50"}>
+                    <td className="text-[7px] text-gray-400 px-1 py-0.5">{i+1}</td>
+                    <td className="text-[7px] text-gray-700 px-1 py-0.5 truncate max-w-[80px]">{p.nombre}</td>
+                    <td className="text-[7px] font-bold px-1 py-0.5" style={{color:nivelColors[p.riesgoNivel]}}>{p.riesgoNivel}</td>
+                    <td className="text-[7px] text-gray-700 px-1 py-0.5 text-center">{p.incidencias}</td>
+                    <td className="text-[7px] text-gray-700 px-1 py-0.5 text-center">{p.brigadistas}</td>
+                    <td className="text-[7px] text-gray-700 px-1 py-0.5 text-center">{p.pctCapacitados}%</td>
+                    <td className="text-[7px] px-1 py-0.5" style={{color:p.tienePlan?"#009850":"#EF4444"}}>{p.tienePlan?"Sí":"No"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {parroquiasRiesgo.length > 7 && <p className="text-[7px] text-gray-400 text-center mt-1">··· {parroquiasRiesgo.length - 7} parroquias más</p>}
+          </div>
+        </div>
+        <div className="px-3 pb-2"><PreviewFooter /></div>
+      </>);
+    }
+
+    // ── Resumen General / Casos ───────────────────────────────────────────
+    const titulo = activeTab === "casos" ? "REPORTE MENSUAL DE CASOS ATENDIDOS" : "REPORTE GENERAL DEL SISTEMA GRD";
+    return wrap(<>
+      <PreviewHeader title={titulo} subtitle="Cáritas Lima — Sistema GRD" periodo={periodo} />
+      <div className="p-3 space-y-3 flex-1">
+        <div className="flex gap-1">
+          <PreviewKpi val={String(totales?.incidencias ?? data.length)} label="Incidencias" color="#EF4444" />
+          <PreviewKpi val={`${totales?.pctBrigadistasCapacitados ?? 0}%`} label="Brig. Certif." color="#009850" />
+          <PreviewKpi val={`${totales?.pctParroquiasPlan ?? 0}%`} label="Con Plan GRD" color="#3B82F6" />
+          <PreviewKpi val={`${totales?.pctActividadesEjecutadas ?? 0}%`} label="Actividades" color="#F59E0B" />
+          <PreviewKpi val={String(totales?.kitsEntregados ?? 0)} label="Kits" color="#9155A8" />
+        </div>
+        {[
+          { label: "Brigadistas Certificados", pct: totales?.pctBrigadistasCapacitados ?? 0, color: "#009850" },
+          { label: "Parroquias con Plan GRD",  pct: totales?.pctParroquiasPlan ?? 0,            color: "#009850" },
+          { label: "Actividades Ejecutadas",   pct: totales?.pctActividadesEjecutadas ?? 0,     color: "#F59E0B" },
+        ].map(op => (
+          <div key={op.label} className="space-y-0.5">
+            <div className="flex justify-between text-[8px]">
+              <span className="font-semibold text-gray-700">{op.label}</span>
+              <span className="font-bold" style={{ color: op.color }}>{op.pct}%</span>
+            </div>
+            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-full rounded-full" style={{ width: `${op.pct}%`, background: op.color }} />
+            </div>
+          </div>
+        ))}
+        {porEstado && porEstado.length > 0 && <div>
+          <PreviewSectionTitle title="Distribución por Estado" />
+          <table className="w-full">
+            <tbody>{porEstado.slice(0,5).map((e,i) => <PreviewBarRow key={i} label={e.label} count={e.value} total={data.length || 1} color="#009850" />)}</tbody>
+          </table>
+        </div>}
+        {incidenciasData?.porGravedad && incidenciasData.porGravedad.length > 0 && <div>
+          <PreviewSectionTitle title="Por Gravedad" />
+          <table className="w-full">
+            <tbody>{incidenciasData.porGravedad.slice(0,4).map((g,i) => <PreviewBarRow key={i} label={g.label} count={g.value} total={data.length||1} color="#EF4444" />)}</tbody>
+          </table>
+        </div>}
+      </div>
+      <div className="px-3 pb-2"><PreviewFooter /></div>
+    </>);
   }
 
   if (format === "excel") {
@@ -298,71 +475,57 @@ function ExportPreview({
     );
   }
 
-  // CSV — estilo editor de código
-  const csvLines = [
-    cols.join(","),
-    ...preview.map((row) => cols.map((c) => `"${row[c] ?? ""}"`).join(",")),
-  ];
-  if (data.length > 6) csvLines.push(`# ··· y ${data.length - 6} registros más`);
-
-  return (
-    <div className="bg-[#1e1e2e] shadow-xl w-full font-mono" style={{ minHeight: 480 }}>
-      <div className="bg-[#2d2d2d] px-3 py-2 flex items-center gap-2 border-b border-[#404040]">
-        <Sheet className="w-3.5 h-3.5 text-[#4ec9b0] flex-shrink-0" />
-        <span className="text-[#cccccc] text-[11px]">Reporte_Incidencias.csv</span>
-        <span className="ml-auto text-[#888] text-[10px]">UTF-8 · CSV</span>
-      </div>
-      <div className="flex">
-        <div className="text-[#585858] text-[10px] py-3 px-2 text-right select-none border-r border-[#333] leading-5">
-          {csvLines.map((_, i) => <div key={i}>{i + 1}</div>)}
-        </div>
-        <div className="flex-1 py-3 px-4 text-[10px] leading-5 overflow-x-auto">
-          {csvLines.map((line, i) => {
-            if (line.startsWith("#")) return <div key={i} className="text-[#6a9955]">{line}</div>;
-            if (i === 0) return <div key={i} className="text-[#ce9178]">{line}</div>;
-            const parts = line.split(",");
-            return (
-              <div key={i}>
-                <span className="text-[#9cdcfe]">{parts[0]}</span>
-                {parts.slice(1).map((p, j) => (
-                  <span key={j}>
-                    <span className="text-[#808080]">,</span>
-                    <span className="text-[#ce9178]">{p}</span>
-                  </span>
-                ))}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
+  return null;
 }
 
 // ─── ExportModal ──────────────────────────────────────────────────────────────
+type TabId = "resumen" | "casos" | "brigadistas" | "prevencion" | "kits" | "riesgo";
+
 interface ExportModalProps {
   data: ExportRow[];
   parroquias: { id: string; nombre: string }[];
   onClose: () => void;
   desde: string;
   hasta: string;
+  activeTab?: TabId;
+  totales?: {
+    incidencias: number;
+    pctBrigadistasCapacitados: number;
+    pctParroquiasPlan: number;
+    pctActividadesEjecutadas: number;
+    kitsEntregados: number;
+    tiempoPromedio: number;
+    totalBrigadistas: number;
+    totalParroquias: number;
+  };
+  porEstado?: Conteo[];
+  porTipo?: Conteo[];
+  porParroquia?: Conteo[];
+  incidenciasData?: IncidenciasData;
+  brigadistasData?: BrigadistasData;
+  kitsData?: KitsData;
+  actividadesData?: ActividadesData;
+  parroquiasRiesgo?: ParroquiaRiesgoData[];
 }
 
-export function ExportModal({ data, parroquias, onClose, desde, hasta }: ExportModalProps) {
+export function ExportModal({
+  data, parroquias, onClose, desde, hasta,
+  activeTab = "resumen",
+  totales, porEstado, porTipo, porParroquia, incidenciasData,
+  brigadistasData, kitsData, actividadesData, parroquiasRiesgo,
+}: ExportModalProps) {
   const tipos = unique(data, "Tipo");
   const estados = unique(data, "Estado");
   const gravedades = unique(data, "Gravedad");
-  const parroquiasNombres = [...new Set(data.map((r) => String(r.Parroquia)).filter(Boolean))].sort();
+  // Usa el listado completo de parroquias, no solo las que aparecen en los datos
+  const parroquiasNombres = parroquias.map(p => p.nombre).sort();
 
-  const [format, setFormat] = useState<"excel" | "csv" | "pdf">("pdf");
+  const [format, setFormat] = useState<"excel" | "pdf">("pdf");
   const [selTipo, setSelTipo] = useState<string[]>([]);
   const [selEstado, setSelEstado] = useState<string[]>([]);
   const [selGravedad, setSelGravedad] = useState<string[]>([]);
   const [selParroquia, setSelParroquia] = useState<string[]>([]);
   const [exporting, setExporting] = useState(false);
-
-  // Suppress unused variable warning — parroquias kept in props for future use
-  void parroquias;
 
   const filteredData = data.filter((row) => {
     if (selTipo.length > 0 && !selTipo.includes(String(row.Tipo))) return false;
@@ -372,18 +535,42 @@ export function ExportModal({ data, parroquias, onClose, desde, hasta }: ExportM
     return true;
   });
 
-  async function svgToDataUrl(svgEl: SVGSVGElement): Promise<string | null> {
+  async function svgToDataUrl(svgEl: SVGSVGElement): Promise<{ data: string; w: number; h: number } | null> {
     try {
+      // Dimensiones: getBoundingClientRect falla cuando el elemento está detrás del modal
+      let w = svgEl.getBoundingClientRect().width;
+      let h = svgEl.getBoundingClientRect().height;
+
+      // Fallback 1: atributos width/height del SVG
+      if (w < 10 || h < 10) {
+        w = parseFloat(svgEl.getAttribute("width") || "0");
+        h = parseFloat(svgEl.getAttribute("height") || "0");
+      }
+      // Fallback 2: viewBox del SVG
+      if (w < 10 || h < 10) {
+        const vb = svgEl.getAttribute("viewBox");
+        if (vb) {
+          const parts = vb.trim().split(/[\s,]+/).map(Number);
+          if (parts.length >= 4) { w = parts[2]; h = parts[3]; }
+        }
+      }
+      // Fallback 3: contenedor padre
+      if (w < 10 || h < 10) {
+        const parent = svgEl.parentElement;
+        if (parent) { w = parent.offsetWidth || 600; h = parent.offsetHeight || 350; }
+      }
+
+      if (w < 30 || h < 30) return null;
+
       const serialized = new XMLSerializer().serializeToString(svgEl);
       const b64 = btoa(unescape(encodeURIComponent(serialized)));
       const dataUrl = `data:image/svg+xml;base64,${b64}`;
-      const rect = svgEl.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) return null;
-      return await new Promise<string | null>((resolve) => {
-        const canvas = document.createElement("canvas");
+
+      const data = await new Promise<string | null>((resolve) => {
         const scale = 2;
-        canvas.width = rect.width * scale;
-        canvas.height = rect.height * scale;
+        const canvas = document.createElement("canvas");
+        canvas.width = w * scale;
+        canvas.height = h * scale;
         const ctx = canvas.getContext("2d");
         if (!ctx) return resolve(null);
         const img = new Image();
@@ -391,11 +578,13 @@ export function ExportModal({ data, parroquias, onClose, desde, hasta }: ExportM
           ctx.fillStyle = "#ffffff";
           ctx.fillRect(0, 0, canvas.width, canvas.height);
           ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          resolve(canvas.toDataURL("image/png", 0.92));
+          resolve(canvas.toDataURL("image/png", 0.95));
         };
         img.onerror = () => resolve(null);
         img.src = dataUrl;
       });
+
+      return data ? { data, w, h } : null;
     } catch {
       return null;
     }
@@ -406,17 +595,7 @@ export function ExportModal({ data, parroquias, onClose, desde, hasta }: ExportM
     const fmtDate = (iso: string) => { const [y, m, d] = iso.split("-"); return `${d}-${m}-${y}`; };
     const nombre = `ReporteGeneral_Caritas_${fmtDate(desde)}_${fmtDate(hasta)}`;
 
-    if (format === "csv") {
-      const cols = Object.keys(filteredData[0] ?? {});
-      const rows = [
-        cols.join(","),
-        ...filteredData.map((r) => cols.map((c) => `"${r[c] ?? ""}"`).join(",")),
-      ];
-      const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a"); a.href = url; a.download = `${nombre}.csv`; a.click();
-      URL.revokeObjectURL(url);
-    } else if (format === "excel") {
+    if (format === "excel") {
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filteredData), "Incidencias");
       const byEstado = [...new Set(filteredData.map((r) => String(r.Estado)))].map((e) => ({
@@ -433,85 +612,726 @@ export function ExportModal({ data, parroquias, onClose, desde, hasta }: ExportM
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(byParr), "Por Parroquia");
       XLSX.writeFile(wb, `${nombre}.xlsx`);
     } else {
-      const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-      const pageW = 297; const pageH = 210; const margin = 14;
+      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      // ── Constantes y utilidades ──────────────────────────────────────────
+      const pageW = 210; const pageH = 297; const mg = 14;
+      const contentW = pageW - mg * 2;
+      const G: [number, number, number] = [0, 152, 80];
+      const today = new Date().toLocaleDateString("es-PE");
+      const periodo = `${desde} a ${hasta}`;
 
-      doc.setFillColor(0, 152, 80);
-      doc.rect(0, 0, pageW, 18, "F");
-      doc.setFontSize(13); doc.setFont("helvetica", "bold"); doc.setTextColor(255, 255, 255);
-      doc.text("Reporte de Incidencias — Cáritas GRD", margin, 12);
-      doc.setFontSize(8); doc.setFont("helvetica", "normal");
-      doc.text(`${filteredData.length} registros · ${desde} — ${hasta}`, pageW - margin, 12, { align: "right" });
+      // Sanitiza texto: jsPDF/helvetica no renderiza bien tildes en mayus ni simbolos especiales
+      const s = (t: string) => t
+        .replace(/[ÁÀÂÄ]/g,"A").replace(/[ÉÈÊË]/g,"E").replace(/[ÍÌÎÏ]/g,"I")
+        .replace(/[ÓÒÔÖ]/g,"O").replace(/[ÚÙÛÜ]/g,"U").replace(/Ñ/g,"N")
+        .replace(/[áàâä]/g,"a").replace(/[éèêë]/g,"e").replace(/[íìîï]/g,"i")
+        .replace(/[óòôö]/g,"o").replace(/[úùûü]/g,"u").replace(/ñ/g,"n")
+        .replace(/[≥]/g,">=").replace(/[≤]/g,"<=").replace(/[–—]/g,"-")
+        .replace(/[""]/g,'"').replace(/['']/g,"'");
 
-      const pdfCols = ["Código", "Fecha", "Tipo", "Gravedad", "Estado", "Parroquia", "Ubicación"];
-      const pdfKeys = ["Codigo", "Fecha", "Tipo", "Gravedad", "Estado", "Parroquia", "Ubicacion"];
-      const colW = [25, 22, 35, 22, 25, 45, 60];
-      const rowH = 6.5;
-      let y = 26;
-
-      const drawHeader = () => {
-        doc.setFillColor(0, 152, 80);
-        doc.rect(margin, y - 4.5, colW.reduce((a, b) => a + b, 0), rowH, "F");
-        doc.setFontSize(7.5); doc.setFont("helvetica", "bold"); doc.setTextColor(255, 255, 255);
-        let x = margin;
-        pdfCols.forEach((c, i) => { doc.text(c, x + 2, y); x += colW[i]; });
-        y += rowH;
+      // ── Encabezado de página principal ───────────────────────────────────
+      const drawCover = (titulo: string, subtitulo: string) => {
+        // Fondo verde superior
+        doc.setFillColor(...G); doc.rect(0, 0, pageW, 38, "F");
+        // Línea decorativa blanca
+        doc.setFillColor(255, 255, 255); doc.setFillColor(255, 255, 255, 0.3);
+        doc.rect(0, 34, pageW, 0.8, "F");
+        // Título
+        doc.setFontSize(18); doc.setFont("helvetica", "bold"); doc.setTextColor(255, 255, 255);
+        doc.text(s(titulo), pageW / 2, 13, { align: "center" });
+        // Subtítulo
+        doc.setFontSize(8.5); doc.setFont("helvetica", "normal");
+        doc.text(s(subtitulo), pageW / 2, 20, { align: "center" });
+        // Org
+        doc.setFontSize(7.5); doc.setTextColor(200, 255, 220);
+        doc.text("Caritas Lima — Sistema GRD", pageW / 2, 26, { align: "center" });
+        // Periodo
+        doc.text(`Periodo: ${s(periodo)}  ·  Exportado el ${today}`, pageW / 2, 32, { align: "center" });
       };
-      drawHeader();
 
-      filteredData.forEach((row, ri) => {
-        if (y > pageH - 15) { doc.addPage(); y = 15; drawHeader(); }
-        if (ri % 2 === 0) {
-          doc.setFillColor(248, 250, 252);
-          doc.rect(margin, y - 4.5, colW.reduce((a, b) => a + b, 0), rowH, "F");
-        }
-        doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(31, 41, 55);
-        let x = margin;
-        pdfKeys.forEach((k, i) => {
-          const txt = String(row[k] ?? "-");
-          const maxChars = Math.floor(colW[i] / 1.8);
-          doc.text(txt.length > maxChars ? txt.slice(0, maxChars - 1) + "…" : txt, x + 2, y);
-          x += colW[i];
+      const drawBandHeader = (titulo: string) => {
+        doc.setFillColor(...G); doc.rect(0, 0, pageW, 10, "F");
+        doc.setFontSize(8); doc.setFont("helvetica", "bold"); doc.setTextColor(255, 255, 255);
+        doc.text(s(`${titulo} — Caritas Lima`), mg, 6.5);
+        doc.text(s(periodo), pageW - mg, 6.5, { align: "right" });
+      };
+
+      const drawFooter = (pageNum: number, total: number) => {
+        doc.setFillColor(245, 247, 250); doc.rect(0, pageH - 10, pageW, 10, "F");
+        doc.setDrawColor(220, 220, 220); doc.setLineWidth(0.3);
+        doc.line(0, pageH - 10, pageW, pageH - 10);
+        doc.setFontSize(7); doc.setFont("helvetica", "italic"); doc.setTextColor(150, 150, 150);
+        doc.text(`Caritas Lima — Sistema GRD | Generado el ${today}`, mg, pageH - 4);
+        doc.text(`Pagina ${pageNum} de ${total}`, pageW - mg, pageH - 4, { align: "right" });
+      };
+
+      const sectionTitle = (title: string, y: number): number => {
+        doc.setFillColor(...G); doc.rect(mg, y, 3, 5.5, "F");
+        doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.setTextColor(31, 41, 55);
+        doc.text(s(title), mg + 5, y + 4.5);
+        doc.setDrawColor(229, 231, 235); doc.setLineWidth(0.4);
+        doc.line(mg, y + 7, pageW - mg, y + 7);
+        return y + 11;
+      };
+
+      // KPI boxes con fondo de color sólido (ejecutivo)
+      const kpiRow = (items: { val: string; lbl: string; color: [number,number,number]; bg?: [number,number,number] }[], y: number): number => {
+        const w = contentW / items.length;
+        items.forEach((k, i) => {
+          const x = mg + i * w;
+          const bg = k.bg ?? [k.color[0], k.color[1], k.color[2]] as [number,number,number];
+          // Fondo de color con opacidad visual
+          doc.setFillColor(bg[0], bg[1], bg[2]);
+          doc.roundedRect(x + 1, y, w - 2, 26, 3, 3, "F");
+          // Línea separadora oscura
+          doc.setFillColor(0,0,0);
+          doc.setDrawColor(bg[0]-20<0?0:bg[0]-20, bg[1]-20<0?0:bg[1]-20, bg[2]-20<0?0:bg[2]-20);
+          // Valor grande
+          doc.setFontSize(20); doc.setFont("helvetica", "bold"); doc.setTextColor(255, 255, 255);
+          doc.text(k.val, x + w / 2, y + 12, { align: "center" });
+          // Label
+          doc.setFontSize(6.5); doc.setFont("helvetica", "bold"); doc.setTextColor(255, 255, 255);
+          k.lbl.split("\n").forEach((ln, li) => doc.text(s(ln), x + w / 2, y + 18 + li * 4, { align: "center" }));
         });
-        y += rowH;
-      });
+        return y + 31;
+      };
 
-      doc.setFontSize(7); doc.setTextColor(150, 150, 150); doc.setFont("helvetica", "italic");
-      doc.text(`Generado el ${new Date().toLocaleDateString("es-PE")} — Cáritas Lima`, margin, pageH - 5);
+      // Barra horizontal proporcional visual (para distribuciones)
+      const drawStackedBar = (
+        items: { label: string; value: number; color: [number,number,number] }[],
+        x: number, y: number, w: number, h: number
+      ) => {
+        const total = items.reduce((s, d) => s + d.value, 0);
+        if (total === 0) { doc.setFillColor(229,231,235); doc.rect(x,y,w,h,"F"); return; }
+        let cx = x;
+        items.forEach(d => {
+          const dw = (d.value / total) * w;
+          if (dw < 0.5) return;
+          doc.setFillColor(...d.color); doc.rect(cx, y, dw, h, "F");
+          if (dw > 12) {
+            doc.setFontSize(7); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
+            doc.text(`${Math.round((d.value/total)*100)}%`, cx + dw/2, y + h/2 + 2.5, { align:"center" });
+          }
+          cx += dw;
+        });
+      };
 
-      const chartWrappers = document.querySelectorAll<HTMLElement>(".recharts-wrapper");
-      for (const wrapper of chartWrappers) {
-        const svg = wrapper.querySelector("svg");
-        if (!svg) continue;
-        const imgData = await svgToDataUrl(svg);
-        if (!imgData) continue;
-        const rect = wrapper.getBoundingClientRect();
-        const aspect = rect.height / Math.max(rect.width, 1);
-        doc.addPage();
-        doc.setFillColor(0, 152, 80);
-        doc.rect(0, 0, pageW, 12, "F");
-        doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.setTextColor(255, 255, 255);
-        doc.text("Gráfico del Dashboard — Cáritas GRD", margin, 8);
-        const imgW = pageW - margin * 2;
-        const imgH = Math.min(imgW * aspect, pageH - 30);
-        doc.addImage(imgData, "PNG", margin, 18, imgW, imgH);
+      // Barra horizontal individual con bar visual grande
+      const distRow = (label: string, count: number, total: number, color: [number,number,number], y: number, rowBg: boolean): number => {
+        const rowH = 8;
+        if (rowBg) { doc.setFillColor(248,250,249); doc.rect(mg,y,contentW,rowH,"F"); }
+        const pct = total > 0 ? (count/total)*100 : 0;
+        const barW = 60; const barH = 3.5;
+        doc.setFontSize(7.5); doc.setFont("helvetica","normal"); doc.setTextColor(31,41,55);
+        doc.text(s(label.length > 28 ? label.slice(0,27)+"..." : label), mg+2, y+5);
+        // Bar track
+        doc.setFillColor(229,231,235); doc.rect(mg+72, y+2.2, barW, barH, "F");
+        // Bar fill
+        if (pct>0) { doc.setFillColor(...color); doc.rect(mg+72, y+2.2, (barW*pct)/100, barH, "F"); }
+        doc.setFont("helvetica","bold"); doc.setTextColor(31,41,55);
+        doc.text(String(count), mg+136, y+5, { align:"right" });
+        doc.setFont("helvetica","normal"); doc.setTextColor(107,114,128);
+        doc.text(`${pct.toFixed(1)}%`, mg+152, y+5, { align:"right" });
+        return y + rowH;
+      };
+
+      // Chart de barras verticales (nativo jsPDF)
+      const drawVertBars = (
+        data: { label: string; value: number }[],
+        x: number, y: number, w: number, h: number,
+        color: [number,number,number]
+      ) => {
+        if (data.length === 0) return;
+        const maxVal = Math.max(...data.map(d=>d.value), 1);
+        const n = data.length;
+        const slotW = w / n;
+        const barW = Math.min(slotW * 0.6, 16);
+        const chartH = h - 18;
+        // Grid lines
+        doc.setDrawColor(240,240,240); doc.setLineWidth(0.2);
+        [0.25, 0.5, 0.75, 1].forEach(pct => {
+          const gy = y + chartH * (1 - pct);
+          doc.line(x, gy, x+w, gy);
+          doc.setFontSize(5.5); doc.setFont("helvetica","normal"); doc.setTextColor(180,180,180);
+          doc.text(String(Math.round(maxVal*pct)), x-1, gy+1, { align:"right" });
+        });
+        data.forEach((d, i) => {
+          const bh = Math.max((d.value/maxVal)*chartH, 0.5);
+          const bx = x + i*slotW + (slotW-barW)/2;
+          const by = y + chartH - bh;
+          // Shadow effect
+          doc.setFillColor(color[0]-20<0?0:color[0]-20, color[1]-20<0?0:color[1]-20, color[2]-20<0?0:color[2]-20);
+          doc.rect(bx+0.8, by+0.8, barW, bh, "F");
+          doc.setFillColor(...color); doc.rect(bx, by, barW, bh, "F");
+          // Value label
+          doc.setFontSize(6.5); doc.setFont("helvetica","bold"); doc.setTextColor(31,41,55);
+          if (bh > 3) doc.text(String(d.value), bx+barW/2, by-2, { align:"center" });
+          // X label
+          doc.setFontSize(6); doc.setFont("helvetica","normal"); doc.setTextColor(107,114,128);
+          const lbl = d.label.length>9 ? d.label.slice(0,8)+"..." : d.label;
+          doc.text(s(lbl), bx+barW/2, y+chartH+8, { align:"center" });
+        });
+        // Baseline
+        doc.setDrawColor(200,200,200); doc.setLineWidth(0.5);
+        doc.line(x, y+chartH, x+w, y+chartH);
+      };
+
+      const totalInc = filteredData.length;
+      const nombreArchivo = `Reporte_GRD_${activeTab}_${desde}_al_${hasta}`;
+
+      // ── Switch por sección activa ────────────────────────────────────────
+      let totalPages = 2;
+
+      if (activeTab === "brigadistas" && brigadistasData) {
+        // ── PDF EJECUTIVO: Brigadistas Capacitados ────────────────────────
+        const pctGlobal = totales?.pctBrigadistasCapacitados ?? 0;
+        drawCover("BRIGADISTAS CAPACITADOS", "Capacitacion y certificacion del personal de campo");
+        let y = 44;
+
+        y = kpiRow([
+          { val: String(brigadistasData.total),  lbl: "Total\nBrigadistas",   color: [255,255,255], bg: [59,130,246] },
+          { val: String(brigadistasData.capacitados), lbl: "Certificados",    color: [255,255,255], bg: [0,152,80] },
+          { val: String(brigadistasData.total - brigadistasData.capacitados), lbl: "Sin\nCertificacion", color: [255,255,255], bg: [245,158,11] },
+          { val: `${pctGlobal}%`, lbl: "Nivel de\nCertificacion", color: [255,255,255], bg: pctGlobal >= 70 ? [0,152,80] : pctGlobal >= 40 ? [245,158,11] : [239,68,68] },
+        ], y);
+
+        // Barra de progreso visual general
+        y += 2;
+        doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(31,41,55);
+        doc.text("Nivel de certificacion general", mg, y+4);
+        doc.setFontSize(8); doc.setFont("helvetica","bold");
+        doc.setTextColor(pctGlobal >= 70 ? 0 : 200, pctGlobal >= 70 ? 152 : pctGlobal >= 40 ? 100 : 50, pctGlobal >= 70 ? 80 : 0);
+        doc.text(`${pctGlobal}%`, pageW-mg, y+4, { align:"right" });
+        doc.setFillColor(229,231,235); doc.rect(mg, y+6, contentW, 5, "F");
+        if (pctGlobal > 0) {
+          doc.setFillColor(pctGlobal>=70?0:pctGlobal>=40?245:239, pctGlobal>=70?152:pctGlobal>=40?158:68, pctGlobal>=70?80:pctGlobal>=40?11:68);
+          doc.rect(mg, y+6, (contentW*pctGlobal)/100, 5, "F");
+        }
+        // Meta label
+        doc.setFontSize(6); doc.setFont("helvetica","normal"); doc.setTextColor(150,150,150);
+        doc.text("0%", mg, y+14); doc.text("Meta: 80%", mg+contentW*0.8-5, y+14); doc.text("100%", pageW-mg, y+14, { align:"right" });
+        y += 18;
+
+        // Bar chart visual por parroquia (top 10)
+        const top10brig = brigadistasData.porParroquia.slice(0, 10);
+        if (top10brig.length > 0) {
+          y = sectionTitle("CERTIFICACION POR PARROQUIA — TOP 10", y);
+          top10brig.forEach((p, i) => {
+            y = distRow(p.parroquia, p.capacitados, p.total || 1, [0,152,80], y, i%2===0);
+          });
+          y += 4;
+        }
+
+        drawFooter(1, 2); doc.addPage(); totalPages = 2;
+        drawBandHeader("BRIGADISTAS CAPACITADOS"); y = 16;
+        y = sectionTitle("DETALLE COMPLETO POR PARROQUIA", y);
+        const thC = ["#","Parroquia","Total","Certificados","%","Brecha"];
+        const thW2 = [8,72,20,28,18,32];
+        doc.setFillColor(...G); doc.rect(mg,y,contentW,8,"F");
+        doc.setFontSize(7.5); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
+        let bx = mg; thC.forEach((c,i)=>{ doc.text(s(c),bx+2,y+5.5); bx+=thW2[i]; }); y+=8;
+        brigadistasData.porParroquia.forEach((p,i)=>{
+          if (y>pageH-18){drawFooter(2,2);doc.addPage();drawBandHeader("BRIGADISTAS");y=16;totalPages++;}
+          const rowH=8;
+          if (i%2===0){doc.setFillColor(248,250,249);doc.rect(mg,y,contentW,rowH,"F");}
+          doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(31,41,55);
+          bx=mg;
+          [String(i+1),s(p.parroquia.length>28?p.parroquia.slice(0,27)+"...":p.parroquia),String(p.total),String(p.capacitados),`${p.pct}%`,String(p.total-p.capacitados)]
+          .forEach((v,vi)=>{
+            if(vi===4){doc.setTextColor(p.pct>=70?0:p.pct>0?200:220, p.pct>=70?152:p.pct>0?100:50, p.pct>=70?80:0);doc.setFont("helvetica","bold");}
+            else{doc.setTextColor(31,41,55);doc.setFont("helvetica","normal");}
+            doc.text(v,bx+2,y+5.5);bx+=thW2[vi];
+          });
+          y+=rowH;
+        });
+        drawFooter(totalPages, totalPages);
+
+      } else if (activeTab === "prevencion" && actividadesData) {
+        // ── PDF EJECUTIVO: Acciones Preventivas ───────────────────────────
+        const pctEjec = actividadesData.total > 0 ? Math.round((actividadesData.ejecutadas/actividadesData.total)*100) : 0;
+        drawCover("ACCIONES PREVENTIVAS", "Actividades preventivas por parroquia");
+        let y = 44;
+        y = kpiRow([
+          { val: String(actividadesData.total),         lbl: "Total\nActividades",   color: [255,255,255], bg: [59,130,246] },
+          { val: String(actividadesData.ejecutadas),    lbl: "Ejecutadas",            color: [255,255,255], bg: [0,152,80] },
+          { val: `${pctEjec}%`,                         lbl: "Tasa de\nEjecucion",   color: [255,255,255], bg: pctEjec>=70?[0,152,80]:pctEjec>=40?[245,158,11]:[239,68,68] },
+          { val: String(actividadesData.totalParticipantes), lbl: "Participantes\nAlcanzados", color: [255,255,255], bg: [145,85,168] },
+        ], y);
+
+        // Bar chart por tipo de actividad
+        if (actividadesData.porTipo.slice(0,8).length > 0) {
+          y = sectionTitle("ACTIVIDADES POR TIPO", y);
+          drawVertBars(actividadesData.porTipo.slice(0,8), mg, y, contentW, 55, [59,130,246]);
+          y += 60;
+        }
+
+        y = sectionTitle("DISTRIBUCION POR ESTADO DE EJECUCION", y);
+        const stackEstado = actividadesData.porEstado.map(e => ({
+          label: e.label, value: e.value,
+          color: e.label==="EJECUTADA"?[0,152,80]:e.label==="PROGRAMADA"?[59,130,246]:e.label==="EN_PROCESO"?[245,158,11]:[239,68,68] as [number,number,number]
+        }));
+        drawStackedBar(stackEstado, mg, y, contentW, 10); y += 12;
+        // Legend
+        let lx = mg;
+        stackEstado.forEach(e=>{ doc.setFillColor(...e.color);doc.rect(lx,y,4,4,"F");doc.setFontSize(6.5);doc.setFont("helvetica","normal");doc.setTextColor(31,41,55);doc.text(s(`${e.label}: ${e.value}`),lx+5.5,y+3.2);lx+=40; });
+        y += 8;
+
+        if (actividadesData.porEstado.length > 0) {
+          y += 2;
+          actividadesData.porEstado.forEach((e,i)=>{ y=distRow(e.label,e.value,actividadesData.total,[59,130,246],y,i%2===0); });
+          y += 4;
+        }
+
+        if (actividadesData.porParroquia.length > 0 && y < pageH-50) {
+          y = sectionTitle("TOP PARROQUIAS POR ACTIVIDAD PREVENTIVA", y);
+          actividadesData.porParroquia.slice(0,8).forEach((p,i)=>{ y=distRow(p.label,p.value,actividadesData.total,[145,85,168],y,i%2===0); });
+        }
+        drawFooter(1, 1);
+
+      } else if (activeTab === "kits" && kitsData) {
+        // ── PDF EJECUTIVO: Kits Entregados ────────────────────────────────
+        const parroquiasBenef = kitsData.porParroquia.filter(p=>p.value>0).length;
+        const stockTotal = kitsData.stockActual.reduce((s,k)=>s+k.stockActual,0);
+        drawCover("KITS ENTREGADOS", "Distribucion de materiales de emergencia por parroquia");
+        let y = 44;
+        y = kpiRow([
+          { val: String(kitsData.totalEntregados), lbl: "Unidades\nDistribuidas",   color: [255,255,255], bg: [145,85,168] },
+          { val: String(parroquiasBenef),           lbl: "Parroquias\nBeneficiadas", color: [255,255,255], bg: [59,130,246] },
+          { val: String(kitsData.porTipo.length),   lbl: "Tipos de\nKit",            color: [255,255,255], bg: [245,158,11] },
+          { val: String(stockTotal),                lbl: "Stock\nActual",            color: [255,255,255], bg: [0,152,80] },
+        ], y);
+
+        if (kitsData.porTipo.length > 0) {
+          y = sectionTitle("DISTRIBUCION POR TIPO DE KIT", y);
+          drawVertBars(kitsData.porTipo.slice(0,8), mg, y, contentW, 55, [145,85,168]);
+          y += 60;
+        }
+        if (kitsData.porParroquia.length > 0) {
+          y = sectionTitle("DISTRIBUCION POR PARROQUIA", y);
+          kitsData.porParroquia.slice(0,10).forEach((p,i)=>{ y=distRow(p.label,p.value,kitsData.totalEntregados||1,[145,85,168],y,i%2===0); });
+          y += 4;
+        }
+        if (kitsData.stockActual.length > 0 && y < pageH-50) {
+          y = sectionTitle("STOCK ACTUAL EN ALMACEN", y);
+          const sthW=[100,40,42];
+          doc.setFillColor(...G); doc.rect(mg,y,contentW,7,"F");
+          doc.setFontSize(7.5); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
+          let bx=mg; ["Tipo de Kit","Stock Actual","Registros"].forEach((c,i)=>{doc.text(c,bx+2,y+4.5);bx+=sthW[i];}); y+=7;
+          kitsData.stockActual.forEach((k,i)=>{
+            if(i%2===0){doc.setFillColor(248,250,249);doc.rect(mg,y,contentW,7,"F");}
+            doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(31,41,55);
+            bx=mg;
+            [s(k.tipoKit.length>28?k.tipoKit.slice(0,27)+"...":k.tipoKit),String(k.stockActual),`${k.total} kit(s)`]
+            .forEach((v,vi)=>{doc.text(v,bx+2,y+4.5);bx+=sthW[vi];});
+            y+=7;
+          });
+        }
+        drawFooter(1, 1);
+
+      } else if (activeTab === "riesgo" && parroquiasRiesgo) {
+        // ── PDF EJECUTIVO: Afectación Parroquial ──────────────────────────
+        const counts = {CRITICO:0,ALTO:0,MEDIO:0,BAJO:0} as Record<string,number>;
+        parroquiasRiesgo.forEach(p=>{ const k=p.riesgoNivel.replace("Í","I").replace("Ó","O"); counts[k]=(counts[k]||0)+1; });
+        const nC: Record<string,[number,number,number]> = {CRITICO:[239,68,68],ALTO:[249,115,22],MEDIO:[245,158,11],BAJO:[0,152,80]};
+
+        drawCover("REPORTE DE AFECTACION PARROQUIAL", "Nivel de Afectacion Estimada por Parroquia");
+        let y = 44;
+
+        y = kpiRow([
+          { val: String(counts.CRITICO||0), lbl: "Afectacion\nCRITICA",  color:[255,255,255], bg:[239,68,68] },
+          { val: String(counts.ALTO||0),    lbl: "Afectacion\nALTA",     color:[255,255,255], bg:[249,115,22] },
+          { val: String(counts.MEDIO||0),   lbl: "Afectacion\nMEDIA",    color:[255,255,255], bg:[245,158,11] },
+          { val: String(counts.BAJO||0),    lbl: "Afectacion\nBAJA",     color:[255,255,255], bg:[0,152,80] },
+        ], y);
+
+        // Barra de distribución proporcional visual (CHART)
+        y = sectionTitle("DISTRIBUCION DE RIESGO POR NIVEL", y);
+        const stackRiesgo = (["CRITICO","ALTO","MEDIO","BAJO"] as const).map(n=>({
+          label:n, value:counts[n]||0, color:nC[n]
+        }));
+        drawStackedBar(stackRiesgo, mg, y, contentW, 12); y+=14;
+        // Legend
+        let lx=mg;
+        stackRiesgo.forEach(item=>{
+          const total2=parroquiasRiesgo.length;
+          doc.setFillColor(...item.color);doc.rect(lx,y,5,5,"F");
+          doc.setFontSize(7);doc.setFont("helvetica","bold");doc.setTextColor(31,41,55);
+          doc.text(`${item.label}: ${item.value}`,lx+6.5,y+3.8);
+          doc.setFont("helvetica","normal");doc.setTextColor(107,114,128);
+          doc.text(`(${total2>0?Math.round((item.value/total2)*100):0}%)`,lx+6.5,y+7.8);
+          lx+=44;
+        });
+        y+=12;
+
+        drawFooter(1, 3); doc.addPage(); totalPages=2;
+
+        // ── Página 2: Mapa nativo Lima Metropolitana + Callao ─────────────
+        drawBandHeader("AFECTACION PARROQUIAL — MAPA DE RIESGO");
+
+        // Límites geográficos
+        const LAT_MAX_M = -11.75, LAT_MIN_M = -12.58;
+        const LNG_MIN_M = -77.30, LNG_MAX_M = -76.43;
+        const LNG_RNG = LNG_MAX_M - LNG_MIN_M;
+        const LAT_RNG = LAT_MAX_M - LAT_MIN_M;
+
+        const MAP_X = mg, MAP_Y_S = 14, MAP_W = contentW, MAP_H = 210;
+
+        const projM = (lat: number, lng: number) => ({
+          x: MAP_X + (lng - LNG_MIN_M) / LNG_RNG * MAP_W,
+          y: MAP_Y_S + (LAT_MAX_M - lat) / LAT_RNG * MAP_H,
+        });
+
+        // Fondo océano Pacífico
+        doc.setFillColor(186, 220, 240); doc.rect(MAP_X, MAP_Y_S, MAP_W, MAP_H, "F");
+
+        // Polígono Lima Metropolitana
+        const LIMA_GEO: [number,number][] = [
+          [-11.770,-77.157],[-11.780,-77.040],[-11.820,-76.980],[-11.860,-76.870],
+          [-11.880,-76.750],[-11.910,-76.630],[-11.970,-76.540],[-12.040,-76.560],
+          [-12.130,-76.620],[-12.220,-76.720],[-12.320,-76.820],[-12.480,-76.930],
+          [-12.540,-77.000],[-12.480,-77.060],[-12.370,-77.060],[-12.250,-77.030],
+          [-12.150,-77.010],[-12.000,-77.050],[-11.960,-77.090],[-11.870,-77.080],
+          [-11.810,-77.100],[-11.770,-77.157],
+        ];
+        const limaP = LIMA_GEO.map(([lat,lng])=>projM(lat,lng));
+        doc.setFillColor(240, 237, 226); doc.setDrawColor(145, 140, 125); doc.setLineWidth(0.5);
+        doc.lines(limaP.slice(1).map((p,i)=>[p.x-limaP[i].x,p.y-limaP[i].y]), limaP[0].x, limaP[0].y, [1,1], "FD", true);
+
+        // Polígono Callao
+        const CALLAO_GEO: [number,number][] = [
+          [-11.882,-77.175],[-11.882,-77.070],[-11.940,-77.070],[-12.000,-77.085],
+          [-12.065,-77.110],[-12.075,-77.155],[-12.060,-77.185],[-11.990,-77.230],
+          [-11.920,-77.215],[-11.882,-77.175],
+        ];
+        const callaoP = CALLAO_GEO.map(([lat,lng])=>projM(lat,lng));
+        doc.setFillColor(224, 235, 246); doc.setDrawColor(85, 120, 165); doc.setLineWidth(0.5);
+        doc.lines(callaoP.slice(1).map((p,i)=>[p.x-callaoP[i].x,p.y-callaoP[i].y]), callaoP[0].x, callaoP[0].y, [1,1], "FD", true);
+
+        // Etiquetas geográficas
+        doc.setFontSize(8); doc.setFont("helvetica","bold");
+        doc.setTextColor(110, 100, 82);
+        // ── Zonas principales de Lima ─────────────────────────────────────
+        // Línea del Río Rímac (corre ~E-O entre lat -11.98 y -12.04)
+        const rimacPts: [number,number][] = [
+          [-12.04,-77.06],[-12.03,-77.02],[-12.02,-76.98],[-12.00,-76.94],
+          [-11.99,-76.90],[-11.98,-76.85],[-11.97,-76.80],[-11.96,-76.75],
+        ];
+        doc.setDrawColor(130, 180, 210); doc.setLineWidth(0.8);
+        for (let ri = 0; ri < rimacPts.length - 1; ri++) {
+          const a = projM(rimacPts[ri][0], rimacPts[ri][1]);
+          const b = projM(rimacPts[ri+1][0], rimacPts[ri+1][1]);
+          doc.line(a.x, a.y, b.x, b.y);
+        }
+
+        // Panamericana Norte (costa, de norte a sur hasta Lima Centro)
+        const panNortePts: [number,number][] = [
+          [-11.78,-77.15],[-11.85,-77.13],[-11.92,-77.10],[-11.97,-77.09],[-12.01,-77.07],
+        ];
+        doc.setDrawColor(200, 180, 140); doc.setLineWidth(0.5);
+        for (let ri = 0; ri < panNortePts.length - 1; ri++) {
+          const a = projM(panNortePts[ri][0], panNortePts[ri][1]);
+          const b = projM(panNortePts[ri+1][0], panNortePts[ri+1][1]);
+          doc.line(a.x, a.y, b.x, b.y);
+        }
+
+        // Panamericana Sur (de Lima Centro hacia el sur)
+        const panSurPts: [number,number][] = [
+          [-12.05,-77.04],[-12.10,-77.01],[-12.18,-76.98],[-12.28,-76.93],[-12.45,-76.89],
+        ];
+        for (let ri = 0; ri < panSurPts.length - 1; ri++) {
+          const a = projM(panSurPts[ri][0], panSurPts[ri][1]);
+          const b = projM(panSurPts[ri+1][0], panSurPts[ri+1][1]);
+          doc.line(a.x, a.y, b.x, b.y);
+        }
+
+        // ── Zonas / grandes áreas de Lima ────────────────────────────────
+        doc.setFontSize(6.5); doc.setFont("helvetica","bold");
+
+        const zonas: { lat: number; lng: number; label: string; color: [number,number,number] }[] = [
+          { lat:-11.87, lng:-77.04, label:"LIMA NORTE",   color:[100,90,75] },
+          { lat:-11.99, lng:-76.76, label:"LIMA ESTE",    color:[100,90,75] },
+          { lat:-12.25, lng:-76.93, label:"LIMA SUR",     color:[100,90,75] },
+          { lat:-12.08, lng:-77.00, label:"LIMA CENTRO",  color:[100,90,75] },
+          { lat:-12.12, lng:-76.86, label:"LIMA ESTE SUR",color:[100,90,75] },
+        ];
+        zonas.forEach(z => {
+          const zp = projM(z.lat, z.lng);
+          if (zp.x < MAP_X+2 || zp.x > MAP_X+MAP_W-2 || zp.y < MAP_Y_S+2 || zp.y > MAP_Y_S+MAP_H-2) return;
+          doc.setTextColor(...z.color);
+          doc.text(z.label, zp.x, zp.y, { align:"center" });
+        });
+
+        // Río Rímac label
+        const rimacMid = projM(-12.01, -76.88);
+        doc.setFontSize(5.5); doc.setFont("helvetica","italic"); doc.setTextColor(100, 160, 200);
+        doc.text("Rio Rimac", rimacMid.x, rimacMid.y - 1.5);
+
+        // Labels principales
+        doc.setFontSize(8); doc.setFont("helvetica","bold");
+        const limaLbl = projM(-12.05, -76.87); doc.setTextColor(110, 100, 82);
+        // (solo mostrar si cae dentro del mapa)
+        if (limaLbl.x > MAP_X && limaLbl.x < MAP_X+MAP_W && limaLbl.y > MAP_Y_S && limaLbl.y < MAP_Y_S+MAP_H)
+          doc.text("LIMA", limaLbl.x, limaLbl.y, {align:"center"});
+        const callaoLbl = projM(-11.97, -77.14); doc.setTextColor(65, 100, 150);
+        if (callaoLbl.x > MAP_X && callaoLbl.x < MAP_X+MAP_W && callaoLbl.y > MAP_Y_S && callaoLbl.y < MAP_Y_S+MAP_H)
+          doc.text("CALLAO", callaoLbl.x, callaoLbl.y, {align:"center"});
+
+        // Marcadores de parroquias
+        parroquiasRiesgo.forEach(p => {
+          if (!p.latitud || !p.longitud) return;
+          const { x: px, y: py } = projM(p.latitud, p.longitud);
+          if (px < MAP_X-2 || px > MAP_X+MAP_W+2 || py < MAP_Y_S-2 || py > MAP_Y_S+MAP_H+2) return;
+          const nKey = p.riesgoNivel.replace("Í","I").replace("Ó","O");
+          const col = nC[nKey] ?? [80,80,80] as [number,number,number];
+          const r = Math.max(1.8, Math.min(5, 1.8 + Math.min(p.incidencias, 6) * 0.45));
+          // Halo blanco para contraste
+          doc.setFillColor(255,255,255); doc.setDrawColor(255,255,255); doc.setLineWidth(0);
+          doc.circle(px, py, r + 0.6, "F");
+          // Marcador de color
+          doc.setFillColor(...col);
+          doc.setDrawColor(Math.max(0,col[0]-50), Math.max(0,col[1]-50), Math.max(0,col[2]-50));
+          doc.setLineWidth(0.3);
+          doc.circle(px, py, r, "FD");
+        });
+
+        // Rosa de los vientos (esquina superior derecha)
+        const RX = MAP_X + MAP_W - 10, RY = MAP_Y_S + 10;
+        doc.setFillColor(255,255,255); doc.circle(RX, RY, 6, "F");
+        doc.setDrawColor(100,100,100); doc.setLineWidth(0.3);
+        doc.line(RX, RY-5, RX, RY+5); doc.line(RX-5, RY, RX+5, RY);
+        doc.setFontSize(6); doc.setFont("helvetica","bold"); doc.setTextColor(31,41,55);
+        doc.text("N", RX, RY-7, {align:"center"});
+
+        // Borde del mapa
+        doc.setDrawColor(160,160,160); doc.setLineWidth(0.5);
+        doc.rect(MAP_X, MAP_Y_S, MAP_W, MAP_H);
+
+        // Leyenda
+        const LEG_Y = MAP_Y_S + MAP_H + 5;
+        doc.setFontSize(7); doc.setFont("helvetica","bold"); doc.setTextColor(31,41,55);
+        doc.text("Nivel de Afectacion:", MAP_X, LEG_Y + 3.5);
+        let legX = MAP_X + 46;
+        (["CRITICO","ALTO","MEDIO","BAJO"] as const).forEach(n => {
+          doc.setFillColor(...nC[n]); doc.circle(legX+3, LEG_Y+1.5, 3, "F");
+          doc.setFontSize(6.5); doc.setFont("helvetica","normal"); doc.setTextColor(31,41,55);
+          doc.text(n, legX + 8, LEG_Y+3.5); legX += 40;
+        });
+        doc.setFontSize(6); doc.setFont("helvetica","normal"); doc.setTextColor(150,150,150);
+        doc.text("Tamano del marcador proporcional al numero de incidencias  |  Solo parroquias con coordenadas registradas", MAP_X, LEG_Y+9);
+        doc.text("Azul = Oceano Pacifico  |  Gris claro = Lima Metropolitana  |  Azul claro = Callao", MAP_X, LEG_Y+13);
+
+        drawFooter(2, 3); doc.addPage(); totalPages=3;
+        drawBandHeader("AFECTACION PARROQUIAL"); y=16;
+        y=sectionTitle("RANKING COMPLETO — NIVEL DE AFECTACION ESTIMADA", y);
+
+        const rhC=["#","Parroquia","Nivel","Casos","Brigadistas","%Cert.","Plan GRD","Act."];
+        const rhW=[7,60,20,14,22,16,22,18];
+        doc.setFillColor(...G);doc.rect(mg,y,contentW,8,"F");
+        doc.setFontSize(7);doc.setFont("helvetica","bold");doc.setTextColor(255,255,255);
+        let bx=mg; rhC.forEach((c,i)=>{doc.text(c,bx+1.5,y+5.5);bx+=rhW[i];}); y+=8;
+
+        parroquiasRiesgo.forEach((p,i)=>{
+          if(y>pageH-18){drawFooter(totalPages,totalPages+1);doc.addPage();drawBandHeader("AFECTACION PARROQUIAL");y=16;totalPages++;}
+          const nKey=p.riesgoNivel.replace("Í","I").replace("Ó","O");
+          const rh=8;
+          // Fondo con tinte del color de riesgo
+          const bg=nC[nKey]??[31,41,55];
+          doc.setFillColor(i%2===0?250:245, i%2===0?250:245, i%2===0?250:245);
+          doc.rect(mg,y,contentW,rh,"F");
+          // Celda de nivel con color de fondo
+          const nivelColIdx=rhW.slice(0,2).reduce((s,v)=>s+v,mg);
+          doc.setFillColor(...bg);doc.rect(nivelColIdx,y,rhW[2],rh,"F");
+
+          doc.setFontSize(6.5);doc.setFont("helvetica","normal");
+          bx=mg;
+          const vals=[String(i+1),s(p.nombre.length>24?p.nombre.slice(0,23)+"...":p.nombre),
+            s(nKey),String(p.incidencias),String(p.brigadistas),`${p.pctCapacitados}%`,
+            p.tienePlan?"Aprobado":"Sin plan",`${p.actividadesEjecutadas}/${p.actividadesTotal}`];
+          vals.forEach((v,vi)=>{
+            if(vi===2){doc.setTextColor(255,255,255);doc.setFont("helvetica","bold");}
+            else if(vi===3&&p.incidencias>0){doc.setTextColor(239,68,68);doc.setFont("helvetica","bold");}
+            else if(vi===6&&!p.tienePlan){doc.setTextColor(239,68,68);doc.setFont("helvetica","normal");}
+            else if(vi===6&&p.tienePlan){doc.setTextColor(0,152,80);doc.setFont("helvetica","normal");}
+            else{doc.setTextColor(31,41,55);doc.setFont("helvetica","normal");}
+            doc.text(v,bx+1.5,y+5.5);bx+=rhW[vi];
+          });
+          y+=rh;
+        });
+
+        y+=6;
+        // Metodologia en box
+        doc.setFillColor(248,250,249);doc.setDrawColor(220,220,220);doc.rect(mg,y,contentW,16,"FD");
+        doc.setFontSize(7);doc.setFont("helvetica","bold");doc.setTextColor(31,41,55);
+        doc.text("Metodologia de Puntaje de Afectacion Estimada",mg+3,y+5);
+        doc.setFont("helvetica","normal");doc.setFontSize(6.5);doc.setTextColor(107,114,128);
+        doc.text("Incidencias: >=5(+3) / >=2(+2) / 1(+1)  |  Brigadistas: <2(+3) / <5(+2) / <10(+1)  |  Certificacion: <30%(+2) / <60%(+1)",mg+3,y+9);
+        doc.text("Sin Plan GRD(+2)  |  Actividades <40% ejecutadas(+2)  |  CRITICO>=8 pts  |  ALTO>=5  |  MEDIO>=3  |  BAJO<3",mg+3,y+13.5);
+        y+=18;
+
+        drawFooter(totalPages, totalPages);
+
+      } else {
+        // ── PDF EJECUTIVO: Resumen General / Casos Atendidos ─────────────
+        const isResumen = activeTab !== "casos";
+        const tituloPDF = isResumen ? "REPORTE GENERAL DEL SISTEMA GRD" : "REPORTE MENSUAL DE CASOS ATENDIDOS";
+        const subtituloPDF = isResumen ? "Indicadores operacionales del sistema" : "Incidencias y emergencias atendidas en el periodo";
+        drawCover(tituloPDF, subtituloPDF);
+        let y = 44;
+
+        y = kpiRow([
+          { val: String(totales?.incidencias ?? totalInc), lbl: "Incidencias\nRegistradas", color:[255,255,255], bg:[239,68,68] },
+          { val: `${totales?.pctBrigadistasCapacitados ?? 0}%`, lbl: "Brigadistas\nCertificados", color:[255,255,255], bg:[0,152,80] },
+          { val: `${totales?.pctParroquiasPlan ?? 0}%`, lbl: "Parroquias\ncon Plan GRD", color:[255,255,255], bg:[59,130,246] },
+          { val: `${totales?.pctActividadesEjecutadas ?? 0}%`, lbl: "Actividades\nEjecutadas", color:[255,255,255], bg:[245,158,11] },
+          { val: String(totales?.kitsEntregados ?? 0), lbl: "Kits\nEntregados", color:[255,255,255], bg:[145,85,168] },
+        ], y);
+
+        // Indicadores operacionales (barras grandes)
+        y = sectionTitle("INDICADORES OPERACIONALES", y);
+        const opInds = [
+          { label: "Brigadistas Certificados", sub: `${totales?.totalBrigadistas??0} brigadistas activos`, pct: totales?.pctBrigadistasCapacitados??0, color: G as [number,number,number] },
+          { label: "Parroquias con Plan GRD Aprobado", sub: `${totales?.totalParroquias??0} parroquias en total`, pct: totales?.pctParroquiasPlan??0, color: [59,130,246] as [number,number,number] },
+          { label: "Actividades Preventivas Ejecutadas", sub: "del total programadas", pct: totales?.pctActividadesEjecutadas??0, color: [245,158,11] as [number,number,number] },
+        ];
+        opInds.forEach(op=>{
+          doc.setFontSize(8.5); doc.setFont("helvetica","bold"); doc.setTextColor(31,41,55); doc.text(s(op.label),mg,y+4.5);
+          doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(107,114,128); doc.text(s(op.sub),mg,y+9);
+          const barStart=mg+82; const barLen=contentW-82-20;
+          doc.setFillColor(229,231,235); doc.rect(barStart,y+1,barLen,5,"F");
+          if(op.pct>0){doc.setFillColor(...op.color);doc.rect(barStart,y+1,(barLen*op.pct)/100,5,"F");}
+          doc.setFontSize(10); doc.setFont("helvetica","bold"); doc.setTextColor(...op.color);
+          doc.text(`${op.pct}%`,pageW-mg,y+6.5,{align:"right"});
+          y+=14;
+        });
+        y+=2;
+
+        // Chart de barras: tipos de evento
+        if (porTipo && porTipo.length > 0) {
+          y = sectionTitle("INCIDENCIAS POR TIPO DE EVENTO", y);
+          drawVertBars(porTipo.slice(0,10), mg, y, contentW, 60, [59,130,246]);
+          y+=65;
+        }
+
+        drawFooter(1,2); doc.addPage(); totalPages=2;
+        drawBandHeader(tituloPDF); y=16;
+
+        // Distribución por estado
+        if (porEstado && porEstado.length>0) {
+          y=sectionTitle("DISTRIBUCION DE INCIDENCIAS POR ESTADO",y);
+          // Stacked bar visual
+          const stackEst=porEstado.map((e,i)=>({label:e.label,value:e.value,color:[[0,152,80],[59,130,246],[245,158,11],[239,68,68],[145,85,168],[249,115,22],[0,200,180],[100,100,100]][i%8] as [number,number,number]}));
+          drawStackedBar(stackEst,mg,y,contentW,10); y+=12;
+          let lx2=mg;
+          stackEst.slice(0,4).forEach(e=>{doc.setFillColor(...e.color);doc.rect(lx2,y,4,4,"F");doc.setFontSize(6.5);doc.setFont("helvetica","normal");doc.setTextColor(31,41,55);doc.text(s(`${e.label}:${e.value}`),lx2+5.5,y+3.2);lx2+=46;});
+          y+=8;
+          porEstado.forEach((e,i)=>{y=distRow(e.label,e.value,totalInc,[0,152,80],y,i%2===0);});
+          y+=5;
+        }
+
+        // Top parroquias
+        if (porParroquia && porParroquia.length>0) {
+          y=sectionTitle(`TOP ${Math.min(porParroquia.length,5)} PARROQUIAS CON MAS INCIDENCIAS`,y);
+          porParroquia.slice(0,5).forEach((p,i)=>{y=distRow(p.label,p.value,totalInc,[249,115,22],y,i%2===0);});
+          y+=4;
+        }
+
+        // Gravedad
+        const gravedad=incidenciasData?.porGravedad??[];
+        if(gravedad.length>0){
+          y=sectionTitle("DISTRIBUCION POR GRAVEDAD",y);
+          gravedad.forEach((g,i)=>{y=distRow(g.label,g.value,totalInc,[239,68,68],y,i%2===0);});
+          y+=4;
+        }
+
+        // Tabla de incidencias
+        if(filteredData.length>0 && y<pageH-55){
+          y=sectionTitle("DETALLE DE INCIDENCIAS",y);
+          const dC=["Codigo","Fecha","Tipo","Gravedad","Estado","Parroquia"];
+          const dK=["Codigo","Fecha","Tipo","Gravedad","Estado","Parroquia"];
+          const dW=[22,22,28,22,30,38];
+          doc.setFillColor(...G);doc.rect(mg,y,contentW,7,"F");
+          doc.setFontSize(7);doc.setFont("helvetica","bold");doc.setTextColor(255,255,255);
+          let bx=mg;dC.forEach((c,i)=>{doc.text(c,bx+1.5,y+4.5);bx+=dW[i];}); y+=7;
+          filteredData.slice(0,Math.floor((pageH-18-y)/6)).forEach((row,ri)=>{
+            if(ri%2===0){doc.setFillColor(248,250,249);doc.rect(mg,y,contentW,6,"F");}
+            doc.setFont("helvetica","normal");doc.setFontSize(6.5);doc.setTextColor(31,41,55);
+            bx=mg;dK.forEach((k,i)=>{const t=s(String(row[k]??"-"));const mx=Math.floor(dW[i]/1.85);doc.text(t.length>mx?t.slice(0,mx-1)+"...":t,bx+1.5,y+4);bx+=dW[i];});
+            y+=6;
+          });
+          if(filteredData.length>25){doc.setFontSize(6.5);doc.setTextColor(107,114,128);doc.setFont("helvetica","italic");doc.text(`... y ${filteredData.length-25} registros mas. Exporta en Excel para el listado completo.`,mg,y+4);}
+        }
+        drawFooter(2,2);
       }
 
-      doc.save(`${nombre}.pdf`);
+      // ── Gráficos estadísticos — captura de recharts del DOM ─────────────
+      // Los SVGs están renderizados detrás del modal; svgToDataUrl usa viewBox como fallback
+      const allWrappers = Array.from(document.querySelectorAll<HTMLElement>(".recharts-wrapper"));
+      type CapturedChart = { data: string; aspectRatio: number };
+      const capturedCharts: CapturedChart[] = [];
+
+      for (const wrapper of allWrappers) {
+        const svg = wrapper.querySelector("svg");
+        if (!svg) continue;
+        const result = await svgToDataUrl(svg);
+        if (result && result.w > 30 && result.h > 30) {
+          capturedCharts.push({ data: result.data, aspectRatio: result.h / result.w });
+        }
+      }
+
+      if (capturedCharts.length > 0) {
+        const tabLabel: Record<string, string> = {
+          resumen: "RESUMEN GENERAL", casos: "CASOS ATENDIDOS", brigadistas: "BRIGADISTAS",
+          prevencion: "ACCIONES PREVENTIVAS", kits: "KITS ENTREGADOS", riesgo: "AFECTACION PARROQUIAL",
+        };
+        const chartTabLabel = s(tabLabel[activeTab] ?? "GRAFICOS");
+
+        // Una página por cada gráfico (A4 portrait — los charts del tab activo)
+        capturedCharts.forEach((chart, idx) => {
+          doc.addPage();
+
+          // Banda superior verde
+          doc.setFillColor(...G); doc.rect(0, 0, pageW, 10, "F");
+          doc.setFontSize(8); doc.setFont("helvetica", "bold"); doc.setTextColor(255, 255, 255);
+          doc.text(`GRAFICOS ESTADISTICOS — ${chartTabLabel}`, mg, 6.5);
+          doc.text(`${idx + 1} / ${capturedCharts.length}`, pageW - mg, 6.5, { align: "right" });
+
+          // Calcular área disponible para el chart
+          const topY = 14;
+          const botY = pageH - 14;
+          const imgW = contentW;
+          const maxImgH = botY - topY;
+          const imgH = Math.min(imgW * chart.aspectRatio, maxImgH);
+          const centeredY = topY + (maxImgH - imgH) / 2;
+
+          // Fondo blanco con borde sutil
+          doc.setFillColor(255, 255, 255); doc.setDrawColor(229, 231, 235);
+          doc.roundedRect(mg - 2, topY - 2, imgW + 4, maxImgH + 4, 3, 3, "FD");
+
+          doc.addImage(chart.data, "PNG", mg, centeredY, imgW, imgH);
+
+          // Footer
+          doc.setFillColor(245, 247, 250); doc.rect(0, pageH - 10, pageW, 10, "F");
+          doc.setDrawColor(220, 220, 220); doc.setLineWidth(0.3); doc.line(0, pageH - 10, pageW, pageH - 10);
+          doc.setFontSize(7); doc.setFont("helvetica", "italic"); doc.setTextColor(150, 150, 150);
+          doc.text(`Caritas Lima — Sistema GRD | Generado el ${today}`, mg, pageH - 4);
+          doc.text(`Grafico ${idx + 1}`, pageW - mg, pageH - 4, { align: "right" });
+        });
+      }
+
+      doc.save(`${nombreArchivo}.pdf`);
     }
 
     setExporting(false);
     onClose();
   }
 
-  const formatMeta = {
-    excel: { label: "Excel", icon: <FileSpreadsheet className="w-4 h-4" /> },
-    csv: { label: "CSV", icon: <Sheet className="w-4 h-4" /> },
-    pdf: { label: "PDF", icon: <FileText className="w-4 h-4" /> },
+  const formatMeta: Record<"excel" | "pdf", { label: string; icon: React.ReactNode; desc: string }> = {
+    pdf: { label: "PDF", icon: <FileText className="w-4 h-4" />, desc: "Reporte ejecutivo con KPIs y gráficos" },
+    excel: { label: "Excel", icon: <FileSpreadsheet className="w-4 h-4" />, desc: "Datos tabulares con múltiples hojas" },
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <div
         className="bg-white rounded-2xl shadow-2xl w-full flex flex-col"
         style={{ maxWidth: "min(1100px, 95vw)", maxHeight: "93vh" }}
@@ -543,31 +1363,21 @@ export function ExportModal({ data, parroquias, onClose, desde, hasta }: ExportM
               {/* Formato — chips en fila */}
               <div>
                 <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Formato</p>
-                <div className="flex gap-1.5">
-                  {(["pdf", "excel", "csv"] as const).map((f) => {
+                <div className="flex gap-2">
+                  {(["pdf", "excel"] as const).map((f) => {
                     const m = formatMeta[f];
                     return (
-                      <button
-                        key={f}
-                        type="button"
-                        onClick={() => setFormat(f)}
-                        className={`cursor-pointer flex items-center justify-center gap-1.5 flex-1 px-2 py-2 rounded-xl border-2 text-xs font-semibold transition-colors ${
-                          format === f
-                            ? "border-[#009850] bg-[#009850]/8 text-[#009850]"
-                            : "border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50"
-                        }`}
-                      >
+                      <button key={f} type="button" onClick={() => setFormat(f)}
+                        className={`cursor-pointer flex flex-col items-center gap-1 flex-1 px-3 py-3 rounded-xl border-2 text-xs font-semibold transition-colors ${
+                          format === f ? "border-[#009850] bg-[#009850]/8 text-[#009850]" : "border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50"
+                        }`}>
                         <span className={format === f ? "text-[#009850]" : "text-gray-400"}>{m.icon}</span>
-                        {m.label}
+                        <span>{m.label}</span>
+                        <span className="text-[9px] font-normal text-gray-400">{m.desc}</span>
                       </button>
                     );
                   })}
                 </div>
-                <p className="text-[10px] text-gray-400 mt-1.5">
-                  {format === "excel" && "4 hojas: Incidencias · Estado · Tipo · Parroquia"}
-                  {format === "pdf" && "Incluye tabla de datos y gráficos del dashboard"}
-                  {format === "csv" && "Archivo de texto separado por comas (UTF-8)"}
-                </p>
               </div>
 
               {/* Filtros */}
@@ -665,7 +1475,14 @@ export function ExportModal({ data, parroquias, onClose, desde, hasta }: ExportM
               </div>
             ) : (
               <div className="w-full max-w-2xl">
-                <ExportPreview format={format} data={filteredData} desde={desde} hasta={hasta} />
+                <ExportPreview
+                  format={format} data={filteredData} desde={desde} hasta={hasta}
+                  activeTab={activeTab}
+                  totales={totales} porEstado={porEstado} porTipo={porTipo}
+                  porParroquia={porParroquia} incidenciasData={incidenciasData}
+                  brigadistasData={brigadistasData} kitsData={kitsData}
+                  actividadesData={actividadesData} parroquiasRiesgo={parroquiasRiesgo}
+                />
               </div>
             )}
           </div>
