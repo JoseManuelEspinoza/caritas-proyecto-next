@@ -2,6 +2,7 @@ import { IIncidenciaRepository } from "../../../domain/repositories/IIncidenciaR
 import { Incidencia } from "../../../domain/entities/incidencia/Incidencia";
 import { NotFoundError } from "../../../domain/errors/DomainError";
 import { InfoCampoData, InformeEvaluacionData, CorreccionData } from "../../dtos/IncidenciaDTO";
+import { AbrirRondaVotacionUseCase } from "../comite-donaciones/AbrirRondaVotacion.usecase";
 
 async function cargar(repo: IIncidenciaRepository, id: string): Promise<Incidencia> {
   const inc = await repo.findById(id);
@@ -121,7 +122,10 @@ export class RegistrarLevantamientoUseCase {
 
 /** DATA RECOPILADA → EN EVALUACION: emite el informe social y abre la solicitud. */
 export class GenerarInformeEvaluacionUseCase {
-  constructor(private readonly repo: IIncidenciaRepository) {}
+  constructor(
+    private readonly repo: IIncidenciaRepository,
+    private readonly abrirRonda?: AbrirRondaVotacionUseCase
+  ) {}
   async execute(
     idIncidencia: string,
     data: InformeEvaluacionData,
@@ -142,12 +146,16 @@ export class GenerarInformeEvaluacionUseCase {
       tipoAyuda: data.tipoIntervencion,
     });
     await this.repo.guardarTransicion(inc, "Informe de evaluación enviado al Comité");
+    if (this.abrirRonda) await this.abrirRonda.execute(idIncidencia);
   }
 }
 
 /** OBSERVADO → EN EVALUACION: corrige y reenvía el informe al Comité. */
 export class CorregirYReenviarUseCase {
-  constructor(private readonly repo: IIncidenciaRepository) {}
+  constructor(
+    private readonly repo: IIncidenciaRepository,
+    private readonly abrirRonda?: AbrirRondaVotacionUseCase
+  ) {}
   async execute(idIncidencia: string, data: CorreccionData, elaboradoPor: string): Promise<void> {
     const inc = await cargar(this.repo, idIncidencia);
     inc.enviarEvaluacion();
@@ -160,5 +168,6 @@ export class CorregirYReenviarUseCase {
     });
     await this.repo.resolverSolicitud(idIncidencia, "EN_EVALUACION");
     await this.repo.guardarTransicion(inc, "Informe corregido y reenviado al Comité");
+    if (this.abrirRonda) await this.abrirRonda.execute(idIncidencia);
   }
 }
