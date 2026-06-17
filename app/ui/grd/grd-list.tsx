@@ -22,6 +22,7 @@ import {
   Zap,
   TrendingDown,
   SendHorizonal,
+  Loader2,
 } from "lucide-react";
 import type { FrontendRole } from "@/app/lib/roles";
 import { PaginationControls, PageSizeSelector } from "@/app/ui/shared/pagination-controls";
@@ -190,6 +191,7 @@ export function GrdList({ items, role, globalCounts }: GrdListProps) {
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(5);
+  const [exportando, setExportando] = useState(false);
 
   const canCreate = role === "admin" || role === "especialistaGRD";
 
@@ -224,12 +226,17 @@ export function GrdList({ items, role, globalCounts }: GrdListProps) {
 
   // xlsx se carga de forma dinámica para no aumentar el bundle inicial.
   const handleExportExcel = async () => {
-    const XLSX = await import("xlsx");
-    const { headers, rows } = buildExportData();
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Incidencias");
-    XLSX.writeFile(wb, `incidencias_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    setExportando(true);
+    try {
+      const XLSX = await import("xlsx");
+      const { headers, rows } = buildExportData();
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Incidencias");
+      XLSX.writeFile(wb, `incidencias_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    } finally {
+      setExportando(false);
+    }
   };
 
   // Filtros
@@ -352,11 +359,16 @@ export function GrdList({ items, role, globalCounts }: GrdListProps) {
 
             <button
               onClick={handleExportExcel}
+              disabled={exportando}
               suppressHydrationWarning
-              className="hidden md:flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 bg-[#F5F5F5] border border-[#DDDDDD] rounded hover:bg-gray-200 transition-colors"
+              className="hidden md:flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 bg-[#F5F5F5] border border-[#DDDDDD] rounded hover:bg-gray-200 transition-colors disabled:opacity-50"
             >
-              <FileSpreadsheet className="w-4 h-4" />
-              Excel
+              {exportando ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <FileSpreadsheet className="w-4 h-4" />
+              )}
+              {exportando ? "Exportando…" : "Excel"}
             </button>
           </div>
 

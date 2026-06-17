@@ -35,6 +35,7 @@ import {
 import { extraerTextoPdf } from "@/app/lib/pdf-text";
 import { consultarDni } from "@/app/actions/reniec";
 import { subirArchivoS3 } from "@/app/ui/shared/file-upload";
+import { useConfirm } from "@/app/ui/shared/confirm-modal";
 import { ACCEPT, validarArchivo } from "@/app/lib/upload-config";
 // xlsx se carga de forma dinámica para no aumentar el bundle inicial.
 import { toast } from "sonner";
@@ -587,6 +588,7 @@ export function IncidentForm({
   const isEdit = Boolean(incidenciaId);
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const { showConfirm, ConfirmModalJSX } = useConfirm();
 
   // ── Listas desde el módulo Catálogos (las constantes son solo respaldo) ──
   const conOpcion = (lista: string[], extra: string) =>
@@ -1011,39 +1013,50 @@ export function IncidentForm({
     toast.success(`Se importaron ${personasNuevas.length} persona(s) correctamente.`);
   }
 
-  function deleteFamilia(familiaId: string) {
+  async function deleteFamilia(familiaId: string) {
     const hasPersonas = personas.some((p) => p.familiaId === familiaId);
-    if (
-      hasPersonas &&
-      !confirm("Esta familia tiene personas registradas. ¿Eliminar junto con sus integrantes?")
-    )
-      return;
+    if (hasPersonas) {
+      const ok = await showConfirm({
+        title: "¿Eliminar familia?",
+        message: "Esta familia tiene personas registradas. Se eliminarán junto con todos sus integrantes.",
+        confirmLabel: "Sí, eliminar",
+        variant: "danger",
+      });
+      if (!ok) return;
+    }
     if (hasPersonas) setPersonas((prev) => prev.filter((p) => p.familiaId !== familiaId));
     setFamilias((prev) => prev.filter((f) => f.id !== familiaId));
   }
 
   // Evidencias
-  function deleteFuente(id: string) {
+  async function deleteFuente(id: string) {
     const f = fuentesEvidencia.find((f) => f.id === id);
-    if (
-      f &&
-      f.archivos.length > 0 &&
-      !confirm(`¿Eliminar "${f.fuente}" y sus ${f.archivos.length} evidencia(s)?`)
-    )
-      return;
+    if (f && f.archivos.length > 0) {
+      const ok = await showConfirm({
+        title: `¿Eliminar "${f.fuente}"?`,
+        message: `Se eliminarán ${f.archivos.length} evidencia(s) asociadas. Esta acción no se puede deshacer.`,
+        confirmLabel: "Sí, eliminar",
+        variant: "danger",
+      });
+      if (!ok) return;
+    }
     setFuentesEvidencia((prev) => prev.filter((f) => f.id !== id));
   }
 
   /** Sincroniza la selección múltiple del desplegable con fuentesEvidencia. */
-  function setFuentesSeleccion(next: string[]) {
+  async function setFuentesSeleccion(next: string[]) {
     // Confirmar si se va a quitar una fuente que ya tiene archivos subidos.
     const aQuitar = fuentesEvidencia.filter((f) => !next.includes(f.fuente));
     for (const f of aQuitar) {
-      if (
-        f.archivos.length > 0 &&
-        !confirm(`¿Quitar "${f.fuente}" y sus ${f.archivos.length} evidencia(s)?`)
-      )
-        return;
+      if (f.archivos.length > 0) {
+        const ok = await showConfirm({
+          title: `¿Quitar "${f.fuente}"?`,
+          message: `Se quitarán ${f.archivos.length} evidencia(s) asociadas.`,
+          confirmLabel: "Sí, quitar",
+          variant: "warning",
+        });
+        if (!ok) return;
+      }
     }
     setFuentesEvidencia((prev) => {
       const conservadas = prev.filter((f) => next.includes(f.fuente));
@@ -1360,8 +1373,12 @@ export function IncidentForm({
                       title="Consultar datos por DNI"
                       className="flex items-center gap-1 px-3 bg-[#009850] text-white rounded-lg text-xs font-medium hover:opacity-90 disabled:opacity-50 flex-shrink-0"
                     >
-                      <Search className="w-3.5 h-3.5" />
-                      {buscandoDniReporta ? "…" : "Buscar"}
+                      {buscandoDniReporta ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Search className="w-3.5 h-3.5" />
+                      )}
+                      {buscandoDniReporta ? "Buscando…" : "Buscar"}
                     </button>
                   </div>
                 </div>
@@ -2154,6 +2171,7 @@ export function IncidentForm({
           onClose={() => setImportPreview(null)}
         />
       )}
+      {ConfirmModalJSX}
     </div>
   );
 }
