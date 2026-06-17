@@ -201,7 +201,10 @@ export async function assignBrigadista(
   brigadistaId: string,
   instrucciones?: string
 ) {
-  await verifySession();
+  const session = await verifySession();
+  if (!["ESPECIALISTAGRD", "ADMINISTRADOR"].includes(session.role)) {
+    return { message: "No tienes permisos para esta acción." };
+  }
   try {
     await makeIncidenciaUseCases().asignar.execute(incidenciaId, brigadistaId, instrucciones);
   } catch (err) {
@@ -230,7 +233,10 @@ export async function assignEquipo(
   equipoIds: string[],
   instrucciones?: string
 ) {
-  await verifySession();
+  const session = await verifySession();
+  if (!["ESPECIALISTAGRD", "ADMINISTRADOR"].includes(session.role)) {
+    return { message: "No tienes permisos para esta acción." };
+  }
   const idUsuarioAsignador = await getUsuarioGRDId();
   try {
     await makeIncidenciaUseCases().asignarEquipo.execute(
@@ -462,7 +468,10 @@ function notificarDecisionComite(
 }
 
 export async function aprobarCaso(incidenciaId: string, observaciones?: string) {
-  await verifySession();
+  const session = await verifySession();
+  if (!["COMITEDONACIONES", "ADMINISTRADOR"].includes(session.role)) {
+    return { message: "No tienes permisos para esta acción." };
+  }
   try {
     await makeIncidenciaUseCases().decisionComite.execute(incidenciaId, "APROBAR", observaciones);
   } catch (err) {
@@ -473,7 +482,10 @@ export async function aprobarCaso(incidenciaId: string, observaciones?: string) 
 }
 
 export async function observarCaso(incidenciaId: string, observaciones: string) {
-  await verifySession();
+  const session = await verifySession();
+  if (!["COMITEDONACIONES", "ADMINISTRADOR"].includes(session.role)) {
+    return { message: "No tienes permisos para esta acción." };
+  }
   try {
     await makeIncidenciaUseCases().decisionComite.execute(incidenciaId, "OBSERVAR", observaciones);
   } catch (err) {
@@ -484,7 +496,10 @@ export async function observarCaso(incidenciaId: string, observaciones: string) 
 }
 
 export async function rechazarCaso(incidenciaId: string, observaciones: string) {
-  await verifySession();
+  const session = await verifySession();
+  if (!["COMITEDONACIONES", "ADMINISTRADOR"].includes(session.role)) {
+    return { message: "No tienes permisos para esta acción." };
+  }
   try {
     await makeIncidenciaUseCases().decisionComite.execute(incidenciaId, "RECHAZAR", observaciones);
   } catch (err) {

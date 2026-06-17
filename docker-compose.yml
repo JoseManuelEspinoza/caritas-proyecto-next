@@ -6,7 +6,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - DATABASE_URL=postgresql://postgres:admin123@db:5432/caritas_db
+      - DATABASE_URL=postgresql://postgres:CaritasDB_2026_Test@caritas-grd-db.c2sjosirydcu.us-east-1.rds.amazonaws.com:5432/caritas_db?schema=public&uselibpqcompat=true&sslmode=require
       - SESSION_SECRET=${SESSION_SECRET:-dev-secret-minimo-32-caracteres-cambiar-en-prod}
       - APP_URL=http://localhost:3000
       - NODE_ENV=development
@@ -54,7 +54,7 @@ services:
     volumes:
       - .:/app
       - node_modules:/app/node_modules
-    command: sh -c "npm install && npm install lightningcss-linux-arm64-gnu @tailwindcss/oxide-linux-arm64-gnu --no-save 2>/dev/null || true && ln -sf /app/node_modules/lightningcss-linux-arm64-gnu/lightningcss.linux-arm64-gnu.node /app/node_modules/lightningcss/lightningcss.linux-arm64-gnu.node 2>/dev/null || true && ln -sf /app/node_modules/@tailwindcss/oxide-linux-arm64-gnu/tailwindcss-oxide.linux-arm64-gnu.node /app/node_modules/@tailwindcss/oxide/tailwindcss-oxide.linux-arm64-gnu.node 2>/dev/null || true && npx prisma generate && npx prisma db push --accept-data-loss && npm run dev"
+    command: sh -c "npm install && npm install lightningcss-linux-arm64-gnu @tailwindcss/oxide-linux-arm64-gnu --no-save 2>/dev/null || true && ln -sf /app/node_modules/lightningcss-linux-arm64-gnu/lightningcss.linux-arm64-gnu.node /app/node_modules/lightningcss/lightningcss.linux-arm64-gnu.node 2>/dev/null || true && ln -sf /app/node_modules/@tailwindcss/oxide-linux-arm64-gnu/tailwindcss-oxide.linux-arm64-gnu.node /app/node_modules/@tailwindcss/oxide/tailwindcss-oxide.linux-arm64-gnu.node 2>/dev/null || true && npx prisma generate && npm run dev"
 
   # ─── Base de datos de la APLICACIÓN ──────────────────────────────────────────
   db:
