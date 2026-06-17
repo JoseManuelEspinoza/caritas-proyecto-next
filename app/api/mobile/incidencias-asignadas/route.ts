@@ -39,6 +39,106 @@ function parseTake(value: string | null): number {
   return Math.min(Math.max(Math.trunc(parsed), 1), 200);
 }
 
+
+type MobileKitArticuloAsignado = {
+  codigo: string;
+  descripcion: string;
+  cantidad: number;
+};
+
+type MobileKitAsignado = {
+  uuidKitAsignado: string;
+  refIdFamilia: string;
+  nombreFamilia: string;
+  tipoKit: string;
+  articulos: MobileKitArticuloAsignado[];
+};
+
+function parseJsonObject(raw: string | null | undefined): Record<string, unknown> | null {
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function asString(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value : fallback;
+}
+
+function asCantidad(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : 1;
+}
+
+function normalizarKitsAsignados(
+  idIncidencia: string,
+  contenidoInforme: string | null | undefined
+): MobileKitAsignado[] {
+  const sc = parseJsonObject(contenidoInforme);
+  const asignacionFamilias = Array.isArray(sc?.asignacionFamilias)
+    ? sc.asignacionFamilias
+    : [];
+
+  const resultado: MobileKitAsignado[] = [];
+
+  for (const familiaRaw of asignacionFamilias) {
+    const familia = asRecord(familiaRaw);
+    if (!familia) continue;
+
+    const refIdFamilia = asString(familia.refId);
+    const nombreFamilia = asString(familia.nombre, "Familia");
+    const kits = Array.isArray(familia.kits) ? familia.kits : [];
+
+    kits.forEach((kitRaw, kitIndex) => {
+      const kit = asRecord(kitRaw);
+      if (!kit) return;
+
+      const tipoKit = asString(kit.tipoKit);
+      const articulosRaw = Array.isArray(kit.articulos) ? kit.articulos : [];
+
+      const articulos = articulosRaw
+        .map((artRaw): MobileKitArticuloAsignado | null => {
+          const art = asRecord(artRaw);
+          if (!art) return null;
+
+          const descripcion = asString(art.descripcion);
+          if (!descripcion) return null;
+
+          return {
+            codigo: asString(art.codigo),
+            descripcion,
+            cantidad: asCantidad(art.cantidad),
+          };
+        })
+        .filter((art): art is MobileKitArticuloAsignado => art !== null);
+
+      if (!tipoKit || articulos.length === 0) return;
+
+      resultado.push({
+        uuidKitAsignado: `${idIncidencia}::${refIdFamilia || "sin-familia"}::${kitIndex}`,
+        refIdFamilia,
+        nombreFamilia,
+        tipoKit,
+        articulos,
+      });
+    });
+  }
+
+  return resultado;
+}
+
 export async function GET(request: Request) {
   const unauthorized = requireMobileSyncKey(request);
   if (unauthorized) return unauthorized;
@@ -281,8 +381,35 @@ export async function GET(request: Request) {
       obsPorIncidencia.set(obs.idReferencia, lista);
     }
 
+    const informesEvaluacion = allIds.length
+      ? await prisma.informe.findMany({
+          where: {
+            idIncidencia: { in: allIds },
+            tipoInforme: "EVALUACION",
+          },
+          orderBy: { fechaElaboracion: "desc" },
+          select: {
+            idInforme: true,
+            idIncidencia: true,
+            contenido: true,
+            fechaElaboracion: true,
+          },
+        })
+      : [];
+
+    const kitsPorIncidencia = new Map<string, MobileKitAsignado[]>();
+    for (const informe of informesEvaluacion) {
+      if (kitsPorIncidencia.has(informe.idIncidencia)) continue;
+
+      kitsPorIncidencia.set(
+        informe.idIncidencia,
+        normalizarKitsAsignados(informe.idIncidencia, informe.contenido)
+      );
+    }
+
     const mapIncidencia = (inc: typeof incidenciasResponsable[number]) => ({
       asignacion: null,
+      kitsAsignados: kitsPorIncidencia.get(inc.idIncidencia) ?? [],
       incidencia: {
         ...inc,
         latitud: decimalToNumber(inc.latitud),
@@ -317,6 +444,7 @@ export async function GET(request: Request) {
           syncEstado: asignacion.syncEstado,
           fechaSincronizacion: asignacion.fechaSincronizacion,
         },
+        kitsAsignados: kitsPorIncidencia.get(asignacion.incidencia.idIncidencia) ?? [],
         incidencia: {
           ...asignacion.incidencia,
           latitud: decimalToNumber(asignacion.incidencia.latitud),
