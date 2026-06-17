@@ -61,13 +61,15 @@ const USERS: SeedUser[] = [
     email: process.env.SEED_COMITE_EMAIL || "comite.demo@caritas.test",
     name: process.env.SEED_COMITE_NAME || "Comité Donaciones Demo",
     role: Role.COMITEDONACIONES,
-    crearUsuarioGRD: false,
+    // Requiere perfil GRD: el comité vota las donaciones y el voto referencia
+    // UsuarioGRD. Sin perfil, getUsuarioGRDId()=null y no podría votar.
+    crearUsuarioGRD: true,
   },
   {
     email: process.env.SEED_JEFA_OGP_EMAIL || "jefaogp.demo@caritas.test",
     name: process.env.SEED_JEFA_OGP_NAME || "Jefa OGP Demo",
     role: Role.JEFAOGP,
-    crearUsuarioGRD: false,
+    crearUsuarioGRD: true,
   },
 ];
 
