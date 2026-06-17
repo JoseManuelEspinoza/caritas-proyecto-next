@@ -26,7 +26,7 @@ import {
 } from "@/app/actions/simulacros";
 import { subirArchivoS3 } from "@/app/ui/shared/file-upload";
 import { ACCEPT } from "@/app/lib/upload-config";
-import { PaginationControls, PageSizeSelector } from "@/app/ui/shared/pagination-controls";
+import { PaginationControls } from "@/app/ui/shared/pagination-controls";
 import type { FrontendRole } from "@/app/lib/roles";
 import { LocationPicker } from "@/app/ui/grd/location-picker";
 
@@ -1723,10 +1723,6 @@ export function SimulacrosModule({
                 Limpiar filtros
               </button>
             )}
-            <PageSizeSelector
-              pageSize={pageSize}
-              onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
-            />
           </div>
         </div>
       </div>
@@ -1756,6 +1752,8 @@ export function SimulacrosModule({
         totalPages={totalPages}
         onPrevious={() => setCurrentPage((p) => Math.max(1, p - 1))}
         onNext={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+        pageSize={pageSize}
+        onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
         className="mt-4"
       />
     </div>

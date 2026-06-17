@@ -6,25 +6,60 @@ import {
   FileText, AlertTriangle, Users, Package,
   Download, Calendar, Activity, Map, Clock, X,
   ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ExternalLink,
+  CheckCircle, Target,
 } from "lucide-react";
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, CartesianGrid, Legend, Area, AreaChart,
+  ResponsiveContainer, CartesianGrid, Legend, Area, AreaChart, LabelList,
 } from "recharts";
 
-import { type ReportesProps, type IncidenciaRow, COLORS, GREEN, fmtLabel } from "./types";
-import { KpiCard } from "./kpi-card";
+import { type ReportesProps, type IncidenciaRow, type ActividadesData, type IncidenciasData, COLORS, GREEN, fmtLabel } from "./types";
+import { KpiCard, KPICard } from "./kpi-card";
 import { ParroquiaMultiSelect } from "./parroquia-multiselect";
 import { ExportModal } from "./export-modal";
+
+const PALETTE = [
+  "#009850", "#3B82F6", "#F59E0B", "#EF4444",
+  "#9155A8", "#F97316", "#00C8B4", "#EC4899",
+];
+
+const ESTADO_ACT_COLORS: Record<string, string> = {
+  EJECUTADA: "#009850",
+  PROGRAMADA: "#3B82F6",
+  EN_PROCESO: "#F59E0B",
+  CANCELADA: "#EF4444",
+  POSTERGADA: "#9155A8",
+};
+
+function ChartCard({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+      <h2 className="text-sm font-bold text-gray-900 mb-0.5">{title}</h2>
+      <p className="text-xs text-gray-400 mb-4">{subtitle}</p>
+      {children}
+    </div>
+  );
+}
+
+function CustomTooltip({ active, payload }: { active?: boolean; payload?: { value: number }[] }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-md text-xs">
+      <p className="text-[#009850] font-semibold">{payload[0].value} actividades</p>
+    </div>
+  );
+}
 
 export function ReportesModule({
   filtros, totales, porEstado, porTipo, porParroquia,
   timeline, byWeek, parroquias, topIncidencias, dataExportacion,
+  actividadesData, incidenciasData,
 }: ReportesProps) {
   const router = useRouter();
   const [desde, setDesde] = useState(filtros.desde);
   const [hasta, setHasta] = useState(filtros.hasta);
   const [parroquiasFiltro, setParroquiasFiltro] = useState<string[]>(filtros.parroquias ?? []);
+  const [tab, setTab] = useState<"incidencias" | "actividades">("incidencias");
   const [showModal, setShowModal] = useState(false);
   const [tablaExpanded, setTablaExpanded] = useState(false);
   const [rowTooltip, setRowTooltip] = useState<{ x: number; y: number; codigo: string } | null>(null);
@@ -110,6 +145,7 @@ export function ReportesModule({
         </div>
         <button
           onClick={() => setShowModal(true)}
+          suppressHydrationWarning
           className="cursor-pointer flex items-center gap-2 px-4 py-2.5 bg-[#009850] hover:bg-[#007a40] text-white rounded-lg text-sm font-semibold transition-colors shadow-sm"
         >
           <Download className="w-4 h-4" /> Exportar reporte
@@ -152,6 +188,7 @@ export function ReportesModule({
           )}
           <button
             onClick={aplicarFiltros}
+            suppressHydrationWarning
             className="cursor-pointer px-5 py-2 bg-[#009850] text-white font-semibold rounded-lg text-sm hover:bg-[#007a40] transition-colors shadow-sm"
           >
             Aplicar
@@ -159,6 +196,7 @@ export function ReportesModule({
           {hayFiltrosActivos && (
             <button
               onClick={limpiarFiltros}
+              suppressHydrationWarning
               className="cursor-pointer text-xs text-gray-400 hover:text-[#009850] flex items-center gap-1 transition-colors"
             >
               <X className="w-3.5 h-3.5" /> Limpiar
@@ -172,6 +210,7 @@ export function ReportesModule({
         <button
           onClick={() => scrollKpi("left")}
           aria-label="Anterior"
+          suppressHydrationWarning
           className="cursor-pointer absolute left-0 top-1/2 -translate-y-1/2 z-10 w-7 h-7 bg-white border border-gray-200 rounded-full flex items-center justify-center shadow-sm hover:shadow-md transition-shadow"
         >
           <ChevronLeft className="w-4 h-4 text-gray-500" />
@@ -190,6 +229,7 @@ export function ReportesModule({
         <button
           onClick={() => scrollKpi("right")}
           aria-label="Siguiente"
+          suppressHydrationWarning
           className="cursor-pointer absolute right-0 top-1/2 -translate-y-1/2 z-10 w-7 h-7 bg-white border border-gray-200 rounded-full flex items-center justify-center shadow-sm hover:shadow-md transition-shadow"
         >
           <ChevronRight className="w-4 h-4 text-gray-500" />
@@ -244,8 +284,26 @@ export function ReportesModule({
               </PieChart>
             </ResponsiveContainer>
           )}
-        </ChartCard>
-      </>}
+        </div>
+      </div>
+
+      {/* ── Selector de tabs ─────────────────────────────────────────────────── */}
+      <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">
+        {(["incidencias", "actividades"] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            suppressHydrationWarning
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              tab === t
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            {t === "incidencias" ? "Casos e Incidencias" : "Actividades Preventivas"}
+          </button>
+        ))}
+      </div>
 
       {/* ── Tab: Actividades Preventivas ──────────────────────────────────────── */}
       {tab === "actividades" && <>
@@ -368,7 +426,7 @@ export function ReportesModule({
               </BarChart>
             </ResponsiveContainer>
           )}
-        </ChartCard>
+        </div>
       </>}
 
       {/* ── Tab: Casos e Incidencias ──────────────────────────────────────────── */}
@@ -406,7 +464,6 @@ export function ReportesModule({
             color="#3B82F6"
           />
         </div>
-      </div>
 
       {/* ── Bar Tipo ──────────────────────────────────────────────────────── */}
       <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
@@ -442,6 +499,7 @@ export function ReportesModule({
             </div>
             <button
               onClick={() => setTablaExpanded((v) => !v)}
+              suppressHydrationWarning
               className="cursor-pointer flex items-center gap-1 text-xs text-[#009850] font-semibold hover:opacity-70 transition-opacity"
             >
               {tablaExpanded ? "Ver menos" : "Ver todas"}
@@ -521,6 +579,8 @@ export function ReportesModule({
           )}
         </div>
       )}
+      </>}
+
     </div>
   );
 }

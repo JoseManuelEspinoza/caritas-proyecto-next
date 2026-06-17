@@ -88,7 +88,7 @@ function fmtFecha(iso: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("es-PE", { day: "2-digit", month: "short", year: "numeric" });
+  return d.toLocaleDateString("es-PE", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" });
 }
 
 type ArticuloConsolidado = { tipoKit: string; codigo: string; descripcion: string; cantidad: number };
@@ -540,7 +540,7 @@ export function DonacionesModule({
                           <div key={e.idEntrega} className="border border-gray-100 rounded-lg p-3 bg-gray-50">
                             <div className="flex items-center justify-between gap-2 mb-1">
                               <span className="text-xs font-mono text-green-700 font-bold">{e.codigoEntrega}</span>
-                              <span className="text-[10px] text-gray-500">{e.fechaEntrega ? new Date(e.fechaEntrega).toLocaleDateString("es-PE") : "—"}</span>
+                              <span className="text-[10px] text-gray-500">{e.fechaEntrega ? new Date(e.fechaEntrega).toLocaleDateString("es-PE", { timeZone: "UTC" }) : "—"}</span>
                             </div>
                             <p className="text-xs font-semibold text-gray-800">{e.tipoAyuda}{e.cantidadEntregada != null ? <span className="ml-2 text-green-700 font-normal">× {e.cantidadEntregada}</span> : null}</p>
                             {e.lugarEntrega && <p className="text-[11px] text-gray-600">📍 {e.lugarEntrega}</p>}
@@ -559,7 +559,7 @@ export function DonacionesModule({
                           <div key={ev.idEvidenciaGRD} className="flex items-center gap-2 text-xs border border-gray-100 rounded p-2 bg-gray-50">
                             <span>📎</span>
                             <span className="flex-1 truncate text-gray-700">{ev.nombreArchivo}</span>
-                            <span className="text-gray-400">{new Date(ev.fechaCarga).toLocaleDateString("es-PE")}</span>
+                            <span className="text-gray-400">{new Date(ev.fechaCarga).toLocaleDateString("es-PE", { timeZone: "UTC" })}</span>
                             <a
                               href={`/api/archivos?key=${encodeURIComponent(ev.urlArchivo)}`}
                               target="_blank"

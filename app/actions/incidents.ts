@@ -410,7 +410,7 @@ export async function corregirYReenviar(incidenciaId: string, data: CorreccionDa
 // ─── Decisiones del Comité ──────────────────────────────────────────────────
 
 // Fire-and-forget: notifica al especialista GRD responsable sobre la decisión del comité.
-export function notificarDecisionComite(
+export async function notificarDecisionComite(
   incidenciaId: string,
   decision: "APROBAR" | "OBSERVAR" | "RECHAZAR",
   observaciones?: string | null

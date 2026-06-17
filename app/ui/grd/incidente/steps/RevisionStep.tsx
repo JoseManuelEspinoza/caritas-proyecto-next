@@ -615,6 +615,7 @@ export function RevisionStep({
 
             {!collapsed && (
               <>
+                <div className={informeYaEnviado ? "pointer-events-none opacity-60 select-none" : ""}>
                 {/* A) Datos de identificación */}
                 <Seccion num="A" titulo="Datos de Identificación">
                   <div>
@@ -1102,6 +1103,7 @@ export function RevisionStep({
                     Todas las evidencias del caso (referencia)
                   </p>
                   <EvidenciasRegistro evidencias={data.evidencias} />
+                </div>
                 </div>
 
                 {/* Acciones */}

@@ -4,6 +4,20 @@ export type Conteo = { label: string; value: number };
 export type ExportRow = Record<string, string | number>;
 export type IncidenciaRow = { id: string } & Record<string, string | number>;
 
+export interface ActividadesData {
+  total: number;
+  ejecutadas: number;
+  totalParticipantes: number;
+  porEstado: Conteo[];
+  porTipo: Conteo[];
+}
+
+export interface IncidenciasData {
+  cerradas: number;
+  enSeguimiento: number;
+  activas: number;
+}
+
 export interface ReportesProps {
   filtros: { desde: string; hasta: string; parroquias: string[] };
   totales: {
@@ -22,6 +36,8 @@ export interface ReportesProps {
   parroquias: { id: string; nombre: string }[];
   topIncidencias: IncidenciaRow[];
   dataExportacion: ExportRow[];
+  actividadesData: ActividadesData;
+  incidenciasData: IncidenciasData;
 }
 
 export const COLORS = [

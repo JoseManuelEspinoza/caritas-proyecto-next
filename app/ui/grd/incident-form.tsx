@@ -852,6 +852,7 @@ export function IncidentForm({
         .sort((a, b) => a.dist - b.dist)
         .map((p) => p.nombre);
       setParroquiasCercanas(ordenadas);
+      if (ordenadas.length > 0) setParroquia(ordenadas[0]);
     } finally {
       setCargandoParroquias(false);
     }
@@ -1125,6 +1126,7 @@ export function IncidentForm({
     if (!categoria.trim()) return "Selecciona la categoría del evento.";
     if (!distrito.trim()) return "Selecciona el distrito del suceso.";
 
+    if (!parroquia.trim()) return "Selecciona la parroquia de referencia.";
     if (!direccion.trim()) return "Ingresa la dirección del suceso.";
     if (direccion.trim().length < 5) return "La dirección debe tener al menos 5 caracteres.";
 
@@ -1563,8 +1565,8 @@ export function IncidentForm({
                     </p>
                   </div>
                   <div>
-                    <label className="text-xs text-gray-500 mb-1.5 block">
-                      Parroquia de referencia
+                    <label className={`text-xs mb-1.5 block ${intentoEnvio && !parroquia.trim() ? "text-red-600" : "text-gray-500"}`}>
+                      Parroquia de referencia <span className="text-red-500">*</span>
                       {cargandoParroquias && (
                         <span className="ml-2 text-[11px] text-[#009850]">buscando cercanas…</span>
                       )}
@@ -1580,6 +1582,7 @@ export function IncidentForm({
                             : PARROQUIAS_LIMA
                       }
                       placeholder="Buscar parroquia del sistema…"
+                      error={intentoEnvio && !parroquia.trim()}
                     />
                     <p className="text-[11px] text-gray-400 mt-1">
                       {parroquiasCercanas && parroquiasCercanas.length > 0

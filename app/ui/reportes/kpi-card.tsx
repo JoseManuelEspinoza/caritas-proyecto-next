@@ -1,5 +1,35 @@
 "use client";
 
+export function KPICard({
+  icon, label, value, sub, color = "#009850", pct,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: number | string;
+  sub?: string;
+  color?: string;
+  pct?: number;
+}) {
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm flex flex-col gap-2">
+      <div className="flex items-center gap-2">
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+          style={{ background: `${color}18` }}>
+          {icon}
+        </div>
+        <span className="text-xs font-medium text-gray-500 leading-tight">{label}</span>
+      </div>
+      <span className="text-2xl font-bold text-gray-900">{value}</span>
+      {sub && <span className="text-[11px] text-gray-400">{sub}</span>}
+      {pct !== undefined && (
+        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+          <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(pct, 100)}%`, background: color }} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function KpiCard({
   icon, label, value, sub, unit, accent,
 }: {

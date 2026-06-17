@@ -161,6 +161,45 @@ export default async function ReportesPage({
   const dataExportacion = allRows.map(({ id: _id, ...rest }: typeof allRows[number]) => rest);
   const topIncidencias = allRows.slice(0, 10);
 
+  // ── Datos para tabs de Actividades e Incidencias ──────────────────────────
+  const [
+    actividadesEstadoGroups,
+    actividadesTipoGroups,
+    actividadesParticipantes,
+    catalogoTipos,
+  ] = await Promise.all([
+    prisma.actividadPreventiva.groupBy({ by: ["estadoActividad"], _count: { _all: true } }),
+    prisma.actividadPreventiva.groupBy({ by: ["idTipoActividadPreventiva"], _count: { _all: true } }),
+    prisma.actividadPreventiva.aggregate({ _sum: { numeroParticipantesReal: true } }),
+    prisma.catalogoDetalleGRD.findMany({ select: { idCatalogoDetalleGRD: true, valor: true } }),
+  ]);
+
+  const tipoLabelMap = new Map(catalogoTipos.map((c) => [c.idCatalogoDetalleGRD, c.valor]));
+
+  const actividadesData = {
+    total: totalActividades,
+    ejecutadas: actividadesEjecutadas,
+    totalParticipantes: actividadesParticipantes._sum.numeroParticipantesReal ?? 0,
+    porEstado: actividadesEstadoGroups.map((g) => ({
+      label: g.estadoActividad,
+      value: g._count._all,
+    })),
+    porTipo: actividadesTipoGroups.map((g) => ({
+      label: tipoLabelMap.get(g.idTipoActividadPreventiva) ?? g.idTipoActividadPreventiva,
+      value: g._count._all,
+    })),
+  };
+
+  const estadoCount = (estado: string) =>
+    estadoGroups.find((g) => g.estadoActual === estado)?._count._all ?? 0;
+
+  const incidenciasData = {
+    cerradas: estadoCount("CERRADO"),
+    enSeguimiento: estadoCount("SEGUIMIENTO ABIERTO"),
+    activas: ["EN EVALUACION", "ASIGNADO", "DATA RECOPILADA", "APROBADO", "ATENDIDO"]
+      .reduce((sum, e) => sum + estadoCount(e), 0),
+  };
+
   return (
     <ReportesModule
       filtros={{
@@ -193,10 +232,8 @@ export default async function ReportesPage({
       parroquias={parroquiasList.map((p) => ({ id: p.idParroquia, nombre: p.nombre }))}
       topIncidencias={topIncidencias}
       dataExportacion={dataExportacion}
-      brigadistasData={brigadistasData}
       actividadesData={actividadesData}
       incidenciasData={incidenciasData}
-      kitsData={kitsData}
     />
   );
 }

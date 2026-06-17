@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import type { AuditEntry } from "@/app/actions/auditoria";
-import { PaginationControls, PageSizeSelector } from "@/app/ui/shared/pagination-controls";
+import { PaginationControls } from "@/app/ui/shared/pagination-controls";
 
 const SOURCE_LABELS: Record<string, string> = {
   grd: "GRD",
@@ -108,11 +108,6 @@ export function AuditoriaTable({ entries }: { entries: AuditEntry[] }) {
         <span className="text-xs text-gray-400">
           {filtered.length} registro{filtered.length !== 1 ? "s" : ""}
         </span>
-        <PageSizeSelector
-          pageSize={pageSize}
-          onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
-          className="ml-auto"
-        />
       </div>
 
       {/* Tabla */}
@@ -202,6 +197,8 @@ export function AuditoriaTable({ entries }: { entries: AuditEntry[] }) {
         totalPages={totalPages}
         onPrevious={() => setPage((p) => Math.max(1, p - 1))}
         onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
+        pageSize={pageSize}
+        onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
         className="rounded-t-none border-t border-x-0 border-b-0 rounded-b-xl"
       />
     </div>
