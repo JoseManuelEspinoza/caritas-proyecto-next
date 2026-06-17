@@ -48,11 +48,19 @@ export async function votarComite(
     } else if (res.estado === "RECHAZADA") {
       notificarDecisionComite(incidenciaId, "RECHAZAR");
     }
+
+    revalidar(incidenciaId);
+    return {};
   } catch (err) {
+    // P2025: cerrarRonda found the round already closed by a concurrent winning vote.
+    // The user's vote was persisted earlier in the use case via upsertVoto.
+    const code = (err as { code?: string })?.code;
+    if (code === "P2025") {
+      revalidar(incidenciaId);
+      return { message: "El caso ya fue resuelto por el Comité; tu voto quedó registrado." };
+    }
     return asMessage(err);
   }
-  revalidar(incidenciaId);
-  return {};
 }
 
 export async function observarCasoComite(
