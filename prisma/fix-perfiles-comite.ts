@@ -12,7 +12,7 @@
  *   docker compose exec -e NODE_OPTIONS="--conditions=react-server" web npx tsx prisma/fix-perfiles-comite.ts
  */
 import { prisma } from "../app/lib/prisma";
-
+import { Role } from "@prisma/client";
 function separar(name: string) {
   const p = (name ?? "").trim().split(/\s+/);
   if (p.length <= 1) return { nombres: name || "Usuario", apellidos: "" };
@@ -20,7 +20,7 @@ function separar(name: string) {
 }
 
 async function main() {
-  const ROLES = ["COMITEDONACIONES", "JEFAOGP"];
+  const ROLES: Role[] = [Role.COMITEDONACIONES, Role.JEFAOGP];
   const users = await prisma.user.findMany({
     where: { role: { in: ROLES }, estado: "ACTIVO" },
     select: { id: true, email: true, name: true, role: true },
