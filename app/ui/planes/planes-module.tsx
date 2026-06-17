@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { ClipboardList, Plus, Calendar, Send, CheckCircle2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { crearPlan, cambiarAprobacionPlan } from "@/app/actions/planes";
-import { PaginationControls, PageSizeSelector } from "@/app/ui/shared/pagination-controls";
+import { PaginationControls } from "@/app/ui/shared/pagination-controls";
 
 type Plan = {
   id: string;
@@ -93,10 +93,6 @@ export function PlanesModule({ planes, parroquias }: { planes: Plan[]; parroquia
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <PageSizeSelector
-            pageSize={pageSize}
-            onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
-          />
           <button
             onClick={() => setShowForm((s) => !s)}
             className="flex items-center gap-2 px-4 py-2 bg-[var(--caritas-green)] text-white rounded"
@@ -263,6 +259,8 @@ export function PlanesModule({ planes, parroquias }: { planes: Plan[]; parroquia
         totalPages={totalPages}
         onPrevious={() => setCurrentPage((p) => Math.max(1, p - 1))}
         onNext={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+        pageSize={pageSize}
+        onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
         className="mt-6"
       />
     </div>

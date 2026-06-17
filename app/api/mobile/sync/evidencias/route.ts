@@ -48,9 +48,12 @@ function jsonError(message: string, status = 400) {
 function requireMobileSyncKey(request: Request): NextResponse | null {
   const expected = process.env.MOBILE_SYNC_API_KEY;
 
-  // Para desarrollo permite probar sin key si no está configurada.
-  // Para producción, definir MOBILE_SYNC_API_KEY en .env del servidor.
-  if (!expected) return null;
+  if (!expected) {
+    return NextResponse.json(
+      { ok: false, message: "Sincronización móvil no configurada." },
+      { status: 503 }
+    );
+  }
 
   const provided = request.headers.get("x-mobile-sync-key");
 
@@ -126,18 +129,7 @@ async function resolveIdReferencia(body: EvidenciaMovilPayload): Promise<string>
   );
 }
 
-async function resolveUsuarioCarga(body: EvidenciaMovilPayload): Promise<string> {
-  const idFromPayload = body.idUsuarioCargaGRD?.trim() || body.idUsuarioRemoto?.trim();
-
-  if (idFromPayload) {
-    const usuario = await prisma.usuarioGRD.findUnique({
-      where: { idUsuarioGRD: idFromPayload },
-      select: { idUsuarioGRD: true },
-    });
-
-    if (usuario) return usuario.idUsuarioGRD;
-  }
-
+async function resolveUsuarioCarga(): Promise<string> {
   const idFromEnv = process.env.MOBILE_SYNC_USUARIO_GRD_ID?.trim();
 
   if (idFromEnv) {
@@ -149,18 +141,9 @@ async function resolveUsuarioCarga(body: EvidenciaMovilPayload): Promise<string>
     if (usuario) return usuario.idUsuarioGRD;
   }
 
-  // Fallback solo para desarrollo/MVP. En producción se debería resolver desde auth móvil.
-  const usuarioFallback = await prisma.usuarioGRD.findFirst({
-    where: { estado: "ACTIVO" },
-    orderBy: { fechaCreacion: "asc" },
-    select: { idUsuarioGRD: true },
-  });
-
-  if (!usuarioFallback) {
-    throw new Error("No existe un usuario GRD activo para registrar la evidencia.");
-  }
-
-  return usuarioFallback.idUsuarioGRD;
+  throw new Error(
+    "No se puede identificar al usuario para registrar la evidencia. Configura MOBILE_SYNC_USUARIO_GRD_ID."
+  );
 }
 
 async function uploadBase64ToS3(
@@ -211,16 +194,33 @@ async function uploadBase64ToS3(
   };
 }
 
+const ALLOWED_S3_PREFIXES = [
+  "evidencias/",
+  "evidencia-kit/",
+  "evidencia-grd/",
+];
+
 function resolveUrlArchivo(body: EvidenciaMovilPayload): string | null {
-  return (
+  const url =
     body.urlArchivo?.trim() ||
     body.urlS3?.trim() ||
     body.key?.trim() ||
-    null
-  );
+    null;
+
+  if (!url) return null;
+
+  if (!ALLOWED_S3_PREFIXES.some((prefix) => url.startsWith(prefix))) {
+    throw new Error(
+      "La clave de archivo proporcionada no corresponde a un prefijo S3 conocido."
+    );
+  }
+
+  return url;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const unauthorized = requireMobileSyncKey(request);
+  if (unauthorized) return unauthorized;
   return NextResponse.json({
     ok: true,
     endpoint: "/api/mobile/sync/evidencias",
@@ -279,7 +279,7 @@ export async function POST(request: Request) {
     const tipoCodigo = normalizeTipoReferencia(body.tipoReferencia);
     const tipoReferencia = await resolveTipoReferencia(tipoCodigo);
     const idReferencia = await resolveIdReferencia(body);
-    const idUsuarioCargaGRD = await resolveUsuarioCarga(body);
+    const idUsuarioCargaGRD = await resolveUsuarioCarga();
 
     const subidaS3 = await uploadBase64ToS3(body, idReferencia);
     const urlArchivo = subidaS3?.urlArchivo || resolveUrlArchivo(body);

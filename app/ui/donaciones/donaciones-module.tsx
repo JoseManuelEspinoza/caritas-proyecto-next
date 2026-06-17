@@ -6,7 +6,6 @@ import Link from "next/link";
 import {
   HandHeart,
   CheckCircle,
-  XCircle,
   AlertCircle,
   Clock,
   Eye,
@@ -22,8 +21,9 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { aprobarCaso, observarCaso, rechazarCaso } from "@/app/actions/incidents";
 import { registrarEntregaAyuda, listarEntregasAyuda } from "@/app/actions/donaciones";
+import { PanelVotacionComite } from "./PanelVotacionComite";
+import type { TallyRondaConNombres } from "@/app/lib/comite-donaciones-tally";
 import { registrarEvidenciaEntrega, listarEvidenciasEntrega } from "@/app/actions/evidencias";
 import { subirArchivoS3 } from "@/app/ui/shared/file-upload";
 import { PaginationControls } from "@/app/ui/shared/pagination-controls";
@@ -88,7 +88,7 @@ function fmtFecha(iso: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("es-PE", { day: "2-digit", month: "short", year: "numeric" });
+  return d.toLocaleDateString("es-PE", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" });
 }
 
 type ArticuloConsolidado = { tipoKit: string; codigo: string; descripcion: string; cantidad: number };
@@ -120,7 +120,19 @@ const STATUS_COLOR: Record<string, string> = {
 
 const PENDIENTES = ["EN EVALUACION", "OBSERVADO"];
 
-export function DonacionesModule({ casos, canEvaluate }: { casos: Caso[]; canEvaluate: boolean }) {
+export function DonacionesModule({
+  casos,
+  canEvaluate,
+  soyMiembroDelComite,
+  miIdUsuarioGRD,
+  tallyPorCaso,
+}: {
+  casos: Caso[];
+  canEvaluate: boolean;
+  soyMiembroDelComite: boolean;
+  miIdUsuarioGRD: string | null;
+  tallyPorCaso: Record<string, TallyRondaConNombres | null>;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [selectedId, setSelectedId] = useState<string | null>(
@@ -177,31 +189,6 @@ export function DonacionesModule({ casos, canEvaluate }: { casos: Caso[]; canEva
     listarEntregasAyuda(selectedId).then(setEntregas).catch(() => setEntregas([]));
     listarEvidenciasEntrega(selectedId).then(setEvidenciasEntrega).catch(() => setEvidenciasEntrega([]));
   }, [selectedId]);
-
-  const decidir = (accion: "APROBAR" | "OBSERVAR" | "RECHAZAR") => {
-    if (!current) return;
-    if (!notes.trim()) {
-      toast.error("Escribe la justificación de la decisión.");
-      return;
-    }
-    const fn =
-      accion === "APROBAR"
-        ? () => aprobarCaso(current.id, notes)
-        : accion === "OBSERVAR"
-          ? () => observarCaso(current.id, notes)
-          : () => rechazarCaso(current.id, notes);
-    startTransition(async () => {
-      const res = await fn();
-      if (res?.message && /no se pudo|no permitida|obligatori/i.test(res.message)) {
-        toast.error(res.message);
-        return;
-      }
-      toast.success("Decisión registrada.");
-      setNotes("");
-      setSelectedId(null);
-      router.refresh();
-    });
-  };
 
   const submitEntrega = () => {
     if (!current) return;
@@ -553,7 +540,7 @@ export function DonacionesModule({ casos, canEvaluate }: { casos: Caso[]; canEva
                           <div key={e.idEntrega} className="border border-gray-100 rounded-lg p-3 bg-gray-50">
                             <div className="flex items-center justify-between gap-2 mb-1">
                               <span className="text-xs font-mono text-green-700 font-bold">{e.codigoEntrega}</span>
-                              <span className="text-[10px] text-gray-500">{e.fechaEntrega ? new Date(e.fechaEntrega).toLocaleDateString("es-PE") : "—"}</span>
+                              <span className="text-[10px] text-gray-500">{e.fechaEntrega ? new Date(e.fechaEntrega).toLocaleDateString("es-PE", { timeZone: "UTC" }) : "—"}</span>
                             </div>
                             <p className="text-xs font-semibold text-gray-800">{e.tipoAyuda}{e.cantidadEntregada != null ? <span className="ml-2 text-green-700 font-normal">× {e.cantidadEntregada}</span> : null}</p>
                             {e.lugarEntrega && <p className="text-[11px] text-gray-600">📍 {e.lugarEntrega}</p>}
@@ -572,7 +559,7 @@ export function DonacionesModule({ casos, canEvaluate }: { casos: Caso[]; canEva
                           <div key={ev.idEvidenciaGRD} className="flex items-center gap-2 text-xs border border-gray-100 rounded p-2 bg-gray-50">
                             <span>📎</span>
                             <span className="flex-1 truncate text-gray-700">{ev.nombreArchivo}</span>
-                            <span className="text-gray-400">{new Date(ev.fechaCarga).toLocaleDateString("es-PE")}</span>
+                            <span className="text-gray-400">{new Date(ev.fechaCarga).toLocaleDateString("es-PE", { timeZone: "UTC" })}</span>
                             <a
                               href={`/api/archivos?key=${encodeURIComponent(ev.urlArchivo)}`}
                               target="_blank"
@@ -588,50 +575,21 @@ export function DonacionesModule({ casos, canEvaluate }: { casos: Caso[]; canEva
                   </div>
                 )}
 
-                {canEvaluate && PENDIENTES.includes(current.estado) ? (
-                  <div className="border-t border-gray-100 pt-4 space-y-3">
-                    <p className="text-xs font-bold text-gray-700">
-                      Resolución y observaciones del Comité
-                    </p>
-                    <textarea
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      rows={3}
-                      placeholder="Justificación de la decisión, criterios aplicados, condiciones de la donación..."
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-purple-400 resize-none"
-                    />
-                    <div className="grid grid-cols-3 gap-2">
-                      <button
-                        onClick={() => decidir("APROBAR")}
-                        disabled={pending}
-                        className="flex flex-col items-center gap-1 py-2.5 bg-green-600 hover:bg-green-700 text-white font-bold text-xs rounded-lg disabled:opacity-50"
-                      >
-                        <CheckCircle className="w-4 h-4" /> Aprobar
-                      </button>
-                      <button
-                        onClick={() => decidir("OBSERVAR")}
-                        disabled={pending}
-                        className="flex flex-col items-center gap-1 py-2.5 bg-yellow-500 hover:bg-yellow-600 text-white font-bold text-xs rounded-lg disabled:opacity-50"
-                      >
-                        <AlertCircle className="w-4 h-4" /> Observar
-                      </button>
-                      <button
-                        onClick={() => decidir("RECHAZAR")}
-                        disabled={pending}
-                        className="flex flex-col items-center gap-1 py-2.5 bg-red-500 hover:bg-red-600 text-white font-bold text-xs rounded-lg disabled:opacity-50"
-                      >
-                        <XCircle className="w-4 h-4" /> Rechazar
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <Link
-                    href={`/grd/${current.id}`}
-                    className="mt-2 flex items-center gap-1.5 text-xs text-[var(--caritas-green)] hover:underline"
-                  >
-                    <Eye className="w-3.5 h-3.5" /> Ver detalle completo del incidente
-                  </Link>
+                {current.estado === "EN EVALUACION" && (
+                  <PanelVotacionComite
+                    idIncidencia={current.id}
+                    soyMiembroDelComite={soyMiembroDelComite}
+                    miIdUsuarioGRD={miIdUsuarioGRD}
+                    tally={tallyPorCaso[current.id] ?? null}
+                  />
                 )}
+
+                <Link
+                  href={`/grd/${current.id}`}
+                  className="mt-2 flex items-center gap-1.5 text-xs text-[var(--caritas-green)] hover:underline"
+                >
+                  <Eye className="w-3.5 h-3.5" /> Ver detalle completo del incidente
+                </Link>
               </div>
             </div>
           )}
