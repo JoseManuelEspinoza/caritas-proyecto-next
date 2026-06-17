@@ -25,7 +25,7 @@ import {
   Loader2,
 } from "lucide-react";
 import type { FrontendRole } from "@/app/lib/roles";
-import { PaginationControls, PageSizeSelector } from "@/app/ui/shared/pagination-controls";
+import { PaginationControls } from "@/app/ui/shared/pagination-controls";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -380,14 +380,6 @@ export function GrdList({ items, role, globalCounts }: GrdListProps) {
               Ver todos ({items.length})
             </button>
           )}
-          <PageSizeSelector
-            pageSize={rowsPerPage}
-            onPageSizeChange={(s) => {
-              setRowsPerPage(s);
-              setCurrentPage(1);
-            }}
-            className="ml-auto"
-          />
         </div>
       </div>
 
@@ -584,6 +576,8 @@ export function GrdList({ items, role, globalCounts }: GrdListProps) {
           totalPages={totalPages}
           onPrevious={() => setCurrentPage((p) => Math.max(1, p - 1))}
           onNext={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+          pageSize={rowsPerPage}
+          onPageSizeChange={(s) => { setRowsPerPage(s); setCurrentPage(1); }}
           className="rounded-t-none border-t border-x-0 border-b-0 rounded-b-xl"
         />
       </div>

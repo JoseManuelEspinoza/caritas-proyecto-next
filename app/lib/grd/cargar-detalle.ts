@@ -224,7 +224,7 @@ export async function cargarDetalleIncidencia(
   );
 
   const brigadistasDisp = await prisma.brigadistaParroquial.findMany({
-    where: { estado: "ACTIVO" },
+    where: { estado: "ACTIVO", disponibilidad: "DISPONIBLE" },
     select: {
       idBrigadistaParroquial: true,
       nombres: true,

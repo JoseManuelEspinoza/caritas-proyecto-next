@@ -61,6 +61,9 @@ export async function guardarArticulosKit(
   articulos: ArticuloKit[]
 ): Promise<void | { message: string }> {
   const session = await verifySession();
+  if (!["ESPECIALISTAGRD", "ADMINISTRADOR"].includes(session.role)) {
+    return { message: "No tienes permisos para esta acción." };
+  }
   const limpios = articulos
     .map((a) => ({
       codigo: a.codigo?.trim() || null,
@@ -112,6 +115,9 @@ export async function crearKit(input: {
   ubicacionAlmacen?: string;
 }) {
   const session = await verifySession();
+  if (!["ESPECIALISTAGRD", "ADMINISTRADOR"].includes(session.role)) {
+    return { message: "No tienes permisos para esta acción." };
+  }
   try {
     await makeKitUseCases().crear.execute(input);
   } catch (err) {
@@ -139,6 +145,9 @@ export async function registrarMovimientoKit(
   }
 ) {
   const session = await verifySession();
+  if (!["ESPECIALISTAGRD", "ADMINISTRADOR"].includes(session.role)) {
+    return { message: "No tienes permisos para esta acción." };
+  }
   const idUsuarioResponsableGRD = await getUsuarioGRDId();
   if (!idUsuarioResponsableGRD) return { message: "Tu usuario no tiene perfil GRD asociado." };
   try {

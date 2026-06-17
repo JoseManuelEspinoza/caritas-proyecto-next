@@ -26,7 +26,7 @@ import {
   toggleEstadoParroquia,
   type ParroquiaFormData,
 } from "@/app/actions/parroquias";
-import { PaginationControls, PageSizeSelector } from "@/app/ui/shared/pagination-controls";
+import { PaginationControls } from "@/app/ui/shared/pagination-controls";
 
 const LocationPicker = dynamic(
   () => import("./location-picker").then((m) => m.LocationPicker),
@@ -364,10 +364,6 @@ export function ParroquiasList({ parroquias, canEdit = false }: Props) {
             <option value="ACTIVO">Activas</option>
             <option value="INACTIVO">Inactivas</option>
           </select>
-          <PageSizeSelector
-            pageSize={pageSize}
-            onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
-          />
         </div>
       </div>
 
@@ -585,6 +581,8 @@ export function ParroquiasList({ parroquias, canEdit = false }: Props) {
         totalPages={totalPages}
         onPrevious={() => setCurrentPage((p) => Math.max(1, p - 1))}
         onNext={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+        pageSize={pageSize}
+        onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
       />
 
       {showModal && (

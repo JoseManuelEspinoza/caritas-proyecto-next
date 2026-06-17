@@ -25,6 +25,9 @@ export async function registrarEntregaAyuda(input: {
   observaciones?: string;
 }) {
   const session = await verifySession();
+  if (!["ESPECIALISTAGRD", "ADMINISTRADOR"].includes(session.role)) {
+    return { message: "No tienes permisos para esta acción." };
+  }
   const idUsuarioResponsableGRD = await getUsuarioGRDId();
   if (!idUsuarioResponsableGRD)
     return { message: "Tu usuario no tiene perfil GRD asociado." };
