@@ -404,7 +404,7 @@ export async function corregirYReenviar(incidenciaId: string, data: CorreccionDa
 // ─── Decisiones del Comité ──────────────────────────────────────────────────
 
 // Fire-and-forget: notifica al especialista GRD responsable sobre la decisión del comité.
-function notificarDecisionComite(
+export function notificarDecisionComite(
   incidenciaId: string,
   decision: "APROBAR" | "OBSERVAR" | "RECHAZAR",
   observaciones?: string | null
@@ -459,39 +459,6 @@ function notificarDecisionComite(
       }
     })
     .catch((e) => console.error("[GRD] Error notificando decisión del comité:", e));
-}
-
-export async function aprobarCaso(incidenciaId: string, observaciones?: string) {
-  await verifySession();
-  try {
-    await makeIncidenciaUseCases().decisionComite.execute(incidenciaId, "APROBAR", observaciones);
-  } catch (err) {
-    return asMessage(err);
-  }
-  notificarDecisionComite(incidenciaId, "APROBAR", observaciones);
-  revalidar(incidenciaId);
-}
-
-export async function observarCaso(incidenciaId: string, observaciones: string) {
-  await verifySession();
-  try {
-    await makeIncidenciaUseCases().decisionComite.execute(incidenciaId, "OBSERVAR", observaciones);
-  } catch (err) {
-    return asMessage(err);
-  }
-  notificarDecisionComite(incidenciaId, "OBSERVAR", observaciones);
-  revalidar(incidenciaId);
-}
-
-export async function rechazarCaso(incidenciaId: string, observaciones: string) {
-  await verifySession();
-  try {
-    await makeIncidenciaUseCases().decisionComite.execute(incidenciaId, "RECHAZAR", observaciones);
-  } catch (err) {
-    return asMessage(err);
-  }
-  notificarDecisionComite(incidenciaId, "RECHAZAR", observaciones);
-  revalidar(incidenciaId);
 }
 
 // ─── Atención, seguimiento y cierre ─────────────────────────────────────────
