@@ -188,6 +188,8 @@ async function ensureDemoMasivo(idUsuarioGRD: string) {
     "Salas Rojas",
     "Vargas Huamán",
     "Castro León",
+    "Rojas Díaz",
+    "Huamán Vega",
   ];
 
   const nBrig = await prisma.brigadistaParroquial.count();
@@ -201,7 +203,8 @@ async function ensureDemoMasivo(idUsuarioGRD: string) {
         idParroquia: pick(parroquias, i).idParroquia,
         dni,
         nombres: pick(nombres, i),
-        apellidos: pick(apellidos, i),
+        // Apellido desacoplado del nombre (índice por bloques) → 16×10=160 combinaciones únicas, sin homónimos.
+        apellidos: pick(apellidos, Math.floor(i / nombres.length)),
         celular: `9${String(10000000 + i).slice(0, 8)}`,
         correo: `brigadista.demo.${pad(i)}@caritas.pe`,
         disponibilidad: i % 5 === 0 ? "EN_CAMPO" : "DISPONIBLE",
