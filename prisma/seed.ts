@@ -158,6 +158,17 @@ async function main() {
         "Personas con discapacidad",
       ],
     },
+    {
+      nombre: "Tipos de Actividad Preventiva",
+      items: [
+        "Simulacro de Sismo",
+        "Simulacro de Incendio",
+        "Simulacro de Inundación",
+        "Charla de Prevención",
+        "Taller",
+        "Campaña",
+      ],
+    },
   ];
   const slug = (v: string) =>
     v

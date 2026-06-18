@@ -96,10 +96,6 @@ type Brigadista = {
 };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const TIPOS = [
-  "Simulacro de Sismo", "Simulacro de Incendio", "Simulacro de Inundación",
-  "Charla de Prevención", "Taller", "Campaña",
-];
 const ESTADOS = ["PROGRAMADA", "ASIGNADA", "EJECUTADA", "OBSERVADA", "VALIDADA", "CANCELADA"];
 
 const ESTADO_CFG: Record<string, { cls: string; label: string; icon: React.ReactNode }> = {
@@ -436,7 +432,7 @@ function CancelModal({ nombre, onConfirm, onClose, loading }: {
 }
 
 // ─── Edit Modal ───────────────────────────────────────────────────────────────
-function EditModal({ sim, parroquias, onClose }: { sim: Actividad; parroquias: Parroquia[]; onClose: () => void }) {
+function EditModal({ sim, parroquias, tiposActividad, onClose }: { sim: Actividad; parroquias: Parroquia[]; tiposActividad: string[]; onClose: () => void }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [form, setForm] = useState({
@@ -483,7 +479,7 @@ function EditModal({ sim, parroquias, onClose }: { sim: Actividad; parroquias: P
           <label className="block md:col-span-3"><span className="text-xs text-gray-500">Tipo</span>
             <select value={form.idTipoActividadPreventiva} onChange={e => setForm({ ...form, idTipoActividadPreventiva: e.target.value })}
               className={`mt-1 ${INPUT} bg-white cursor-pointer`}>
-              {TIPOS.map(t => <option key={t}>{t}</option>)}
+              {tiposActividad.map(t => <option key={t}>{t}</option>)}
             </select></label>
           <label className="block md:col-span-2"><span className="text-xs text-gray-500">Fecha</span>
             <input type="date" value={form.fechaProgramada} onChange={e => setForm({ ...form, fechaProgramada: e.target.value })} className={`mt-1 ${INPUT}`} /></label>
@@ -1203,10 +1199,11 @@ function HiloObservaciones({ comentarios, simId, currentNombre, rolTipo, canWrit
 
 // ─── ActividadCard ────────────────────────────────────────────────────────────
 function ActividadCard({
-  sim, parroquias, brigadistas, canManage, role,
+  sim, parroquias, brigadistas, tiposActividad, canManage, role,
   currentUsuarioGRDId, currentBrigadistaId, currentNombre,
 }: {
   sim: Actividad; parroquias: Parroquia[]; brigadistas: Brigadista[];
+  tiposActividad: string[];
   canManage: boolean; role: FrontendRole;
   currentUsuarioGRDId: string | null; currentBrigadistaId: string | null; currentNombre: string;
 }) {
@@ -1268,7 +1265,7 @@ function ActividadCard({
 
   return (
     <>
-      {showEdit && <EditModal sim={sim} parroquias={parroquias} onClose={() => setShowEdit(false)} />}
+      {showEdit && <EditModal sim={sim} parroquias={parroquias} tiposActividad={tiposActividad} onClose={() => setShowEdit(false)} />}
       {showCancel && (
         <CancelModal nombre={sim.nombreActividad} onConfirm={handleCancel}
           onClose={() => setShowCancel(false)} loading={pending} />
@@ -1416,14 +1413,14 @@ function ActividadCard({
 }
 
 // ─── Nueva Actividad Form ─────────────────────────────────────────────────────
-function NuevaActividadForm({ parroquias, onCancel, onSaved }: {
-  parroquias: Parroquia[]; onCancel: () => void; onSaved: () => void;
+function NuevaActividadForm({ parroquias, tiposActividad, onCancel, onSaved }: {
+  parroquias: Parroquia[]; tiposActividad: string[]; onCancel: () => void; onSaved: () => void;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [form, setForm] = useState({
     idParroquia: "",
-    idTipoActividadPreventiva: TIPOS[0],
+    idTipoActividadPreventiva: tiposActividad[0] ?? "",
     nombreActividad: "",
     fechaProgramada: new Date().toISOString().slice(0, 10),
     horarioInicio: "",
@@ -1503,7 +1500,7 @@ function NuevaActividadForm({ parroquias, onCancel, onSaved }: {
           <label className="block">
             <span className="text-xs text-gray-500">Tipo de simulacro *</span>
             <div className="mt-1">
-              <SingleSelect options={TIPOS.map(t => ({ value: t, label: t }))}
+              <SingleSelect options={tiposActividad.map(t => ({ value: t, label: t }))}
                 value={form.idTipoActividadPreventiva}
                 onChange={v => setForm({ ...form, idTipoActividadPreventiva: v })}
                 placeholder="Selecciona tipo" icon={ShieldCheck} />
@@ -1600,12 +1597,13 @@ function NuevaActividadForm({ parroquias, onCancel, onSaved }: {
 
 // ─── Main Module ──────────────────────────────────────────────────────────────
 export function SimulacrosModule({
-  actividades, parroquias, brigadistas, role,
+  actividades, parroquias, brigadistas, tiposActividad, role,
   currentUsuarioGRDId, currentBrigadistaId, currentNombre,
 }: {
   actividades: Actividad[];
   parroquias: Parroquia[];
   brigadistas: Brigadista[];
+  tiposActividad: string[];
   role: FrontendRole;
   currentUsuarioGRDId: string | null;
   currentBrigadistaId: string | null;
@@ -1675,7 +1673,7 @@ export function SimulacrosModule({
       </div>
 
       {showForm && canManage && (
-        <NuevaActividadForm parroquias={parroquias}
+        <NuevaActividadForm parroquias={parroquias} tiposActividad={tiposActividad}
           onCancel={() => setShowForm(false)} onSaved={() => setShowForm(false)} />
       )}
 
@@ -1727,7 +1725,7 @@ export function SimulacrosModule({
           <div className="flex flex-1 flex-col sm:flex-row gap-3">
             <MultiSelect options={ESTADOS.map(e => ({ value: e, label: e }))} value={estadoFilter} onChange={setEstadoFilter} placeholder="Estado" icon={Activity} />
             <MultiSelect options={parroquias.map(p => ({ value: p.id, label: p.nombre }))} value={parroquiaFilter} onChange={setParroquiaFilter} placeholder="Parroquia" icon={MapPin} />
-            <MultiSelect options={TIPOS.map(t => ({ value: t, label: t }))} value={tipoFilter} onChange={setTipoFilter} placeholder="Tipo" icon={ShieldCheck} />
+            <MultiSelect options={tiposActividad.map(t => ({ value: t, label: t }))} value={tipoFilter} onChange={setTipoFilter} placeholder="Tipo" icon={ShieldCheck} />
           </div>
         </div>
         <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
@@ -1784,6 +1782,7 @@ export function SimulacrosModule({
         )}
         {paginated.map(a => (
           <ActividadCard key={a.id} sim={a} parroquias={parroquias} brigadistas={brigadistas}
+            tiposActividad={tiposActividad}
             canManage={canManage} role={role}
             currentUsuarioGRDId={currentUsuarioGRDId}
             currentBrigadistaId={currentBrigadistaId}
