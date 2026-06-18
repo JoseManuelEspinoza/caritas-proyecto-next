@@ -16,20 +16,21 @@ services:
       - CHOKIDAR_USEPOLLING=true
       # 300 ms was polling 1 GB of node_modules thousands of times/sec; 3 s is sufficient.
       - CHOKIDAR_INTERVAL=3000
-      # ─── Auth.js v5 + Keycloak (OIDC) ──────────────────────────────────────
-      # ISSUER = URL pública (navegador). INTERNAL = red Docker (callback/token).
+      # ─── Auth.js v5 + Keycloak (OIDC) — Keycloak REMOTO en Render ───────────
+      # Keycloak ya NO corre en local; la app consume el servicio desplegado.
       - AUTH_SECRET=dev-auth-secret-cambiar-en-produccion-min-32-chars
       - AUTH_TRUST_HOST=true
       - AUTH_URL=http://localhost:3000
       - AUTH_KEYCLOAK_ID=caritas-app
       - AUTH_KEYCLOAK_SECRET=caritas-app-secret-dev
-      - AUTH_KEYCLOAK_ISSUER=http://localhost:8085/realms/caritas
-      - AUTH_KEYCLOAK_INTERNAL_URL=http://keycloak:8085/realms/caritas
+      - AUTH_KEYCLOAK_ISSUER=https://caritas-proyecto-next.onrender.com/realms/caritas
+      # NO definir AUTH_KEYCLOAK_INTERNAL_URL con Keycloak remoto: token/userinfo
+      # también van por la URL pública. Si se define, el intercambio del token falla.
       # ─── Keycloak Admin API (para crear cuentas de brigadistas, etc.) ────────
-      - KEYCLOAK_ADMIN_URL=http://keycloak:8085
+      - KEYCLOAK_ADMIN_URL=https://caritas-proyecto-next.onrender.com
       - KEYCLOAK_REALM=caritas
       - KEYCLOAK_ADMIN_USER=admin
-      - KEYCLOAK_ADMIN_PASS=admin
+      - KEYCLOAK_ADMIN_PASS=PonUnaClaveFuerte123!
       # SMTP — se lee desde el archivo .env del proyecto
       - SMTP_HOST=${SMTP_HOST:-mailhog}
       - SMTP_PORT=${SMTP_PORT:-1025}
@@ -73,53 +74,54 @@ services:
       timeout: 5s
       retries: 10
 
-  # ─── Base de datos de KEYCLOAK (separada de la app, NO H2) ───────────────────
-  keycloak-db:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_USER: keycloak
-      POSTGRES_PASSWORD: keycloak123
-      POSTGRES_DB: keycloak
-    volumes:
-      - keycloak_db_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U keycloak"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
-  # ─── KEYCLOAK (Identity Provider / OIDC) ─────────────────────────────────────
-  keycloak:
-    image: quay.io/keycloak/keycloak:26.0
-    command: start-dev --import-realm
-    environment:
-      # Persistencia en PostgreSQL (buena práctica de producción; nada de H2)
-      KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
-      KC_DB_USERNAME: keycloak
-      KC_DB_PASSWORD: keycloak123
-      # Admin inicial (consola en /admin)
-      KC_BOOTSTRAP_ADMIN_USERNAME: admin
-      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
-      # HTTP local (sin TLS en dev) + health
-      KC_HTTP_ENABLED: "true"
-      KC_HTTP_PORT: "8085"
-      # URL pública del IdP: debe coincidir con el issuer que usa la app.
-      KC_HOSTNAME: http://localhost:8085
-      KC_HOSTNAME_STRICT: "false"
-      KC_HEALTH_ENABLED: "true"
-    ports:
-      - "8085:8085"
-    volumes:
-      # El realm se importa al primer arranque
-      - ./keycloak/realm-caritas.json:/opt/keycloak/data/import/realm-caritas.json:ro
-      # Tema de login con la marca Cáritas (el usuario no ve Keycloak)
-      - ./keycloak/themes:/opt/keycloak/themes:ro
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    depends_on:
-      keycloak-db:
-        condition: service_healthy
+  # ═══════════════════════════════════════════════════════════════════════════
+  # KEYCLOAK LOCAL — DESACTIVADO. Ahora se usa el Keycloak desplegado en Render:
+  #   https://caritas-proyecto-next.onrender.com
+  # Para volver a correr Keycloak en local, descomenta estos dos servicios y la
+  # entrada `keycloak_db_data` en `volumes:`, y restaura las variables del
+  # servicio `web` a localhost:8085 / keycloak:8085 (ver git history).
+  # ═══════════════════════════════════════════════════════════════════════════
+  # # ─── Base de datos de KEYCLOAK (separada de la app, NO H2) ─────────────────
+  # keycloak-db:
+  #   image: postgres:15-alpine
+  #   environment:
+  #     POSTGRES_USER: keycloak
+  #     POSTGRES_PASSWORD: keycloak123
+  #     POSTGRES_DB: keycloak
+  #   volumes:
+  #     - keycloak_db_data:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U keycloak"]
+  #     interval: 5s
+  #     timeout: 5s
+  #     retries: 10
+  #
+  # # ─── KEYCLOAK (Identity Provider / OIDC) ───────────────────────────────────
+  # keycloak:
+  #   image: quay.io/keycloak/keycloak:26.0
+  #   command: start-dev --import-realm
+  #   environment:
+  #     KC_DB: postgres
+  #     KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
+  #     KC_DB_USERNAME: keycloak
+  #     KC_DB_PASSWORD: keycloak123
+  #     KC_BOOTSTRAP_ADMIN_USERNAME: admin
+  #     KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+  #     KC_HTTP_ENABLED: "true"
+  #     KC_HTTP_PORT: "8085"
+  #     KC_HOSTNAME: http://localhost:8085
+  #     KC_HOSTNAME_STRICT: "false"
+  #     KC_HEALTH_ENABLED: "true"
+  #   ports:
+  #     - "8085:8085"
+  #   volumes:
+  #     - ./keycloak/realm-caritas.json:/opt/keycloak/data/import/realm-caritas.json:ro
+  #     - ./keycloak/themes:/opt/keycloak/themes:ro
+  #   extra_hosts:
+  #     - "host.docker.internal:host-gateway"
+  #   depends_on:
+  #     keycloak-db:
+  #       condition: service_healthy
 
   # Servidor de email para desarrollo — Bandeja web: http://localhost:8025
   mailhog:
@@ -130,5 +132,5 @@ services:
 
 volumes:
   postgres_data:
-  keycloak_db_data:
+  # keycloak_db_data:   # desactivado: Keycloak corre en Render, no en local
   node_modules:
