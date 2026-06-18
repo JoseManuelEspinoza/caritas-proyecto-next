@@ -138,7 +138,7 @@ export class PrismaCursoRepository implements ICursoRepository {
     idInscripcion: string,
     data: { estadoCertificacion: string; constanciaUrl?: string }
   ): Promise<void> {
-    await prisma.certificacionCurso.upsert({
+    const cert = await prisma.certificacionCurso.upsert({
       where: { idInscripcionCurso: idInscripcion },
       create: {
         idInscripcionCurso: idInscripcion,
@@ -151,6 +151,69 @@ export class PrismaCursoRepository implements ICursoRepository {
         constanciaUrl: data.constanciaUrl ?? undefined,
         fechaCertificacion: new Date(),
       },
+      select: { idCertificacionCurso: true },
     });
+
+    // Vincular la certificación al BrigadistaParroquial (por DNI o por email via UsuarioGRD).
+    // Permite que los reportes detecten brigadistas certificados sin traversar
+    // la cadena Participante→InscripcionCurso→CertificacionCurso.
+    try {
+      const inscripcion = await prisma.inscripcionCurso.findUnique({
+        where: { idInscripcionCurso: idInscripcion },
+        select: { participante: { select: { numeroDocumento: true, correo: true } } },
+      });
+      const { numeroDocumento: dni, correo } = inscripcion?.participante ?? {};
+
+      let idBrigadista: string | null = null;
+
+      if (dni) {
+        const b = await prisma.brigadistaParroquial.findFirst({
+          where: { dni, idCertificacionCurso: null },
+          select: { idBrigadistaParroquial: true },
+        });
+        idBrigadista = b?.idBrigadistaParroquial ?? null;
+      }
+
+      if (!idBrigadista && correo) {
+        const usuario = await prisma.usuarioGRD.findFirst({
+          where: { correoReferencia: correo },
+          select: { idUsuarioGRD: true },
+        });
+        if (!usuario) {
+          const user = await prisma.user.findFirst({
+            where: { email: correo },
+            select: { id: true },
+          });
+          if (user) {
+            const uGRD = await prisma.usuarioGRD.findUnique({
+              where: { idCredencial: user.id },
+              select: { idUsuarioGRD: true },
+            });
+            if (uGRD) {
+              const b = await prisma.brigadistaParroquial.findFirst({
+                where: { idUsuarioGRD: uGRD.idUsuarioGRD, idCertificacionCurso: null },
+                select: { idBrigadistaParroquial: true },
+              });
+              idBrigadista = b?.idBrigadistaParroquial ?? null;
+            }
+          }
+        } else {
+          const b = await prisma.brigadistaParroquial.findFirst({
+            where: { idUsuarioGRD: usuario.idUsuarioGRD, idCertificacionCurso: null },
+            select: { idBrigadistaParroquial: true },
+          });
+          idBrigadista = b?.idBrigadistaParroquial ?? null;
+        }
+      }
+
+      if (idBrigadista) {
+        await prisma.brigadistaParroquial.update({
+          where: { idBrigadistaParroquial: idBrigadista },
+          data: { idCertificacionCurso: cert.idCertificacionCurso },
+        });
+      }
+    } catch {
+      // No bloquear la certificación si el brigadista no existe o ya tiene vínculo
+    }
   }
 }

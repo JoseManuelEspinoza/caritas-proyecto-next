@@ -44,3 +44,24 @@ export async function cargarCatalogosIncidente(): Promise<CatalogosIncidente> {
     gruposVulnerables: porCatalogo(CATALOGOS.gruposVulnerables),
   };
 }
+
+export type CatalogosSimulacro = {
+  tiposActividad: string[];
+};
+
+const NOMBRE_CATALOGO_SIMULACRO = "Tipos de Actividad Preventiva";
+
+export async function cargarCatalogosSimulacro(): Promise<CatalogosSimulacro> {
+  const detalles = await prisma.catalogoDetalleGRD.findMany({
+    where: {
+      estado: "ACTIVO",
+      catalogo: { estado: "ACTIVO", nombreCatalogo: NOMBRE_CATALOGO_SIMULACRO },
+    },
+    select: { valor: true, orden: true },
+    orderBy: [{ orden: "asc" }, { valor: "asc" }],
+  });
+
+  return {
+    tiposActividad: detalles.map((d) => d.valor),
+  };
+}
