@@ -37,11 +37,14 @@ export const PASOS = ETAPAS_ORDEN.map((etapa) => ({
 
 /**
  * Índice del paso activo para un estado dado.
- * Caso especial: un incidente recién ABIERTO aterriza en "Asignar Equipo" (paso 1),
- * porque el registro ya está hecho y la siguiente acción es asignar el equipo.
+ * Casos especiales:
+ * - ABIERTO → "Asignar Equipo" (paso 1): el registro ya está hecho.
+ * - APROBADO → "Atender Caso" (paso 4): la revisión ya está completada y
+ *   la siguiente acción es atender el caso.
  */
 export function indicePaso(estado: string): number {
   if (estado === "ABIERTO") return 1;
+  if (estado === "APROBADO") return 4;
   const i = indiceEtapa(etapaDeEstado(estado as EstadoIncidencia));
   return i < 0 ? 0 : i;
 }

@@ -590,8 +590,6 @@ function TabPrevencion({ actividadesData }: ReportesProps) {
   const pendientes = actividadesData.total - actividadesData.ejecutadas;
   const promPart = actividadesData.ejecutadas > 0 ? Math.round(actividadesData.totalParticipantes / actividadesData.ejecutadas) : 0;
 
-  const sinCatalogo = actividadesData.porTipo.length === 1 && actividadesData.porTipo[0].label === "Sin clasificar";
-
   return (
     <div className="space-y-5">
       {/* KPIs */}
@@ -638,8 +636,8 @@ function TabPrevencion({ actividadesData }: ReportesProps) {
         </ChartCard>
 
         {/* Tipo de actividad */}
-        <ChartCard title="Por Tipo de Actividad" subtitle={sinCatalogo ? "Catálogo de tipos no configurado" : "Distribución por modalidad o simulacro"}>
-          {actividadesData.porTipo.length === 0 || sinCatalogo ? (
+        <ChartCard title="Por Tipo de Actividad" subtitle="Distribución por modalidad o simulacro">
+          {actividadesData.porTipo.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-48 gap-2 text-center">
               <Info className="w-5 h-5 text-gray-300" />
               <p className="text-xs text-gray-400 max-w-40 leading-snug">Los tipos de actividad no están vinculados al catálogo del sistema</p>
