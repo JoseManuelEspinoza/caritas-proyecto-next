@@ -62,7 +62,33 @@ type Actividad = {
   comentariosObservacion: Comentario[];
   evidencias: EvidenciaItem[];
 };
-type Parroquia = { id: string; nombre: string };
+type Parroquia = { id: string; nombre: string; lat?: number | null; lng?: number | null };
+
+/** Distancia Haversine en km entre dos coordenadas. */
+function distanciaKm(aLat: number, aLng: number, bLat: number, bLng: number): number {
+  const R = 6371;
+  const dLat = ((bLat - aLat) * Math.PI) / 180;
+  const dLng = ((bLng - aLng) * Math.PI) / 180;
+  const s =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((aLat * Math.PI) / 180) * Math.cos((bLat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+
+/** Parroquia del sistema (con coords) más cercana a un punto. */
+function parroquiaMasCercana(lat: number, lng: number, parroquias: Parroquia[]): Parroquia | null {
+  let mejor: Parroquia | null = null;
+  let mejorDist = Infinity;
+  for (const p of parroquias) {
+    if (p.lat == null || p.lng == null) continue;
+    const d = distanciaKm(lat, lng, p.lat, p.lng);
+    if (d < mejorDist) {
+      mejorDist = d;
+      mejor = p;
+    }
+  }
+  return mejor;
+}
 type Brigadista = {
   id: string; nombre: string; celular?: string | null;
   idParroquia: string; idUsuarioGRD?: string | null;
@@ -1409,6 +1435,21 @@ function NuevaActividadForm({ parroquias, onCancel, onSaved }: {
   const [errors, setErrors] = useState<string[]>([]);
   const [mapLat, setMapLat] = useState<number | null>(null);
   const [mapLng, setMapLng] = useState<number | null>(null);
+  // Aviso cuando la parroquia se eligió automáticamente por cercanía.
+  const [parroquiaAuto, setParroquiaAuto] = useState<string | null>(null);
+
+  // Al fijar la ubicación en el mapa, sugiere la parroquia más cercana como
+  // organizadora por defecto (el usuario puede cambiarla manualmente).
+  const onUbicacion = (lat: number | null, lng: number | null) => {
+    setMapLat(lat);
+    setMapLng(lng);
+    if (lat == null || lng == null) return;
+    const cercana = parroquiaMasCercana(lat, lng, parroquias);
+    if (cercana) {
+      setForm((f) => ({ ...f, idParroquia: cercana.id }));
+      setParroquiaAuto(cercana.nombre);
+    }
+  };
 
   const required = ["nombreActividad", "idParroquia", "fechaProgramada", "descripcionActividad"] as const;
 
@@ -1493,10 +1534,16 @@ function NuevaActividadForm({ parroquias, onCancel, onSaved }: {
         {/* Línea 3: Parroquia + Lugar */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <span className="text-xs text-gray-500 block mb-1">Parroquia *</span>
+            <span className="text-xs text-gray-500 block mb-1">Parroquia organizadora *</span>
             <SingleSelect options={parroquias.map(p => ({ value: p.id, label: p.nombre }))}
-              value={form.idParroquia} onChange={v => setForm({ ...form, idParroquia: v })}
+              value={form.idParroquia}
+              onChange={v => { setForm({ ...form, idParroquia: v }); setParroquiaAuto(null); }}
               placeholder="Selecciona parroquia" icon={MapPin} error={errors.includes("idParroquia")} />
+            {parroquiaAuto && form.idParroquia && (
+              <p className="text-[11px] text-[var(--caritas-green)] mt-1">
+                Sugerida por cercanía a la ubicación: {parroquiaAuto}
+              </p>
+            )}
           </div>
           <label className="block">
             <span className="text-xs text-gray-500">Lugar</span>
@@ -1512,7 +1559,7 @@ function NuevaActividadForm({ parroquias, onCancel, onSaved }: {
             <LocationPicker
               lat={mapLat}
               lng={mapLng}
-              onChange={(lat, lng) => { setMapLat(lat); setMapLng(lng); }}
+              onChange={onUbicacion}
               onAddressResolved={({ direccion }) => {
                 if (direccion) setForm(f => ({ ...f, lugarActividad: direccion }));
               }}

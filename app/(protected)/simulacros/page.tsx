@@ -59,7 +59,7 @@ export default async function SimulacrosPage() {
     prisma.parroquia.findMany({
       where: { estado: "ACTIVO" },
       orderBy: { nombre: "asc" },
-      select: { idParroquia: true, nombre: true },
+      select: { idParroquia: true, nombre: true, latitud: true, longitud: true },
     }),
 
     prisma.brigadistaParroquial.findMany({
@@ -156,7 +156,12 @@ export default async function SimulacrosPage() {
             fecha: e.fechaCarga.toISOString(),
           })),
       }))}
-      parroquias={parroquias.map((p) => ({ id: p.idParroquia, nombre: p.nombre }))}
+      parroquias={parroquias.map((p) => ({
+        id: p.idParroquia,
+        nombre: p.nombre,
+        lat: p.latitud != null ? Number(p.latitud) : null,
+        lng: p.longitud != null ? Number(p.longitud) : null,
+      }))}
       brigadistas={brigadistasDisp.map((b) => ({
         id: b.idBrigadistaParroquial,
         nombre: `${b.nombres} ${b.apellidos ?? ""}`.trim(),
