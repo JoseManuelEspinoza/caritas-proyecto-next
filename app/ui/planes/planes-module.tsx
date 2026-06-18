@@ -34,12 +34,16 @@ export function PlanesModule({ planes, parroquias }: { planes: Plan[]; parroquia
   const [showForm, setShowForm] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(5);
+
+  const today = new Date().toISOString().slice(0, 10);
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+
   const [form, setForm] = useState({
     idParroquia: parroquias[0]?.id ?? "",
     nombrePlan: "",
     objetivos: "",
     diagnosticoRiesgo: "",
-    fechaInicio: new Date().toISOString().slice(0, 10),
+    fechaInicio: today,
     fechaFin: "",
   });
 
@@ -68,6 +72,10 @@ export function PlanesModule({ planes, parroquias }: { planes: Plan[]; parroquia
   const submit = () => {
     if (!form.nombrePlan.trim() || !form.idParroquia) {
       toast.error("Completa parroquia y título.");
+      return;
+    }
+    if (form.fechaFin && form.fechaFin <= today) {
+      toast.error("La fecha fin debe ser posterior al día de hoy.");
       return;
     }
     run(async () => {
@@ -123,9 +131,11 @@ export function PlanesModule({ planes, parroquias }: { planes: Plan[]; parroquia
             <span className="text-xs text-gray-600">Título del plan <span className="text-red-500">*</span></span>
             <input
               value={form.nombrePlan}
-              onChange={(e) => setForm({ ...form, nombrePlan: e.target.value })}
+              onChange={(e) => setForm({ ...form, nombrePlan: e.target.value.replace(/[0-9]/g, "") })}
+              maxLength={40}
               className="mt-1 w-full px-3 py-2 border border-[var(--caritas-border)] rounded text-sm"
             />
+            <span className="text-xs text-gray-400">{form.nombrePlan.length}/40</span>
           </label>
           <label className="block md:col-span-2">
             <span className="text-xs text-gray-600">Objetivos</span>
@@ -150,6 +160,7 @@ export function PlanesModule({ planes, parroquias }: { planes: Plan[]; parroquia
             <input
               type="date"
               value={form.fechaInicio}
+              min={today}
               onChange={(e) => setForm({ ...form, fechaInicio: e.target.value })}
               className="mt-1 w-full px-3 py-2 border border-[var(--caritas-border)] rounded text-sm"
             />
@@ -159,6 +170,7 @@ export function PlanesModule({ planes, parroquias }: { planes: Plan[]; parroquia
             <input
               type="date"
               value={form.fechaFin}
+              min={tomorrow}
               onChange={(e) => setForm({ ...form, fechaFin: e.target.value })}
               className="mt-1 w-full px-3 py-2 border border-[var(--caritas-border)] rounded text-sm"
             />
