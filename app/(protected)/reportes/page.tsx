@@ -112,11 +112,21 @@ const fetchFilteredData = unstable_cache(
   async (desdeISO: string, hastaISO: string, parroquiasStr: string) => {
     const desde = new Date(desdeISO);
     const hasta = new Date(hastaISO);
+    hasta.setUTCHours(23, 59, 59, 999); // incluir todo el día hasta (no cortar en medianoche UTC)
     const parroquiasFiltro = parroquiasStr ? parroquiasStr.split(",").filter(Boolean) : [];
     const filtroFecha = { gte: desde, lte: hasta };
     const whereInc = {
       fechaRegistro: filtroFecha,
       ...(parroquiasFiltro.length > 0 ? { idParroquia: { in: parroquiasFiltro } } : {}),
+    };
+    const whereAct = {
+      fechaRegistro: filtroFecha,
+      ...(parroquiasFiltro.length > 0 ? { idParroquia: { in: parroquiasFiltro } } : {}),
+    };
+    const whereKit = {
+      tipoMovimiento: "SALIDA",
+      fechaMovimiento: filtroFecha,
+      ...(parroquiasFiltro.length > 0 ? { idParroquiaDestino: { in: parroquiasFiltro } } : {}),
     };
 
     const [
@@ -144,16 +154,16 @@ const fetchFilteredData = unstable_cache(
       prisma.incidencia.groupBy({ by: ["estadoActual"], where: whereInc, _count: { _all: true } }),
       prisma.incidencia.groupBy({ by: ["tipoEvento"], where: whereInc, _count: { _all: true } }),
       prisma.incidencia.groupBy({ by: ["gravedad"], where: whereInc, _count: { _all: true } }),
-      prisma.actividadPreventiva.count(),
-      prisma.actividadPreventiva.count({ where: { estadoActividad: "EJECUTADA" } }),
-      prisma.actividadPreventiva.groupBy({ by: ["estadoActividad"], _count: { _all: true } }),
-      prisma.actividadPreventiva.groupBy({ by: ["idTipoActividadPreventiva"], _count: { _all: true } }),
-      prisma.actividadPreventiva.aggregate({ _sum: { numeroParticipantesReal: true } }),
-      prisma.actividadPreventiva.groupBy({ by: ["idParroquia"], _count: { _all: true } }),
-      prisma.actividadPreventiva.groupBy({ by: ["idParroquia"], where: { estadoActividad: "EJECUTADA" }, _count: { _all: true } }),
-      prisma.movimientoKit.aggregate({ where: { tipoMovimiento: "SALIDA" }, _sum: { cantidad: true } }),
+      prisma.actividadPreventiva.count({ where: whereAct }),
+      prisma.actividadPreventiva.count({ where: { ...whereAct, estadoActividad: "EJECUTADA" } }),
+      prisma.actividadPreventiva.groupBy({ by: ["estadoActividad"], where: whereAct, _count: { _all: true } }),
+      prisma.actividadPreventiva.groupBy({ by: ["idTipoActividadPreventiva"], where: whereAct, _count: { _all: true } }),
+      prisma.actividadPreventiva.aggregate({ where: whereAct, _sum: { numeroParticipantesReal: true } }),
+      prisma.actividadPreventiva.groupBy({ by: ["idParroquia"], where: whereAct, _count: { _all: true } }),
+      prisma.actividadPreventiva.groupBy({ by: ["idParroquia"], where: { ...whereAct, estadoActividad: "EJECUTADA" }, _count: { _all: true } }),
+      prisma.movimientoKit.aggregate({ where: whereKit, _sum: { cantidad: true } }),
       prisma.movimientoKit.findMany({
-        where: { tipoMovimiento: "SALIDA" },
+        where: whereKit,
         select: { cantidad: true, idParroquiaDestino: true, kitEmergencia: { select: { tipoKit: true } } },
       }),
     ]);
@@ -307,8 +317,7 @@ export default async function ReportesPage({
         return { parroquia: p.nombre, total, capacitados, pct: total > 0 ? Math.round((capacitados / total) * 100) : 0 };
       })
       .filter(p => p.total > 0)
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 12),
+      .sort((a, b) => b.total - a.total),
   };
 
   // ── Kits data ──────────────────────────────────────────────────────────────
@@ -324,12 +333,10 @@ export default async function ReportesPage({
     stockActual: base.kitsPorTipo,
   };
 
-  // ── Actividades por parroquia ─────────────────────────────────────────────
+  // ── Actividades por parroquia — TODAS las parroquias activas, con 0 si no tienen ──
   const actividadesPorParroquia = base.parroquiasData
-    .filter(p => actividadesTotalMap.has(p.idParroquia))
     .map(p => ({ label: p.nombre, value: actividadesTotalMap.get(p.idParroquia) ?? 0 }))
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 10);
+    .sort((a, b) => b.value - a.value);
 
   const actividadesData: ActividadesData = {
     total: filtered.totalActividades,
