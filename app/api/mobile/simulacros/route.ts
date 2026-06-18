@@ -22,7 +22,7 @@ function requireMobileSyncKey(request: Request): NextResponse | null {
 
   if (!expected) {
     return NextResponse.json(
-      { ok: false, message: "Sincronizacion movil no configurada." },
+      { ok: false, message: "Sincronización móvil no configurada." },
       { status: 503 }
     );
   }
@@ -84,8 +84,8 @@ function parseEstados(value: string | null): string[] | null {
 }
 
 export async function GET(request: Request) {
-  //const unauthorized = requireMobileSyncKey(request);
-  //if (unauthorized) return unauthorized;
+  const unauthorized = requireMobileSyncKey(request);
+  if (unauthorized) return unauthorized;
 
   try {
     const { searchParams } = new URL(request.url);

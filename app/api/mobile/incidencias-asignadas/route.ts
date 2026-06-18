@@ -12,7 +12,10 @@ function requireMobileSyncKey(request: Request): NextResponse | null {
   const expected = process.env.MOBILE_SYNC_API_KEY?.trim();
 
   if (!expected) {
-    return null;
+    return NextResponse.json(
+      { ok: false, message: "Sincronización móvil no configurada." },
+      { status: 503 }
+    );
   }
 
   const received = request.headers.get("x-mobile-sync-key")?.trim() ?? "";

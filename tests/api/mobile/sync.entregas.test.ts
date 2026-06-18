@@ -37,6 +37,7 @@ const INCIDENCIA_MOCK = {
   idIncidencia: "inc-server-1",
   codigoCaso: "GRD-2026-0001",
   idParroquia: "par-1",
+  estadoActual: "APROBADO",
 };
 
 const ENTREGA_BD = {
