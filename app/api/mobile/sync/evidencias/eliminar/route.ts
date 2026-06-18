@@ -6,6 +6,29 @@ import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+function jsonError(message: string, status = 400) {
+  return NextResponse.json({ ok: false, message }, { status });
+}
+
+function requireMobileSyncKey(request: Request): NextResponse | null {
+  const expected = process.env.MOBILE_SYNC_API_KEY?.trim();
+
+  if (!expected) {
+    return NextResponse.json(
+      { ok: false, message: "Sincronización móvil no configurada." },
+      { status: 503 }
+    );
+  }
+
+  const received = request.headers.get("x-mobile-sync-key")?.trim() ?? "";
+
+  if (received !== expected) {
+    return jsonError("No autorizado.", 401);
+  }
+
+  return null;
+}
+
 async function deleteFromS3(key: string): Promise<void> {
   if (!isS3Configured()) return;
   if (!key || /^https?:\/\//i.test(key)) return; // URL absoluta o vacía, no es un key
@@ -26,6 +49,9 @@ async function deleteFromS3(key: string): Promise<void> {
 }
 
 export async function POST(request: Request) {
+  const unauthorized = requireMobileSyncKey(request);
+  if (unauthorized) return unauthorized;
+
   let body: { uuidEvidencia?: string };
 
   try {
