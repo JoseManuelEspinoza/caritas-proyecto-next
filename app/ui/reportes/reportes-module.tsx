@@ -6,13 +6,14 @@ import { useRouter } from "next/navigation";
 import {
   FileText, AlertTriangle, Users, Package, Activity,
   Download, Calendar, Clock, X,
-  ExternalLink, CheckCircle, MapPin, LayoutDashboard,
-  TrendingUp, ShieldAlert, ShieldCheck, ChevronDown, ChevronUp,
+  CheckCircle, MapPin, LayoutDashboard,
+  TrendingUp, ShieldAlert, ShieldCheck,
   AlertCircle, Info,
 } from "lucide-react";
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid, Legend, Area, AreaChart, LabelList,
+  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
 } from "recharts";
 
 import {
@@ -86,24 +87,7 @@ function NoData({ height = 200 }: { height?: number }) {
   );
 }
 
-function StatBadge({ value, label, color = GREEN }: { value: string | number; label: string; color?: string }) {
-  return (
-    <div className="text-center">
-      <div className="text-2xl font-bold" style={{ color }}>{value}</div>
-      <div className="text-[11px] text-gray-500 mt-0.5 leading-tight">{label}</div>
-    </div>
-  );
-}
 
-function SectionDivider({ title }: { title: string }) {
-  return (
-    <div className="flex items-center gap-3 my-1">
-      <div className="h-px flex-1 bg-gray-100" />
-      <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest">{title}</span>
-      <div className="h-px flex-1 bg-gray-100" />
-    </div>
-  );
-}
 
 function RiesgoNivelBadge({ nivel }: { nivel: RiesgoNivel }) {
   const cfg = RIESGO_CONFIG[nivel];
@@ -181,7 +165,7 @@ function TabResumen({ totales, parroquiasRiesgo, actividadesData, kitsData, brig
       <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="text-base font-bold text-gray-900">Estado del Sistema GRD</h3>
+            <h3 className="text-base font-bold text-gray-900">Estado del Sistema de Gestión de Riesgos y Desastres</h3>
             <p className="text-xs text-gray-400 mt-0.5">Período analizado: {filtros.desde} → {filtros.hasta}</p>
           </div>
           <div className="text-right">
@@ -196,10 +180,10 @@ function TabResumen({ totales, parroquiasRiesgo, actividadesData, kitsData, brig
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           {[
             { label: "Incidencias", value: totales.incidencias, sub: `${resolRate}% resueltas`, icon: <AlertTriangle className="w-4 h-4" style={{ color: "#EF4444" }} />, color: "#EF4444" },
-            { label: "Brig. Certif.", value: `${totales.pctBrigadistasCapacitados}%`, sub: `${totales.brigadistasCapacitados}/${totales.totalBrigadistas}`, icon: <Users className="w-4 h-4 text-[#009850]" />, color: totales.pctBrigadistasCapacitados>=70?GREEN:"#F59E0B" },
-            { label: "Planes GRD", value: `${totales.pctParroquiasPlan}%`, sub: `${totales.parroquiasConPlan}/${totales.totalParroquias}`, icon: <FileText className="w-4 h-4" style={{ color: "#3B82F6" }} />, color: "#3B82F6" },
+            { label: "Brigadistas Certificados", value: `${totales.pctBrigadistasCapacitados}%`, sub: `${totales.brigadistasCapacitados}/${totales.totalBrigadistas}`, icon: <Users className="w-4 h-4 text-[#009850]" />, color: totales.pctBrigadistasCapacitados>=70?GREEN:"#F59E0B" },
+            { label: "Planes Gestion de Riesgos y desastres", value: `${totales.pctParroquiasPlan}%`, sub: `${totales.parroquiasConPlan}/${totales.totalParroquias}`, icon: <FileText className="w-4 h-4" style={{ color: "#3B82F6" }} />, color: "#3B82F6" },
             { label: "Prevención", value: `${totales.pctActividadesEjecutadas}%`, sub: `${actividadesData.ejecutadas}/${actividadesData.total} actividades`, icon: <Activity className="w-4 h-4" style={{ color: "#F59E0B" }} />, color: "#F59E0B" },
-            { label: "Kits dist.", value: totales.kitsEntregados, sub: `${kitsData.porParroquia.length} parroquias`, icon: <Package className="w-4 h-4" style={{ color: "#9155A8" }} />, color: "#9155A8" },
+            { label: "Kits distribuidos", value: totales.kitsEntregados, sub: `${kitsData.porParroquia.length} parroquias`, icon: <Package className="w-4 h-4" style={{ color: "#9155A8" }} />, color: "#9155A8" },
             { label: "Días/caso", value: totales.tiempoPromedio, sub: "promedio atención", icon: <Clock className="w-4 h-4" style={{ color: "#F97316" }} />, color: totales.tiempoPromedio<=3?GREEN:totales.tiempoPromedio<=7?"#F59E0B":"#EF4444" },
           ].map(m => (
             <KpiCard key={m.label} icon={m.icon} label={m.label} value={m.value} sub={m.sub} />
@@ -213,7 +197,7 @@ function TabResumen({ totales, parroquiasRiesgo, actividadesData, kitsData, brig
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {[
             { label: "Capacitación de Brigadistas", sub: `${brigSinCert} de ${totales.totalBrigadistas} sin certificación`, pct: totales.pctBrigadistasCapacitados, meta: 80 },
-            { label: "Cobertura de Planes GRD", sub: `${parroquiasSinPlan} parroquias sin plan aprobado`, pct: totales.pctParroquiasPlan, meta: 100 },
+            { label: "Cobertura de Planes de Gestión de Riesgos y Desastres", sub: `${parroquiasSinPlan} parroquias sin plan aprobado`, pct: totales.pctParroquiasPlan, meta: 100 },
             { label: "Ejecución Actividades Preventivas", sub: `${actividadesData.totalParticipantes} personas alcanzadas`, pct: totales.pctActividadesEjecutadas, meta: 70 },
             { label: "Tasa de Resolución de Casos", sub: `${incidenciasData.cerradas} casos cerrados de ${totales.incidencias}`, pct: resolRate, meta: 80 },
           ].map(h => {
@@ -293,40 +277,32 @@ function TabResumen({ totales, parroquiasRiesgo, actividadesData, kitsData, brig
 
 // ── Tab: Casos Atendidos ──────────────────────────────────────────────────────
 
-function TabCasos({ totales, porEstado, porTipo, porParroquia, timeline, byWeek, incidenciasData, topIncidencias, dataExportacion }: ReportesProps) {
-  const router = useRouter();
-  const [expanded, setExpanded] = useState(false);
-  const [tooltip, setTooltip] = useState<{ x: number; y: number; codigo: string } | null>(null);
-
+function TabCasos({ totales, porEstado, porTipo, porParroquia, timeline, byWeek, incidenciasData }: ReportesProps) {
   const timelineLabeled = timeline.map(t => ({ ...t, label: fmtLabel(t.label) }));
   const resolRate = totales.incidencias > 0 ? Math.round((incidenciasData.cerradas / totales.incidencias) * 100) : 0;
+  const enGestion = incidenciasData.activas + incidenciasData.enSeguimiento;
 
   return (
     <div className="space-y-5">
-      {tooltip && (
-        <div style={{ position: "fixed", left: tooltip.x, top: tooltip.y, zIndex: 9999 }} className="pointer-events-none -translate-y-full mb-2">
-          <div className="flex items-center gap-1.5 bg-gray-900 text-white text-xs font-medium px-2.5 py-1.5 rounded-lg shadow-xl whitespace-nowrap">
-            <ExternalLink className="w-3 h-3" /> Ir a caso {tooltip.codigo}
-          </div>
-        </div>
-      )}
-
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <KpiCard icon={<AlertTriangle className="w-5 h-5" style={{ color: "#EF4444" }} />} label="Total Casos" value={totales.incidencias} sub="En el período" />
+        <KpiCard icon={<AlertTriangle className="w-5 h-5" style={{ color: "#EF4444" }} />} label="Total Casos" value={totales.incidencias} sub="Registrados en el período" />
         <KpiCard icon={<CheckCircle className="w-5 h-5 text-[#009850]" />} label="Resueltos" value={incidenciasData.cerradas} sub={`${resolRate}% tasa de resolución`} accent />
-        <KpiCard icon={<TrendingUp className="w-5 h-5" style={{ color: "#F97316" }} />} label="En Seguimiento" value={incidenciasData.enSeguimiento} sub="Requieren monitoreo" />
+        <KpiCard icon={<TrendingUp className="w-5 h-5" style={{ color: "#F97316" }} />} label="En Gestión" value={enGestion} sub="Activos + seguimiento" />
         <KpiCard icon={<Clock className="w-5 h-5" style={{ color: "#3B82F6" }} />} label="Días Promedio" value={totales.tiempoPromedio} sub="Tiempo de atención" />
       </div>
 
-      {/* Timeline */}
-      <ChartCard title="Evolución de Incidencias" subtitle={byWeek ? "Agrupadas por semana" : "Agrupadas por día"}>
+      {/* Tendencia temporal — gráfico principal */}
+      <ChartCard
+        title={byWeek ? "Tendencia Semanal de Incidencias" : "Evolución Diaria de Incidencias"}
+        subtitle={byWeek ? "Casos agrupados por semana — identifica picos y tendencias del período" : "Casos reportados por día — ideal para períodos cortos"}
+      >
         {timelineLabeled.length === 0 ? <NoData /> : (
-          <ResponsiveContainer width="100%" height={220}>
+          <ResponsiveContainer width="100%" height={200}>
             <AreaChart data={timelineLabeled} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
               <defs>
                 <linearGradient id="gGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={GREEN} stopOpacity={0.15} />
+                  <stop offset="5%" stopColor={GREEN} stopOpacity={0.18} />
                   <stop offset="95%" stopColor={GREEN} stopOpacity={0} />
                 </linearGradient>
               </defs>
@@ -334,54 +310,63 @@ function TabCasos({ totales, porEstado, porTipo, porParroquia, timeline, byWeek,
               <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#9CA3AF" }} axisLine={false} tickLine={false} />
               <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "#9CA3AF" }} axisLine={false} tickLine={false} />
               <Tooltip contentStyle={{ borderRadius: "10px", border: "1px solid #E5E7EB", fontSize: 12 }} formatter={(v) => [`${v} casos`, ""]} />
-              <Area type="monotone" dataKey="value" stroke={GREEN} strokeWidth={2} fill="url(#gGrad)" dot={{ r: 3, fill: GREEN }} activeDot={{ r: 5 }} />
+              <Area type="monotone" dataKey="value" stroke={GREEN} strokeWidth={2.5} fill="url(#gGrad)" dot={{ r: 3, fill: GREEN }} activeDot={{ r: 5 }} />
             </AreaChart>
           </ResponsiveContainer>
         )}
       </ChartCard>
 
-      {/* Estado + Tipo + Gravedad */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <ChartCard title="Por Estado" subtitle="Ciclo de vida de casos">
-          {porEstado.length === 0 ? <NoData height={200} /> : (
-            <ResponsiveContainer width="100%" height={200}>
+      {/* Estado + Tipo — 2 columnas */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <ChartCard title="Distribución por Estado" subtitle="Ciclo de vida de los casos registrados">
+          {porEstado.length === 0 ? <NoData height={190} /> : (
+            <ResponsiveContainer width="100%" height={190}>
               <PieChart>
-                <Pie data={porEstado} dataKey="value" nameKey="label" cx="50%" cy="50%" outerRadius={75} innerRadius={38} strokeWidth={0}>
+                <Pie data={porEstado} dataKey="value" nameKey="label" cx="45%" cy="50%" outerRadius={72} innerRadius={38} strokeWidth={0}>
                   {porEstado.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
                 <Tooltip formatter={(v) => [`${v}`, "Casos"]} />
-                <Legend iconType="circle" iconSize={7} formatter={v => <span style={{ fontSize: 10, color: "#4B5563" }}>{v}</span>} />
+                <Legend layout="vertical" align="right" verticalAlign="middle" iconType="circle" iconSize={7} formatter={v => <span style={{ fontSize: 10, color: "#4B5563" }}>{v}</span>} />
               </PieChart>
             </ResponsiveContainer>
           )}
         </ChartCard>
 
-        <ChartCard title="Por Tipo de Evento" subtitle="Clasificación de emergencias">
-          {porTipo.length === 0 ? <NoData height={200} /> : (
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={porTipo} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
+        <ChartCard title="Por Tipo de Evento" subtitle="Clasificación de las emergencias registradas">
+          {porTipo.length === 0 ? <NoData height={190} /> : (
+            <ResponsiveContainer width="100%" height={190}>
+              <BarChart data={porTipo.slice(0, 6)} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
-                <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#9CA3AF" }} axisLine={false} tickLine={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#9CA3AF" }} axisLine={false} tickLine={false} tickFormatter={(v: string) => v.length > 8 ? v.slice(0, 7) + "…" : v} />
                 <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "#9CA3AF" }} axisLine={false} tickLine={false} />
                 <Tooltip contentStyle={{ borderRadius: "10px", border: "1px solid #E5E7EB", fontSize: 12 }} formatter={(v) => [`${v}`, "Casos"]} />
-                <Bar dataKey="value" fill={GREEN} radius={[4, 4, 0, 0]} maxBarSize={50} />
+                <Bar dataKey="value" radius={[4, 4, 0, 0]} maxBarSize={44}>
+                  {porTipo.slice(0, 6).map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
+                  <LabelList dataKey="value" position="top" style={{ fontSize: 10, fill: "#6B7280" }} />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           )}
         </ChartCard>
+      </div>
 
-        <ChartCard title="Por Gravedad" subtitle="Nivel de urgencia registrado">
-          {incidenciasData.porGravedad.length === 0 ? <NoData height={200} /> : (
-            <div className="space-y-2.5 pt-2">
+      {/* Gravedad + Parroquia — 2 columnas */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <ChartCard title="Por Nivel de Gravedad" subtitle="Urgencia registrada de los casos atendidos">
+          {incidenciasData.porGravedad.length === 0 ? <NoData height={180} /> : (
+            <div className="space-y-3 pt-2">
               {incidenciasData.porGravedad.map((g, i) => {
-                const max = Math.max(...incidenciasData.porGravedad.map(x => x.value));
-                const pct = max > 0 ? (g.value / max) * 100 : 0;
-                const color = g.label === "Alto" || g.label === "Crítico" ? "#EF4444" : g.label === "Moderado" ? "#F59E0B" : "#009850";
+                const total = incidenciasData.porGravedad.reduce((s, x) => s + x.value, 0);
+                const pct = total > 0 ? Math.round((g.value / total) * 100) : 0;
+                const color = g.label === "Alto" || g.label === "Crítico" || g.label === "Severo" ? "#EF4444" : g.label === "Moderado" ? "#F59E0B" : "#009850";
                 return (
                   <div key={i} className="space-y-1">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-gray-600">{g.label}</span>
-                      <span className="font-bold" style={{ color }}>{g.value}</span>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-gray-600 font-medium">{g.label}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold" style={{ color }}>{g.value}</span>
+                        <span className="text-gray-400">({pct}%)</span>
+                      </div>
                     </div>
                     <ProgressBar pct={pct} color={color} />
                   </div>
@@ -390,71 +375,23 @@ function TabCasos({ totales, porEstado, porTipo, porParroquia, timeline, byWeek,
             </div>
           )}
         </ChartCard>
-      </div>
 
-      {/* Por parroquia */}
-      <ChartCard title="Incidencias por Parroquia" subtitle="Top 10 parroquias con más casos registrados">
-        {porParroquia.length === 0 ? <NoData height={200} /> : (
-          <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={porParroquia} layout="vertical" margin={{ top: 0, right: 20, left: 10, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#F3F4F6" />
-              <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: "#9CA3AF" }} axisLine={false} tickLine={false} />
-              <YAxis type="category" dataKey="label" width={95} tick={{ fontSize: 10, fill: "#6B7280" }} axisLine={false} tickLine={false} tickFormatter={(v: string) => v.length > 15 ? v.slice(0, 14) + "…" : v} />
-              <Tooltip contentStyle={{ borderRadius: "10px", border: "1px solid #E5E7EB", fontSize: 12 }} formatter={(v) => [`${v}`, "Casos"]} />
-              <Bar dataKey="value" fill={GREEN} radius={[0, 6, 6, 0]} maxBarSize={18}>
-                <LabelList dataKey="value" position="right" style={{ fontSize: 10, fill: "#6B7280" }} />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        )}
-      </ChartCard>
-
-      {/* Resumen ejecutivo de casos recientes — sin tabla densa */}
-      {topIncidencias.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-100">
-            <h3 className="text-sm font-bold text-gray-900">Casos Recientes del Período</h3>
-            <p className="text-xs text-gray-400">Haz clic en un caso para ver el detalle completo</p>
-          </div>
-          <div className="divide-y divide-gray-50">
-            {topIncidencias.map((row, i) => {
-              const hasId = typeof (row as { id?: string }).id === "string";
-              const gravedadColor = row.Gravedad === "Alto" || row.Gravedad === "Crítico" || row.Gravedad === "Severo" ? "#EF4444" : row.Gravedad === "Moderado" ? "#F59E0B" : "#009850";
-              return (
-                <div key={i}
-                  onClick={hasId ? () => router.push(`/grd/${(row as { id: string }).id}`) : undefined}
-                  className={`flex items-center gap-4 px-5 py-3.5 transition-colors ${hasId ? "cursor-pointer hover:bg-[#009850]/5" : ""}`}
-                >
-                  {/* Indicador de gravedad */}
-                  <div className="w-2 h-8 rounded-full shrink-0" style={{ background: gravedadColor }} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-[11px] text-gray-400">{String(row.Codigo)}</span>
-                      <span className="text-sm font-semibold text-gray-800">{String(row.Tipo)}</span>
-                      <span className="text-xs text-gray-400">·</span>
-                      <span className="text-xs text-gray-500">{String(row.Parroquia)}</span>
-                    </div>
-                    <div className="flex items-center gap-3 mt-0.5">
-                      <span className="text-[11px] text-gray-400">{String(row.Fecha)}</span>
-                      <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#009850]/10 text-[#009850]">{String(row.Estado)}</span>
-                      <span className="text-[11px] font-semibold" style={{ color: gravedadColor }}>{String(row.Gravedad)}</span>
-                    </div>
-                  </div>
-                  {hasId && <ExternalLink className="w-3.5 h-3.5 text-gray-300 shrink-0" />}
-                </div>
-              );
-            })}
-          </div>
-          {dataExportacion.length > topIncidencias.length && (
-            <div className="px-5 py-3 border-t border-gray-50 bg-gray-50/50 text-center">
-              <p className="text-xs text-gray-400">
-                Mostrando {topIncidencias.length} de {dataExportacion.length} casos.
-                <span className="text-[#009850] font-semibold ml-1">Exporta en Excel para el listado completo.</span>
-              </p>
-            </div>
+        <ChartCard title="Incidencias por Parroquia" subtitle="Top parroquias con más casos en el período">
+          {porParroquia.length === 0 ? <NoData height={180} /> : (
+            <ResponsiveContainer width="100%" height={Math.max(180, Math.min(porParroquia.slice(0, 7).length * 28 + 10, 220))}>
+              <BarChart data={porParroquia.slice(0, 7)} layout="vertical" margin={{ top: 0, right: 24, left: 10, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#F3F4F6" />
+                <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: "#9CA3AF" }} axisLine={false} tickLine={false} />
+                <YAxis type="category" dataKey="label" width={92} tick={{ fontSize: 10, fill: "#6B7280" }} axisLine={false} tickLine={false} tickFormatter={(v: string) => v.length > 14 ? v.slice(0, 13) + "…" : v} />
+                <Tooltip contentStyle={{ borderRadius: "10px", border: "1px solid #E5E7EB", fontSize: 12 }} formatter={(v) => [`${v}`, "Casos"]} />
+                <Bar dataKey="value" fill="#F97316" radius={[0, 6, 6, 0]} maxBarSize={16}>
+                  <LabelList dataKey="value" position="right" style={{ fontSize: 10, fill: "#6B7280" }} />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           )}
-        </div>
-      )}
+        </ChartCard>
+      </div>
     </div>
   );
 }
@@ -464,37 +401,125 @@ function TabCasos({ totales, porEstado, porTipo, porParroquia, timeline, byWeek,
 function TabBrigadistas({ totales, brigadistasData }: ReportesProps) {
   const pct = totales.pctBrigadistasCapacitados;
   const sinCert = totales.totalBrigadistas - totales.brigadistasCapacitados;
+  const donutData = [
+    { label: "Certificados", value: totales.brigadistasCapacitados },
+    { label: "Sin certificación", value: Math.max(sinCert, 0) },
+  ];
+  const sorted = [...brigadistasData.porParroquia];
+  const top3 = sorted.slice(0, 3);
+  const bottom3 = [...sorted].sort((a, b) => a.pct - b.pct).filter(p => p.pct < 100).slice(0, 3);
+  const pctColor = pct >= 80 ? GREEN : pct >= 50 ? "#F59E0B" : "#EF4444";
 
   return (
     <div className="space-y-5">
+      {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <KpiCard icon={<Users className="w-5 h-5 text-[#009850]" />} label="Total Brigadistas" value={totales.totalBrigadistas} sub="Activos en el sistema" accent />
         <KpiCard icon={<CheckCircle className="w-5 h-5" style={{ color: GREEN }} />} label="Certificados" value={totales.brigadistasCapacitados} sub={`${pct}% del total`} />
         <KpiCard icon={<AlertTriangle className="w-5 h-5" style={{ color: "#F59E0B" }} />} label="Sin Certificación" value={sinCert} sub="Requieren capacitación" />
-        <KpiCard icon={<TrendingUp className="w-5 h-5" style={{ color: "#3B82F6" }} />} label="Meta Cobertura" value={`${pct}%`} sub="Avance hacia 100%" />
+        <KpiCard icon={<TrendingUp className="w-5 h-5" style={{ color: "#3B82F6" }} />} label="Meta 80%" value={`${pct}%`} sub={pct >= 80 ? "Meta alcanzada ✓" : `Faltan ${80 - pct}%`} />
       </div>
 
-      {/* Progress general */}
-      <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <h3 className="text-sm font-bold text-gray-900">Nivel de Certificación General</h3>
-            <p className="text-xs text-gray-400">Brigadistas con curso aprobado sobre el total activo</p>
+      {/* Donut + Parroquias destacadas */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <ChartCard title="Estado de Certificación General" subtitle="Brigadistas certificados vs. pendientes de capacitación">
+          {totales.totalBrigadistas === 0 ? <NoData height={200} /> : (
+            <div className="flex items-center gap-6">
+              <ResponsiveContainer width="52%" height={190}>
+                <PieChart>
+                  <Pie data={donutData} dataKey="value" nameKey="label" cx="50%" cy="50%" outerRadius={76} innerRadius={46} strokeWidth={0}>
+                    <Cell fill={GREEN} />
+                    <Cell fill={sinCert === 0 ? "#E5E7EB" : "#F59E0B"} />
+                  </Pie>
+                  <Tooltip formatter={(v) => [`${v} brigadistas`, ""]} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="flex-1 space-y-3">
+                <div className="text-center">
+                  <div className="text-3xl font-bold" style={{ color: pctColor }}>{pct}%</div>
+                  <div className="text-xs text-gray-500 mt-0.5">tasa de certificación</div>
+                </div>
+                {donutData.map((d, i) => (
+                  <div key={d.label} className="flex items-center gap-2 text-xs">
+                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: i === 0 ? GREEN : sinCert === 0 ? "#E5E7EB" : "#F59E0B" }} />
+                    <span className="text-gray-600 flex-1">{d.label}</span>
+                    <span className="font-bold text-gray-800">{d.value}</span>
+                  </div>
+                ))}
+                <div className="pt-1">
+                  <div className="flex justify-between text-[10px] text-gray-400 mb-1">
+                    <span>0%</span><span className="font-semibold">Meta: 80%</span><span>100%</span>
+                  </div>
+                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden relative">
+                    <div className="h-full rounded-full" style={{ width: `${Math.min(pct, 100)}%`, background: pctColor }} />
+                    <div className="absolute top-0 bottom-0 w-0.5 bg-gray-400/50" style={{ left: "80%" }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </ChartCard>
+
+        <ChartCard title="Parroquias Destacadas" subtitle="Mayor y menor tasa de certificación por parroquia">
+          <div className="space-y-4 pt-1">
+            {top3.length > 0 && (
+              <div>
+                <div className="text-[11px] font-semibold text-gray-400 mb-2 uppercase tracking-wide">Mayor certificación</div>
+                {top3.map((p, i) => (
+                  <div key={i} className="flex items-center gap-2 mb-2">
+                    <span className="text-[10px] font-bold text-gray-400 w-4">{i + 1}</span>
+                    <span className="text-xs text-gray-700 flex-1 truncate">{p.parroquia}</span>
+                    <span className="text-xs font-bold text-[#009850] w-8 text-right">{p.pct}%</span>
+                    <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full bg-[#009850]" style={{ width: `${p.pct}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {bottom3.length > 0 && (
+              <div>
+                <div className="text-[11px] font-semibold text-gray-400 mb-2 uppercase tracking-wide">Requieren atención urgente</div>
+                {bottom3.map((p, i) => {
+                  const c = p.pct < 30 ? "#EF4444" : "#F59E0B";
+                  return (
+                    <div key={i} className="flex items-center gap-2 mb-2">
+                      <span className="text-[10px] font-bold text-gray-400 w-4">{i + 1}</span>
+                      <span className="text-xs text-gray-700 flex-1 truncate">{p.parroquia}</span>
+                      <span className="text-xs font-bold w-8 text-right" style={{ color: c }}>{p.pct}%</span>
+                      <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full" style={{ width: `${p.pct}%`, background: c }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
-          <StatBadge value={`${pct}%`} label="certificados" color={pct >= 70 ? GREEN : pct >= 40 ? "#F59E0B" : "#EF4444"} />
-        </div>
-        <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
-          <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(pct, 100)}%`, background: pct >= 70 ? GREEN : pct >= 40 ? "#F59E0B" : "#EF4444" }} />
-        </div>
-        <div className="flex justify-between text-xs text-gray-400 mt-1.5">
-          <span>0%</span><span>Meta: 80%</span><span>100%</span>
-        </div>
+        </ChartCard>
       </div>
 
-      {/* Por parroquia — grouped bar */}
-      <ChartCard title="Brigadistas por Parroquia" subtitle="Total vs. certificados — brecha de capacitación">
-        {brigadistasData.porParroquia.length === 0 ? <NoData height={280} /> : (
-          <ResponsiveContainer width="100%" height={Math.max(280, brigadistasData.porParroquia.length * 28)}>
+      {/* Radar de parroquias top */}
+      {brigadistasData.porParroquia.length >= 3 && (
+        <ChartCard title="Comparativa de Certificación por Parroquia" subtitle="% de brigadistas certificados — top 8 parroquias por tamaño">
+          <ResponsiveContainer width="100%" height={220}>
+            <RadarChart data={brigadistasData.porParroquia.slice(0, 8).map(p => ({ parroquia: p.parroquia.length > 12 ? p.parroquia.slice(0, 11) + "…" : p.parroquia, pct: p.pct, meta: 80 }))}>
+              <PolarGrid stroke="#E5E7EB" />
+              <PolarAngleAxis dataKey="parroquia" tick={{ fontSize: 9, fill: "#6B7280" }} />
+              <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 8, fill: "#9CA3AF" }} tickCount={5} />
+              <Radar name="% Certificados" dataKey="pct" stroke={GREEN} fill={GREEN} fillOpacity={0.2} />
+              <Radar name="Meta (80%)" dataKey="meta" stroke="#E5E7EB" fill="transparent" strokeDasharray="4 2" />
+              <Legend iconType="circle" iconSize={8} formatter={v => <span style={{ fontSize: 10, color: "#4B5563" }}>{v}</span>} />
+              <Tooltip formatter={(v) => [`${v}%`, ""]} />
+            </RadarChart>
+          </ResponsiveContainer>
+        </ChartCard>
+      )}
+
+      {/* Grouped bar — total vs certificados */}
+      <ChartCard title="Brigadistas por Parroquia" subtitle="Total activos vs. certificados — brecha de capacitación">
+        {brigadistasData.porParroquia.length === 0 ? <NoData height={240} /> : (
+          <ResponsiveContainer width="100%" height={Math.max(240, brigadistasData.porParroquia.length * 22)}>
             <BarChart data={brigadistasData.porParroquia} layout="vertical" margin={{ top: 0, right: 40, left: 10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#F1F5F9" />
               <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10, fill: "#9CA3AF" }} axisLine={false} tickLine={false} />
@@ -510,33 +535,46 @@ function TabBrigadistas({ totales, brigadistasData }: ReportesProps) {
         )}
       </ChartCard>
 
-      {/* Tabla de brechas */}
+      {/* Tabla detalle */}
       <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100">
           <h3 className="text-sm font-bold text-gray-900">Detalle por Parroquia</h3>
-          <p className="text-xs text-gray-400">Ordenado por mayor cantidad de brigadistas</p>
+          <p className="text-xs text-gray-400">Ordenado por mayor cantidad de brigadistas · incluye brecha y estado de avance</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                {["Parroquia","Total","Certificados","% Cert.","Brecha"].map(h => (
+                {["Parroquia","Total","Certificados","% Cert.","Brecha","Estado"].map(h => (
                   <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {brigadistasData.porParroquia.map((p, i) => (
-                <tr key={i} className="hover:bg-gray-50">
-                  <td className="px-4 py-2.5 font-medium text-gray-800">{p.parroquia}</td>
-                  <td className="px-4 py-2.5 text-gray-700">{p.total}</td>
-                  <td className="px-4 py-2.5 text-[#009850] font-semibold">{p.capacitados}</td>
-                  <td className="px-4 py-2.5">
-                    <span className={`font-bold ${p.pct >= 70 ? "text-[#009850]" : p.pct >= 40 ? "text-amber-600" : "text-red-600"}`}>{p.pct}%</span>
-                  </td>
-                  <td className="px-4 py-2.5 text-gray-500">{p.total - p.capacitados} sin certif.</td>
-                </tr>
-              ))}
+              {brigadistasData.porParroquia.map((p, i) => {
+                const brecha = p.total - p.capacitados;
+                const sc = p.pct >= 80 ? GREEN : p.pct >= 50 ? "#F59E0B" : "#EF4444";
+                const sl = p.pct >= 80 ? "Óptimo" : p.pct >= 50 ? "En proceso" : "Crítico";
+                return (
+                  <tr key={i} className="hover:bg-gray-50">
+                    <td className="px-4 py-2.5 font-medium text-gray-800">{p.parroquia}</td>
+                    <td className="px-4 py-2.5 text-gray-700">{p.total}</td>
+                    <td className="px-4 py-2.5 text-[#009850] font-semibold">{p.capacitados}</td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold" style={{ color: sc }}>{p.pct}%</span>
+                        <div className="w-10 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${p.pct}%`, background: sc }} />
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5 text-gray-500">{brecha > 0 ? `${brecha} sin certif.` : "—"}</td>
+                    <td className="px-4 py-2.5">
+                      <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: `${sc}18`, color: sc }}>{sl}</span>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -550,42 +588,89 @@ function TabBrigadistas({ totales, brigadistasData }: ReportesProps) {
 function TabPrevencion({ actividadesData }: ReportesProps) {
   const pct = actividadesData.total > 0 ? Math.round((actividadesData.ejecutadas / actividadesData.total) * 100) : 0;
   const pendientes = actividadesData.total - actividadesData.ejecutadas;
+  const promPart = actividadesData.ejecutadas > 0 ? Math.round(actividadesData.totalParticipantes / actividadesData.ejecutadas) : 0;
+
+  const sinCatalogo = actividadesData.porTipo.length === 1 && actividadesData.porTipo[0].label === "Sin clasificar";
 
   return (
     <div className="space-y-5">
+      {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <KpiCard icon={<Activity className="w-5 h-5" style={{ color: "#3B82F6" }} />} label="Total Actividades" value={actividadesData.total} sub="Registradas en el sistema" />
         <KpiCard icon={<CheckCircle className="w-5 h-5 text-[#009850]" />} label="Ejecutadas" value={actividadesData.ejecutadas} sub={`${pct}% del total`} accent />
-        <KpiCard icon={<Clock className="w-5 h-5" style={{ color: "#F59E0B" }} />} label="Pendientes" value={pendientes} sub="Por ejecutar" />
         <KpiCard icon={<Users className="w-5 h-5" style={{ color: "#9155A8" }} />} label="Participantes" value={actividadesData.totalParticipantes} sub="Personas alcanzadas" />
+        <KpiCard icon={<TrendingUp className="w-5 h-5" style={{ color: "#F59E0B" }} />} label="Prom./Actividad" value={promPart} sub="Participantes por actividad" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <ChartCard title="Distribución por Estado" subtitle="Porcentaje de ejecución por estado de actividad">
-          {actividadesData.porEstado.length === 0 ? <NoData height={220} /> : (
-            <ResponsiveContainer width="100%" height={220}>
+      {/* Barra de ejecución */}
+      <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h3 className="text-sm font-bold text-gray-900">Tasa de Ejecución</h3>
+            <p className="text-xs text-gray-400">{actividadesData.ejecutadas} ejecutadas · {pendientes} pendientes · meta: 70%</p>
+          </div>
+          <span className="text-2xl font-bold" style={{ color: pct >= 70 ? GREEN : pct >= 40 ? "#F59E0B" : "#EF4444" }}>{pct}%</span>
+        </div>
+        <div className="h-3 bg-gray-100 rounded-full overflow-hidden relative">
+          <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(pct, 100)}%`, background: pct >= 70 ? GREEN : pct >= 40 ? "#F59E0B" : "#EF4444" }} />
+          <div className="absolute top-0 bottom-0 w-0.5 bg-gray-400/60" style={{ left: "70%" }} />
+        </div>
+        <div className="flex justify-between text-[10px] text-gray-400 mt-1.5">
+          <span>0%</span><span className="font-semibold">Meta: 70%</span><span>100%</span>
+        </div>
+      </div>
+
+      {/* 3 gráficos en fila */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        {/* Estado donut */}
+        <ChartCard title="Por Estado" subtitle="Ciclo de ejecución de actividades">
+          {actividadesData.porEstado.length === 0 ? <NoData height={195} /> : (
+            <ResponsiveContainer width="100%" height={195}>
               <PieChart>
-                <Pie data={actividadesData.porEstado} dataKey="value" nameKey="label" cx="40%" cy="50%" outerRadius={85} innerRadius={44} strokeWidth={0}>
+                <Pie data={actividadesData.porEstado} dataKey="value" nameKey="label" cx="50%" cy="50%" outerRadius={70} innerRadius={38} strokeWidth={0}>
                   {actividadesData.porEstado.map((e, i) => <Cell key={i} fill={ESTADO_ACT_COLORS[e.label] ?? PALETTE[i % PALETTE.length]} />)}
                 </Pie>
                 <Tooltip formatter={(v) => [`${v}`, "Actividades"]} />
-                <Legend layout="vertical" align="right" verticalAlign="middle" formatter={v => <span style={{ fontSize: 10, color: "#4B5563" }}>{v}</span>} />
+                <Legend layout="vertical" align="right" verticalAlign="middle" iconType="circle" iconSize={7} formatter={v => <span style={{ fontSize: 9, color: "#4B5563" }}>{String(v).replace(/_/g, " ")}</span>} />
               </PieChart>
             </ResponsiveContainer>
           )}
         </ChartCard>
 
-        <ChartCard title="Por Tipo de Actividad" subtitle="Distribución por modalidad">
-          {actividadesData.porTipo.length === 0 ? <NoData height={220} /> : (
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={actividadesData.porTipo} layout="vertical" margin={{ top: 4, right: 40, left: 4, bottom: 4 }}>
+        {/* Tipo de actividad */}
+        <ChartCard title="Por Tipo de Actividad" subtitle={sinCatalogo ? "Catálogo de tipos no configurado" : "Distribución por modalidad o simulacro"}>
+          {actividadesData.porTipo.length === 0 || sinCatalogo ? (
+            <div className="flex flex-col items-center justify-center h-48 gap-2 text-center">
+              <Info className="w-5 h-5 text-gray-300" />
+              <p className="text-xs text-gray-400 max-w-40 leading-snug">Los tipos de actividad no están vinculados al catálogo del sistema</p>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={195}>
+              <BarChart data={actividadesData.porTipo.slice(0, 6)} layout="vertical" margin={{ top: 2, right: 28, left: 4, bottom: 2 }}>
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#F1F5F9" />
-                <XAxis type="number" tick={{ fontSize: 10, fill: "#9CA3AF" }} axisLine={false} tickLine={false} allowDecimals={false} />
-                <YAxis type="category" dataKey="label" tick={{ fontSize: 9, fill: "#6B7280" }} axisLine={false} tickLine={false} width={100} />
+                <XAxis type="number" tick={{ fontSize: 9, fill: "#9CA3AF" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                <YAxis type="category" dataKey="label" tick={{ fontSize: 9, fill: "#6B7280" }} axisLine={false} tickLine={false} width={88} tickFormatter={(v: string) => v.length > 13 ? v.slice(0, 12) + "…" : v} />
                 <Tooltip contentStyle={{ borderRadius: "10px", border: "1px solid #E5E7EB", fontSize: 12 }} formatter={(v) => [`${v}`, "Actividades"]} />
-                <Bar dataKey="value" radius={[0, 4, 4, 0]} maxBarSize={18}>
-                  {actividadesData.porTipo.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
-                  <LabelList dataKey="value" position="right" style={{ fontSize: 10, fill: "#6B7280" }} />
+                <Bar dataKey="value" radius={[0, 4, 4, 0]} maxBarSize={16}>
+                  {actividadesData.porTipo.slice(0, 6).map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
+                  <LabelList dataKey="value" position="right" style={{ fontSize: 9, fill: "#6B7280" }} />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </ChartCard>
+
+        {/* Top parroquias */}
+        <ChartCard title="Top Parroquias" subtitle="Actividades por parroquia">
+          {actividadesData.porParroquia.length === 0 ? <NoData height={195} /> : (
+            <ResponsiveContainer width="100%" height={195}>
+              <BarChart data={actividadesData.porParroquia.slice(0, 6)} layout="vertical" margin={{ top: 0, right: 24, left: 4, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#F3F4F6" />
+                <XAxis type="number" allowDecimals={false} tick={{ fontSize: 9, fill: "#9CA3AF" }} axisLine={false} tickLine={false} />
+                <YAxis type="category" dataKey="label" width={84} tick={{ fontSize: 9, fill: "#6B7280" }} axisLine={false} tickLine={false} tickFormatter={(v: string) => v.length > 12 ? v.slice(0, 11) + "…" : v} />
+                <Tooltip contentStyle={{ borderRadius: "10px", border: "1px solid #E5E7EB", fontSize: 12 }} formatter={(v) => [`${v}`, "Actividades"]} />
+                <Bar dataKey="value" fill="#3B82F6" radius={[0, 6, 6, 0]} maxBarSize={14}>
+                  <LabelList dataKey="value" position="right" style={{ fontSize: 9, fill: "#6B7280" }} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -593,21 +678,20 @@ function TabPrevencion({ actividadesData }: ReportesProps) {
         </ChartCard>
       </div>
 
-      <ChartCard title="Actividades por Parroquia" subtitle="Top 10 parroquias con mayor actividad preventiva">
-        {actividadesData.porParroquia.length === 0 ? <NoData height={220} /> : (
+      {/* Radar por parroquia si hay datos suficientes */}
+      {actividadesData.porParroquia.length >= 4 && (
+        <ChartCard title="Radar de Actividad por Parroquia" subtitle="Distribución relativa de actividades preventivas — top 8 parroquias">
           <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={actividadesData.porParroquia} layout="vertical" margin={{ top: 0, right: 30, left: 10, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#F3F4F6" />
-              <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: "#9CA3AF" }} axisLine={false} tickLine={false} />
-              <YAxis type="category" dataKey="label" width={95} tick={{ fontSize: 10, fill: "#6B7280" }} axisLine={false} tickLine={false} tickFormatter={(v: string) => v.length > 15 ? v.slice(0, 14) + "…" : v} />
-              <Tooltip contentStyle={{ borderRadius: "10px", border: "1px solid #E5E7EB", fontSize: 12 }} formatter={(v) => [`${v}`, "Actividades"]} />
-              <Bar dataKey="value" fill="#3B82F6" radius={[0, 6, 6, 0]} maxBarSize={16}>
-                <LabelList dataKey="value" position="right" style={{ fontSize: 10, fill: "#6B7280" }} />
-              </Bar>
-            </BarChart>
+            <RadarChart data={actividadesData.porParroquia.slice(0, 8).map(p => ({ parroquia: p.label.length > 12 ? p.label.slice(0, 11) + "…" : p.label, actividades: p.value }))}>
+              <PolarGrid stroke="#E5E7EB" />
+              <PolarAngleAxis dataKey="parroquia" tick={{ fontSize: 9, fill: "#6B7280" }} />
+              <PolarRadiusAxis tick={{ fontSize: 8, fill: "#9CA3AF" }} tickCount={4} />
+              <Radar name="Actividades" dataKey="actividades" stroke="#3B82F6" fill="#3B82F6" fillOpacity={0.2} />
+              <Tooltip formatter={(v) => [`${v}`, "Actividades"]} />
+            </RadarChart>
           </ResponsiveContainer>
-        )}
-      </ChartCard>
+        </ChartCard>
+      )}
     </div>
   );
 }
@@ -700,40 +784,142 @@ function TabRiesgo({ parroquiasRiesgo }: ReportesProps) {
   for (const p of parroquiasRiesgo) counts[p.riesgoNivel]++;
 
   const filtered = filtroNivel === "TODOS" ? parroquiasRiesgo : parroquiasRiesgo.filter(p => p.riesgoNivel === filtroNivel);
+  const total = parroquiasRiesgo.length;
+
+  const nivelPie = (["CRÍTICO","ALTO","MEDIO","BAJO"] as RiesgoNivel[]).map(n => ({
+    label: n, value: counts[n], color: RIESGO_CONFIG[n].color,
+  })).filter(d => d.value > 0);
+
+  const avgByNivel = (["CRÍTICO","ALTO","MEDIO","BAJO"] as RiesgoNivel[]).map(n => {
+    const grp = parroquiasRiesgo.filter(p => p.riesgoNivel === n);
+    if (grp.length === 0) return { nivel: n, incidencias: 0, pctCapacitados: 0, actPct: 0 };
+    return {
+      nivel: n,
+      incidencias: Math.round(grp.reduce((s, p) => s + p.incidencias, 0) / grp.length * 10) / 10,
+      pctCapacitados: Math.round(grp.reduce((s, p) => s + p.pctCapacitados, 0) / grp.length),
+      actPct: Math.round(grp.reduce((s, p) => s + (p.actividadesTotal > 0 ? (p.actividadesEjecutadas / p.actividadesTotal) * 100 : 0), 0) / grp.length),
+    };
+  });
 
   return (
     <div className="space-y-5">
       {/* Descripción */}
       <div className="bg-[#009850]/5 border border-[#009850]/20 rounded-xl px-4 py-3 text-xs text-gray-700">
-        <span className="font-semibold">Nivel de afectación estimado</span> — score multifactorial que considera: incidencias registradas, brigadistas disponibles, certificación, plan GRD aprobado y ejecución de actividades preventivas.
+        <span className="font-semibold">Nivel de afectación estimado</span> — score multifactorial: incidencias registradas, brigadistas disponibles, % certificación, plan GRD aprobado y ejecución de actividades preventivas.
       </div>
 
       {/* Filtros por nivel */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {(["CRÍTICO","ALTO","MEDIO","BAJO"] as RiesgoNivel[]).map(n => {
           const cfg = RIESGO_CONFIG[n];
+          const pct = total > 0 ? Math.round((counts[n] / total) * 100) : 0;
           return (
             <button key={n} suppressHydrationWarning onClick={() => setFiltroNivel(filtroNivel === n ? "TODOS" : n)}
               className={`cursor-pointer rounded-xl p-4 border text-left transition-all shadow-sm ${filtroNivel === n ? `${cfg.bgClass} ${cfg.borderClass}` : "bg-white border-gray-200 hover:border-gray-300"}`}>
-              <div className="text-2xl font-bold mb-1" style={{ color: cfg.color }}>{counts[n]}</div>
+              <div className="text-2xl font-bold mb-0.5" style={{ color: cfg.color }}>{counts[n]}</div>
               <div className={`text-xs font-semibold ${filtroNivel === n ? cfg.textClass : "text-gray-500"}`}>Afectación {n}</div>
-              <div className="text-[11px] text-gray-400">parroquias</div>
+              <div className="text-[11px] text-gray-400">{pct}% del total</div>
             </button>
           );
         })}
       </div>
 
+      {/* Gráficos estadísticos */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* Donut distribución */}
+        <ChartCard title="Distribución por Nivel" subtitle="Proporción de parroquias según nivel de afectación estimado">
+          {total === 0 ? <NoData height={190} /> : (
+            <div className="flex items-center gap-4">
+              <ResponsiveContainer width="52%" height={190}>
+                <PieChart>
+                  <Pie data={nivelPie} dataKey="value" nameKey="label" cx="50%" cy="50%" outerRadius={74} innerRadius={42} strokeWidth={0}>
+                    {nivelPie.map((d, i) => <Cell key={i} fill={d.color} />)}
+                  </Pie>
+                  <Tooltip formatter={(v) => [`${v} parroquias`, ""]} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="flex-1 space-y-2">
+                {(["CRÍTICO","ALTO","MEDIO","BAJO"] as RiesgoNivel[]).map(n => {
+                  const pct = total > 0 ? Math.round((counts[n] / total) * 100) : 0;
+                  return (
+                    <div key={n} className="space-y-0.5">
+                      <div className="flex justify-between text-xs">
+                        <span className="font-medium text-gray-600">{n}</span>
+                        <span className="font-bold" style={{ color: RIESGO_CONFIG[n].color }}>{counts[n]} ({pct}%)</span>
+                      </div>
+                      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: RIESGO_CONFIG[n].color }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </ChartCard>
+
+        {/* Promedio incidencias por nivel */}
+        <ChartCard title="Promedio de Incidencias por Nivel" subtitle="Carga promedio de casos en parroquias según su nivel de afectación">
+          {total === 0 ? <NoData height={190} /> : (
+            <ResponsiveContainer width="100%" height={190}>
+              <BarChart data={avgByNivel} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
+                <XAxis dataKey="nivel" tick={{ fontSize: 10, fill: "#9CA3AF" }} axisLine={false} tickLine={false} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "#9CA3AF" }} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={{ borderRadius: "10px", border: "1px solid #E5E7EB", fontSize: 12 }} formatter={(v) => [`${v}`, "Prom. incidencias"]} />
+                <Bar dataKey="incidencias" radius={[4, 4, 0, 0]} maxBarSize={44}>
+                  {avgByNivel.map((d, i) => <Cell key={i} fill={RIESGO_CONFIG[d.nivel as RiesgoNivel]?.color ?? "#9CA3AF"} />)}
+                  <LabelList dataKey="incidencias" position="top" style={{ fontSize: 10, fill: "#6B7280" }} />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </ChartCard>
+      </div>
+
+      {/* Indicadores promedio por nivel */}
+      {total > 0 && (
+        <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+          <h3 className="text-sm font-bold text-gray-900 mb-1">Indicadores Promedio por Nivel de Afectación</h3>
+          <p className="text-xs text-gray-400 mb-4">Certificación y ejecución de actividades entre los grupos de parroquias</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-5">
+            {avgByNivel.map(n => (
+              <div key={n.nivel} className="space-y-2">
+                <div className="text-xs font-bold uppercase tracking-wide" style={{ color: RIESGO_CONFIG[n.nivel as RiesgoNivel]?.color ?? "#666" }}>{n.nivel}</div>
+                {[
+                  { label: "% certif.", value: n.pctCapacitados, color: n.pctCapacitados >= 60 ? GREEN : "#EF4444" },
+                  { label: "% act. ejec.", value: n.actPct, color: n.actPct >= 60 ? GREEN : "#F59E0B" },
+                ].map(m => (
+                  <div key={m.label} className="space-y-0.5">
+                    <div className="flex justify-between text-[10px]">
+                      <span className="text-gray-500">{m.label}</span>
+                      <span className="font-bold" style={{ color: m.color }}>{m.value}%</span>
+                    </div>
+                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: `${m.value}%`, background: m.color }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Mapa Leaflet */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-bold text-gray-900">Lima Metropolitana y Callao</h3>
+          <div>
+            <h3 className="text-sm font-bold text-gray-900">Mapa de Afectación — Lima Metropolitana y Callao</h3>
+            <p className="text-xs text-gray-400">Tamaño del marcador proporcional al número de incidencias</p>
+          </div>
           {filtroNivel !== "TODOS" && (
             <button onClick={() => setFiltroNivel("TODOS")} suppressHydrationWarning className="cursor-pointer text-xs text-gray-400 hover:text-[#009850] flex items-center gap-1">
               <X className="w-3.5 h-3.5" /> Ver todas
             </button>
           )}
         </div>
-        <Suspense fallback={<div className="h-[520px] rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center text-sm text-gray-400">Cargando mapa...</div>}>
+        <Suspense fallback={<div className="h-115 rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center text-sm text-gray-400">Cargando mapa de Lima y Callao...</div>}>
           <MapaRiesgoParroquial parroquias={parroquiasRiesgo} filtroNivel={filtroNivel} />
         </Suspense>
       </div>
@@ -748,12 +934,11 @@ function TabRiesgo({ parroquiasRiesgo }: ReportesProps) {
             </p>
           </div>
         </div>
-
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                {["#","Parroquia","Nivel de Afectación","Incidencias","Brigadistas","% Cert.","Plan GRD","Actividades"].map(h => (
+                {["#","Parroquia","Nivel","Incidencias","Brigadistas","% Cert.","Plan GRD","Actividades"].map(h => (
                   <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -771,7 +956,7 @@ function TabRiesgo({ parroquiasRiesgo }: ReportesProps) {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <span className={`font-bold ${p.pctCapacitados >= 60 ? "text-[#009850]" : p.pctCapacitados > 0 ? "text-amber-600" : "text-red-600"}`}>{p.pctCapacitados}%</span>
-                        <div className="w-14 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div className="w-12 h-1.5 bg-gray-100 rounded-full overflow-hidden">
                           <div className="h-full rounded-full" style={{ width: `${p.pctCapacitados}%`, background: p.pctCapacitados >= 60 ? GREEN : p.pctCapacitados > 0 ? "#F59E0B" : "#EF4444" }} />
                         </div>
                       </div>
@@ -877,7 +1062,7 @@ export function ReportesModule(props: ReportesProps) {
             <FileText className="w-5 h-5 text-[#009850]" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-gray-900">Reportes GRD</h1>
+            <h1 className="text-xl font-bold text-gray-900">Reportes Gestion de Riesgos y Desastres</h1>
             <p className="text-xs text-gray-500">Período: {desde} — {hasta}</p>
           </div>
         </div>

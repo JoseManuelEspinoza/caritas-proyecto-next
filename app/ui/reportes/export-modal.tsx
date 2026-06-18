@@ -535,61 +535,6 @@ export function ExportModal({
     return true;
   });
 
-  async function svgToDataUrl(svgEl: SVGSVGElement): Promise<{ data: string; w: number; h: number } | null> {
-    try {
-      // Dimensiones: getBoundingClientRect falla cuando el elemento está detrás del modal
-      let w = svgEl.getBoundingClientRect().width;
-      let h = svgEl.getBoundingClientRect().height;
-
-      // Fallback 1: atributos width/height del SVG
-      if (w < 10 || h < 10) {
-        w = parseFloat(svgEl.getAttribute("width") || "0");
-        h = parseFloat(svgEl.getAttribute("height") || "0");
-      }
-      // Fallback 2: viewBox del SVG
-      if (w < 10 || h < 10) {
-        const vb = svgEl.getAttribute("viewBox");
-        if (vb) {
-          const parts = vb.trim().split(/[\s,]+/).map(Number);
-          if (parts.length >= 4) { w = parts[2]; h = parts[3]; }
-        }
-      }
-      // Fallback 3: contenedor padre
-      if (w < 10 || h < 10) {
-        const parent = svgEl.parentElement;
-        if (parent) { w = parent.offsetWidth || 600; h = parent.offsetHeight || 350; }
-      }
-
-      if (w < 30 || h < 30) return null;
-
-      const serialized = new XMLSerializer().serializeToString(svgEl);
-      const b64 = btoa(unescape(encodeURIComponent(serialized)));
-      const dataUrl = `data:image/svg+xml;base64,${b64}`;
-
-      const data = await new Promise<string | null>((resolve) => {
-        const scale = 2;
-        const canvas = document.createElement("canvas");
-        canvas.width = w * scale;
-        canvas.height = h * scale;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return resolve(null);
-        const img = new Image();
-        img.onload = () => {
-          ctx.fillStyle = "#ffffff";
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          resolve(canvas.toDataURL("image/png", 0.95));
-        };
-        img.onerror = () => resolve(null);
-        img.src = dataUrl;
-      });
-
-      return data ? { data, w, h } : null;
-    } catch {
-      return null;
-    }
-  }
-
   async function exportar() {
     setExporting(true);
     const fmtDate = (iso: string) => { const [y, m, d] = iso.split("-"); return `${d}-${m}-${y}`; };
@@ -776,6 +721,143 @@ export function ExportModal({
         doc.line(x, y+chartH, x+w, y+chartH);
       };
 
+      // Sector de pie nativo (sin DOM SVG)
+      const drawPieSector = (cx: number, cy: number, r: number, startDeg: number, endDeg: number, color: [number,number,number]) => {
+        if (endDeg - startDeg < 0.3) return;
+        const steps = Math.max(Math.ceil((endDeg - startDeg) / 4), 8);
+        const toR = (d: number) => (d - 90) * Math.PI / 180;
+        const pts: [number,number][] = [[cx, cy]];
+        for (let i = 0; i <= steps; i++) {
+          const a = toR(startDeg + (endDeg - startDeg) * i / steps);
+          pts.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]);
+        }
+        const linePairs: [number,number][] = pts.slice(1).map((p, i) => [p[0]-pts[i][0], p[1]-pts[i][1]]);
+        linePairs.push([cx - pts[pts.length-1][0], cy - pts[pts.length-1][1]]);
+        doc.setFillColor(...color); doc.setDrawColor(...color); doc.setLineWidth(0.1);
+        doc.lines(linePairs, pts[0][0], pts[0][1], [1,1], "FD", true);
+      };
+
+      const drawDonut = (
+        items: {label: string; value: number; color: [number,number,number]}[],
+        cx: number, cy: number, r: number, innerR: number,
+        legendX: number, legendY: number, legendSpacing = 10
+      ) => {
+        const total = items.reduce((s, d) => s + d.value, 0);
+        if (total === 0) return;
+        let angle = 0;
+        items.forEach(d => {
+          const sweep = (d.value / total) * 360;
+          if (sweep > 0.3) drawPieSector(cx, cy, r, angle, angle + sweep, d.color);
+          angle += sweep;
+        });
+        // Agujero blanco
+        doc.setFillColor(255,255,255); doc.setDrawColor(255,255,255);
+        doc.circle(cx, cy, innerR, "F");
+        // Texto central
+        const pctMain = Math.round((items[0].value / total) * 100);
+        doc.setFontSize(9); doc.setFont("helvetica","bold"); doc.setTextColor(31,41,55);
+        doc.text(`${pctMain}%`, cx, cy + 2, {align:"center"});
+        doc.setFontSize(5.5); doc.setFont("helvetica","normal"); doc.setTextColor(107,114,128);
+        doc.text(s(items[0].label.split(" ")[0]), cx, cy + 6.5, {align:"center"});
+        // Leyenda
+        items.forEach((d, i) => {
+          const ly = legendY + i * legendSpacing;
+          doc.setFillColor(...d.color); doc.rect(legendX, ly, 4, 4, "F");
+          const pct = Math.round((d.value / total) * 100);
+          doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(31,41,55);
+          doc.text(s(d.label), legendX + 6, ly + 3);
+          doc.setFont("helvetica","bold"); doc.setTextColor(...d.color);
+          doc.text(`${d.value}  (${pct}%)`, legendX + 6, ly + 7.5);
+        });
+      };
+
+      // Paleta de colores equivalente a PALETTE del UI
+      const JSPDF_PALETTE: [number,number,number][] = [
+        [0,152,80],[59,130,246],[245,158,11],[239,68,68],
+        [145,85,168],[249,115,22],[0,200,180],[236,72,153],
+      ];
+
+      // Barras verticales con color por barra (igual que el UI)
+      const drawVertBarsColored = (
+        data: {label: string; value: number}[],
+        x: number, y: number, w: number, h: number,
+        palette: [number,number,number][]
+      ) => {
+        if (data.length === 0) return;
+        const maxVal = Math.max(...data.map(d=>d.value), 1);
+        const n = data.length;
+        const slotW = w / n;
+        const barW = Math.min(slotW * 0.6, 16);
+        const chartH = h - 18;
+        doc.setDrawColor(240,240,240); doc.setLineWidth(0.2);
+        [0.25,0.5,0.75,1].forEach(pct => {
+          const gy = y + chartH*(1-pct);
+          doc.line(x,gy,x+w,gy);
+          doc.setFontSize(5.5); doc.setFont("helvetica","normal"); doc.setTextColor(180,180,180);
+          doc.text(String(Math.round(maxVal*pct)), x-1, gy+1, {align:"right"});
+        });
+        data.forEach((d,i) => {
+          const col = palette[i % palette.length];
+          const bh = Math.max((d.value/maxVal)*chartH, 0.5);
+          const bx = x + i*slotW + (slotW-barW)/2;
+          const by = y + chartH - bh;
+          doc.setFillColor(Math.max(0,col[0]-20),Math.max(0,col[1]-20),Math.max(0,col[2]-20));
+          doc.rect(bx+0.8,by+0.8,barW,bh,"F");
+          doc.setFillColor(...col); doc.rect(bx,by,barW,bh,"F");
+          doc.setFontSize(6.5); doc.setFont("helvetica","bold"); doc.setTextColor(31,41,55);
+          if (bh > 3) doc.text(String(d.value), bx+barW/2, by-2, {align:"center"});
+          doc.setFontSize(6); doc.setFont("helvetica","normal"); doc.setTextColor(107,114,128);
+          const lbl = d.label.length>9 ? d.label.slice(0,8)+"..." : d.label;
+          doc.text(s(lbl), bx+barW/2, y+chartH+8, {align:"center"});
+        });
+        doc.setDrawColor(200,200,200); doc.setLineWidth(0.5);
+        doc.line(x, y+chartH, x+w, y+chartH);
+      };
+
+      // Gráfico de línea nativo para tendencia temporal
+      const drawLineChart = (
+        data: {label: string; value: number}[],
+        x: number, y: number, w: number, h: number,
+        color: [number,number,number]
+      ) => {
+        if (data.length < 1) return;
+        const chartH = h - 18;
+        const maxVal = Math.max(...data.map(d=>d.value), 1);
+        doc.setDrawColor(240,240,240); doc.setLineWidth(0.2);
+        [0.25,0.5,0.75,1].forEach(pct => {
+          const gy = y + chartH*(1-pct);
+          doc.line(x,gy,x+w,gy);
+          doc.setFontSize(5.5); doc.setFont("helvetica","normal"); doc.setTextColor(180,180,180);
+          doc.text(String(Math.round(maxVal*pct)), x-1, gy+1.5, {align:"right"});
+        });
+        if (data.length === 1) {
+          const px2 = x + w/2, py2 = y + chartH - (data[0].value/maxVal)*chartH;
+          doc.setFillColor(...color); doc.circle(px2, py2, 2.5, "F");
+          doc.setFontSize(7); doc.setFont("helvetica","bold"); doc.setTextColor(31,41,55);
+          doc.text(String(data[0].value), px2, py2-4, {align:"center"});
+        } else {
+          const pts2 = data.map((d,i) => [x + (i/(data.length-1))*w, y + chartH - (d.value/maxVal)*chartH] as [number,number]);
+          // Línea de tendencia
+          doc.setDrawColor(...color); doc.setLineWidth(1.5);
+          for (let i=0; i<pts2.length-1; i++) doc.line(pts2[i][0],pts2[i][1],pts2[i+1][0],pts2[i+1][1]);
+          // Puntos
+          pts2.forEach((p,i) => {
+            doc.setFillColor(255,255,255); doc.circle(p[0],p[1],2,"F");
+            doc.setFillColor(...color); doc.circle(p[0],p[1],1.3,"F");
+            doc.setFontSize(6); doc.setFont("helvetica","bold"); doc.setTextColor(31,41,55);
+            if (data[i].value > 0) doc.text(String(data[i].value), p[0], p[1]-3.5, {align:"center"});
+          });
+        }
+        // Etiquetas X
+        doc.setFontSize(6); doc.setFont("helvetica","normal"); doc.setTextColor(107,114,128);
+        data.forEach((d,i) => {
+          const lx2 = data.length>1 ? x+(i/(data.length-1))*w : x+w/2;
+          doc.text(d.label, lx2, y+chartH+8, {align:"center"});
+        });
+        doc.setDrawColor(200,200,200); doc.setLineWidth(0.5);
+        doc.line(x, y+chartH, x+w, y+chartH);
+      };
+
       const totalInc = filteredData.length;
       const nombreArchivo = `Reporte_GRD_${activeTab}_${desde}_al_${hasta}`;
 
@@ -844,6 +926,34 @@ export function ExportModal({
           });
           y+=rowH;
         });
+        // Página de análisis gráfico
+        drawFooter(totalPages, totalPages + 1); doc.addPage(); totalPages++;
+        drawBandHeader("BRIGADISTAS CAPACITADOS — ANALISIS GRAFICO"); let yG = 14;
+
+        yG = sectionTitle("ESTADO DE CERTIFICACION GENERAL", yG);
+        const donutItems: {label: string; value: number; color: [number,number,number]}[] = [
+          { label: "Certificados", value: brigadistasData.capacitados, color: [0,152,80] },
+          { label: "Sin certificacion", value: Math.max(brigadistasData.total - brigadistasData.capacitados, 0), color: [245,158,11] },
+        ];
+        const dcx = mg + 30, dcy = yG + 28, dr = 24, dir = 12;
+        drawDonut(donutItems, dcx, dcy, dr, dir, dcx + 38, dcy - 8, 12);
+        // Stacked bar proporcional
+        const sbW2 = contentW - 80;
+        doc.setFontSize(7); doc.setFont("helvetica","bold"); doc.setTextColor(107,114,128);
+        doc.text("Distribucion proporcional del total:", dcx + 38, yG + 4);
+        drawStackedBar(donutItems, dcx + 38, yG + 6, sbW2, 9);
+        yG = dcy + dr + 8;
+
+        if (brigadistasData.porParroquia.length > 0) {
+          yG = sectionTitle("CERTIFICACION POR PARROQUIA — MAYOR A MENOR (%)", yG);
+          const sorted = [...brigadistasData.porParroquia].sort((a, b) => b.pct - a.pct);
+          sorted.forEach((p, i) => {
+            if (yG > pageH - 20) { drawFooter(totalPages, totalPages+1); doc.addPage(); drawBandHeader("BRIGADISTAS"); yG = 14; totalPages++; }
+            const rc: [number,number,number] = p.pct >= 70 ? [0,152,80] : p.pct >= 40 ? [245,158,11] : [239,68,68];
+            const lbl = `${s(p.parroquia.length > 26 ? p.parroquia.slice(0,25)+"..." : p.parroquia)}  (${p.capacitados}/${p.total} certif.)`;
+            yG = distRow(lbl, p.pct, 100, rc, yG, i%2===0);
+          });
+        }
         drawFooter(totalPages, totalPages);
 
       } else if (activeTab === "prevencion" && actividadesData) {
@@ -858,17 +968,18 @@ export function ExportModal({
           { val: String(actividadesData.totalParticipantes), lbl: "Participantes\nAlcanzados", color: [255,255,255], bg: [145,85,168] },
         ], y);
 
-        // Bar chart por tipo de actividad
-        if (actividadesData.porTipo.slice(0,8).length > 0) {
+        // Bar chart por tipo de actividad — solo si hay tipos del catálogo
+        const tiposValidos = actividadesData.porTipo.filter(t => t.label !== "Sin clasificar");
+        if (tiposValidos.length > 0) {
           y = sectionTitle("ACTIVIDADES POR TIPO", y);
-          drawVertBars(actividadesData.porTipo.slice(0,8), mg, y, contentW, 55, [59,130,246]);
+          drawVertBars(tiposValidos.slice(0,8), mg, y, contentW, 55, [59,130,246]);
           y += 60;
         }
 
         y = sectionTitle("DISTRIBUCION POR ESTADO DE EJECUCION", y);
-        const stackEstado = actividadesData.porEstado.map(e => ({
+        const stackEstado: {label:string;value:number;color:[number,number,number]}[] = actividadesData.porEstado.map(e => ({
           label: e.label, value: e.value,
-          color: e.label==="EJECUTADA"?[0,152,80]:e.label==="PROGRAMADA"?[59,130,246]:e.label==="EN_PROCESO"?[245,158,11]:[239,68,68] as [number,number,number]
+          color: (e.label==="EJECUTADA"?[0,152,80]:e.label==="PROGRAMADA"?[59,130,246]:e.label==="EN_PROCESO"||e.label==="EN_EJECUCION"?[245,158,11]:[239,68,68]) as [number,number,number],
         }));
         drawStackedBar(stackEstado, mg, y, contentW, 10); y += 12;
         // Legend
@@ -885,7 +996,18 @@ export function ExportModal({
         if (actividadesData.porParroquia.length > 0 && y < pageH-50) {
           y = sectionTitle("TOP PARROQUIAS POR ACTIVIDAD PREVENTIVA", y);
           actividadesData.porParroquia.slice(0,8).forEach((p,i)=>{ y=distRow(p.label,p.value,actividadesData.total,[145,85,168],y,i%2===0); });
+          y+=4;
         }
+
+        // Donut de estado de ejecución — visual igual que pantalla
+        const eDonutItems = stackEstado.filter(e=>e.value>0);
+        if (eDonutItems.length > 1 && y < pageH - 58) {
+          y = sectionTitle("ESTADO DE EJECUCION — DISTRIBUCION VISUAL", y);
+          const eDcx = mg + 20, eDcy = y + 18;
+          drawDonut(eDonutItems, eDcx, eDcy, 16, 8, eDcx + 36, y + 2, 11);
+          y = eDcy + 22;
+        }
+
         drawFooter(1, 1);
 
       } else if (activeTab === "kits" && kitsData) {
@@ -962,6 +1084,65 @@ export function ExportModal({
           lx+=44;
         });
         y+=12;
+
+        // Donut nativo: distribución por nivel (igual que pantalla)
+        const nivelD: {label:string;value:number;color:[number,number,number]}[] = (["CRITICO","ALTO","MEDIO","BAJO"] as const)
+          .map(n => ({ label: `${n} (${counts[n]||0})`, value: counts[n]||0, color: nC[n] }))
+          .filter(d => d.value > 0);
+        if (nivelD.length > 0 && y < pageH - 65) {
+          const dCx = mg + 22, dCy = y + 22;
+          drawDonut(nivelD, dCx, dCy, 20, 10, dCx + 36, y + 2, 12);
+          y = dCy + 26;
+        }
+
+        // Tabla: indicadores promedio por nivel
+        y = sectionTitle("INDICADORES PROMEDIO POR NIVEL DE AFECTACION", y);
+        const nhdr = ["Nivel","Parroquias","% Total","Prom. Incid.","Prom. % Certif.","Con Plan GRD"];
+        const nhW  = [28,24,22,32,36,30];
+        doc.setFillColor(...G); doc.rect(mg,y,contentW,7,"F");
+        doc.setFontSize(7); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
+        let nhX=mg; nhdr.forEach((h,i)=>{doc.text(h,nhX+1.5,y+4.5);nhX+=nhW[i];}); y+=7;
+
+        (["CRITICO","ALTO","MEDIO","BAJO"] as const).forEach((n,ri)=>{
+          const grp = parroquiasRiesgo.filter(p=>p.riesgoNivel.replace("Í","I").replace("Ó","O")===n);
+          if (grp.length===0) return;
+          const pctN = Math.round((grp.length/parroquiasRiesgo.length)*100);
+          const avgI = (grp.reduce((s,p)=>s+p.incidencias,0)/grp.length).toFixed(1);
+          const avgC = Math.round(grp.reduce((s,p)=>s+p.pctCapacitados,0)/grp.length);
+          const conP = grp.filter(p=>p.tienePlan).length;
+          if (ri%2===0){doc.setFillColor(248,250,249);doc.rect(mg,y,contentW,8,"F");}
+          doc.setFillColor(...(nC[n]??[80,80,80]));doc.rect(mg,y,3,8,"F");
+          doc.setFontSize(7.5); doc.setFont("helvetica","bold"); doc.setTextColor(31,41,55);
+          nhX=mg;
+          doc.text(n,nhX+5,y+5.5); nhX+=nhW[0];
+          doc.setFont("helvetica","normal");
+          doc.text(String(grp.length),nhX+1.5,y+5.5); nhX+=nhW[1];
+          doc.text(`${pctN}%`,nhX+1.5,y+5.5); nhX+=nhW[2];
+          doc.text(String(avgI),nhX+1.5,y+5.5); nhX+=nhW[3];
+          doc.setTextColor(avgC>=60?0:239, avgC>=60?152:68, avgC>=60?80:68); doc.setFont("helvetica","bold");
+          doc.text(`${avgC}%`,nhX+1.5,y+5.5); nhX+=nhW[4];
+          doc.setTextColor(31,41,55); doc.setFont("helvetica","normal");
+          doc.text(`${conP}/${grp.length}`,nhX+1.5,y+5.5);
+          y+=8;
+        });
+        y+=4;
+
+        // Top 5 parroquias de mayor riesgo
+        if (parroquiasRiesgo.length > 0 && y < pageH - 65) {
+          y = sectionTitle("TOP 5 PARROQUIAS DE MAYOR AFECTACION", y);
+          parroquiasRiesgo.slice(0,5).forEach((p,i) => {
+            const nKey = p.riesgoNivel.replace("Í","I").replace("Ó","O");
+            const col = nC[nKey]??[80,80,80];
+            if (i%2===0){doc.setFillColor(248,250,249);doc.rect(mg,y,contentW,9,"F");}
+            doc.setFillColor(...col); doc.rect(mg,y,3,9,"F");
+            doc.setFontSize(7.5); doc.setFont("helvetica","bold"); doc.setTextColor(31,41,55);
+            doc.text(`${i+1}. ${s(p.nombre.length>42?p.nombre.slice(0,41)+"...":p.nombre)}`, mg+5, y+4.5);
+            doc.setFont("helvetica","normal"); doc.setTextColor(107,114,128);
+            const actP = p.actividadesTotal>0?Math.round((p.actividadesEjecutadas/p.actividadesTotal)*100):0;
+            doc.text(`${p.incidencias} incid.  |  ${p.brigadistas} brigad.  |  ${p.pctCapacitados}% certif.  |  ${actP}% activid.  |  Plan: ${p.tienePlan?"Aprobado":"Sin plan"}`, mg+5, y+8);
+            y+=10;
+          });
+        }
 
         drawFooter(1, 3); doc.addPage(); totalPages=2;
 
@@ -1044,39 +1225,21 @@ export function ExportModal({
           doc.line(a.x, a.y, b.x, b.y);
         }
 
-        // ── Zonas / grandes áreas de Lima ────────────────────────────────
-        doc.setFontSize(6.5); doc.setFont("helvetica","bold");
-
-        const zonas: { lat: number; lng: number; label: string; color: [number,number,number] }[] = [
-          { lat:-11.87, lng:-77.04, label:"LIMA NORTE",   color:[100,90,75] },
-          { lat:-11.99, lng:-76.76, label:"LIMA ESTE",    color:[100,90,75] },
-          { lat:-12.25, lng:-76.93, label:"LIMA SUR",     color:[100,90,75] },
-          { lat:-12.08, lng:-77.00, label:"LIMA CENTRO",  color:[100,90,75] },
-          { lat:-12.12, lng:-76.86, label:"LIMA ESTE SUR",color:[100,90,75] },
-        ];
-        zonas.forEach(z => {
-          const zp = projM(z.lat, z.lng);
-          if (zp.x < MAP_X+2 || zp.x > MAP_X+MAP_W-2 || zp.y < MAP_Y_S+2 || zp.y > MAP_Y_S+MAP_H-2) return;
-          doc.setTextColor(...z.color);
-          doc.text(z.label, zp.x, zp.y, { align:"center" });
-        });
-
-        // Río Rímac label
+        // Río Rímac label (antes de marcadores para que quede debajo)
         const rimacMid = projM(-12.01, -76.88);
         doc.setFontSize(5.5); doc.setFont("helvetica","italic"); doc.setTextColor(100, 160, 200);
         doc.text("Rio Rimac", rimacMid.x, rimacMid.y - 1.5);
 
-        // Labels principales
+        // Labels principales Lima / Callao
         doc.setFontSize(8); doc.setFont("helvetica","bold");
-        const limaLbl = projM(-12.05, -76.87); doc.setTextColor(110, 100, 82);
-        // (solo mostrar si cae dentro del mapa)
+        const limaLbl = projM(-12.18, -76.82); doc.setTextColor(110, 100, 82);
         if (limaLbl.x > MAP_X && limaLbl.x < MAP_X+MAP_W && limaLbl.y > MAP_Y_S && limaLbl.y < MAP_Y_S+MAP_H)
           doc.text("LIMA", limaLbl.x, limaLbl.y, {align:"center"});
         const callaoLbl = projM(-11.97, -77.14); doc.setTextColor(65, 100, 150);
         if (callaoLbl.x > MAP_X && callaoLbl.x < MAP_X+MAP_W && callaoLbl.y > MAP_Y_S && callaoLbl.y < MAP_Y_S+MAP_H)
           doc.text("CALLAO", callaoLbl.x, callaoLbl.y, {align:"center"});
 
-        // Marcadores de parroquias
+        // Marcadores de parroquias (se dibujan ANTES de las etiquetas de zona)
         parroquiasRiesgo.forEach(p => {
           if (!p.latitud || !p.longitud) return;
           const { x: px, y: py } = projM(p.latitud, p.longitud);
@@ -1084,14 +1247,32 @@ export function ExportModal({
           const nKey = p.riesgoNivel.replace("Í","I").replace("Ó","O");
           const col = nC[nKey] ?? [80,80,80] as [number,number,number];
           const r = Math.max(1.8, Math.min(5, 1.8 + Math.min(p.incidencias, 6) * 0.45));
-          // Halo blanco para contraste
           doc.setFillColor(255,255,255); doc.setDrawColor(255,255,255); doc.setLineWidth(0);
           doc.circle(px, py, r + 0.6, "F");
-          // Marcador de color
           doc.setFillColor(...col);
           doc.setDrawColor(Math.max(0,col[0]-50), Math.max(0,col[1]-50), Math.max(0,col[2]-50));
           doc.setLineWidth(0.3);
           doc.circle(px, py, r, "FD");
+        });
+
+        // Etiquetas de zona dibujadas DESPUÉS de marcadores — con fondo blanco para contraste
+        const zonas: { lat: number; lng: number; label: string }[] = [
+          { lat:-11.82, lng:-77.00, label:"LIMA NORTE"    },
+          { lat:-11.99, lng:-76.72, label:"LIMA ESTE"     },
+          { lat:-12.30, lng:-76.90, label:"LIMA SUR"      },
+          { lat:-12.06, lng:-77.01, label:"LIMA CENTRO"   },
+          { lat:-12.14, lng:-76.81, label:"LIMA ESTE SUR" },
+        ];
+        doc.setFontSize(6); doc.setFont("helvetica","bold");
+        zonas.forEach(z => {
+          const zp = projM(z.lat, z.lng);
+          if (zp.x < MAP_X+8 || zp.x > MAP_X+MAP_W-8 || zp.y < MAP_Y_S+6 || zp.y > MAP_Y_S+MAP_H-6) return;
+          const tw = z.label.length * 2.0;
+          // Fondo blanco semitransparente detrás del texto
+          doc.setFillColor(255,255,255); doc.setDrawColor(255,255,255);
+          doc.rect(zp.x - tw/2 - 1, zp.y - 4, tw + 2, 5, "F");
+          doc.setTextColor(80, 70, 55);
+          doc.text(z.label, zp.x, zp.y, { align:"center" });
         });
 
         // Rosa de los vientos (esquina superior derecha)
@@ -1173,8 +1354,8 @@ export function ExportModal({
       } else {
         // ── PDF EJECUTIVO: Resumen General / Casos Atendidos ─────────────
         const isResumen = activeTab !== "casos";
-        const tituloPDF = isResumen ? "REPORTE GENERAL DEL SISTEMA GRD" : "REPORTE MENSUAL DE CASOS ATENDIDOS";
-        const subtituloPDF = isResumen ? "Indicadores operacionales del sistema" : "Incidencias y emergencias atendidas en el periodo";
+        const tituloPDF = isResumen ? "REPORTE GENERAL DEL SISTEMA GRD" : "REPORTE DE INCIDENCIAS Y CASOS ATENDIDOS";
+        const subtituloPDF = isResumen ? "Indicadores operacionales del sistema" : "Incidencias y emergencias registradas en el periodo";
         drawCover(tituloPDF, subtituloPDF);
         let y = 44;
 
@@ -1205,11 +1386,34 @@ export function ExportModal({
         });
         y+=2;
 
-        // Chart de barras: tipos de evento
+        // Chart de barras: tipos de evento — con colores distintos por tipo (igual que pantalla)
         if (porTipo && porTipo.length > 0) {
           y = sectionTitle("INCIDENCIAS POR TIPO DE EVENTO", y);
-          drawVertBars(porTipo.slice(0,10), mg, y, contentW, 60, [59,130,246]);
-          y+=65;
+          drawVertBarsColored(porTipo.slice(0,10), mg, y, contentW, 55, JSPDF_PALETTE);
+          y += 60;
+        }
+
+        // Gráfico de tendencia temporal — agrupado por semana (igual que pantalla)
+        const tlineMap: Record<string,number> = {};
+        filteredData.forEach(row => {
+          const ds = String(row.Fecha || "");
+          const pts3 = ds.split("/");
+          if (pts3.length !== 3) return;
+          const [dd2,mm2,yy2] = pts3.map(Number);
+          if (isNaN(dd2)||isNaN(mm2)||isNaN(yy2)) return;
+          const date = new Date(yy2, mm2-1, dd2);
+          const dow = date.getDay() || 7;
+          const ws = new Date(date); ws.setDate(date.getDate()-dow+1);
+          const key = `${String(ws.getDate()).padStart(2,"0")}/${String(ws.getMonth()+1).padStart(2,"0")}`;
+          tlineMap[key] = (tlineMap[key]||0) + 1;
+        });
+        const tlineData = Object.entries(tlineMap)
+          .sort((a,b) => a[0].localeCompare(b[0]))
+          .map(([label, value]) => ({label, value}));
+        if (tlineData.length >= 1 && y < pageH - 75) {
+          y = sectionTitle("TENDENCIA DE INCIDENCIAS POR SEMANA", y);
+          drawLineChart(tlineData, mg, y, contentW, 52, G as [number,number,number]);
+          y += 57;
         }
 
         drawFooter(1,2); doc.addPage(); totalPages=2;
@@ -1243,79 +1447,7 @@ export function ExportModal({
           y+=4;
         }
 
-        // Tabla de incidencias
-        if(filteredData.length>0 && y<pageH-55){
-          y=sectionTitle("DETALLE DE INCIDENCIAS",y);
-          const dC=["Codigo","Fecha","Tipo","Gravedad","Estado","Parroquia"];
-          const dK=["Codigo","Fecha","Tipo","Gravedad","Estado","Parroquia"];
-          const dW=[22,22,28,22,30,38];
-          doc.setFillColor(...G);doc.rect(mg,y,contentW,7,"F");
-          doc.setFontSize(7);doc.setFont("helvetica","bold");doc.setTextColor(255,255,255);
-          let bx=mg;dC.forEach((c,i)=>{doc.text(c,bx+1.5,y+4.5);bx+=dW[i];}); y+=7;
-          filteredData.slice(0,Math.floor((pageH-18-y)/6)).forEach((row,ri)=>{
-            if(ri%2===0){doc.setFillColor(248,250,249);doc.rect(mg,y,contentW,6,"F");}
-            doc.setFont("helvetica","normal");doc.setFontSize(6.5);doc.setTextColor(31,41,55);
-            bx=mg;dK.forEach((k,i)=>{const t=s(String(row[k]??"-"));const mx=Math.floor(dW[i]/1.85);doc.text(t.length>mx?t.slice(0,mx-1)+"...":t,bx+1.5,y+4);bx+=dW[i];});
-            y+=6;
-          });
-          if(filteredData.length>25){doc.setFontSize(6.5);doc.setTextColor(107,114,128);doc.setFont("helvetica","italic");doc.text(`... y ${filteredData.length-25} registros mas. Exporta en Excel para el listado completo.`,mg,y+4);}
-        }
         drawFooter(2,2);
-      }
-
-      // ── Gráficos estadísticos — captura de recharts del DOM ─────────────
-      // Los SVGs están renderizados detrás del modal; svgToDataUrl usa viewBox como fallback
-      const allWrappers = Array.from(document.querySelectorAll<HTMLElement>(".recharts-wrapper"));
-      type CapturedChart = { data: string; aspectRatio: number };
-      const capturedCharts: CapturedChart[] = [];
-
-      for (const wrapper of allWrappers) {
-        const svg = wrapper.querySelector("svg");
-        if (!svg) continue;
-        const result = await svgToDataUrl(svg);
-        if (result && result.w > 30 && result.h > 30) {
-          capturedCharts.push({ data: result.data, aspectRatio: result.h / result.w });
-        }
-      }
-
-      if (capturedCharts.length > 0) {
-        const tabLabel: Record<string, string> = {
-          resumen: "RESUMEN GENERAL", casos: "CASOS ATENDIDOS", brigadistas: "BRIGADISTAS",
-          prevencion: "ACCIONES PREVENTIVAS", kits: "KITS ENTREGADOS", riesgo: "AFECTACION PARROQUIAL",
-        };
-        const chartTabLabel = s(tabLabel[activeTab] ?? "GRAFICOS");
-
-        // Una página por cada gráfico (A4 portrait — los charts del tab activo)
-        capturedCharts.forEach((chart, idx) => {
-          doc.addPage();
-
-          // Banda superior verde
-          doc.setFillColor(...G); doc.rect(0, 0, pageW, 10, "F");
-          doc.setFontSize(8); doc.setFont("helvetica", "bold"); doc.setTextColor(255, 255, 255);
-          doc.text(`GRAFICOS ESTADISTICOS — ${chartTabLabel}`, mg, 6.5);
-          doc.text(`${idx + 1} / ${capturedCharts.length}`, pageW - mg, 6.5, { align: "right" });
-
-          // Calcular área disponible para el chart
-          const topY = 14;
-          const botY = pageH - 14;
-          const imgW = contentW;
-          const maxImgH = botY - topY;
-          const imgH = Math.min(imgW * chart.aspectRatio, maxImgH);
-          const centeredY = topY + (maxImgH - imgH) / 2;
-
-          // Fondo blanco con borde sutil
-          doc.setFillColor(255, 255, 255); doc.setDrawColor(229, 231, 235);
-          doc.roundedRect(mg - 2, topY - 2, imgW + 4, maxImgH + 4, 3, 3, "FD");
-
-          doc.addImage(chart.data, "PNG", mg, centeredY, imgW, imgH);
-
-          // Footer
-          doc.setFillColor(245, 247, 250); doc.rect(0, pageH - 10, pageW, 10, "F");
-          doc.setDrawColor(220, 220, 220); doc.setLineWidth(0.3); doc.line(0, pageH - 10, pageW, pageH - 10);
-          doc.setFontSize(7); doc.setFont("helvetica", "italic"); doc.setTextColor(150, 150, 150);
-          doc.text(`Caritas Lima — Sistema GRD | Generado el ${today}`, mg, pageH - 4);
-          doc.text(`Grafico ${idx + 1}`, pageW - mg, pageH - 4, { align: "right" });
-        });
       }
 
       doc.save(`${nombreArchivo}.pdf`);
