@@ -1448,14 +1448,11 @@ export function ExportModal({
         // Distribución por estado
         if (porEstado && porEstado.length>0) {
           y=sectionTitle("DISTRIBUCION DE INCIDENCIAS POR ESTADO",y);
-          // Stacked bar visual
-          const stackEst=porEstado.map((e,i)=>({label:e.label,value:e.value,color:[[0,152,80],[59,130,246],[245,158,11],[239,68,68],[145,85,168],[249,115,22],[0,200,180],[100,100,100]][i%8] as [number,number,number]}));
-          drawStackedBar(stackEst,mg,y,contentW,10); y+=12;
-          let lx2=mg;
-          stackEst.slice(0,4).forEach(e=>{doc.setFillColor(...e.color);doc.rect(lx2,y,4,4,"F");doc.setFontSize(6.5);doc.setFont("helvetica","normal");doc.setTextColor(31,41,55);doc.text(s(`${e.label}:${e.value}`),lx2+5.5,y+3.2);lx2+=46;});
-          y+=8;
-          porEstado.forEach((e,i)=>{y=distRow(e.label,e.value,totalInc,[0,152,80],y,i%2===0);});
-          y+=5;
+          // Grafico circular (pastel) + leyenda al costado
+          const estItems=porEstado.map((e,i)=>({label:e.label,value:e.value,color:[[0,152,80],[59,130,246],[245,158,11],[239,68,68],[145,85,168],[249,115,22],[0,200,180],[100,100,100]][i%8] as [number,number,number]}));
+          const estH=Math.max(34, estItems.length*10+6);
+          drawDonut(estItems, mg+22, y+estH/2, 17, 9, mg+52, y+4, 9);
+          y+=estH+4;
         }
 
         // Top parroquias
@@ -1465,12 +1462,18 @@ export function ExportModal({
           y+=4;
         }
 
-        // Gravedad
+        // Gravedad — grafico circular (pastel) con colores por severidad
         const gravedad=incidenciasData?.porGravedad??[];
         if(gravedad.length>0){
           y=sectionTitle("DISTRIBUCION POR GRAVEDAD",y);
-          gravedad.forEach((g,i)=>{y=distRow(g.label,g.value,totalInc,[239,68,68],y,i%2===0);});
-          y+=4;
+          const gravItems=gravedad.map(g=>{
+            const c: [number,number,number] = (g.label==="Alto"||g.label==="Critico"||g.label==="Crítico"||g.label==="Severo")
+              ? [239,68,68] : g.label==="Moderado" ? [245,158,11] : [0,152,80];
+            return {label:g.label,value:g.value,color:c};
+          });
+          const gravH=Math.max(34, gravItems.length*10+6);
+          drawDonut(gravItems, mg+22, y+gravH/2, 17, 9, mg+52, y+4, 9);
+          y+=gravH+4;
         }
 
         drawFirmas(y, tituloPDF);
