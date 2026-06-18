@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, useMemo } from "react";
+import { useConfirm } from "@/app/ui/shared/confirm-modal";
 import { useRouter } from "next/navigation";
 import {
   GraduationCap,
@@ -163,6 +164,7 @@ function UnidadRow({
   const [menuMaterial, setMenuMaterial] = useState<string | null>(null);
   const [editandoMaterial, setEditandoMaterial] = useState<{ id: string; titulo: string; tipoMaterial: string; enlaceMaterial: string } | null>(null);
   const [pending, startTransition] = useTransition();
+  const { showConfirm, ConfirmModalJSX } = useConfirm();
 
   const guardarTituloUnidad = () => {
     if (!tituloUnidad.trim()) return;
@@ -173,8 +175,14 @@ function UnidadRow({
     });
   };
 
-  const borrarUnidad = () => {
-    if (!confirm(`¿Eliminar la unidad "${sesion.tituloUnidad}" y todos sus materiales?`)) return;
+  const borrarUnidad = async () => {
+    const ok = await showConfirm({
+      title: "¿Eliminar unidad?",
+      message: `Se eliminará "${sesion.tituloUnidad}" y todos sus materiales. Esta acción no se puede deshacer.`,
+      confirmLabel: "Sí, eliminar",
+      variant: "danger",
+    });
+    if (!ok) return;
     startTransition(async () => {
       const res = await eliminarSesion(sesion.id);
       if (res?.message) toast.error(res.message);
@@ -187,8 +195,14 @@ function UnidadRow({
     setEditandoMaterial({ id: m.id, titulo: m.titulo, tipoMaterial: m.tipoMaterial ?? TIPOS_MATERIAL[0], enlaceMaterial: m.enlaceMaterial ?? "" });
   };
 
-  const borrarMaterial = (idMaterial: string, nombre: string) => {
-    if (!confirm(`¿Eliminar el material "${nombre}"?`)) return;
+  const borrarMaterial = async (idMaterial: string, nombre: string) => {
+    const ok = await showConfirm({
+      title: "¿Eliminar material?",
+      message: `Se eliminará "${nombre}". Esta acción no se puede deshacer.`,
+      confirmLabel: "Sí, eliminar",
+      variant: "danger",
+    });
+    if (!ok) return;
     setMenuMaterial(null);
     startTransition(async () => {
       const res = await eliminarMaterial(idMaterial);
@@ -335,6 +349,7 @@ function UnidadRow({
           }}
         />
       )}
+      {ConfirmModalJSX}
     </div>
   );
 }

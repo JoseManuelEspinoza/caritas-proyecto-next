@@ -109,6 +109,9 @@ function validarUrlOpcional(value?: string | null): { message: string } | null {
   const limpio = texto(value);
   if (!limpio) return null;
 
+  // Rutas internas del proxy S3 siempre son válidas
+  if (limpio.startsWith("/api/")) return null;
+
   try {
     const url = new URL(limpio);
     if (!["http:", "https:"].includes(url.protocol)) {

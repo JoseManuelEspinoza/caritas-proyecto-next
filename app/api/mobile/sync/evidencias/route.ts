@@ -48,9 +48,12 @@ function jsonError(message: string, status = 400) {
 function requireMobileSyncKey(request: Request): NextResponse | null {
   const expected = process.env.MOBILE_SYNC_API_KEY;
 
-  // Para desarrollo permite probar sin key si no está configurada.
-  // Para producción, definir MOBILE_SYNC_API_KEY en .env del servidor.
-  if (!expected) return null;
+  if (!expected) {
+    return NextResponse.json(
+      { ok: false, message: "Sincronización móvil no configurada." },
+      { status: 503 }
+    );
+  }
 
   const provided = request.headers.get("x-mobile-sync-key");
 
@@ -127,40 +130,23 @@ async function resolveIdReferencia(body: EvidenciaMovilPayload): Promise<string>
 }
 
 async function resolveUsuarioCarga(body: EvidenciaMovilPayload): Promise<string> {
-  const idFromPayload = body.idUsuarioCargaGRD?.trim() || body.idUsuarioRemoto?.trim();
+  const candidates = [
+    body.idUsuarioCargaGRD?.trim(),
+    body.idUsuarioRemoto?.trim(),
+    process.env.MOBILE_SYNC_USUARIO_GRD_ID?.trim(),
+  ].filter(Boolean) as string[];
 
-  if (idFromPayload) {
+  for (const id of candidates) {
     const usuario = await prisma.usuarioGRD.findUnique({
-      where: { idUsuarioGRD: idFromPayload },
+      where: { idUsuarioGRD: id },
       select: { idUsuarioGRD: true },
     });
-
     if (usuario) return usuario.idUsuarioGRD;
   }
 
-  const idFromEnv = process.env.MOBILE_SYNC_USUARIO_GRD_ID?.trim();
-
-  if (idFromEnv) {
-    const usuario = await prisma.usuarioGRD.findUnique({
-      where: { idUsuarioGRD: idFromEnv },
-      select: { idUsuarioGRD: true },
-    });
-
-    if (usuario) return usuario.idUsuarioGRD;
-  }
-
-  // Fallback solo para desarrollo/MVP. En producción se debería resolver desde auth móvil.
-  const usuarioFallback = await prisma.usuarioGRD.findFirst({
-    where: { estado: "ACTIVO" },
-    orderBy: { fechaCreacion: "asc" },
-    select: { idUsuarioGRD: true },
-  });
-
-  if (!usuarioFallback) {
-    throw new Error("No existe un usuario GRD activo para registrar la evidencia.");
-  }
-
-  return usuarioFallback.idUsuarioGRD;
+  throw new Error(
+    "No se puede identificar al usuario para registrar la evidencia."
+  );
 }
 
 async function uploadBase64ToS3(
@@ -211,6 +197,12 @@ async function uploadBase64ToS3(
   };
 }
 
+const ALLOWED_S3_PREFIXES = [
+  "evidencias/",
+  "evidencia-kit/",
+  "evidencia-grd/",
+];
+
 function resolveUrlArchivo(body: EvidenciaMovilPayload): string | null {
   const candidates = [body.urlArchivo, body.urlS3, body.key].map((v) => v?.trim()).filter(Boolean);
   // Rechazar URIs locales de Android (content://, file://) — no son válidas en el servidor
@@ -218,7 +210,9 @@ function resolveUrlArchivo(body: EvidenciaMovilPayload): string | null {
   return valid ?? null;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const unauthorized = requireMobileSyncKey(request);
+  if (unauthorized) return unauthorized;
   return NextResponse.json({
     ok: true,
     endpoint: "/api/mobile/sync/evidencias",

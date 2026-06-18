@@ -9,12 +9,13 @@ export const dynamic = "force-dynamic";
 export default async function ReportesPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ desde?: string; hasta?: string }>;
+  searchParams?: Promise<{ desde?: string; hasta?: string; parroquias?: string }>;
 }) {
   const session = await verifySession();
   const role = toFrontendRole(session.role);
   if (!["admin", "especialistaGRD", "comite", "jefaOGP"].includes(role)) redirect("/dashboard");
 
+  // ── Filtros de fecha ──────────────────────────────────────────────────────
   const hoy = new Date();
   const haceUnMes = new Date();
   haceUnMes.setMonth(hoy.getMonth() - 1);
@@ -23,8 +24,16 @@ export default async function ReportesPage({
   const desde = params?.desde ? new Date(params.desde) : haceUnMes;
   const hasta = params?.hasta ? new Date(params.hasta) : hoy;
   hasta.setHours(23, 59, 59, 999);
-  const filtroFecha = { gte: desde, lte: hasta };
 
+  const parroquiasParam = params?.parroquias ?? "";
+  const parroquiasFiltro = parroquiasParam ? parroquiasParam.split(",").filter(Boolean) : [];
+  const filtroFecha = { gte: desde, lte: hasta };
+  const whereInc = {
+    fechaRegistro: filtroFecha,
+    ...(parroquiasFiltro.length > 0 ? { idParroquia: { in: parroquiasFiltro } } : {}),
+  };
+
+  // ── Consultas paralelizadas ───────────────────────────────────────────────
   const [
     totalIncidencias,
     incidenciasList,
@@ -37,209 +46,106 @@ export default async function ReportesPage({
     totalActividades,
     actividadesEjecutadas,
     movimientosKitsEntregados,
-    brigadistasFullList,
-    actividadesFullList,
-    movimientosFullList,
+    parroquiasList,
   ] = await Promise.all([
-    prisma.incidencia.count({ where: { fechaRegistro: filtroFecha } }),
+    prisma.incidencia.count({ where: whereInc }),
+
     prisma.incidencia.findMany({
-      where: { fechaRegistro: filtroFecha },
+      where: whereInc,
       include: { parroquia: true, usuarioResponsable: true },
-      orderBy: { fechaRegistro: "asc" },
+      orderBy: { fechaRegistro: "desc" },
     }),
+
     prisma.incidencia.groupBy({
       by: ["estadoActual"],
-      where: { fechaRegistro: filtroFecha },
+      where: whereInc,
       _count: { _all: true },
     }),
+
     prisma.incidencia.groupBy({
       by: ["tipoEvento"],
-      where: { fechaRegistro: filtroFecha },
+      where: whereInc,
       _count: { _all: true },
     }),
+
     prisma.brigadistaParroquial.count(),
     prisma.brigadistaParroquial.count({ where: { idCertificacionCurso: { not: null } } }),
+
     prisma.parroquia.count(),
-    prisma.parroquia.count({
-      where: { planesTrabajo: { some: { estadoAprobacion: "APROBADO" } } },
-    }),
+    prisma.parroquia.count({ where: { planesTrabajo: { some: { estadoAprobacion: "APROBADO" } } } }),
+
     prisma.actividadPreventiva.count(),
     prisma.actividadPreventiva.count({ where: { estadoActividad: "EJECUTADA" } }),
+
     prisma.movimientoKit.aggregate({
       where: { tipoMovimiento: "SALIDA" },
       _sum: { cantidad: true },
     }),
-    prisma.brigadistaParroquial.findMany({
-      select: {
-        estado: true,
-        disponibilidad: true,
-        idCertificacionCurso: true,
-        parroquia: { select: { nombre: true } },
-      },
-    }),
-    prisma.actividadPreventiva.findMany({
-      select: {
-        estadoActividad: true,
-        idTipoActividadPreventiva: true,
-        numeroParticipantesReal: true,
-        parroquia: { select: { nombre: true } },
-      },
-    }),
-    prisma.movimientoKit.findMany({
-      where: { fechaMovimiento: filtroFecha },
-      select: {
-        tipoMovimiento: true,
-        cantidad: true,
-        fechaMovimiento: true,
-        kitEmergencia: { select: { tipoKit: true } },
-        parroquiaDestino: { select: { nombre: true } },
-      },
+
+    prisma.parroquia.findMany({
+      where: { estado: "ACTIVO" },
+      select: { idParroquia: true, nombre: true },
+      orderBy: { nombre: "asc" },
     }),
   ]);
 
-  // Derived data from incidenciasList (no extra DB round-trips)
-  const tendenciaMap = new Map<string, number>();
+  // ── Timeline: agrupar por día o semana según rango ────────────────────────
+  const rangeDays = (hasta.getTime() - desde.getTime()) / (1000 * 60 * 60 * 24);
+  const byWeek = rangeDays > 14;
+  const timelineMap: Record<string, number> = {};
   for (const inc of incidenciasList) {
-    const day = inc.fechaRegistro.toISOString().split("T")[0];
-    tendenciaMap.set(day, (tendenciaMap.get(day) ?? 0) + 1);
+    const d = new Date(inc.fechaRegistro);
+    let key: string;
+    if (byWeek) {
+      const dow = d.getUTCDay() || 7;
+      const weekStart = new Date(d);
+      weekStart.setUTCDate(d.getUTCDate() - dow + 1);
+      key = weekStart.toISOString().slice(0, 10);
+    } else {
+      key = d.toISOString().slice(0, 10);
+    }
+    timelineMap[key] = (timelineMap[key] || 0) + 1;
   }
-  const porDia = Array.from(tendenciaMap.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([d, v]) => ({ label: d.slice(5), value: v }));
-
-  const parroquiaMap = new Map<string, number>();
-  for (const inc of incidenciasList) {
-    if (!inc.parroquia) continue;
-    parroquiaMap.set(inc.parroquia.nombre, (parroquiaMap.get(inc.parroquia.nombre) ?? 0) + 1);
-  }
-  const topParroquias = Array.from(parroquiaMap.entries())
-    .sort(([, a], [, b]) => b - a)
-    .slice(0, 5)
-    .map(([label, value]) => ({ label, value }));
-
-  const gravedadMap = new Map<string, number>();
-  for (const inc of incidenciasList) {
-    const g = inc.gravedad ?? "Sin definir";
-    gravedadMap.set(g, (gravedadMap.get(g) ?? 0) + 1);
-  }
-  const porGravedad = Array.from(gravedadMap.entries())
+  const timeline = Object.entries(timelineMap)
     .map(([label, value]) => ({ label, value }))
-    .sort((a, b) => b.value - a.value);
+    .sort((a, b) => a.label.localeCompare(b.label));
 
-  // Normalize underscore variants (e.g. DATA_RECOPILADA → DATA RECOPILADA) and merge duplicate groups
-  const estadoMerged = new Map<string, number>();
-  for (const g of estadoGroups) {
-    const label = (g.estadoActual || "Sin estado").replace(/_/g, " ");
-    estadoMerged.set(label, (estadoMerged.get(label) ?? 0) + g._count._all);
+  // ── Por parroquia ─────────────────────────────────────────────────────────
+  const parroquiaMap: Record<string, number> = {};
+  for (const inc of incidenciasList) {
+    const nombre = inc.parroquia?.nombre ?? "Sin parroquia";
+    parroquiaMap[nombre] = (parroquiaMap[nombre] || 0) + 1;
   }
-  const porEstado = Array.from(estadoMerged.entries()).map(([label, value]) => ({ label, value }));
+  const porParroquia = Object.entries(parroquiaMap)
+    .map(([label, value]) => ({ label, value }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 10);
+
+  // ── Tiempo promedio activo (días entre registro y última actualización) ────
+  const tiempoPromedio =
+    incidenciasList.length > 0
+      ? Math.round(
+          incidenciasList.reduce((sum, inc) => {
+            const days =
+              (inc.updatedAt.getTime() - inc.fechaRegistro.getTime()) /
+              (1000 * 60 * 60 * 24);
+            return sum + days;
+          }, 0) / incidenciasList.length
+        )
+      : 0;
+
+  // ── Formateo para gráficos ────────────────────────────────────────────────
+  const porEstado = estadoGroups.map((g) => ({
+    label: g.estadoActual || "Sin estado",
+    value: g._count._all,
+  }));
   const porTipo = tipoGroups
     .filter((g) => g.tipoEvento)
     .map((g) => ({ label: g.tipoEvento as string, value: g._count._all }));
 
-  // Brigadistas breakdown
-  const brigDispMap = new Map<string, number>();
-  const brigParroquiaMap = new Map<string, number>();
-  for (const b of brigadistasFullList) {
-    const disp = b.disponibilidad ?? "NO DISPONIBLE";
-    brigDispMap.set(disp, (brigDispMap.get(disp) ?? 0) + 1);
-    const p = b.parroquia?.nombre ?? "Sin parroquia";
-    brigParroquiaMap.set(p, (brigParroquiaMap.get(p) ?? 0) + 1);
-  }
-  const brigadistasData = {
-    total: totalBrigadistas,
-    certificados: brigadistasCapacitados,
-    sinCertificar: totalBrigadistas - brigadistasCapacitados,
-    porDisponibilidad: Array.from(brigDispMap.entries()).map(([label, value]) => ({ label, value })),
-    porParroquia: Array.from(brigParroquiaMap.entries())
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 5)
-      .map(([label, value]) => ({ label, value })),
-  };
-
-  // Actividades breakdown
-  const actEstadoMap = new Map<string, number>();
-  const actTipoMap = new Map<string, number>();
-  const actParroquiaMap = new Map<string, number>();
-  let actParticipantes = 0;
-  let actEjecutadas = 0;
-  for (const a of actividadesFullList) {
-    actEstadoMap.set(a.estadoActividad, (actEstadoMap.get(a.estadoActividad) ?? 0) + 1);
-    const tipo = a.idTipoActividadPreventiva || "Sin tipo";
-    actTipoMap.set(tipo, (actTipoMap.get(tipo) ?? 0) + 1);
-    const p = a.parroquia?.nombre ?? "Sin parroquia";
-    actParroquiaMap.set(p, (actParroquiaMap.get(p) ?? 0) + 1);
-    actParticipantes += a.numeroParticipantesReal ?? 0;
-    if (a.estadoActividad === "EJECUTADA") actEjecutadas++;
-  }
-  const actividadesData = {
-    total: actividadesFullList.length,
-    ejecutadas: actEjecutadas,
-    porEstado: Array.from(actEstadoMap.entries()).map(([label, value]) => ({ label, value })),
-    porTipo: Array.from(actTipoMap.entries())
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 8)
-      .map(([label, value]) => ({ label, value })),
-    porParroquia: Array.from(actParroquiaMap.entries())
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 5)
-      .map(([label, value]) => ({ label, value })),
-    totalParticipantes: actParticipantes,
-  };
-
-  // Incidencias breakdown (in-memory from existing list)
-  const resolvedStates = new Set(["CERRADO", "ATENDIDO", "RECHAZADO"]);
-  let incCerradas = 0;
-  let incSeguimiento = 0;
-  for (const inc of incidenciasList) {
-    const estado = (inc.estadoActual || "").replace(/_/g, " ").toUpperCase();
-    if (resolvedStates.has(estado)) incCerradas++;
-    else if (estado.includes("SEGUIMIENTO")) incSeguimiento++;
-  }
-  const incidenciasData = {
-    cerradas: incCerradas,
-    enSeguimiento: incSeguimiento,
-    activas: totalIncidencias - incCerradas - incSeguimiento,
-  };
-
-  // Kits / Almacén breakdown
-  const kitsTipoMap = new Map<string, number>();
-  const kitsParroquiaMap = new Map<string, number>();
-  const kitsFechaMap = new Map<string, number>();
-  let kitsTotalSalidas = 0;
-  let kitsTotalEntradas = 0;
-  for (const m of movimientosFullList) {
-    const tipo = m.kitEmergencia?.tipoKit ?? "Sin tipo";
-    const dia = m.fechaMovimiento.toISOString().split("T")[0].slice(5);
-    kitsFechaMap.set(dia, (kitsFechaMap.get(dia) ?? 0) + m.cantidad);
-    if (m.tipoMovimiento === "SALIDA") {
-      kitsTotalSalidas += m.cantidad;
-      kitsTipoMap.set(tipo, (kitsTipoMap.get(tipo) ?? 0) + m.cantidad);
-      if (m.parroquiaDestino?.nombre) {
-        const p = m.parroquiaDestino.nombre;
-        kitsParroquiaMap.set(p, (kitsParroquiaMap.get(p) ?? 0) + m.cantidad);
-      }
-    } else {
-      kitsTotalEntradas += m.cantidad;
-    }
-  }
-  const kitsData = {
-    totalSalidas: kitsTotalSalidas,
-    totalEntradas: kitsTotalEntradas,
-    parroquiasBeneficiadas: kitsParroquiaMap.size,
-    porTipoKit: Array.from(kitsTipoMap.entries())
-      .sort(([, a], [, b]) => b - a)
-      .map(([label, value]) => ({ label, value })),
-    porParroquia: Array.from(kitsParroquiaMap.entries())
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 5)
-      .map(([label, value]) => ({ label, value })),
-    porFecha: Array.from(kitsFechaMap.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([label, value]) => ({ label, value })),
-  };
-
-  const dataExportacion = incidenciasList.map((inc) => ({
+  // ── Filas con ID (para navegación en tabla) y sin ID (para exportación) ──
+  const allRows = incidenciasList.map((inc) => ({
+    id: inc.idIncidencia,
     Codigo: inc.codigoCaso || "-",
     Fecha: inc.fechaRegistro.toLocaleDateString("es-PE"),
     Tipo: inc.tipoEvento || "-",
@@ -247,13 +153,59 @@ export default async function ReportesPage({
     Estado: inc.estadoActual,
     Parroquia: inc.parroquia?.nombre || "No asignada",
     Ubicacion: inc.direccionEvento || "-",
+    Responsable: inc.usuarioResponsable
+      ? `${inc.usuarioResponsable.nombres} ${inc.usuarioResponsable.apellidos ?? ""}`.trim()
+      : "-",
   }));
+
+  const dataExportacion = allRows.map(({ id: _id, ...rest }: typeof allRows[number]) => rest);
+  const topIncidencias = allRows.slice(0, 10);
+
+  // ── Datos para tabs de Actividades e Incidencias ──────────────────────────
+  const [
+    actividadesEstadoGroups,
+    actividadesTipoGroups,
+    actividadesParticipantes,
+    catalogoTipos,
+  ] = await Promise.all([
+    prisma.actividadPreventiva.groupBy({ by: ["estadoActividad"], _count: { _all: true } }),
+    prisma.actividadPreventiva.groupBy({ by: ["idTipoActividadPreventiva"], _count: { _all: true } }),
+    prisma.actividadPreventiva.aggregate({ _sum: { numeroParticipantesReal: true } }),
+    prisma.catalogoDetalleGRD.findMany({ select: { idCatalogoDetalleGRD: true, valor: true } }),
+  ]);
+
+  const tipoLabelMap = new Map(catalogoTipos.map((c) => [c.idCatalogoDetalleGRD, c.valor]));
+
+  const actividadesData = {
+    total: totalActividades,
+    ejecutadas: actividadesEjecutadas,
+    totalParticipantes: actividadesParticipantes._sum.numeroParticipantesReal ?? 0,
+    porEstado: actividadesEstadoGroups.map((g) => ({
+      label: g.estadoActividad,
+      value: g._count._all,
+    })),
+    porTipo: actividadesTipoGroups.map((g) => ({
+      label: tipoLabelMap.get(g.idTipoActividadPreventiva) ?? g.idTipoActividadPreventiva,
+      value: g._count._all,
+    })),
+  };
+
+  const estadoCount = (estado: string) =>
+    estadoGroups.find((g) => g.estadoActual === estado)?._count._all ?? 0;
+
+  const incidenciasData = {
+    cerradas: estadoCount("CERRADO"),
+    enSeguimiento: estadoCount("SEGUIMIENTO ABIERTO"),
+    activas: ["EN EVALUACION", "ASIGNADO", "DATA RECOPILADA", "APROBADO", "ATENDIDO"]
+      .reduce((sum, e) => sum + estadoCount(e), 0),
+  };
 
   return (
     <ReportesModule
       filtros={{
         desde: desde.toISOString().split("T")[0],
         hasta: hasta.toISOString().split("T")[0],
+        parroquias: parroquiasFiltro,
       }}
       totales={{
         incidencias: totalIncidencias,
@@ -270,20 +222,18 @@ export default async function ReportesPage({
             ? Math.round((actividadesEjecutadas / totalActividades) * 100)
             : 0,
         kitsEntregados: movimientosKitsEntregados._sum.cantidad || 0,
-        totalBrigadistas,
-        totalParroquias,
-        totalActividades,
+        tiempoPromedio,
       }}
       porEstado={porEstado}
       porTipo={porTipo}
-      porDia={porDia}
-      topParroquias={topParroquias}
-      porGravedad={porGravedad}
+      porParroquia={porParroquia}
+      timeline={timeline}
+      byWeek={byWeek}
+      parroquias={parroquiasList.map((p) => ({ id: p.idParroquia, nombre: p.nombre }))}
+      topIncidencias={topIncidencias}
       dataExportacion={dataExportacion}
-      brigadistasData={brigadistasData}
       actividadesData={actividadesData}
       incidenciasData={incidenciasData}
-      kitsData={kitsData}
     />
   );
 }

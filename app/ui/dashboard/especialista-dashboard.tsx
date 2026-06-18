@@ -76,7 +76,11 @@ export type SimulacroActivo = {
 
 export type EspecialistaDashboardProps = {
   userName: string;
+  anio: number;
   incidentesActivos: number;
+  incidentes2026: number;
+  familias2026: number;
+  personas2026: number;
   familias: number;
   personas: number;
   brigDisp: number;
@@ -169,9 +173,11 @@ const PIPELINE = [
 
 export function EspecialistaDashboard({
   userName,
+  anio,
   incidentesActivos,
-  familias,
-  personas,
+  incidentes2026,
+  familias2026,
+  personas2026,
   brigDisp,
   totalBrigActivos,
   pipelineCounts,
@@ -215,11 +221,11 @@ export function EspecialistaDashboard({
           sub={urgentes.length > 0 ? "Requieren tu atención" : "Sin pendientes"}
         />
         <StatCard
-          label="Familias afectadas"
-          value={familias}
+          label={`Familias afectadas (${anio})`}
+          value={familias2026}
           icon={Users}
           color="bg-[#9155A8]"
-          sub={`${personas} personas`}
+          sub={`${personas2026} personas · ${incidentes2026} incidentes este año`}
         />
         <StatCard
           label="Brigadistas disponibles"

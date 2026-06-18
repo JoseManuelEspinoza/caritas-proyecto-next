@@ -91,13 +91,18 @@ export type IncidenteResumen = {
   tituloIncidencia: string | null;
   tipoEvento: string | null;
   estadoActual: string;
+  fecha: string;
   parroquia: string | null;
 };
 
 export type AdminDashboardProps = {
+  anio: number;
   incidentesActivos: number;
   incidentesCerrados: number;
   totalIncidentes: number;
+  incidentes2026: number;
+  familias2026: number;
+  personas2026: number;
   familias: number;
   personas: number;
   usersActivos: number;
@@ -194,11 +199,13 @@ function IncidentRow({ inc }: { inc: IncidenteResumen }) {
 }
 
 export function AdminDashboard({
+  anio,
   incidentesActivos,
   incidentesCerrados,
   totalIncidentes,
-  familias,
-  personas,
+  incidentes2026,
+  familias2026,
+  personas2026,
   usersActivos,
   totalUsers,
   brigDisp,
@@ -212,7 +219,7 @@ export function AdminDashboard({
   const pipeline = PIPELINE.map((p) => ({ ...p, count: pipelineCounts[p.status] ?? 0 }));
 
   return (
-    <div className="p-4 md:p-6 space-y-5 max-w-7xl mx-auto">
+    <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
       <div>
         <h1 className="text-xl font-semibold text-gray-900">Panel de Administración</h1>
         <p className="text-sm text-gray-500 mt-0.5">
@@ -220,41 +227,53 @@ export function AdminDashboard({
         </p>
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard
-          label="Incidentes activos"
-          value={incidentesActivos}
-          icon={AlertTriangle}
-          color="bg-[#009850]"
-          to="/grd"
-        />
-        <StatCard
-          label="Familias afectadas"
-          value={familias}
-          icon={Users}
-          color="bg-[#9155A8]"
-          sub={`${personas} personas empadronadas`}
-        />
-        <StatCard
-          label="Usuarios activos"
-          value={usersActivos}
-          icon={UserCheck}
-          color="bg-[#00C8B4]"
-          to="/usuarios"
-        />
-        <StatCard
-          label="Brigadistas disponibles"
-          value={brigDisp}
-          icon={ShieldCheck}
-          color="bg-[#FF823C]"
-          to="/brigadistas"
-        />
-      </div>
+      {/* ════════ SECCIÓN 1: INCIDENTES (GRD) ════════ */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2">
+          <span className="w-1.5 h-5 rounded-full bg-[#009850]" />
+          <h2 className="text-base font-semibold text-gray-800">Incidentes</h2>
+        </div>
 
-      {/* Pipeline */}
-      <div className="bg-white border border-[#DDDDDD] rounded-xl p-4">
-        <SectionTitle title="Pipeline GRD — Incidentes por estado" to="/grd" />
+        {/* Métricas del año en curso */}
+        <div>
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+            Este año ({anio})
+          </p>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <StatCard
+              label={`Incidentes registrados en ${anio}`}
+              value={incidentes2026}
+              icon={AlertTriangle}
+              color="bg-[#009850]"
+              to="/grd"
+            />
+            <StatCard
+              label={`Familias afectadas en ${anio}`}
+              value={familias2026}
+              icon={Users}
+              color="bg-[#9155A8]"
+              sub={`${personas2026} personas empadronadas`}
+            />
+            <StatCard
+              label="Activos ahora (todos)"
+              value={incidentesActivos}
+              icon={Activity}
+              color="bg-[#FF823C]"
+              to="/grd"
+            />
+            <StatCard
+              label="Simulacros en curso"
+              value={simPendientes}
+              icon={ShieldCheck}
+              color="bg-[#00C8B4]"
+              to="/simulacros"
+            />
+          </div>
+        </div>
+
+        {/* Pipeline (estado actual de la cartera) */}
+        <div className="bg-white border border-[#DDDDDD] rounded-xl p-4">
+          <SectionTitle title="Pipeline GRD — Incidentes por estado" to="/grd" />
         <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
           {pipeline.map((p) => (
             <Link
@@ -285,151 +304,132 @@ export function AdminDashboard({
               )
           )}
         </div>
-        <div className="flex justify-between text-[10px] text-gray-400 mt-1">
+        <div className="flex flex-wrap justify-between gap-2 text-[10px] text-gray-400 mt-2 pt-2 border-t border-gray-100">
+          <span className="text-gray-500 font-medium">Histórico acumulado:</span>
           <span>{incidentesActivos} activos</span>
           <span>{incidentesCerrados} cerrados/rechazados</span>
-          <span>{totalIncidentes} total histórico</span>
+          <span className="font-semibold text-gray-600">{totalIncidentes} en total</span>
         </div>
-      </div>
-
-      {/* Gráficos */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-white border border-[#DDDDDD] rounded-xl p-4">
-          <SectionTitle title="Incidentes por categoría" />
-          {catData.length === 0 ? (
-            <div className="h-[200px] flex items-center justify-center text-sm text-gray-400">
-              Sin datos
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={catData} margin={{ top: 0, right: 8, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
-                <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
-                <Bar dataKey="count" name="Incidentes" radius={[4, 4, 0, 0]}>
-                  {catData.map((_, i) => (
-                    <Cell
-                      key={i}
-                      fill={
-                        ["#009850", "#9155A8", "#00C8B4", "#FF823C", "#FFC300", "#3B82F6"][i % 6]
-                      }
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          )}
         </div>
 
-        <div className="bg-white border border-[#DDDDDD] rounded-xl p-4">
-          <SectionTitle title="Distribución de usuarios por rol" to="/usuarios" />
-          {roleData.length === 0 ? (
-            <div className="h-[200px] flex items-center justify-center text-sm text-gray-400">
-              Sin datos
-            </div>
-          ) : (
-            <div className="flex items-center gap-4">
-              <ResponsiveContainer width="55%" height={200}>
-                <PieChart>
-                  <Pie
-                    data={roleData}
-                    dataKey="value"
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={50}
-                    outerRadius={80}
-                    paddingAngle={2}
-                  >
-                    {roleData.map((entry, i) => (
-                      <Cell key={i} fill={entry.fill} />
-                    ))}
-                  </Pie>
-                  <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="flex-1 space-y-2">
-                {roleData.map((r) => (
-                  <div key={r.name} className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5">
-                      <div
-                        className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: r.fill }}
-                      />
-                      <span className="text-xs text-gray-600">{r.name}</span>
-                    </div>
-                    <span className="text-xs font-bold text-gray-800">{r.value}</span>
-                  </div>
-                ))}
+        {/* Categorías del año + recientes */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="bg-white border border-[#DDDDDD] rounded-xl p-4">
+            <SectionTitle title={`Categorías de incidentes (${anio})`} />
+            {catData.length === 0 ? (
+              <div className="h-[200px] flex items-center justify-center text-sm text-gray-400">
+                Sin incidentes este año
               </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Incidentes recientes + Módulos */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 bg-white border border-[#DDDDDD] rounded-xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-[#DDDDDD] flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-700">Incidentes activos recientes</h2>
-            <Link
-              href="/grd"
-              className="text-xs text-[#009850] hover:underline flex items-center gap-1"
-            >
-              Ver todos <ArrowRight className="w-3 h-3" />
-            </Link>
-          </div>
-          <div className="divide-y divide-[#DDDDDD]">
-            {incidentesRecientes.length === 0 ? (
-              <p className="text-xs text-gray-500 p-4 text-center">Sin incidentes activos</p>
             ) : (
-              incidentesRecientes.map((i) => <IncidentRow key={i.id} inc={i} />)
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={catData} margin={{ top: 0, right: 8, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                  <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
+                  <Bar dataKey="count" name="Incidentes" radius={[4, 4, 0, 0]}>
+                    {catData.map((_, i) => (
+                      <Cell
+                        key={i}
+                        fill={["#009850", "#9155A8", "#00C8B4", "#FF823C", "#FFC300", "#3B82F6"][i % 6]}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
             )}
           </div>
+
+          <div className="lg:col-span-2 bg-white border border-[#DDDDDD] rounded-xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-[#DDDDDD] flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-gray-700">Incidentes activos recientes</h2>
+              <Link href="/grd" className="text-xs text-[#009850] hover:underline flex items-center gap-1">
+                Ver todos <ArrowRight className="w-3 h-3" />
+              </Link>
+            </div>
+            <div className="divide-y divide-[#DDDDDD]">
+              {incidentesRecientes.length === 0 ? (
+                <p className="text-xs text-gray-500 p-4 text-center">Sin incidentes activos</p>
+              ) : (
+                incidentesRecientes.map((i) => <IncidentRow key={i.id} inc={i} />)
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ════════ SECCIÓN 2: USUARIOS Y EQUIPO ════════ */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2">
+          <span className="w-1.5 h-5 rounded-full bg-[#00C8B4]" />
+          <h2 className="text-base font-semibold text-gray-800">Usuarios y equipo</h2>
+          <span className="text-xs text-gray-400">(padrón actual)</span>
         </div>
 
-        <div className="space-y-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <StatCard
+            label="Usuarios activos"
+            value={usersActivos}
+            icon={UserCheck}
+            color="bg-[#00C8B4]"
+            sub={`${totalUsers} en total`}
+            to="/usuarios"
+          />
+          <StatCard
+            label="Brigadistas disponibles"
+            value={brigDisp}
+            icon={ShieldCheck}
+            color="bg-[#FF823C]"
+            sub={`${totalBrig} registrados`}
+            to="/brigadistas"
+          />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-2 bg-white border border-[#DDDDDD] rounded-xl p-4">
+            <SectionTitle title="Distribución de usuarios por rol" to="/usuarios" />
+            {roleData.length === 0 ? (
+              <div className="h-[200px] flex items-center justify-center text-sm text-gray-400">
+                Sin datos
+              </div>
+            ) : (
+              <div className="flex items-center gap-4">
+                <ResponsiveContainer width="55%" height={200}>
+                  <PieChart>
+                    <Pie data={roleData} dataKey="value" cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={2}>
+                      {roleData.map((entry, i) => (
+                        <Cell key={i} fill={entry.fill} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="flex-1 space-y-2">
+                  {roleData.map((r) => (
+                    <div key={r.name} className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: r.fill }} />
+                        <span className="text-xs text-gray-600">{r.name}</span>
+                      </div>
+                      <span className="text-xs font-bold text-gray-800">{r.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="bg-white border border-[#DDDDDD] rounded-xl p-4">
             <SectionTitle title="Módulos del sistema" />
             <div className="space-y-2">
               {[
-                {
-                  icon: ShieldCheck,
-                  label: "Brigadistas",
-                  sub: `${totalBrig} registrados`,
-                  color: "text-blue-600 bg-blue-50",
-                  to: "/brigadistas",
-                },
-                {
-                  icon: Activity,
-                  label: "Simulacros",
-                  sub: `${simPendientes} activos`,
-                  color: "text-[#009850] bg-[#009850]/10",
-                  to: "/simulacros",
-                },
-                {
-                  icon: FileText,
-                  label: "Planes GRD",
-                  sub: "Ver planes",
-                  color: "text-purple-600 bg-purple-50",
-                  to: "/planes",
-                },
-                {
-                  icon: Users,
-                  label: "Usuarios",
-                  sub: `${usersActivos}/${totalUsers} activos`,
-                  color: "text-[#00C8B4] bg-cyan-50",
-                  to: "/usuarios",
-                },
+                { icon: ShieldCheck, label: "Brigadistas", sub: `${totalBrig} registrados`, color: "text-blue-600 bg-blue-50", to: "/brigadistas" },
+                { icon: Activity, label: "Simulacros", sub: `${simPendientes} activos`, color: "text-[#009850] bg-[#009850]/10", to: "/simulacros" },
+                { icon: FileText, label: "Planes GRD", sub: "Ver planes", color: "text-purple-600 bg-purple-50", to: "/planes" },
+                { icon: Users, label: "Usuarios", sub: `${usersActivos}/${totalUsers} activos`, color: "text-[#00C8B4] bg-cyan-50", to: "/usuarios" },
               ].map((m) => (
-                <Link
-                  key={m.label}
-                  href={m.to}
-                  className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <div
-                    className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${m.color}`}
-                  >
+                <Link key={m.label} href={m.to} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-gray-50 transition-colors">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${m.color}`}>
                     <m.icon className="w-4 h-4" />
                   </div>
                   <div>
@@ -442,7 +442,7 @@ export function AdminDashboard({
             </div>
           </div>
         </div>
-      </div>
+      </section>
     </div>
   );
 }

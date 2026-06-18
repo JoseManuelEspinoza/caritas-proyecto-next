@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { toast } from "sonner";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -32,8 +33,24 @@ import { ResumenStep } from "@/app/ui/grd/incidente/steps/ResumenStep";
  */
 export function IncidentDetail({ data }: { data: IncidentData }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [activeStep, setActiveStep] = useState(() => indicePaso(data.estadoActual));
   const [showHistory, setShowHistory] = useState(false);
+
+  // Confirmación tras registrar/editar el incidente (el form redirige aquí con
+  // un flag). Se muestra una vez y se limpia el parámetro de la URL.
+  useEffect(() => {
+    const codigo = data.codigoCaso ?? "el incidente";
+    if (searchParams.get("registrado") === "1") {
+      toast.success(`Incidente ${codigo} registrado correctamente.`);
+    } else if (searchParams.get("actualizado") === "1") {
+      toast.success(`Cambios de ${codigo} guardados correctamente.`);
+    } else {
+      return;
+    }
+    router.replace(`/grd/${data.idIncidencia}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const cfg = estadoUI(data.estadoActual);
   const currentStepIdx = indicePaso(data.estadoActual);
@@ -108,11 +125,15 @@ export function IncidentDetail({ data }: { data: IncidentData }) {
             const completed = idx < currentStepIdx;
             const current = idx === currentStepIdx;
             const active = idx === activeStep;
+            const isNextStep = idx === currentStepIdx + 1;
+            // ATENCION (idx=4) solo se habilita como "siguiente paso" si el comité aprobó
+            const nextStepAllowed =
+              isNextStep && (idx !== 4 || data.solicitudComite?.resultado === "APROBAR");
             return (
               <button
                 key={step.etapa}
                 onClick={() => setActiveStep(idx)}
-                disabled={!current && !completed && idx !== currentStepIdx + 1}
+                disabled={!current && !completed && !nextStepAllowed}
                 className={`flex flex-col items-center gap-1 px-3 md:px-4 py-3 text-xs font-medium transition-colors border-b-2 flex-shrink-0 min-w-[70px] ${
                   active
                     ? "border-[#009850] text-[#009850] bg-[#009850]/5"
@@ -120,7 +141,7 @@ export function IncidentDetail({ data }: { data: IncidentData }) {
                       ? "border-transparent text-gray-400 hover:text-gray-600 hover:bg-gray-50"
                       : current
                         ? "border-[#009850]/40 text-gray-700 hover:bg-gray-50"
-                        : idx === currentStepIdx + 1
+                        : nextStepAllowed
                           ? "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
                           : "border-transparent text-gray-300 cursor-not-allowed"
                 }`}

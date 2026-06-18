@@ -149,7 +149,8 @@ export async function createIncidente(data: CreateIncidenteData) {
     `Se registró: ${data.categoria} en ${data.distrito}`,
     `/grd/${id}`
   );
-  redirect(`/grd/${id}`);
+  // ?registrado=1 → el detalle muestra la confirmación tras el redirect.
+  redirect(`/grd/${id}?registrado=1`);
 }
 
 export async function updateIncidente(incidenciaId: string, data: CreateIncidenteData) {
@@ -191,7 +192,7 @@ export async function updateIncidente(incidenciaId: string, data: CreateIncident
   }
 
   revalidar(incidenciaId);
-  redirect(`/grd/${incidenciaId}`);
+  redirect(`/grd/${incidenciaId}?actualizado=1`);
 }
 
 // ─── Flujo de campo y evaluación ────────────────────────────────────────────
@@ -201,7 +202,10 @@ export async function assignBrigadista(
   brigadistaId: string,
   instrucciones?: string
 ) {
-  await verifySession();
+  const session = await verifySession();
+  if (!["ESPECIALISTAGRD", "ADMINISTRADOR"].includes(session.role)) {
+    return { message: "No tienes permisos para esta acción." };
+  }
   try {
     await makeIncidenciaUseCases().asignar.execute(incidenciaId, brigadistaId, instrucciones);
   } catch (err) {
@@ -230,7 +234,10 @@ export async function assignEquipo(
   equipoIds: string[],
   instrucciones?: string
 ) {
-  await verifySession();
+  const session = await verifySession();
+  if (!["ESPECIALISTAGRD", "ADMINISTRADOR"].includes(session.role)) {
+    return { message: "No tienes permisos para esta acción." };
+  }
   const idUsuarioAsignador = await getUsuarioGRDId();
   try {
     await makeIncidenciaUseCases().asignarEquipo.execute(
@@ -404,7 +411,7 @@ export async function corregirYReenviar(incidenciaId: string, data: CorreccionDa
 // ─── Decisiones del Comité ──────────────────────────────────────────────────
 
 // Fire-and-forget: notifica al especialista GRD responsable sobre la decisión del comité.
-function notificarDecisionComite(
+export async function notificarDecisionComite(
   incidenciaId: string,
   decision: "APROBAR" | "OBSERVAR" | "RECHAZAR",
   observaciones?: string | null
@@ -459,39 +466,6 @@ function notificarDecisionComite(
       }
     })
     .catch((e) => console.error("[GRD] Error notificando decisión del comité:", e));
-}
-
-export async function aprobarCaso(incidenciaId: string, observaciones?: string) {
-  await verifySession();
-  try {
-    await makeIncidenciaUseCases().decisionComite.execute(incidenciaId, "APROBAR", observaciones);
-  } catch (err) {
-    return asMessage(err);
-  }
-  notificarDecisionComite(incidenciaId, "APROBAR", observaciones);
-  revalidar(incidenciaId);
-}
-
-export async function observarCaso(incidenciaId: string, observaciones: string) {
-  await verifySession();
-  try {
-    await makeIncidenciaUseCases().decisionComite.execute(incidenciaId, "OBSERVAR", observaciones);
-  } catch (err) {
-    return asMessage(err);
-  }
-  notificarDecisionComite(incidenciaId, "OBSERVAR", observaciones);
-  revalidar(incidenciaId);
-}
-
-export async function rechazarCaso(incidenciaId: string, observaciones: string) {
-  await verifySession();
-  try {
-    await makeIncidenciaUseCases().decisionComite.execute(incidenciaId, "RECHAZAR", observaciones);
-  } catch (err) {
-    return asMessage(err);
-  }
-  notificarDecisionComite(incidenciaId, "RECHAZAR", observaciones);
-  revalidar(incidenciaId);
 }
 
 // ─── Atención, seguimiento y cierre ─────────────────────────────────────────
