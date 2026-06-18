@@ -67,6 +67,9 @@ export class KitEmergencia {
 
   /** Ajusta el stock según el tipo de movimiento. Bloquea entregas sin saldo. */
   aplicarMovimiento(tipo: TipoMovimiento, cantidad: number): void {
+    if (this.props.estadoKit === "ARCHIVADO") {
+      throw new BusinessRuleError("No se pueden registrar movimientos en un kit archivado.");
+    }
     KitEmergencia.assertTipoMovimientoValido(tipo);
     KitEmergencia.assertEntero(cantidad, "cantidad");    
     Guard.positive(cantidad, "cantidad");
@@ -80,11 +83,22 @@ export class KitEmergencia {
     this.props.stockActual = nuevo;
   }
 
+  /** Archiva el kit: queda inactivo (no admite movimientos) pero conserva su historial. */
+  archivar(): void {
+    if (this.props.estadoKit === "ARCHIVADO") {
+      throw new BusinessRuleError("El kit ya está archivado.");
+    }
+    this.props.estadoKit = "ARCHIVADO";
+  }
+
   get id(): string {
     return this.props.id;
   }
   get stockActual(): number {
     return this.props.stockActual;
+  }
+  get estadoKit(): string {
+    return this.props.estadoKit;
   }
   get snapshot(): Readonly<KitProps> {
     return this.props;
