@@ -44,7 +44,7 @@ const INPUT: BrigadistaInput = {
 };
 
 function brigadistaActivo(id = "uuid-1"): BrigadistaParroquial {
-  return BrigadistaParroquial.crear({ id, idParroquia: "parroquia-1", nombres: "María" });
+  return BrigadistaParroquial.crear({ id, idParroquia: "parroquia-1", nombres: "María", apellidos: "García" });
 }
 
 function brigadistaInactivo(id = "uuid-1"): BrigadistaParroquial {
@@ -84,11 +84,46 @@ describe("CrearBrigadistaUseCase", () => {
     ).rejects.toThrow(ValidationError);
   });
 
-  it("[borde] omite la validación de DNI cuando el campo está vacío", async () => {
+  it("[negativo] lanza ValidationError cuando el DNI está vacío", async () => {
     const repo = makeRepo();
-    const result = await new CrearBrigadistaUseCase(repo).execute({ ...INPUT, dni: "" });
-    expect(repo.findIdByDni).not.toHaveBeenCalled();
-    expect(result.dni).toBeNull();
+    await expect(
+      new CrearBrigadistaUseCase(repo).execute({ ...INPUT, dni: "" })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando nombres tiene menos de 2 caracteres", async () => {
+    const repo = makeRepo();
+    await expect(
+      new CrearBrigadistaUseCase(repo).execute({ ...INPUT, nombres: "M" })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando apellidos tiene menos de 2 caracteres", async () => {
+    const repo = makeRepo();
+    await expect(
+      new CrearBrigadistaUseCase(repo).execute({ ...INPUT, apellidos: "G" })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando correo tiene formato inválido", async () => {
+    const repo = makeRepo();
+    await expect(
+      new CrearBrigadistaUseCase(repo).execute({ ...INPUT, correo: "no-es-un-email" })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando idParroquia está vacío", async () => {
+    const repo = makeRepo();
+    await expect(
+      new CrearBrigadistaUseCase(repo).execute({ ...INPUT, idParroquia: "" })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando disponibilidad es inválida", async () => {
+    const repo = makeRepo();
+    await expect(
+      new CrearBrigadistaUseCase(repo).execute({ ...INPUT, disponibilidad: "INVALIDA" as any })
+    ).rejects.toThrow(ValidationError);
   });
 });
 

@@ -43,6 +43,7 @@ type IncidenciaMovilPayload = {
   numAfectados?: number | null;
   responsable?: string | null;
   estado?: string | null;
+  idIncidenciaRemota?: string | null;
   fechaUltimaModificacion?: number | null;
 
   causa?: string | null;
@@ -262,7 +263,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const existente = await prisma.incidencia.findUnique({
+    let existente = await prisma.incidencia.findUnique({
       where: { uuidMovil },
       select: {
         idIncidencia: true,
@@ -273,7 +274,31 @@ export async function POST(request: Request) {
       },
     });
 
+    // Para incidencias creadas desde la web (sin uuidMovil), buscar por idIncidencia
+    if (!existente && body.idIncidenciaRemota) {
+      existente = await prisma.incidencia.findUnique({
+        where: { idIncidencia: body.idIncidenciaRemota },
+        select: {
+          idIncidencia: true,
+          codigoCaso: true,
+          uuidMovil: true,
+          syncEstado: true,
+          fechaSincronizacion: true,
+        },
+      });
+    }
+
     if (existente) {
+      // Si el móvil envía un estado actualizado, actualizarlo en el servidor
+      const nuevoEstado = body.estado?.trim();
+      const ESTADOS_VALIDOS_MOVIL = ["DATA RECOPILADA", "EN CAMPO", "ABIERTO"];
+      if (nuevoEstado && ESTADOS_VALIDOS_MOVIL.includes(nuevoEstado)) {
+        await prisma.incidencia.update({
+          where: { idIncidencia: existente.idIncidencia },
+          data: { estadoActual: nuevoEstado },
+        });
+      }
+
       return NextResponse.json({
         ok: true,
         duplicated: true,

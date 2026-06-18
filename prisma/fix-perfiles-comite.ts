@@ -11,6 +11,7 @@
  * Ejecutar:
  *   docker compose exec -e NODE_OPTIONS="--conditions=react-server" web npx tsx prisma/fix-perfiles-comite.ts
  */
+import { Role } from "@prisma/client";
 import { prisma } from "../app/lib/prisma";
 import { Role } from "@prisma/client";
 function separar(name: string) {

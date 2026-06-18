@@ -117,3 +117,22 @@ describe("PlanTrabajo — flujo de aprobación", () => {
     expect(() => p.enviarRevision()).toThrow(BusinessRuleError);
   });
 });
+
+describe("PlanTrabajo — desdePersistencia e id", () => {
+  it("[positivo] desdePersistencia restaura el estado APROBADO", () => {
+    const p = PlanTrabajo.desdePersistencia({
+      id: "plan-99",
+      idParroquia: "parroquia-1",
+      idUsuarioResponsableGRD: "usuario-1",
+      nombrePlan: "Plan Persistido",
+      estadoAprobacion: "APROBADO",
+    });
+    expect(p.snapshot.estadoAprobacion).toBe("APROBADO");
+    expect(p.id).toBe("plan-99");
+  });
+
+  it("[negativo] lanza ValidationError al actualizar nombrePlan con menos de 3 chars", () => {
+    const p = crearBorrador();
+    expect(() => p.actualizar({ nombrePlan: "AB" })).toThrow(ValidationError);
+  });
+});

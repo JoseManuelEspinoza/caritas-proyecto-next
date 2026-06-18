@@ -155,6 +155,47 @@ describe("BrigadistaParroquial.marcarEnCampo y liberar", () => {
 });
 
 // ---------------------------------------------------------------------------
+// desdePersistencia, id y dni getters
+// ---------------------------------------------------------------------------
+describe("BrigadistaParroquial.desdePersistencia e id/dni", () => {
+  it("[positivo] desdePersistencia restaura los datos sin validar", () => {
+    const props = {
+      id: "uuid-99",
+      idParroquia: "parroquia-1",
+      nombres: "Pedro",
+      apellidos: "Ruiz",
+      disponibilidad: DISPONIBILIDAD.DISPONIBLE,
+      estado: ESTADO.ACTIVO,
+      fechaRegistro: new Date(),
+    };
+    const b = BrigadistaParroquial.desdePersistencia(props);
+    expect(b.snapshot.nombres).toBe("Pedro");
+    expect(b.snapshot.estado).toBe(ESTADO.ACTIVO);
+  });
+
+  it("[positivo] get id retorna el id del brigadista", () => {
+    const b = crearActivo();
+    expect(b.id).toBe("uuid-1");
+  });
+
+  it("[positivo] get dni retorna el dni del brigadista", () => {
+    const b = crearActivo();
+    expect(b.dni).toBe("12345678");
+  });
+
+  it("[positivo] get dni retorna null cuando no se asignó", () => {
+    const b = BrigadistaParroquial.crear({ ...BASE, dni: undefined });
+    expect(b.dni).toBeNull();
+  });
+
+  it("[negativo] lanza BusinessRuleError cuando disponibilidad es inválida en crear", () => {
+    expect(() =>
+      BrigadistaParroquial.crear({ ...BASE, disponibilidad: "INVALIDA" })
+    ).toThrow(BusinessRuleError);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // actualizarDatos
 // ---------------------------------------------------------------------------
 describe("BrigadistaParroquial.actualizarDatos", () => {
