@@ -45,6 +45,7 @@ model User {
   sesiones        Sesion[]
   intentosLogin   IntentoLogin[]
   recuperaciones  RecuperacionContrasena[]
+  notificaciones  Notificacion[]
 
   @@map("users")
 }
@@ -212,6 +213,8 @@ model UsuarioGRD {
   actividadesResponsable         ActividadPreventiva[]    @relation("UsuarioResponsableActividad")
   observacionesSimulacro         ObservacionSimulacro[]   @relation("ObservadorSimulacro")
   asignacionesSimulacroRealizadas SimulacroBrigadista[]   @relation("AsignadorSimulacro")
+  votosComite                     VotoComiteDonaciones[]  @relation("VotoComite")
+  rondasCerradas                  RondaVotacionComite[]   @relation("RondaCierre")
 
   @@map("usuario_grd")
 }
@@ -387,8 +390,9 @@ model Incidencia {
   gruposFamiliares GrupoFamiliarAfectado[]
   asignaciones     AsignacionBrigadistaIncidencia[]
   acciones         AccionRespuesta[]
-  solicitudesAyuda SolicitudAyudaHumanitaria[]
-  entregasAyuda    EntregaAyudaHumanitaria[]
+  solicitudesAyuda     SolicitudAyudaHumanitaria[]
+  entregasAyuda        EntregaAyudaHumanitaria[]
+  rondasVotacionComite RondaVotacionComite[]
   seguimientos     SeguimientoIncidencia[]
   informes         Informe[]
   historialEstados HistorialEstadoIncidencia[]
@@ -656,6 +660,57 @@ model EntregaAyudaHumanitaria {
   @@index([idGrupoFamiliar], map: "idx_entrega_grupo_familiar")
   @@index([uuidAfectadoMovil], map: "idx_entrega_uuid_afectado_movil")
   @@map("entrega_ayuda_humanitaria")
+}
+
+enum EstadoRondaVotacionComite {
+  ABIERTA
+  CERRADA_APROBADA
+  CERRADA_RECHAZADA
+  CERRADA_OBSERVADA
+}
+
+enum DecisionVotoComite {
+  A_FAVOR
+  EN_CONTRA
+}
+
+model RondaVotacionComite {
+  idRonda          String                     @id @default(uuid())
+  idIncidencia     String
+  numeroRonda      Int
+  estado           EstadoRondaVotacionComite  @default(ABIERTA)
+  nSnapshot        Int?
+  umbralSnapshot   Int?
+  abiertaAt        DateTime                   @default(now())
+  cerradaAt        DateTime?
+  idUsuarioCierre  String?
+  observaciones    String?
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+
+  incidencia       Incidencia                 @relation(fields: [idIncidencia], references: [idIncidencia])
+  usuarioCierre    UsuarioGRD?                @relation("RondaCierre", fields: [idUsuarioCierre], references: [idUsuarioGRD])
+  votos            VotoComiteDonaciones[]
+
+  @@unique([idIncidencia, numeroRonda], map: "uq_ronda_incidencia_numero")
+  @@index([idIncidencia, estado], map: "idx_ronda_incidencia_estado")
+  @@map("ronda_votacion_comite")
+}
+
+model VotoComiteDonaciones {
+  idVoto        String              @id @default(uuid())
+  idRonda       String
+  idUsuarioGRD  String
+  decision      DecisionVotoComite
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  ronda         RondaVotacionComite @relation(fields: [idRonda], references: [idRonda], onDelete: Cascade)
+  usuario       UsuarioGRD          @relation("VotoComite", fields: [idUsuarioGRD], references: [idUsuarioGRD])
+
+  @@unique([idRonda, idUsuarioGRD], map: "uq_voto_ronda_usuario")
+  @@index([idRonda, decision], map: "idx_voto_ronda_decision")
+  @@map("voto_comite_donaciones")
 }
 
 model SeguimientoIncidencia {
@@ -1256,4 +1311,20 @@ model AuditLog {
   createdAt DateTime @default(now())
 
   @@map("audit_logs")
+}
+
+model Notificacion {
+  idNotificacion String   @id @default(uuid())
+  userId         String
+  tipo           String
+  titulo         String
+  mensaje        String   @db.Text
+  enlace         String?
+  leida          Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, leida, createdAt])
+  @@map("notificaciones")
 }

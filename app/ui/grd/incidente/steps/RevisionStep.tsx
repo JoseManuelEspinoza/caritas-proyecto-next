@@ -15,13 +15,11 @@ import {
   Users,
   X,
   XCircle,
+  Search,
 } from "lucide-react";
 import {
   saveInformeEvaluacion,
   saveBorradorInformeEvaluacion,
-  aprobarCaso,
-  observarCaso,
-  rechazarCaso,
   corregirYReenviar,
 } from "@/app/actions/incidents";
 import type { IncidenciaDetalleOutput } from "@/core/application/dtos/IncidenciaDetalleDTO";
@@ -58,7 +56,6 @@ export function RevisionStep({
       ? "decidir"
       : "evaluar";
   const [view, setView] = useState<"evaluar" | "decidir">(defaultView);
-  const [obsText, setObsText] = useState("");
   const [evalForm, setEvalForm] = useState({
     analisis: "",
     hallazgos: "",
@@ -139,6 +136,8 @@ export function RevisionStep({
   const [subiendoDoc, setSubiendoDoc] = useState(false);
   const [savingForPdf, setSavingForPdf] = useState(false);
   const [descargandoPdf, setDescargandoPdf] = useState(false);
+  const [kitSearch, setKitSearch] = useState<Record<string, string>>({});
+  const [kitDropdownOpen, setKitDropdownOpen] = useState<Record<string, boolean>>({});
 
   const addKit = (refId: string, tipo: string) =>
     setAsignaciones((p) => ({
@@ -197,6 +196,8 @@ export function RevisionStep({
 
   const { puedeEvaluar: canEvaluar, puedeDecidir: canDecidir } = permisosDeDetalle(data);
   const solicitud = data.solicitudComite;
+  // El informe ya fue enviado al comité cuando existe informe de evaluación y el estado avanzó a EN EVALUACION
+  const informeYaEnviado = !!informeEval && data.estadoActual === "EN EVALUACION";
 
   // Anotaciones por familia registradas en el levantamiento de campo
   const notasFamiliasRef: { id: string; nota: string }[] = (() => {
@@ -426,26 +427,6 @@ export function RevisionStep({
     });
   }
 
-  function handleDecision(tipo: "aprobar" | "observar" | "rechazar") {
-    if ((tipo === "observar" || tipo === "rechazar") && !obsText.trim()) {
-      toast.error("Debes indicar observaciones o motivo de rechazo");
-      return;
-    }
-    startTransition(async () => {
-      if (tipo === "aprobar") {
-        await aprobarCaso(data.idIncidencia);
-        toast.success("Caso aprobado");
-      } else if (tipo === "observar") {
-        await observarCaso(data.idIncidencia, obsText);
-        toast.success("Caso devuelto con observaciones");
-      } else {
-        await rechazarCaso(data.idIncidencia, obsText);
-        toast.error("Caso rechazado");
-      }
-      onDone();
-    });
-  }
-
   // Estado ya decidido
   if (["APROBADO", "RECHAZADO"].includes(data.estadoActual)) {
     const approved = data.estadoActual === "APROBADO";
@@ -634,6 +615,7 @@ export function RevisionStep({
 
             {!collapsed && (
               <>
+                <div className={informeYaEnviado ? "pointer-events-none opacity-60 select-none" : ""}>
                 {/* A) Datos de identificación */}
                 <Seccion num="A" titulo="Datos de Identificación">
                   <div>
@@ -902,9 +884,18 @@ export function RevisionStep({
                                       >
                                         −
                                       </button>
-                                      <span className="w-7 text-center text-[11px] font-semibold text-gray-700">
-                                        {a.cantidad}
-                                      </span>
+                                      <input
+                                        key={a.cantidad}
+                                        type="number"
+                                        min={1}
+                                        defaultValue={a.cantidad}
+                                        onBlur={(e) => {
+                                          const v = parseInt(e.target.value, 10);
+                                          if (!isNaN(v) && v >= 1) updArt(g.id, ki, ai, { cantidad: v });
+                                          else e.target.value = String(a.cantidad);
+                                        }}
+                                        className="w-10 text-center text-[11px] font-semibold text-gray-700 border border-gray-200 rounded outline-none focus:border-purple-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                      />
                                       <button
                                         type="button"
                                         onClick={() => updArt(g.id, ki, ai, { cantidad: a.cantidad + 1 })}
@@ -938,37 +929,62 @@ export function RevisionStep({
                             </div>
                           ))}
 
-                          <div className="flex flex-wrap gap-1.5">
-                            {/* Kits reales del módulo de Kits de Emergencia (con stock) */}
-                            {data.kitsEmergencia.map((k) => {
-                              const usados = usoKits.get(k.id) ?? 0;
-                              const sinStock = k.stockActual - usados <= 0;
-                              return (
-                                <button
-                                  key={k.id}
-                                  type="button"
-                                  onClick={() => addKitSistema(g.id, k)}
-                                  title={k.descripcion ?? undefined}
-                                  className={`text-[11px] px-2 py-1 border border-dashed rounded-lg flex items-center gap-1 ${
-                                    sinStock
-                                      ? "border-amber-300 text-amber-700 hover:bg-amber-50"
-                                      : "border-purple-300 text-purple-700 hover:bg-purple-50"
-                                  }`}
-                                >
-                                  <Plus className="w-3 h-3" /> {k.tipoKit}
-                                  <span className={`font-semibold ${sinStock ? "text-amber-600" : "text-purple-400"}`}>
-                                    · stock {k.stockActual - usados}
-                                  </span>
-                                </button>
-                              );
-                            })}
+                          {/* Selector buscable de kits */}
+                          <div className="space-y-1">
                             <button
                               type="button"
-                              onClick={() => addKit(g.id, "Otros")}
-                              className="text-[11px] px-2 py-1 border border-dashed border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 flex items-center gap-1"
+                              onClick={() => setKitDropdownOpen(p => ({ ...p, [g.id]: !p[g.id] }))}
+                              className="w-full flex items-center justify-between gap-2 px-3 py-2 border border-purple-200 rounded-lg text-xs text-purple-700 hover:bg-purple-50 transition-colors"
                             >
-                              <Plus className="w-3 h-3" /> Otros
+                              <span className="flex items-center gap-1.5"><Plus className="w-3.5 h-3.5" /> Agregar kit</span>
+                              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${kitDropdownOpen[g.id] ? "rotate-180" : ""}`} />
                             </button>
+                            {kitDropdownOpen[g.id] && (
+                              <div className="border border-gray-200 rounded-lg bg-white shadow-sm overflow-hidden">
+                                <div className="flex items-center gap-1.5 px-3 py-2 border-b border-gray-100 bg-gray-50">
+                                  <Search className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                  <input
+                                    autoFocus
+                                    type="text"
+                                    placeholder="Buscar kit..."
+                                    value={kitSearch[g.id] ?? ""}
+                                    onChange={e => setKitSearch(p => ({ ...p, [g.id]: e.target.value }))}
+                                    className="flex-1 text-xs bg-transparent outline-none text-gray-700 placeholder-gray-400"
+                                  />
+                                </div>
+                                <div className="max-h-44 overflow-y-auto divide-y divide-gray-50">
+                                  {data.kitsEmergencia
+                                    .filter(k => k.tipoKit.toLowerCase().includes((kitSearch[g.id] ?? "").toLowerCase()))
+                                    .map((k) => {
+                                      const usados = usoKits.get(k.id) ?? 0;
+                                      const sinStock = k.stockActual - usados <= 0;
+                                      return (
+                                        <button
+                                          key={k.id}
+                                          type="button"
+                                          onClick={() => { addKitSistema(g.id, k); setKitDropdownOpen(p => ({ ...p, [g.id]: false })); setKitSearch(p => ({ ...p, [g.id]: "" })); }}
+                                          className="w-full flex items-center justify-between px-3 py-2 hover:bg-purple-50 transition-colors"
+                                        >
+                                          <span className="text-xs text-gray-800">{k.tipoKit}</span>
+                                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${sinStock ? "bg-amber-100 text-amber-700" : "bg-purple-100 text-purple-600"}`}>
+                                            stock {k.stockActual - usados}
+                                          </span>
+                                        </button>
+                                      );
+                                    })}
+                                  {data.kitsEmergencia.filter(k => k.tipoKit.toLowerCase().includes((kitSearch[g.id] ?? "").toLowerCase())).length === 0 && (
+                                    <p className="text-xs text-gray-400 text-center py-4">Sin resultados</p>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => { addKit(g.id, "Otros"); setKitDropdownOpen(p => ({ ...p, [g.id]: false })); }}
+                                    className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-xs text-gray-500 border-t border-gray-100 transition-colors"
+                                  >
+                                    <Plus className="w-3 h-3" /> Otros (personalizado)
+                                  </button>
+                                </div>
+                              </div>
+                            )}
                           </div>
                           {data.kitsEmergencia.length === 0 && (
                             <p className="text-[11px] text-gray-400">
@@ -1088,6 +1104,7 @@ export function RevisionStep({
                   </p>
                   <EvidenciasRegistro evidencias={data.evidencias} />
                 </div>
+                </div>
 
                 {/* Acciones */}
                 {fieldErrors.size > 0 && (
@@ -1100,6 +1117,14 @@ export function RevisionStep({
                   </div>
                 )}
 
+                {informeYaEnviado && (
+                  <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
+                    <span className="text-sm text-green-800">
+                      Informe enviado al Comité — en espera de decisión. No se puede reenviar.
+                    </span>
+                  </div>
+                )}
                 <div className="flex flex-col sm:flex-row gap-2">
                   <button
                     type="button"
@@ -1116,11 +1141,13 @@ export function RevisionStep({
                   <button
                     type="button"
                     onClick={handleClickEnviar}
-                    disabled={isPending}
-                    className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-white font-semibold disabled:opacity-50"
+                    disabled={isPending || informeYaEnviado}
+                    title={informeYaEnviado ? "El informe ya fue enviado al Comité" : undefined}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                     style={{ background: "#7c3aed" }}
                   >
-                    <FileCheck className="w-4 h-4" /> Enviar Informe al Comité
+                    <FileCheck className="w-4 h-4" />
+                    {informeYaEnviado ? "Informe ya enviado" : "Enviar Informe al Comité"}
                   </button>
                 </div>
 
@@ -1428,40 +1455,13 @@ export function RevisionStep({
           )}
 
           <div className="border-t border-gray-100 pt-4">
-            <label className="block text-xs font-semibold text-gray-700 mb-1">
-              Resolución y observaciones del Comité
-            </label>
-            <textarea
-              rows={3}
-              className={textareaCls}
-              value={obsText}
-              onChange={(e) => setObsText(e.target.value)}
-              placeholder="Justificación de la decisión, criterios aplicados, condiciones de la donación..."
-            />
-          </div>
-          <div className="flex gap-3 justify-end flex-wrap">
-            <button
-              onClick={() => handleDecision("rechazar")}
-              disabled={isPending}
-              className={btnDanger}
-            >
-              {isPending ? "Procesando..." : "Rechazar"}
-            </button>
-            <button
-              onClick={() => handleDecision("observar")}
-              disabled={isPending}
-              className="px-4 py-2 text-sm font-medium text-amber-700 bg-amber-50 border border-amber-300 rounded-lg hover:bg-amber-100 transition-colors disabled:opacity-50"
-            >
-              {isPending ? "Procesando..." : "Devolver con observaciones"}
-            </button>
-            <button
-              onClick={() => handleDecision("aprobar")}
-              disabled={isPending}
-              className={btnPrimary}
-              style={{ background: "var(--caritas-green)" }}
-            >
-              {isPending ? "Procesando..." : "Aprobar caso"}
-            </button>
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+              <p className="font-semibold mb-1">Caso enviado al Comité de Donaciones</p>
+              <p>
+                La decisión se toma por votación de los miembros del Comité. Para emitir tu voto u observar el caso, ve al{" "}
+                <a href="/donaciones" className="underline font-medium">panel de votación</a>.
+              </p>
+            </div>
           </div>
         </div>
       )}

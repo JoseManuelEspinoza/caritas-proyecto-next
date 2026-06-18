@@ -54,7 +54,12 @@ function jsonError(message: string, status = 400) {
 function requireMobileSyncKey(request: Request): NextResponse | null {
   const expected = process.env.MOBILE_SYNC_API_KEY?.trim();
 
-  if (!expected) return null;
+  if (!expected) {
+    return NextResponse.json(
+      { ok: false, message: "Sincronización móvil no configurada." },
+      { status: 503 }
+    );
+  }
 
   const received = request.headers.get("x-mobile-sync-key")?.trim() ?? "";
 
@@ -128,12 +133,6 @@ function validarPayload(body: AfectadoMovilPayload): string {
 
   if (nombres.length < 2) {
     throw new MobileSyncError("nombres debe tener al menos 2 caracteres.");
-  }
-
-  const numeroDocumento = getNumeroDocumento(body);
-
-  if (numeroDocumento && numeroDocumento.length < 6) {
-    throw new MobileSyncError("numeroDocumento debe tener al menos 6 caracteres.");
   }
 
   parseFechaOpcional(body.fechaNacimiento);
@@ -250,7 +249,9 @@ async function resolveGrupoFamiliar(
   return grupo.idGrupoFamiliar;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const unauthorized = requireMobileSyncKey(request);
+  if (unauthorized) return unauthorized;
   return NextResponse.json({
     ok: true,
     endpoint: "/api/mobile/sync/afectados",

@@ -7,6 +7,7 @@ import {
   ClipboardList,
   Users,
   UserPlus,
+  UserCircle,
   MessageSquarePlus,
   Trash2,
   Pencil,
@@ -33,7 +34,9 @@ import type {
 } from "@/core/application/dtos/IncidenciaDetalleDTO";
 import { parseInforme } from "@/core/application/dtos/InformeContenidoDTO";
 import { PersonaModal } from "@/app/ui/grd/persona-modal";
+import { useConfirm } from "@/app/ui/shared/confirm-modal";
 import { EvidenciasRegistro, EvidenciaChip } from "@/app/ui/grd/incidente/components/EvidenciasRegistro";
+import { EvidenciaUploader } from "@/app/ui/grd/incidente/components/EvidenciaUploader";
 import { subirEvidencia } from "@/app/ui/grd/incidente/lib/subir-evidencia";
 import { fmtDate } from "@/app/ui/grd/incidente/lib/format";
 import { inputCls, textareaCls } from "@/app/ui/grd/incidente/lib/ui-classes";
@@ -50,6 +53,7 @@ export function CampoStep({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const { showConfirm, ConfirmModalJSX } = useConfirm();
   // Brigadista solo puede llenar si está asignado a ESTE incidente
   const canAct =
     data.role === "admin" ||
@@ -140,8 +144,14 @@ export function CampoStep({
     });
   }
 
-  function handleDeletePersona(personaId: string) {
-    if (!confirm("¿Eliminar esta persona del empadronamiento?")) return;
+  async function handleDeletePersona(personaId: string) {
+    const ok = await showConfirm({
+      title: "¿Eliminar persona?",
+      message: "Se eliminará esta persona del empadronamiento. Esta acción no se puede deshacer.",
+      confirmLabel: "Sí, eliminar",
+      variant: "danger",
+    });
+    if (!ok) return;
     startTransition(async () => {
       const res = await deletePersonaCampo(personaId, data.idIncidencia);
       if (res && "message" in res) {
@@ -153,8 +163,14 @@ export function CampoStep({
     });
   }
 
-  function handleDeleteFamilia(grupoId: string) {
-    if (!confirm("¿Eliminar este grupo familiar y todas sus personas?")) return;
+  async function handleDeleteFamilia(grupoId: string) {
+    const ok = await showConfirm({
+      title: "¿Eliminar grupo familiar?",
+      message: "Se eliminará el grupo familiar y todas sus personas registradas. Esta acción no se puede deshacer.",
+      confirmLabel: "Sí, eliminar",
+      variant: "danger",
+    });
+    if (!ok) return;
     startTransition(async () => {
       const res = await deleteGrupoFamiliarCampo(grupoId, data.idIncidencia);
       if (res && "message" in res) {
@@ -367,148 +383,113 @@ export function CampoStep({
           </span>
           <span className="text-sm font-semibold text-gray-800">Verificación del Evento</span>
         </summary>
-        <div className="p-4 space-y-3 text-sm">
-          <div className="border border-gray-200 rounded-lg p-3 space-y-1.5">
-            <p className="text-xs font-semibold text-gray-500 uppercase mb-1">
-              Datos del evento registrados
-            </p>
-            <p>
-              <span className="font-semibold">Categoría:</span> {data.tipoEvento ?? "—"}
-            </p>
-            <p>
-              <span className="font-semibold">Ubicación:</span>{" "}
-              {[data.direccionEvento, data.parroquia].filter(Boolean).join(", ") || "—"}
-            </p>
-            {data.descripcionEvento && (
-              <p>
-                <span className="font-semibold">Descripción inicial:</span> {data.descripcionEvento}
-              </p>
-            )}
-            {data.causa &&
-              (() => {
-                let ctx: Record<string, unknown> | null = null;
-                try {
-                  ctx = JSON.parse(data.causa!);
-                } catch {}
-                if (ctx && typeof ctx === "object") {
-                  const causaStr = typeof ctx.causa === "string" ? ctx.causa : "";
-                  const refStr = typeof ctx.referencia === "string" ? ctx.referencia : "";
-                  const necs: string[] = Array.isArray(ctx.necesidades)
-                    ? (ctx.necesidades as unknown[]).map((n) => String(n))
-                    : [];
-                  const necObs = typeof ctx.necesidadesObs === "string" ? ctx.necesidadesObs : "";
-                  return (
-                    <div className="space-y-1">
-                      {causaStr && (
-                        <p>
-                          <span className="font-semibold">Causa:</span> {causaStr}
-                        </p>
-                      )}
-                      {refStr && (
-                        <p>
-                          <span className="font-semibold">Referencia al lugar:</span> {refStr}
-                        </p>
-                      )}
-                      {necs.length > 0 && (
-                        <div className="flex items-start gap-2 flex-wrap">
-                          <span className="font-semibold flex-shrink-0">Necesidades:</span>
-                          <div className="flex flex-wrap gap-1">
-                            {necs.map((n, i) => (
-                              <span
-                                key={i}
-                                className="px-2 py-0.5 bg-orange-50 text-orange-700 text-[10px] rounded-full border border-orange-200"
-                              >
-                                {n}
-                              </span>
-                            ))}
+        <div className="p-4 text-sm space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* Columna izquierda */}
+            <div className="space-y-3">
+              {/* Datos del evento */}
+              <div className="border border-gray-200 rounded-lg p-3 space-y-1.5">
+                <p className="text-xs font-semibold text-gray-500 uppercase mb-1">
+                  Datos del evento registrados
+                </p>
+                <p><span className="font-semibold">Categoría:</span> {data.tipoEvento ?? "—"}</p>
+                <p>
+                  <span className="font-semibold">Ubicación:</span>{" "}
+                  {[data.direccionEvento, data.parroquia].filter(Boolean).join(", ") || "—"}
+                </p>
+                {data.descripcionEvento && (
+                  <p><span className="font-semibold">Descripción inicial:</span> {data.descripcionEvento}</p>
+                )}
+                {data.causa && (() => {
+                  let ctx: Record<string, unknown> | null = null;
+                  try { ctx = JSON.parse(data.causa!); } catch {}
+                  if (ctx && typeof ctx === "object") {
+                    const causaStr = typeof ctx.causa === "string" ? ctx.causa : "";
+                    const refStr = typeof ctx.referencia === "string" ? ctx.referencia : "";
+                    const necs: string[] = Array.isArray(ctx.necesidades)
+                      ? (ctx.necesidades as unknown[]).map((n) => String(n)) : [];
+                    const necObs = typeof ctx.necesidadesObs === "string" ? ctx.necesidadesObs : "";
+                    return (
+                      <div className="space-y-1">
+                        {causaStr && <p><span className="font-semibold">Causa:</span> {causaStr}</p>}
+                        {refStr && <p><span className="font-semibold">Referencia al lugar:</span> {refStr}</p>}
+                        {necs.length > 0 && (
+                          <div className="flex items-start gap-2 flex-wrap">
+                            <span className="font-semibold flex-shrink-0">Necesidades:</span>
+                            <div className="flex flex-wrap gap-1">
+                              {necs.map((n, i) => (
+                                <span key={i} className="px-2 py-0.5 bg-orange-50 text-orange-700 text-[10px] rounded-full border border-orange-200">{n}</span>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      )}
-                      {necObs && (
-                        <p>
-                          <span className="font-semibold">Obs. necesidades:</span> {necObs}
-                        </p>
-                      )}
-                    </div>
-                  );
-                }
-                return (
-                  <p>
-                    <span className="font-semibold">Causa:</span> {data.causa}
-                  </p>
-                );
-              })()}
-          </div>
-
-          {data.aviso && (
-            <div className="border border-gray-200 rounded-lg p-3 space-y-1">
-              <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Reportado por</p>
-              <p>
-                <span className="font-semibold">Nombre:</span> {data.aviso.nombreInformante ?? "—"}
-              </p>
-              {data.aviso.telefonoInformante && (
-                <p>
-                  <span className="font-semibold">Celular:</span> {data.aviso.telefonoInformante}
-                </p>
-              )}
-              {data.reportanteRol && (
-                <p>
-                  <span className="font-semibold">Rol/Institución:</span> {data.reportanteRol}
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Evidencias iniciales */}
-          <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Evidencias iniciales</p>
-            {evidIniciales.length === 0 ? (
-              <p className="text-xs text-gray-400">Sin evidencias iniciales registradas.</p>
-            ) : (
-              <div className="space-y-2.5">
-                {Object.entries(inicialesPorFuente).map(([fuente, items]) => (
-                  <div key={fuente}>
-                    <p className="text-[11px] text-gray-500 mb-1">
-                      {fuente} · {items.length} archivo(s)
-                    </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {items.map((ev) => (
-                        <EvidenciaChip key={ev.id} ev={ev} />
-                      ))}
-                    </div>
-                  </div>
-                ))}
+                        )}
+                        {necObs && <p><span className="font-semibold">Obs. necesidades:</span> {necObs}</p>}
+                      </div>
+                    );
+                  }
+                  return <p><span className="font-semibold">Causa:</span> {data.causa}</p>;
+                })()}
               </div>
-            )}
-          </div>
 
-          {/* Estimación */}
-          <div className="border border-gray-200 rounded-lg p-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase mb-2">
-              Estimación inicial de afectación
-            </p>
-            {data.gravedad && (
-              <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-200">
-                {data.gravedad}
-              </span>
-            )}
-            <p className="text-sm font-semibold mt-2">{totalPersonas} persona(s) afectada(s)</p>
-            <div className="flex flex-wrap gap-1 mt-1">
-              {[
-                ["Niños", ninos],
-                ["Adultos", adultos],
-                ["Adultos Mayores", mayores],
-              ].map(([label, n]) => (
-                <span
-                  key={label}
-                  className="px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] rounded-full"
-                >
-                  {label} · {n}
-                </span>
-              ))}
+              {/* Reportado por */}
+              {data.aviso && (
+                <div className="border border-gray-200 rounded-lg p-3 space-y-1">
+                  <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Reportado por</p>
+                  <p><span className="font-semibold">Nombre:</span> {data.aviso.nombreInformante ?? "—"}</p>
+                  {data.aviso.telefonoInformante && (
+                    <p><span className="font-semibold">Celular:</span> {data.aviso.telefonoInformante}</p>
+                  )}
+                  {data.reportanteRol && (
+                    <p><span className="font-semibold">Rol/Institución:</span> {data.reportanteRol}</p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Columna derecha */}
+            <div className="space-y-3">
+              {/* Evidencias iniciales */}
+              <div className="border border-gray-200 rounded-lg p-3">
+                <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Evidencias iniciales</p>
+                {evidIniciales.length === 0 ? (
+                  <p className="text-xs text-gray-400">Sin evidencias iniciales registradas.</p>
+                ) : (
+                  <div className="space-y-2.5">
+                    {Object.entries(inicialesPorFuente).map(([fuente, items]) => (
+                      <div key={fuente}>
+                        <p className="text-[11px] text-gray-500 mb-1">{fuente} · {items.length} archivo(s)</p>
+                        <div className="grid grid-cols-1 gap-2">
+                          {items.map((ev) => <EvidenciaChip key={ev.id} ev={ev} />)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Estimación */}
+              <div className="border border-gray-200 rounded-lg p-3">
+                <p className="text-xs font-semibold text-gray-500 uppercase mb-2">
+                  Estimación inicial de afectación
+                </p>
+                {data.gravedad && (
+                  <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-200">
+                    {data.gravedad}
+                  </span>
+                )}
+                <p className="text-sm font-semibold mt-2">{totalPersonas} persona(s) afectada(s)</p>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {[["Niños", ninos], ["Adultos", adultos], ["Adultos Mayores", mayores]].map(([label, n]) => (
+                    <span key={label} className="px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] rounded-full">
+                      {label} · {n}
+                    </span>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
 
+          {/* Observaciones — ancho completo */}
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">
               Observaciones desde campo (opcional)
@@ -536,89 +517,131 @@ export function CampoStep({
             {totalPersonas} persona(s) · {data.gruposFamiliares.length} familia(s)
           </span>
         </summary>
-        <div className="p-4 space-y-2">
+        <div className="p-4 space-y-3">
           {data.gruposFamiliares.map((g) => (
-            <div key={g.id} className="bg-gray-50 rounded-lg border border-gray-100 p-2.5 space-y-1.5">
-              {/* Cabecera del grupo familiar */}
-              <div className="flex items-center gap-1">
-                <p className="text-[11px] font-bold text-gray-700 flex-1 min-w-0 truncate">
-                  {g.nombreReferencia ?? "Grupo familiar"}
-                </p>
-                <span className="text-[10px] text-gray-400 flex-shrink-0">{g.totalPersonas} mbr.</span>
-                <button
-                  type="button"
-                  title="Agregar persona a esta familia"
-                  onClick={() => handleAddToFamilia(g.id)}
-                  className="p-1 rounded text-gray-400 hover:text-green-600 hover:bg-green-50 transition-colors"
-                >
-                  <UserPlus className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  title={familyOpen[g.id] ? "Ocultar nota" : "Agregar nota"}
-                  onClick={() => setFamilyOpen((prev) => ({ ...prev, [g.id]: !prev[g.id] }))}
-                  className={`p-1 rounded transition-colors ${
-                    familyOpen[g.id] || familyNotes[g.id]?.trim()
-                      ? "text-blue-600 bg-blue-50"
-                      : "text-gray-400 hover:text-blue-500 hover:bg-blue-50"
-                  }`}
-                >
-                  <MessageSquarePlus className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  title="Eliminar grupo familiar"
-                  onClick={() => handleDeleteFamilia(g.id)}
-                  className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+            <div key={g.id} className="border border-blue-200 rounded-lg bg-blue-50 overflow-hidden">
+              {/* Cabecera del grupo */}
+              <div className="bg-blue-100 px-3 py-2 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-blue-600" />
+                  <span className="text-sm font-semibold text-blue-900">
+                    {g.nombreReferencia ?? "Grupo familiar"}
+                  </span>
+                  <span className="text-xs text-blue-600">
+                    ({g.personas.length} integrantes)
+                  </span>
+                </div>
+                <div className="flex gap-1">
+                  <button
+                    type="button"
+                    title="Agregar persona a esta familia"
+                    onClick={() => handleAddToFamilia(g.id)}
+                    className="p-1 hover:bg-blue-200 rounded text-blue-600 transition-colors"
+                  >
+                    <UserPlus className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    title={familyOpen[g.id] ? "Ocultar nota" : "Agregar nota"}
+                    onClick={() => setFamilyOpen((prev) => ({ ...prev, [g.id]: !prev[g.id] }))}
+                    className={`p-1 rounded transition-colors ${
+                      familyOpen[g.id] || familyNotes[g.id]?.trim()
+                        ? "text-blue-700 bg-blue-200"
+                        : "text-blue-600 hover:bg-blue-200"
+                    }`}
+                  >
+                    <MessageSquarePlus className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    title="Eliminar grupo familiar"
+                    onClick={() => handleDeleteFamilia(g.id)}
+                    className="p-1 hover:bg-red-100 rounded text-red-500 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
-
-              {/* Lista de personas */}
-              <ul className="space-y-0.5">
-                {g.personas.map((p) => (
-                  <li key={p.id} className="flex items-center gap-1 text-[11px] text-gray-700">
-                    <span className="flex-1 min-w-0 truncate">
-                      {p.nombres} {p.apellidos ?? ""}
-                      {p.parentesco ? <span className="text-gray-400"> · {p.parentesco}</span> : null}
-                    </span>
-                    <span className="text-[10px] text-gray-400 flex-shrink-0">
-                      {p.edad ? `${p.edad}a` : "—"} · {p.sexo ?? "—"}
-                    </span>
-                    <button
-                      type="button"
-                      title="Editar persona"
-                      onClick={() => handleEditPersona(p, g.id)}
-                      className="p-1 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors flex-shrink-0"
-                    >
-                      <Pencil className="w-3 h-3" />
-                    </button>
-                    <button
-                      type="button"
-                      title="Eliminar persona"
-                      onClick={() => handleDeletePersona(p.id)}
-                      className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </li>
-                ))}
-                {g.personas.length === 0 && (
-                  <li className="text-[10px] text-gray-400 italic">Sin personas registradas.</li>
-                )}
-              </ul>
 
               {/* Nota de familia */}
               {familyOpen[g.id] && (
-                <textarea
-                  rows={2}
-                  className="w-full px-2.5 py-1.5 text-xs border border-blue-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 resize-none placeholder:text-gray-400"
-                  placeholder="¿Qué necesita esta familia? (opcional)"
-                  value={familyNotes[g.id] ?? ""}
-                  onChange={(e) => setFamilyNotes((prev) => ({ ...prev, [g.id]: e.target.value }))}
-                />
+                <div className="px-3 py-2 border-t border-blue-200">
+                  <textarea
+                    rows={2}
+                    className="w-full px-2.5 py-1.5 text-xs border border-blue-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 resize-none placeholder:text-gray-400"
+                    placeholder="¿Qué necesita esta familia? (opcional)"
+                    value={familyNotes[g.id] ?? ""}
+                    onChange={(e) => setFamilyNotes((prev) => ({ ...prev, [g.id]: e.target.value }))}
+                  />
+                </div>
               )}
+
+              {/* Lista de personas */}
+              <div className="p-2 space-y-1">
+                {g.personas.map((p) => (
+                  <div key={p.id} className="bg-white border border-gray-200 rounded px-3 py-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <UserCircle className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                          <span className="text-sm font-medium text-gray-900 truncate">
+                            {p.nombres} {p.apellidos ?? ""}
+                          </span>
+                          {p.parentesco && (
+                            <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-[10px] font-medium flex-shrink-0">
+                              {p.parentesco}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-gray-500 ml-6">
+                          <span>
+                            Edad: <strong className="text-gray-700">{p.edad ?? "—"}</strong> años
+                          </span>
+                          {p.tipoDocumento && (
+                            <span>
+                              {p.tipoDocumento}: <strong className="text-gray-700">{p.numeroDocumento ?? "—"}</strong>
+                            </span>
+                          )}
+                          <span>
+                            Género: <strong className="text-gray-700">{p.sexo ?? "—"}</strong>
+                          </span>
+                          {p.telefono && (
+                            <span>
+                              Cel: <strong className="text-gray-700">{p.telefono}</strong>
+                            </span>
+                          )}
+                          {p.condicionEspecial && (
+                            <span className="px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded text-[10px] font-medium">
+                              {p.condicionEspecial}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex gap-1 flex-shrink-0">
+                        <button
+                          type="button"
+                          title="Editar persona"
+                          onClick={() => handleEditPersona(p, g.id)}
+                          className="p-1 hover:bg-gray-100 rounded text-gray-500 transition-colors"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          title="Eliminar persona"
+                          onClick={() => handleDeletePersona(p.id)}
+                          className="p-1 hover:bg-red-100 rounded text-red-500 transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {g.personas.length === 0 && (
+                  <p className="text-xs text-blue-400 text-center py-2 italic">Sin personas registradas.</p>
+                )}
+              </div>
             </div>
           ))}
 
@@ -662,7 +685,7 @@ export function CampoStep({
             <button
               type="button"
               onClick={() => setShowAddFamilia(true)}
-              className="w-full flex items-center justify-center gap-2 py-2 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-600 hover:border-[#009850] hover:text-[#009850] transition-colors"
+              className="w-full flex items-center justify-center gap-2 py-2 border-2 border-dashed border-blue-300 rounded-lg text-sm text-blue-600 hover:border-blue-500 hover:bg-blue-50 transition-colors font-medium"
             >
               <Plus className="w-4 h-4" /> Agregar grupo familiar
             </button>
@@ -692,40 +715,14 @@ export function CampoStep({
             </ul>
           </div>
 
-          {canUpload ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <label className="flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-600 hover:border-[#009850] hover:text-[#009850] cursor-pointer transition-colors">
-                <Camera className="w-4 h-4" /> Tomar foto
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  className="hidden"
-                  onChange={(e) => handleUploadCampo(e.target.files)}
-                />
-              </label>
-              <label className="flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-600 hover:border-[#009850] hover:text-[#009850] cursor-pointer transition-colors">
-                <Upload className="w-4 h-4" /> Cargar foto / video
-                <input
-                  type="file"
-                  multiple
-                  accept="image/*,video/*,.pdf"
-                  className="hidden"
-                  onChange={(e) => handleUploadCampo(e.target.files)}
-                />
-              </label>
-            </div>
-          ) : (
-            <p className="text-xs text-gray-400 italic text-center py-1">
-              Solo el equipo asignado puede cargar evidencias.
-            </p>
-          )}
-
-          {subiendo.length > 0 && (
-            <p className="text-xs text-blue-600 flex items-center gap-1">
-              <Loader2 className="w-3 h-3 animate-spin" /> Subiendo {subiendo.length} archivo(s)…
-            </p>
-          )}
+          <EvidenciaUploader
+            onFiles={handleUploadCampo}
+            accept="image/*,video/*,.pdf"
+            loading={subiendo.length > 0}
+            loadingCount={subiendo.length}
+            disabled={!canUpload}
+            disabledMessage="Solo el equipo asignado puede cargar evidencias."
+          />
 
           {evidCampo.length === 0 && subiendo.length === 0 ? (
             <p className="text-center text-xs text-gray-400 py-2">
@@ -800,6 +797,8 @@ export function CampoStep({
           </>
         )}
       </button>
+
+      {ConfirmModalJSX}
 
       {/* Modal de persona afectada (agregar / editar) */}
       {showPersonaModal && (

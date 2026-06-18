@@ -15,15 +15,188 @@ import {
   Loader2,
   Pencil,
   CheckCircle,
+  Search,
+  Plus,
+  UserCheck,
 } from "lucide-react";
-import { registrarAtencion, cerrarCaso } from "@/app/actions/incidents";
+import { registrarAtencion, cerrarCaso, assignEquipo } from "@/app/actions/incidents";
 import type { IncidenciaDetalleOutput } from "@/core/application/dtos/IncidenciaDetalleDTO";
 import { parseInforme } from "@/core/application/dtos/InformeContenidoDTO";
 import { permisosDeDetalle } from "@/app/lib/permisos-incidencia";
 import { subirEvidencia } from "@/app/ui/grd/incidente/lib/subir-evidencia";
+import { avatarColor, iniciales } from "@/app/ui/grd/incidente/lib/avatar";
+import { BrigCard } from "@/app/ui/grd/incidente/components/BrigadistaCard";
 import { fmtDate } from "@/app/ui/grd/incidente/lib/format";
 import { inputCls, textareaCls } from "@/app/ui/grd/incidente/lib/ui-classes";
 import { AsignarSeguimientoPanel } from "@/app/ui/grd/incidente/steps/seguimiento/AsignarResponsable";
+
+// ─── Panel de equipo reasignable dentro de AtencionStep ─────────────────────
+function EquipoAsignacionPanel({
+  data,
+  onDone,
+}: {
+  data: IncidenciaDetalleOutput;
+  onDone: () => void;
+}) {
+  const [editando, setEditando] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const [query, setQuery] = useState("");
+
+  const respInicial = data.asignaciones.find((a) => a.esResponsable)?.brigadistaId ?? "";
+  const equipoInicial = data.asignaciones.filter((a) => !a.esResponsable).map((a) => a.brigadistaId);
+  const [responsable, setResponsable] = useState(respInicial);
+  const [equipo, setEquipo] = useState<string[]>(equipoInicial);
+
+  const seleccionados = [responsable, ...equipo].filter(Boolean);
+  const tieneEquipo = data.asignaciones.length > 0 || Boolean(data.responsableGRD);
+
+  function findBrig(id: string) {
+    return data.brigadistasDisponibles.find((b) => b.id === id)
+      ?? data.asignaciones.find((a) => a.brigadistaId === id);
+  }
+
+  const catalogo = data.brigadistasDisponibles
+    .filter((b) => !seleccionados.includes(b.id))
+    .filter((b) => {
+      const q = query.trim().toLowerCase();
+      return !q || `${b.nombres} ${b.apellidos ?? ""}`.toLowerCase().includes(q)
+        || (b.parroquia ?? "").toLowerCase().includes(q);
+    });
+
+  function agregar(id: string) {
+    if (!responsable) setResponsable(id);
+    else if (!equipo.includes(id) && id !== responsable) setEquipo((p) => [...p, id]);
+  }
+
+  function guardar() {
+    if (!responsable) { toast.error("Designa un brigadista responsable."); return; }
+    startTransition(async () => {
+      const res = await assignEquipo(data.idIncidencia, responsable, equipo, data.instruccionesAsignacion ?? "");
+      if (res && "message" in res) { toast.error(res.message); return; }
+      toast.success("Equipo reasignado correctamente.");
+      setEditando(false);
+      onDone();
+    });
+  }
+
+  const respBrig = data.asignaciones.find((a) => a.esResponsable);
+  const integrantes = data.asignaciones.filter((a) => !a.esResponsable);
+
+  return (
+    <div className="rounded-lg border border-cyan-100 overflow-hidden">
+      <div className="bg-cyan-50 px-3 py-2 flex items-center justify-between border-b border-cyan-100">
+        <div className="flex items-center gap-2">
+          <Users className="w-4 h-4 text-cyan-600" />
+          <p className="text-xs font-bold text-cyan-800 uppercase tracking-wide">Equipo asignado</p>
+        </div>
+        {!editando && (
+          <button type="button" onClick={() => setEditando(true)}
+            className="flex items-center gap-1 text-xs text-cyan-700 hover:text-cyan-900 border border-cyan-200 rounded-lg px-2 py-1 hover:bg-cyan-100">
+            <Pencil className="w-3 h-3" /> Reasignar
+          </button>
+        )}
+        {editando && (
+          <button type="button" onClick={() => { setEditando(false); setResponsable(respInicial); setEquipo(equipoInicial); }}
+            className="text-xs text-gray-500 hover:text-gray-700">
+            Cancelar
+          </button>
+        )}
+      </div>
+
+      <div className="p-3 space-y-2">
+        {!editando ? (
+          !tieneEquipo ? (
+            <p className="text-xs text-gray-400 italic text-center py-2">Sin equipo asignado</p>
+          ) : data.responsableGRD ? (
+            <div className="flex items-center gap-2">
+              <UserCheck className="w-4 h-4 text-cyan-600" />
+              <p className="text-sm font-medium text-gray-800">{data.responsableGRD.nombre}</p>
+              <span className="text-[10px] bg-cyan-100 text-cyan-700 px-1.5 py-0.5 rounded-full font-bold">Especialista GRD</span>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              {respBrig && (
+                <BrigCard id={respBrig.brigadistaId} nombres={respBrig.nombres}
+                  apellidos={respBrig.apellidos} parroquia={respBrig.parroquia}
+                  celular={respBrig.celular} badge="RESPONSABLE" />
+              )}
+              {integrantes.map((m) => (
+                <BrigCard key={m.brigadistaId} id={m.brigadistaId} nombres={m.nombres}
+                  apellidos={m.apellidos} parroquia={m.parroquia} celular={m.celular} />
+              ))}
+            </div>
+          )
+        ) : (
+          <div className="space-y-3">
+            {/* Seleccionados */}
+            {seleccionados.length > 0 && (
+              <div className="space-y-1.5">
+                {responsable && (() => {
+                  const b = findBrig(responsable);
+                  if (!b) return null;
+                  return (
+                    <BrigCard id={responsable} nombres={b.nombres}
+                      apellidos={"apellidos" in b ? b.apellidos : null}
+                      parroquia={"parroquia" in b ? b.parroquia : null}
+                      celular={"celular" in b ? b.celular : null}
+                      badge="RESPONSABLE"
+                      onRemove={() => { if (equipo.length > 0) { setResponsable(equipo[0]); setEquipo((p) => p.slice(1)); } else setResponsable(""); }}
+                    />
+                  );
+                })()}
+                {equipo.map((id) => {
+                  const b = findBrig(id);
+                  if (!b) return null;
+                  return (
+                    <BrigCard key={id} id={id} nombres={b.nombres}
+                      apellidos={"apellidos" in b ? b.apellidos : null}
+                      parroquia={"parroquia" in b ? b.parroquia : null}
+                      celular={"celular" in b ? b.celular : null}
+                      onRemove={() => setEquipo((p) => p.filter((x) => x !== id))}
+                    />
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Buscador */}
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input value={query} onChange={(e) => setQuery(e.target.value)}
+                placeholder="Buscar brigadista..."
+                className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-cyan-400" />
+            </div>
+
+            {/* Lista */}
+            <div className="max-h-40 overflow-y-auto border border-gray-100 rounded-lg divide-y divide-gray-50">
+              {catalogo.length === 0 ? (
+                <p className="text-center py-3 text-xs text-gray-400">Sin resultados</p>
+              ) : catalogo.map((b) => (
+                <button key={b.id} type="button" onClick={() => agregar(b.id)}
+                  className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-left">
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${avatarColor(b.id)}`}>
+                    <span className="text-white text-[10px] font-bold">{iniciales(b.nombres, b.apellidos)}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-gray-800 truncate">{b.nombres} {b.apellidos ?? ""}</p>
+                    <p className="text-[10px] text-gray-400">{b.parroquia ?? "—"}</p>
+                  </div>
+                  <Plus className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                </button>
+              ))}
+            </div>
+
+            <button type="button" onClick={guardar} disabled={isPending || !responsable}
+              className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-white text-xs font-semibold disabled:opacity-50"
+              style={{ background: "#0e7490" }}>
+              {isPending ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Guardando…</> : <><UserCheck className="w-3.5 h-3.5" /> Guardar reasignación ({seleccionados.length})</>}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 type ActaArt = { codigo: string; descripcion: string; cantidad: number };
 type ActaKit = { tipoKit: string; articulos: ActaArt[] };
@@ -42,6 +215,7 @@ export function AtencionStep({
   const [isPending, startTransition] = useTransition();
   const { puedeAtender: canAct } = permisosDeDetalle(data);
   const done = data.entregas.length > 0;
+  const yaAtendido = ["ATENDIDO", "CERRADO", "EN SEGUIMIENTO"].includes(data.estadoActual ?? "");
 
   // Kits aprobados por familia (del informe de evaluación enviado al Comité)
   const informeEval = data.informes.find((i) => i.tipo === "EVALUACION");
@@ -402,6 +576,9 @@ export function AtencionStep({
         </div>
 
         <div className="p-4 space-y-4 bg-white">
+          {/* Equipo asignado con opción de reasignar */}
+          <EquipoAsignacionPanel data={data} onDone={() => {}} />
+
           {/* Resolución del Comité */}
           {data.solicitudComite?.observaciones && (
             <div className="flex items-start gap-2 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
@@ -616,9 +793,14 @@ export function AtencionStep({
             <button
               type="button"
               onClick={marcarAtendido}
-              disabled={isPending || subiendo}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-white font-semibold disabled:opacity-50"
-              style={{ background: "#0e7490" }}
+              disabled={isPending || subiendo || yaAtendido}
+              title={yaAtendido ? "Este caso ya fue marcado como Atendido" : undefined}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold transition-all ${
+                yaAtendido
+                  ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                  : "text-white disabled:opacity-50"
+              }`}
+              style={yaAtendido ? undefined : { background: "#0e7490" }}
             >
               {isPending || subiendo ? (
                 <>

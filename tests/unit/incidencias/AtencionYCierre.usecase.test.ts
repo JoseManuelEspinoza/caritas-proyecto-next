@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   RegistrarAtencionUseCase,
+  IniciarSeguimientoUseCase,
   AgregarSeguimientoUseCase,
   CerrarCasoUseCase,
 } from "@/core/application/use-cases/incidencias/AtencionYCierre.usecase";
@@ -17,6 +18,7 @@ function makeRepo(overrides: Partial<IIncidenciaRepository> = {}): IIncidenciaRe
     actualizarDatos: vi.fn().mockResolvedValue(undefined),
     guardarTransicion: vi.fn().mockResolvedValue(undefined),
     registrarAsignacion: vi.fn().mockResolvedValue(undefined),
+    asignarEquipo: vi.fn().mockResolvedValue(undefined),
     asignarResponsable: vi.fn().mockResolvedValue(undefined),
     guardarInforme: vi.fn().mockResolvedValue(undefined),
     upsertSolicitudEnEvaluacion: vi.fn().mockResolvedValue(undefined),
@@ -24,6 +26,8 @@ function makeRepo(overrides: Partial<IIncidenciaRepository> = {}): IIncidenciaRe
     registrarEntrega: vi.fn().mockResolvedValue(undefined),
     agregarSeguimiento: vi.fn().mockResolvedValue(undefined),
     liberarBrigadistas: vi.fn().mockResolvedValue(undefined),
+    agregarPersona: vi.fn().mockResolvedValue(undefined),
+    guardarEvidencias: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
@@ -68,6 +72,26 @@ describe("RegistrarAtencionUseCase", () => {
     await expect(
       new RegistrarAtencionUseCase(repo).execute("no-existe", ATENCION_DATA)
     ).rejects.toThrow(NotFoundError);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// IniciarSeguimientoUseCase
+// ---------------------------------------------------------------------------
+describe("IniciarSeguimientoUseCase", () => {
+  it("[positivo] transiciona ATENDIDO → SEGUIMIENTO ABIERTO", async () => {
+    const inc = Incidencia.desdePersistencia({ id: "inc-8", estadoActual: "ATENDIDO" });
+    const repo = makeRepo({ findById: vi.fn().mockResolvedValue(inc) });
+
+    await new IniciarSeguimientoUseCase(repo).execute("inc-8");
+
+    expect(inc.estadoActual).toBe("SEGUIMIENTO ABIERTO");
+    expect(repo.guardarTransicion).toHaveBeenCalledOnce();
+  });
+
+  it("[negativo] lanza NotFoundError cuando el incidente no existe", async () => {
+    const repo = makeRepo();
+    await expect(new IniciarSeguimientoUseCase(repo).execute("no-existe")).rejects.toThrow(NotFoundError);
   });
 });
 

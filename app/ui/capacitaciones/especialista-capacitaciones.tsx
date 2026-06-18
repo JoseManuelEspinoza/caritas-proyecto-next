@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, useMemo } from "react";
+import { useConfirm } from "@/app/ui/shared/confirm-modal";
 import { useRouter } from "next/navigation";
 import {
   GraduationCap,
@@ -167,6 +168,7 @@ function SesionCard({
   const [tituloUnidad, setTituloUnidad] = useState(sesion.tituloUnidad);
   const [menuAbierto, setMenuAbierto] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const { showConfirm, ConfirmModalJSX } = useConfirm();
 
   const guardarTituloUnidad = () => {
     if (!tituloUnidad.trim()) return;
@@ -177,16 +179,28 @@ function SesionCard({
     });
   };
 
-  const handleEliminarUnidad = () => {
-    if (!confirm(`¿Eliminar la unidad "${sesion.tituloUnidad}" y todos sus materiales?`)) return;
+  const handleEliminarUnidad = async () => {
+    const ok = await showConfirm({
+      title: "¿Eliminar unidad?",
+      message: `Se eliminará "${sesion.tituloUnidad}" y todos sus materiales. Esta acción no se puede deshacer.`,
+      confirmLabel: "Sí, eliminar",
+      variant: "danger",
+    });
+    if (!ok) return;
     startTransition(async () => {
       await eliminarSesion(sesion.id);
       onRefresh();
     });
   };
 
-  const handleEliminarMaterial = (idMaterial: string, titulo: string) => {
-    if (!confirm(`¿Eliminar el material "${titulo}"?`)) return;
+  const handleEliminarMaterial = async (idMaterial: string, titulo: string) => {
+    const ok = await showConfirm({
+      title: "¿Eliminar material?",
+      message: `Se eliminará "${titulo}". Esta acción no se puede deshacer.`,
+      confirmLabel: "Sí, eliminar",
+      variant: "danger",
+    });
+    if (!ok) return;
     startTransition(async () => {
       await eliminarMaterial(idMaterial);
       onRefresh();
@@ -291,6 +305,7 @@ function SesionCard({
           </button>
         </div>
       )}
+      {ConfirmModalJSX}
     </div>
   );
 }

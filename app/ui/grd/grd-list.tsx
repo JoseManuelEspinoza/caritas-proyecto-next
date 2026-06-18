@@ -6,7 +6,7 @@ import {
   Plus,
   Filter,
   Search,
-  Download,
+  FileSpreadsheet,
   MapPin,
   Users,
   Calendar,
@@ -22,10 +22,14 @@ import {
   Zap,
   TrendingDown,
   SendHorizonal,
+  Loader2,
 } from "lucide-react";
 import type { FrontendRole } from "@/app/lib/roles";
+import { PaginationControls } from "@/app/ui/shared/pagination-controls";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
+
+export type GlobalCounts = Record<string, number>;
 
 export type IncidenteItem = {
   idIncidencia: string;
@@ -138,12 +142,21 @@ const STATUS: Record<string, StatusCfg> = {
 };
 
 const CATEGORY_ICONS: Record<string, any> = {
-  Incendios: Flame,
-  Inundaciones: Waves,
-  Derrumbes: Mountain,
-  Tsunamis: Waves,
-  Sismos: Zap,
-  Deslizamientos: TrendingDown,
+  Incendio: Flame,
+  Inundación: Waves,
+  Derrumbe: Mountain,
+  Sismo: Zap,
+  Deslizamiento: TrendingDown,
+  Vendaval: Zap,
+};
+
+const CATEGORY_COLORS: Record<string, { bg: string; text: string }> = {
+  Incendio:     { bg: "bg-red-100",    text: "text-red-700" },
+  Inundación:   { bg: "bg-blue-100",   text: "text-blue-700" },
+  Sismo:        { bg: "bg-orange-100", text: "text-orange-700" },
+  Derrumbe:     { bg: "bg-stone-100",  text: "text-stone-700" },
+  Deslizamiento:{ bg: "bg-amber-100",  text: "text-amber-700" },
+  Vendaval:     { bg: "bg-teal-100",   text: "text-teal-700" },
 };
 
 function CatIcon({ cat, className = "w-4 h-4" }: { cat: string | null; className?: string }) {
@@ -169,19 +182,33 @@ const SUMMARY_STATES = [
 interface GrdListProps {
   items: IncidenteItem[];
   role: FrontendRole;
+  globalCounts?: GlobalCounts;
 }
 
-export function GrdList({ items, role }: GrdListProps) {
+export function GrdList({ items, role, globalCounts }: GrdListProps) {
   const [statusFilter, setStatusFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(5);
+  const [exportando, setExportando] = useState(false);
 
   const canCreate = role === "admin" || role === "especialistaGRD";
-  const rowsPerPage = 10;
 
-  const handleExport = () => {
-    const headers = ["Código", "Incidente", "Categoría", "Estado", "Ubicación", "Parroquia", "Familias", "Personas", "Brigadistas", "Fecha"];
+  // Datos a exportar.
+  const buildExportData = () => {
+    const headers = [
+      "Código",
+      "Incidente",
+      "Categoría",
+      "Estado",
+      "Ubicación",
+      "Parroquia",
+      "Familias",
+      "Personas",
+      "Brigadistas",
+      "Fecha",
+    ];
     const rows = filtered.map((i) => [
       i.codigoCaso ?? "",
       i.tituloIncidencia ?? "",
@@ -194,16 +221,22 @@ export function GrdList({ items, role }: GrdListProps) {
       i.brigadistas.join("; "),
       new Date(i.fechaRegistro).toLocaleDateString("es-PE", { timeZone: "America/Lima" }),
     ]);
-    const csv = [headers, ...rows]
-      .map((row) => row.map((v) => `"${v.replace(/"/g, '""')}"`).join(","))
-      .join("\n");
-    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `incidencias_${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    return { headers, rows };
+  };
+
+  // xlsx se carga de forma dinámica para no aumentar el bundle inicial.
+  const handleExportExcel = async () => {
+    setExportando(true);
+    try {
+      const XLSX = await import("xlsx");
+      const { headers, rows } = buildExportData();
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Incidencias");
+      XLSX.writeFile(wb, `incidencias_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    } finally {
+      setExportando(false);
+    }
   };
 
   // Filtros
@@ -232,10 +265,12 @@ export function GrdList({ items, role }: GrdListProps) {
     if (currentPage > totalPages) setCurrentPage(totalPages);
   }, [currentPage, totalPages]);
 
-  // Conteos por estado
-  const counts: Record<string, number> = {};
-  for (const item of items) {
-    counts[item.estadoActual] = (counts[item.estadoActual] ?? 0) + 1;
+  // Conteos por estado — usa globalCounts si se pasa (para roles con vista filtrada)
+  const counts: Record<string, number> = globalCounts ?? {};
+  if (!globalCounts) {
+    for (const item of items) {
+      counts[item.estadoActual] = (counts[item.estadoActual] ?? 0) + 1;
+    }
   }
 
   return (
@@ -263,7 +298,7 @@ export function GrdList({ items, role }: GrdListProps) {
       </div>
 
       {/* Tarjetas de estado */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2 md:gap-3">
+      {role !== "jefaOGP" && <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2 md:gap-3">
         {SUMMARY_STATES.map((s) => {
           const cfg = STATUS[s];
           const Icon = cfg.icon;
@@ -288,7 +323,7 @@ export function GrdList({ items, role }: GrdListProps) {
             </button>
           );
         })}
-      </div>
+      </div>}
 
       {/* Filtros */}
       <div className="bg-white rounded-xl border border-gray-200 p-3 md:p-4">
@@ -314,23 +349,26 @@ export function GrdList({ items, role }: GrdListProps) {
               className="flex-1 px-3 py-2 text-sm bg-[#F5F5F5] border border-[#DDDDDD] rounded focus:outline-none focus:ring-2 focus:ring-[#009850]/20 focus:border-[#009850]"
             >
               <option value="all">Todas las categorías</option>
-              <option value="Incendios">Incendios</option>
-              <option value="Inundaciones">Inundaciones</option>
-              <option value="Derrumbes">Derrumbes</option>
-              <option value="Deslizamientos">Deslizamientos</option>
-              <option value="Sismos">Sismos</option>
-              <option value="Tsunamis">Tsunamis</option>
-              <option value="Pérdida parcial de la vivienda">Pérdida parcial de vivienda</option>
-              <option value="Colapso de infraestructura">Colapso de infraestructura</option>
+              <option value="Incendio">Incendio</option>
+              <option value="Inundación">Inundación</option>
+              <option value="Derrumbe">Derrumbe</option>
+              <option value="Deslizamiento">Deslizamiento</option>
+              <option value="Sismo">Sismo</option>
+              <option value="Vendaval">Vendaval</option>
             </select>
 
             <button
-              onClick={handleExport}
+              onClick={handleExportExcel}
+              disabled={exportando}
               suppressHydrationWarning
-              className="hidden md:flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 bg-[#F5F5F5] border border-[#DDDDDD] rounded hover:bg-gray-200 transition-colors"
+              className="hidden md:flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 bg-[#F5F5F5] border border-[#DDDDDD] rounded hover:bg-gray-200 transition-colors disabled:opacity-50"
             >
-              <Download className="w-4 h-4" />
-              Exportar
+              {exportando ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <FileSpreadsheet className="w-4 h-4" />
+              )}
+              {exportando ? "Exportando…" : "Excel"}
             </button>
           </div>
 
@@ -384,12 +422,15 @@ export function GrdList({ items, role }: GrdListProps) {
                       Por enviar
                     </span>
                   )}
-                  {item.tipoEvento && (
-                    <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 flex items-center gap-1">
-                      <CatIcon cat={item.tipoEvento} className="w-3 h-3" />
-                      {item.tipoEvento}
-                    </span>
-                  )}
+                  {item.tipoEvento && (() => {
+                    const clr = CATEGORY_COLORS[item.tipoEvento] ?? { bg: "bg-gray-100", text: "text-gray-600" };
+                    return (
+                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${clr.bg} ${clr.text} flex items-center gap-1`}>
+                        <CatIcon cat={item.tipoEvento} className="w-3 h-3" />
+                        {item.tipoEvento}
+                      </span>
+                    );
+                  })()}
                 </div>
                 <div className="flex items-center gap-4 text-xs text-gray-500">
                   {item.direccionEvento && (
@@ -457,16 +498,10 @@ export function GrdList({ items, role }: GrdListProps) {
                           {item.tituloIncidencia ?? "Sin título"}
                         </p>
                         <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-400">
-                          {item.direccionEvento && (
-                            <span className="flex items-center gap-1">
-                              <MapPin className="w-3 h-3" />
-                              {item.direccionEvento}
-                            </span>
-                          )}
-                          {item.totalPersonas > 0 && (
+                          {item.totalFamilias > 0 && (
                             <span className="flex items-center gap-1">
                               <Users className="w-3 h-3" />
-                              {item.totalPersonas} personas
+                              {item.totalFamilias} fam · {item.totalPersonas} pers
                             </span>
                           )}
                         </div>
@@ -478,18 +513,29 @@ export function GrdList({ items, role }: GrdListProps) {
                       </td>
                       <td className="px-5 py-4 whitespace-nowrap">
                         {item.tipoEvento ? (
-                          <span className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg text-xs font-semibold w-fit">
-                            <CatIcon cat={item.tipoEvento} className="w-3.5 h-3.5" />
-                            {item.tipoEvento}
-                          </span>
+                          (() => {
+                            const clr = CATEGORY_COLORS[item.tipoEvento] ?? { bg: "bg-gray-100", text: "text-gray-600" };
+                            return (
+                              <span className={`flex items-center gap-1.5 px-2.5 py-1 ${clr.bg} ${clr.text} rounded-lg text-xs font-semibold w-fit`}>
+                                <CatIcon cat={item.tipoEvento} className="w-3.5 h-3.5" />
+                                {item.tipoEvento}
+                              </span>
+                            );
+                          })()
                         ) : (
                           <span className="text-gray-400 text-xs">—</span>
                         )}
                       </td>
-                      <td className="px-5 py-4 whitespace-nowrap">
-                        <span className="text-sm text-gray-700">
+                      <td className="px-5 py-4 max-w-xs">
+                        <p className="text-sm text-gray-700 truncate">
                           {item.parroquia ?? item.direccionEvento ?? "—"}
-                        </span>
+                        </p>
+                        {item.parroquia && item.direccionEvento && (
+                          <p className="flex items-center gap-1 text-xs text-gray-400 mt-0.5 truncate">
+                            <MapPin className="w-3 h-3 flex-shrink-0" />
+                            {item.direccionEvento}
+                          </p>
+                        )}
                       </td>
                       <td className="px-5 py-4 whitespace-nowrap">
                         <div className="flex flex-col gap-1 items-start">
@@ -522,37 +568,18 @@ export function GrdList({ items, role }: GrdListProps) {
           </div>
         )}
 
-        {filtered.length > 0 && (
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 border-t border-[#DDDDDD] bg-[#F5F5F5]">
-            <p className="text-xs text-gray-500">
-              Mostrando {startIndex + 1}-{Math.min(startIndex + rowsPerPage, filtered.length)} de{" "}
-              {filtered.length}
-            </p>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={safePage === 1}
-                className="px-3 py-1.5 text-xs font-medium rounded-lg border border-[#DDDDDD] bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                suppressHydrationWarning
-              >
-                Anterior
-              </button>
-              <span className="text-xs text-gray-600 font-medium">
-                Página {safePage} de {totalPages}
-              </span>
-              <button
-                type="button"
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                disabled={safePage === totalPages}
-                className="px-3 py-1.5 text-xs font-medium rounded-lg border border-[#DDDDDD] bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                suppressHydrationWarning
-              >
-                Siguiente
-              </button>
-            </div>
-          </div>
-        )}
+        <PaginationControls
+          total={filtered.length}
+          start={filtered.length === 0 ? 0 : startIndex + 1}
+          end={Math.min(startIndex + rowsPerPage, filtered.length)}
+          page={safePage}
+          totalPages={totalPages}
+          onPrevious={() => setCurrentPage((p) => Math.max(1, p - 1))}
+          onNext={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+          pageSize={rowsPerPage}
+          onPageSizeChange={(s) => { setRowsPerPage(s); setCurrentPage(1); }}
+          className="rounded-t-none border-t border-x-0 border-b-0 rounded-b-xl"
+        />
       </div>
 
       {/* FAB móvil */}

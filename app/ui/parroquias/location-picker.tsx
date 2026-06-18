@@ -28,12 +28,15 @@ async function searchPlaces(q: string): Promise<Suggestion[]> {
     if (!res.ok) return [];
     const data = await res.json();
     return (data as Array<{ lat: string; lon: string; display_name: string; name?: string }>).map((item) => {
-      const parts = item.display_name.split(", ");
+      // Para un lugar conocido (POI), el 1er segmento del display_name es su
+      // NOMBRE, no la dirección. Se descarta para que la dirección sea la calle.
+      let parts = item.display_name.split(", ");
+      if (item.name && parts[0] === item.name) parts = parts.slice(1);
       return {
         lat: parseFloat(item.lat),
         lng: parseFloat(item.lon),
         name: item.name || parts[0],
-        subtext: parts.slice(1, 4).join(", "),
+        subtext: parts.slice(0, 3).join(", "),
         addressForField: parts.slice(0, 3).join(", "),
       };
     });
@@ -47,8 +50,10 @@ async function reverseGeocode(lat: number, lng: number): Promise<string | null> 
     const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`;
     const res = await fetch(url, { headers: { "Accept-Language": "es" } });
     if (!res.ok) return null;
-    const data = await res.json() as { display_name: string };
-    const parts = data.display_name.split(", ");
+    const data = (await res.json()) as { display_name: string; name?: string };
+    // Igual que en la búsqueda: si el 1er segmento es el nombre del POI, se omite.
+    let parts = data.display_name.split(", ");
+    if (data.name && parts[0] === data.name) parts = parts.slice(1);
     return parts.slice(0, 3).join(", ");
   } catch {
     return null;

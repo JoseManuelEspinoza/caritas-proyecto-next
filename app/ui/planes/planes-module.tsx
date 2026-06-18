@@ -28,13 +28,12 @@ const ESTADO_BADGE: Record<string, string> = {
   OBSERVADO: "bg-orange-50 text-orange-700",
 };
 
-const PAGE_SIZE = 6;
-
 export function PlanesModule({ planes, parroquias }: { planes: Plan[]; parroquias: Parroquia[] }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [showForm, setShowForm] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5);
   const [form, setForm] = useState({
     idParroquia: parroquias[0]?.id ?? "",
     nombrePlan: "",
@@ -55,12 +54,12 @@ export function PlanesModule({ planes, parroquias }: { planes: Plan[]; parroquia
       }
     });
 
-  const totalPages = Math.max(1, Math.ceil(planes.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(planes.length / pageSize));
   const safePage = Math.min(currentPage, totalPages);
-  const startIndex = (safePage - 1) * PAGE_SIZE;
-  const paginated = planes.slice(startIndex, startIndex + PAGE_SIZE);
+  const startIndex = (safePage - 1) * pageSize;
+  const paginated = planes.slice(startIndex, startIndex + pageSize);
   const visibleFrom = planes.length === 0 ? 0 : startIndex + 1;
-  const visibleTo = Math.min(startIndex + PAGE_SIZE, planes.length);
+  const visibleTo = Math.min(startIndex + pageSize, planes.length);
 
   useEffect(() => {
     if (currentPage > totalPages) setCurrentPage(totalPages);
@@ -93,12 +92,14 @@ export function PlanesModule({ planes, parroquias }: { planes: Plan[]; parroquia
             <p className="text-sm text-gray-600">Planes de trabajo y su aprobación</p>
           </div>
         </div>
-        <button
-          onClick={() => setShowForm((s) => !s)}
-          className="flex items-center gap-2 px-4 py-2 bg-[var(--caritas-green)] text-white rounded"
-        >
-          <Plus className="w-4 h-4" /> Nuevo plan
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowForm((s) => !s)}
+            className="flex items-center gap-2 px-4 py-2 bg-[var(--caritas-green)] text-white rounded"
+          >
+            <Plus className="w-4 h-4" /> Nuevo plan
+          </button>
+        </div>
       </div>
 
       {showForm && (
@@ -256,8 +257,10 @@ export function PlanesModule({ planes, parroquias }: { planes: Plan[]; parroquia
         end={visibleTo}
         page={safePage}
         totalPages={totalPages}
-        onPrevious={() => setCurrentPage((page) => Math.max(1, page - 1))}
-        onNext={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+        onPrevious={() => setCurrentPage((p) => Math.max(1, p - 1))}
+        onNext={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+        pageSize={pageSize}
+        onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
         className="mt-6"
       />
     </div>

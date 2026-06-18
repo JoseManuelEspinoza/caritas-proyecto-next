@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
-import { isS3Configured, presignPut, safeFilename } from "@/app/lib/s3";
+import { isS3Configured, presignPut, presignGet, safeFilename } from "@/app/lib/s3";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -48,9 +48,12 @@ function jsonError(message: string, status = 400) {
 function requireMobileSyncKey(request: Request): NextResponse | null {
   const expected = process.env.MOBILE_SYNC_API_KEY;
 
-  // Para desarrollo permite probar sin key si no está configurada.
-  // Para producción, definir MOBILE_SYNC_API_KEY en .env del servidor.
-  if (!expected) return null;
+  if (!expected) {
+    return NextResponse.json(
+      { ok: false, message: "Sincronización móvil no configurada." },
+      { status: 503 }
+    );
+  }
 
   const provided = request.headers.get("x-mobile-sync-key");
 
@@ -127,40 +130,23 @@ async function resolveIdReferencia(body: EvidenciaMovilPayload): Promise<string>
 }
 
 async function resolveUsuarioCarga(body: EvidenciaMovilPayload): Promise<string> {
-  const idFromPayload = body.idUsuarioCargaGRD?.trim() || body.idUsuarioRemoto?.trim();
+  const candidates = [
+    body.idUsuarioCargaGRD?.trim(),
+    body.idUsuarioRemoto?.trim(),
+    process.env.MOBILE_SYNC_USUARIO_GRD_ID?.trim(),
+  ].filter(Boolean) as string[];
 
-  if (idFromPayload) {
+  for (const id of candidates) {
     const usuario = await prisma.usuarioGRD.findUnique({
-      where: { idUsuarioGRD: idFromPayload },
+      where: { idUsuarioGRD: id },
       select: { idUsuarioGRD: true },
     });
-
     if (usuario) return usuario.idUsuarioGRD;
   }
 
-  const idFromEnv = process.env.MOBILE_SYNC_USUARIO_GRD_ID?.trim();
-
-  if (idFromEnv) {
-    const usuario = await prisma.usuarioGRD.findUnique({
-      where: { idUsuarioGRD: idFromEnv },
-      select: { idUsuarioGRD: true },
-    });
-
-    if (usuario) return usuario.idUsuarioGRD;
-  }
-
-  // Fallback solo para desarrollo/MVP. En producción se debería resolver desde auth móvil.
-  const usuarioFallback = await prisma.usuarioGRD.findFirst({
-    where: { estado: "ACTIVO" },
-    orderBy: { fechaCreacion: "asc" },
-    select: { idUsuarioGRD: true },
-  });
-
-  if (!usuarioFallback) {
-    throw new Error("No existe un usuario GRD activo para registrar la evidencia.");
-  }
-
-  return usuarioFallback.idUsuarioGRD;
+  throw new Error(
+    "No se puede identificar al usuario para registrar la evidencia."
+  );
 }
 
 async function uploadBase64ToS3(
@@ -211,16 +197,22 @@ async function uploadBase64ToS3(
   };
 }
 
+const ALLOWED_S3_PREFIXES = [
+  "evidencias/",
+  "evidencia-kit/",
+  "evidencia-grd/",
+];
+
 function resolveUrlArchivo(body: EvidenciaMovilPayload): string | null {
-  return (
-    body.urlArchivo?.trim() ||
-    body.urlS3?.trim() ||
-    body.key?.trim() ||
-    null
-  );
+  const candidates = [body.urlArchivo, body.urlS3, body.key].map((v) => v?.trim()).filter(Boolean);
+  // Rechazar URIs locales de Android (content://, file://) — no son válidas en el servidor
+  const valid = candidates.find((v) => v && /^https?:\/\//i.test(v));
+  return valid ?? null;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const unauthorized = requireMobileSyncKey(request);
+  if (unauthorized) return unauthorized;
   return NextResponse.json({
     ok: true,
     endpoint: "/api/mobile/sync/evidencias",
@@ -262,6 +254,10 @@ export async function POST(request: Request) {
     });
 
     if (existente) {
+      let urlFirmada: string | null = null;
+      if (existente.urlArchivo && isS3Configured() && !/^https?:\/\//i.test(existente.urlArchivo)) {
+        try { urlFirmada = await presignGet(existente.urlArchivo); } catch { /* ignora */ }
+      }
       return NextResponse.json({
         ok: true,
         duplicated: true,
@@ -271,6 +267,7 @@ export async function POST(request: Request) {
         idReferenciaRemota: existente.idReferencia,
         nombreArchivo: existente.nombreArchivo,
         urlArchivo: existente.urlArchivo,
+        urlFirmada: urlFirmada ?? existente.urlArchivo,
         syncEstado: existente.syncEstado ?? "SINCRONIZADO",
         fechaSincronizacion: existente.fechaSincronizacion,
       });
@@ -305,7 +302,7 @@ export async function POST(request: Request) {
         nombreArchivo: body.nombreArchivo?.trim() || "evidencia-movil",
         urlArchivo,
         formatoArchivo: contentType,
-        descripcion: body.descripcion?.trim() || null,
+        descripcion: body.descripcion?.trim() || "Evidencia de campo",
         tamanoArchivo: subidaS3?.tamanoArchivo ?? body.tamanoArchivo ?? null,
         latitud: body.lat ?? body.latitud ?? null,
         longitud: body.lng ?? body.longitud ?? null,
@@ -324,6 +321,11 @@ export async function POST(request: Request) {
       },
     });
 
+    let urlFirmada: string | null = null;
+    if (evidencia.urlArchivo && isS3Configured() && !/^https?:\/\//i.test(evidencia.urlArchivo)) {
+      try { urlFirmada = await presignGet(evidencia.urlArchivo); } catch { /* ignora */ }
+    }
+
     return NextResponse.json({
       ok: true,
       duplicated: false,
@@ -333,6 +335,7 @@ export async function POST(request: Request) {
       idReferenciaRemota: evidencia.idReferencia,
       nombreArchivo: evidencia.nombreArchivo,
       urlArchivo: evidencia.urlArchivo,
+      urlFirmada: urlFirmada ?? evidencia.urlArchivo,
       syncEstado: evidencia.syncEstado,
       fechaSincronizacion: evidencia.fechaSincronizacion,
     });

@@ -1,7 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   AsignarBrigadistaUseCase,
+  AsignarEquipoUseCase,
   AutoasignarmeUseCase,
+  AgregarPersonaUseCase,
+  AgregarEvidenciasUseCase,
   RegistrarLevantamientoUseCase,
   GenerarInformeEvaluacionUseCase,
   CorregirYReenviarUseCase,
@@ -18,6 +21,7 @@ function makeRepo(overrides: Partial<IIncidenciaRepository> = {}): IIncidenciaRe
     actualizarDatos: vi.fn().mockResolvedValue(undefined),
     guardarTransicion: vi.fn().mockResolvedValue(undefined),
     registrarAsignacion: vi.fn().mockResolvedValue(undefined),
+    asignarEquipo: vi.fn().mockResolvedValue(undefined),
     asignarResponsable: vi.fn().mockResolvedValue(undefined),
     guardarInforme: vi.fn().mockResolvedValue(undefined),
     upsertSolicitudEnEvaluacion: vi.fn().mockResolvedValue(undefined),
@@ -25,6 +29,8 @@ function makeRepo(overrides: Partial<IIncidenciaRepository> = {}): IIncidenciaRe
     registrarEntrega: vi.fn().mockResolvedValue(undefined),
     agregarSeguimiento: vi.fn().mockResolvedValue(undefined),
     liberarBrigadistas: vi.fn().mockResolvedValue(undefined),
+    agregarPersona: vi.fn().mockResolvedValue(undefined),
+    guardarEvidencias: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
@@ -83,6 +89,40 @@ describe("AsignarBrigadistaUseCase", () => {
 });
 
 // ---------------------------------------------------------------------------
+// AsignarEquipoUseCase
+// ---------------------------------------------------------------------------
+describe("AsignarEquipoUseCase", () => {
+  it("[positivo] asigna equipo y transiciona ABIERTO → ASIGNADO", async () => {
+    const inc = Incidencia.crear({ id: "inc-eq-1" });
+    const repo = makeRepo({ findById: vi.fn().mockResolvedValue(inc) });
+
+    await new AsignarEquipoUseCase(repo).execute("inc-eq-1", "responsable-1", ["brig-1", "brig-2"]);
+
+    expect(repo.asignarEquipo).toHaveBeenCalledOnce();
+    expect(repo.guardarTransicion).toHaveBeenCalledOnce();
+    expect(inc.estadoActual).toBe("ASIGNADO");
+  });
+
+  it("[borde] no transiciona si ya está ASIGNADO (solo actualiza equipo)", async () => {
+    const inc = Incidencia.desdePersistencia({ id: "inc-eq-2", estadoActual: "ASIGNADO" });
+    const repo = makeRepo({ findById: vi.fn().mockResolvedValue(inc) });
+
+    await new AsignarEquipoUseCase(repo).execute("inc-eq-2", "responsable-1", []);
+
+    expect(repo.asignarEquipo).toHaveBeenCalledOnce();
+    expect(repo.guardarTransicion).not.toHaveBeenCalled();
+    expect(inc.estadoActual).toBe("ASIGNADO");
+  });
+
+  it("[negativo] lanza NotFoundError cuando el incidente no existe", async () => {
+    const repo = makeRepo();
+    await expect(
+      new AsignarEquipoUseCase(repo).execute("no-existe", "responsable-1", [])
+    ).rejects.toThrow(NotFoundError);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // AutoasignarmeUseCase
 // ---------------------------------------------------------------------------
 describe("AutoasignarmeUseCase", () => {
@@ -96,10 +136,68 @@ describe("AutoasignarmeUseCase", () => {
     expect(inc.estadoActual).toBe("ASIGNADO");
   });
 
+  it("[borde] no transiciona si ya está ASIGNADO (solo actualiza responsable)", async () => {
+    const inc = Incidencia.desdePersistencia({ id: "inc-3b", estadoActual: "ASIGNADO" });
+    const repo = makeRepo({ findById: vi.fn().mockResolvedValue(inc) });
+
+    await new AutoasignarmeUseCase(repo).execute("inc-3b", "usuario-grd-1");
+
+    expect(repo.asignarResponsable).toHaveBeenCalledOnce();
+    expect(repo.guardarTransicion).not.toHaveBeenCalled();
+    expect(inc.estadoActual).toBe("ASIGNADO");
+  });
+
   it("[negativo] lanza NotFoundError cuando el incidente no existe", async () => {
     const repo = makeRepo();
     await expect(
       new AutoasignarmeUseCase(repo).execute("no-existe", "usuario-grd-1")
+    ).rejects.toThrow(NotFoundError);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AgregarPersonaUseCase
+// ---------------------------------------------------------------------------
+describe("AgregarPersonaUseCase", () => {
+  it("[positivo] agrega persona afectada a incidencia existente", async () => {
+    const inc = Incidencia.desdePersistencia({ id: "inc-p-1", estadoActual: "ASIGNADO" });
+    const repo = makeRepo({ findById: vi.fn().mockResolvedValue(inc) });
+
+    await new AgregarPersonaUseCase(repo).execute("inc-p-1", { nombres: "Juan" });
+
+    expect(repo.agregarPersona).toHaveBeenCalledOnce();
+    expect(repo.agregarPersona).toHaveBeenCalledWith("inc-p-1", { nombres: "Juan" });
+  });
+
+  it("[negativo] lanza NotFoundError cuando el incidente no existe", async () => {
+    const repo = makeRepo();
+    await expect(
+      new AgregarPersonaUseCase(repo).execute("no-existe", { nombres: "Juan" })
+    ).rejects.toThrow(NotFoundError);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AgregarEvidenciasUseCase
+// ---------------------------------------------------------------------------
+describe("AgregarEvidenciasUseCase", () => {
+  it("[positivo] persiste evidencias en incidencia existente", async () => {
+    const inc = Incidencia.desdePersistencia({ id: "inc-ev-1", estadoActual: "ASIGNADO" });
+    const repo = makeRepo({ findById: vi.fn().mockResolvedValue(inc) });
+    const evidencias = [
+      { key: "s3/foto1.jpg", nombreArchivo: "foto1.jpg", formato: "jpg", tamano: 1024, descripcion: null },
+    ];
+
+    await new AgregarEvidenciasUseCase(repo).execute("inc-ev-1", "usuario-grd-1", evidencias);
+
+    expect(repo.guardarEvidencias).toHaveBeenCalledOnce();
+    expect(repo.guardarEvidencias).toHaveBeenCalledWith("inc-ev-1", "usuario-grd-1", evidencias);
+  });
+
+  it("[negativo] lanza NotFoundError cuando el incidente no existe", async () => {
+    const repo = makeRepo();
+    await expect(
+      new AgregarEvidenciasUseCase(repo).execute("no-existe", "usuario-grd-1", [])
     ).rejects.toThrow(NotFoundError);
   });
 });
@@ -204,5 +302,39 @@ describe("CorregirYReenviarUseCase", () => {
         "usuario-1"
       )
     ).rejects.toThrow(NotFoundError);
+  });
+
+  it("[borde] ejecuta abrirRonda cuando se proporciona", async () => {
+    const inc = Incidencia.desdePersistencia({ id: "inc-corr-2", estadoActual: "OBSERVADO" });
+    const repo = makeRepo({ findById: vi.fn().mockResolvedValue(inc) });
+    const abrirRonda = { execute: vi.fn().mockResolvedValue(undefined) } as any;
+
+    await new CorregirYReenviarUseCase(repo, abrirRonda).execute(
+      "inc-corr-2",
+      { analisisSituacion: "Nuevo análisis completo", hallazgosTexto: "Hallazgos", conclusiones: "OK", recomendacionComite: "Aprobar" },
+      "usuario-1"
+    );
+
+    expect(abrirRonda.execute).toHaveBeenCalledWith("inc-corr-2");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GenerarInformeEvaluacionUseCase — rama abrirRonda
+// ---------------------------------------------------------------------------
+describe("GenerarInformeEvaluacionUseCase — con abrirRonda", () => {
+  it("[borde] ejecuta abrirRonda cuando se proporciona", async () => {
+    const inc = Incidencia.desdePersistencia({ id: "inc-inf-2", estadoActual: "DATA RECOPILADA" });
+    const repo = makeRepo({ findById: vi.fn().mockResolvedValue(inc) });
+    const abrirRonda = { execute: vi.fn().mockResolvedValue(undefined) } as any;
+
+    await new GenerarInformeEvaluacionUseCase(repo, abrirRonda).execute(
+      "inc-inf-2",
+      INFORME_EVALUACION,
+      "usuario-1"
+    );
+
+    expect(abrirRonda.execute).toHaveBeenCalledWith("inc-inf-2");
+    expect(inc.estadoActual).toBe("EN EVALUACION");
   });
 });

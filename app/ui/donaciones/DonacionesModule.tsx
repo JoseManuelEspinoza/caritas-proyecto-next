@@ -4,7 +4,6 @@ import { useState, useMemo } from "react";
 import {
   HandHeart,
   CheckCircle,
-  XCircle,
   Eye,
   AlertCircle,
   Clock,
@@ -22,6 +21,9 @@ import {
 } from "lucide-react";
 import type { Incident, IncidentStatus, HistoryEntry } from "@/app/lib/incident-types";
 import { initialIncidents } from "@/app/lib/incident-data";
+import { PaginationControls } from "@/app/ui/shared/pagination-controls";
+import { PanelVotacionComite } from "./PanelVotacionComite";
+import type { TallyRondaConNombres } from "@/app/lib/comite-donaciones-tally";
 
 const STATUS_COLOR: Record<IncidentStatus, string> = {
   ABIERTO: "bg-yellow-50 text-yellow-700",
@@ -62,12 +64,14 @@ const nowIso = () => new Date().toISOString();
 interface Props {
   canEvaluate: boolean;
   currentUser: string;
+  soyMiembroDelComite: boolean;
+  miIdUsuarioGRD: string | null;
+  tallyPorCaso: Record<string, TallyRondaConNombres | null>;
 }
 
-export function DonacionesModule({ canEvaluate, currentUser }: Props) {
+export function DonacionesModule({ canEvaluate, currentUser, soyMiembroDelComite, miIdUsuarioGRD, tallyPorCaso }: Props) {
   const [incidents, setIncidents] = useState<Incident[]>(initialIncidents);
   const [selected, setSelected] = useState<string | null>(null);
-  const [notes, setNotes] = useState("");
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -75,6 +79,8 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
   const [parroquiaFilter, setParroquiaFilter] = useState("all");
   const [queuePage, setQueuePage] = useState(1);
   const [historyPage, setHistoryPage] = useState(1);
+  const [queuePageSize, setQueuePageSize] = useState(5);
+  const [historyPageSize, setHistoryPageSize] = useState(5);
 
   const queueAll = useMemo(
     () => incidents.filter((i) => ["EN EVALUACION", "OBSERVADO"].includes(i.status)),
@@ -118,131 +124,22 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
     [filteredIncidents]
   );
 
-  const queueTotalPages = Math.max(1, Math.ceil(queue.length / 10));
-  const historyTotalPages = Math.max(1, Math.ceil(closed.length / 10));
+  const queueTotalPages = Math.max(1, Math.ceil(queue.length / queuePageSize));
+  const historyTotalPages = Math.max(1, Math.ceil(closed.length / historyPageSize));
   const safeQueuePage = Math.min(queuePage, queueTotalPages);
   const safeHistoryPage = Math.min(historyPage, historyTotalPages);
-  const queueSlice = queue.slice((safeQueuePage - 1) * 10, safeQueuePage * 10);
-  const historySlice = closed.slice((safeHistoryPage - 1) * 10, safeHistoryPage * 10);
-  const queueFrom = queue.length === 0 ? 0 : (safeQueuePage - 1) * 10 + 1;
-  const queueTo = Math.min(queue.length, safeQueuePage * 10);
-  const historyFrom = closed.length === 0 ? 0 : (safeHistoryPage - 1) * 10 + 1;
-  const historyTo = Math.min(closed.length, safeHistoryPage * 10);
+  const queueSlice = queue.slice((safeQueuePage - 1) * queuePageSize, safeQueuePage * queuePageSize);
+  const historySlice = closed.slice((safeHistoryPage - 1) * historyPageSize, safeHistoryPage * historyPageSize);
+  const queueFrom = queue.length === 0 ? 0 : (safeQueuePage - 1) * queuePageSize + 1;
+  const queueTo = Math.min(queue.length, safeQueuePage * queuePageSize);
+  const historyFrom = closed.length === 0 ? 0 : (safeHistoryPage - 1) * historyPageSize + 1;
+  const historyTo = Math.min(closed.length, safeHistoryPage * historyPageSize);
 
   // El clamping de página se resuelve en render con safeQueuePage/safeHistoryPage
   // (Math.min). No se usan efectos con setState para evitar renders en cascada
   // (regla react-hooks/set-state-in-effect).
 
   const current = selected ? (incidents.find((i) => i.id === selected) ?? null) : null;
-
-  const aprobarCaso = (id: string, notas: string) => {
-    setIncidents((prev) =>
-      prev.map((i) => {
-        if (i.id !== id) return i;
-        const entry: HistoryEntry = {
-          id: `h-${Date.now()}`,
-          user: currentUser,
-          timestamp: nowIso(),
-          action: "aprobacion",
-          prevStatus: i.status,
-          newStatus: "APROBADO",
-          notes: notas,
-        };
-        return {
-          ...i,
-          status: "APROBADO",
-          updatedAt: nowIso(),
-          updatedBy: currentUser,
-          history: [...(i.history ?? []), entry],
-        };
-      })
-    );
-  };
-
-  const observarCaso = (id: string, observaciones: string) => {
-    setIncidents((prev) =>
-      prev.map((i) => {
-        if (i.id !== id) return i;
-        const entry: HistoryEntry = {
-          id: `h-${Date.now()}`,
-          user: currentUser,
-          timestamp: nowIso(),
-          action: "observacion",
-          prevStatus: i.status,
-          newStatus: "OBSERVADO",
-          notes: observaciones,
-        };
-        const updatedInforme = i.informeEvaluacion
-          ? { ...i.informeEvaluacion, observacionesComite: observaciones }
-          : i.informeEvaluacion;
-        return {
-          ...i,
-          status: "OBSERVADO",
-          informeEvaluacion: updatedInforme,
-          updatedAt: nowIso(),
-          updatedBy: currentUser,
-          history: [...(i.history ?? []), entry],
-        };
-      })
-    );
-  };
-
-  const rechazarCaso = (id: string, notas: string) => {
-    setIncidents((prev) =>
-      prev.map((i) => {
-        if (i.id !== id) return i;
-        const entry: HistoryEntry = {
-          id: `h-${Date.now()}`,
-          user: currentUser,
-          timestamp: nowIso(),
-          action: "rechazo",
-          prevStatus: i.status,
-          newStatus: "RECHAZADO",
-          notes: notas,
-        };
-        return {
-          ...i,
-          status: "RECHAZADO",
-          updatedAt: nowIso(),
-          updatedBy: currentUser,
-          history: [...(i.history ?? []), entry],
-        };
-      })
-    );
-  };
-
-  const handleAprobar = () => {
-    if (!current) return;
-    if (!notes.trim()) {
-      alert("Escribe las notas de aprobación");
-      return;
-    }
-    aprobarCaso(current.id, notes);
-    setSelected(null);
-    setNotes("");
-  };
-
-  const handleObservar = () => {
-    if (!current) return;
-    if (!notes.trim()) {
-      alert("Escribe las observaciones antes de devolver");
-      return;
-    }
-    observarCaso(current.id, notes);
-    setSelected(null);
-    setNotes("");
-  };
-
-  const handleRechazar = () => {
-    if (!current) return;
-    if (!notes.trim()) {
-      alert("Escribe el motivo de rechazo");
-      return;
-    }
-    rechazarCaso(current.id, notes);
-    setSelected(null);
-    setNotes("");
-  };
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
@@ -433,34 +330,18 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
                   )}
                 </button>
               ))}
-              {queue.length > 0 && (
-                <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 bg-gray-50">
-                  <p className="text-xs text-gray-500">
-                    Mostrando {queueFrom}-{queueTo} de {queue.length}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setQueuePage((p) => Math.max(1, p - 1))}
-                      disabled={safeQueuePage === 1}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-[var(--caritas-border)] rounded-lg bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <ChevronLeft className="w-3.5 h-3.5" /> Anterior
-                    </button>
-                    <span className="text-xs text-gray-500 font-medium">
-                      {safeQueuePage} / {queueTotalPages}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setQueuePage((p) => Math.min(queueTotalPages, p + 1))}
-                      disabled={safeQueuePage === queueTotalPages}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-[var(--caritas-border)] rounded-lg bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Siguiente <ChevronRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              )}
+              <PaginationControls
+                total={queue.length}
+                start={queueFrom}
+                end={queueTo}
+                page={safeQueuePage}
+                totalPages={queueTotalPages}
+                onPrevious={() => setQueuePage((p) => Math.max(1, p - 1))}
+                onNext={() => setQueuePage((p) => Math.min(queueTotalPages, p + 1))}
+                pageSize={queuePageSize}
+                onPageSizeChange={(s) => { setQueuePageSize(s); setQueuePage(1); }}
+                className="rounded-none border-x-0 border-b-0"
+              />
             </div>
           )}
 
@@ -493,32 +374,18 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
                   </button>
                 ))}
               </div>
-              <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 bg-gray-50">
-                <p className="text-xs text-gray-500">
-                  Mostrando {historyFrom}-{historyTo} de {closed.length}
-                </p>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
-                    disabled={safeHistoryPage === 1}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-[var(--caritas-border)] rounded-lg bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <ChevronLeft className="w-3.5 h-3.5" /> Anterior
-                  </button>
-                  <span className="text-xs text-gray-500 font-medium">
-                    {safeHistoryPage} / {historyTotalPages}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setHistoryPage((p) => Math.min(historyTotalPages, p + 1))}
-                    disabled={safeHistoryPage === historyTotalPages}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-[var(--caritas-border)] rounded-lg bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Siguiente <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
+              <PaginationControls
+                total={closed.length}
+                start={historyFrom}
+                end={historyTo}
+                page={safeHistoryPage}
+                totalPages={historyTotalPages}
+                onPrevious={() => setHistoryPage((p) => Math.max(1, p - 1))}
+                onNext={() => setHistoryPage((p) => Math.min(historyTotalPages, p + 1))}
+                pageSize={historyPageSize}
+                onPageSizeChange={(s) => { setHistoryPageSize(s); setHistoryPage(1); }}
+                className="rounded-none border-x-0 border-b-0"
+              />
             </>
           )}
         </div>
@@ -906,41 +773,14 @@ export function DonacionesModule({ canEvaluate, currentUser }: Props) {
                   </div>
                 )}
 
-                {/* Panel de decisión */}
-                {canEvaluate && ["EN EVALUACION", "OBSERVADO"].includes(current.status) && (
-                  <div className="border-t border-gray-100 pt-4 space-y-3">
-                    <p className="text-xs font-bold text-gray-700">Resolución del Comité</p>
-                    <textarea
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      rows={3}
-                      placeholder="Justificación de la decisión, criterios aplicados, condiciones, monto o kit aprobado..."
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-purple-400 resize-none"
-                    />
-                    <div className="grid grid-cols-3 gap-2">
-                      <button
-                        onClick={handleAprobar}
-                        className="flex flex-col items-center gap-1 py-2.5 bg-green-600 hover:bg-green-700 text-white font-bold text-xs rounded-lg transition-all"
-                      >
-                        <CheckCircle className="w-4 h-4" />
-                        Aprobar
-                      </button>
-                      <button
-                        onClick={handleObservar}
-                        className="flex flex-col items-center gap-1 py-2.5 bg-yellow-500 hover:bg-yellow-600 text-white font-bold text-xs rounded-lg transition-all"
-                      >
-                        <AlertCircle className="w-4 h-4" />
-                        Observar
-                      </button>
-                      <button
-                        onClick={handleRechazar}
-                        className="flex flex-col items-center gap-1 py-2.5 bg-red-500 hover:bg-red-600 text-white font-bold text-xs rounded-lg transition-all"
-                      >
-                        <XCircle className="w-4 h-4" />
-                        Rechazar
-                      </button>
-                    </div>
-                  </div>
+                {/* Panel de votación del Comité */}
+                {current.status === "EN EVALUACION" && (
+                  <PanelVotacionComite
+                    idIncidencia={current.id}
+                    soyMiembroDelComite={soyMiembroDelComite}
+                    miIdUsuarioGRD={miIdUsuarioGRD}
+                    tally={tallyPorCaso[current.id] ?? null}
+                  />
                 )}
 
                 {/* Vista de solo lectura para casos procesados */}

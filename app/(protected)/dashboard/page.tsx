@@ -7,6 +7,12 @@ import { EspecialistaDashboard } from "@/app/ui/dashboard/especialista-dashboard
 
 const INACTIVE = ["CERRADO", "RECHAZADO"];
 
+// "Este año" = año calendario actual. El dashboard separa lo del año en curso
+// del histórico acumulado (incidentes), mientras que usuarios/equipo es padrón actual.
+const ANIO = new Date().getFullYear();
+const INICIO_ANIO = new Date(ANIO, 0, 1);
+const esteAnio = { gte: INICIO_ANIO };
+
 async function getAdminData() {
   const [
     porEstado,
@@ -17,9 +23,12 @@ async function getAdminData() {
     totalUsers,
     familias,
     personas,
+    incidentes2026,
+    familias2026,
+    personas2026,
     incidentesRecientes,
     simPendientes,
-    incidentesPorTipo,
+    incidentesPorTipo2026,
   ] = await Promise.all([
     prisma.incidencia.groupBy({
       by: ["estadoActual"],
@@ -41,6 +50,14 @@ async function getAdminData() {
         grupoFamiliar: { incidencia: { estadoActual: { notIn: INACTIVE }, deletedAt: null } },
       },
     }),
+    // ── Métricas del año en curso ──
+    prisma.incidencia.count({ where: { deletedAt: null, createdAt: esteAnio } }),
+    prisma.grupoFamiliarAfectado.count({
+      where: { incidencia: { deletedAt: null, createdAt: esteAnio } },
+    }),
+    prisma.personaAfectada.count({
+      where: { grupoFamiliar: { incidencia: { deletedAt: null, createdAt: esteAnio } } },
+    }),
     prisma.incidencia.findMany({
       where: { estadoActual: { notIn: INACTIVE }, deletedAt: null },
       orderBy: { createdAt: "desc" },
@@ -51,16 +68,18 @@ async function getAdminData() {
         tituloIncidencia: true,
         tipoEvento: true,
         estadoActual: true,
+        createdAt: true,
         parroquia: { select: { nombre: true } },
       },
     }),
     prisma.actividadPreventiva.count({
       where: { estadoActividad: { in: ["PROGRAMADA", "EN_EJECUCION"] }, deletedAt: null },
     }),
+    // Categorías SOLO del año en curso
     prisma.incidencia.groupBy({
       by: ["tipoEvento"],
       _count: { idIncidencia: true },
-      where: { deletedAt: null, tipoEvento: { not: null } },
+      where: { deletedAt: null, tipoEvento: { not: null }, createdAt: esteAnio },
     }),
   ]);
 
@@ -73,7 +92,7 @@ async function getAdminData() {
     else incidentesActivos += row._count.idIncidencia;
   }
 
-  const catData = incidentesPorTipo
+  const catData = incidentesPorTipo2026
     .filter((r) => r.tipoEvento)
     .map((r) => ({ name: r.tipoEvento!, count: r._count.idIncidencia }))
     .sort((a, b) => b.count - a.count);
@@ -85,9 +104,13 @@ async function getAdminData() {
   }));
 
   return {
+    anio: ANIO,
     incidentesActivos,
     incidentesCerrados,
     totalIncidentes: incidentesActivos + incidentesCerrados,
+    incidentes2026,
+    familias2026,
+    personas2026,
     familias,
     personas,
     usersActivos,
@@ -102,6 +125,7 @@ async function getAdminData() {
       tituloIncidencia: i.tituloIncidencia,
       tipoEvento: i.tipoEvento,
       estadoActual: i.estadoActual,
+      fecha: i.createdAt.toISOString(),
       parroquia: i.parroquia?.nombre ?? null,
     })),
     catData,
@@ -116,6 +140,9 @@ async function getEspecialistaData() {
     brigDispList,
     familias,
     personas,
+    incidentes2026,
+    familias2026,
+    personas2026,
     incidentesRecientes,
     simulacrosActivos,
   ] = await Promise.all([
@@ -143,6 +170,13 @@ async function getEspecialistaData() {
         grupoFamiliar: { incidencia: { estadoActual: { notIn: INACTIVE }, deletedAt: null } },
       },
     }),
+    prisma.incidencia.count({ where: { deletedAt: null, createdAt: esteAnio } }),
+    prisma.grupoFamiliarAfectado.count({
+      where: { incidencia: { deletedAt: null, createdAt: esteAnio } },
+    }),
+    prisma.personaAfectada.count({
+      where: { grupoFamiliar: { incidencia: { deletedAt: null, createdAt: esteAnio } } },
+    }),
     prisma.incidencia.findMany({
       where: { estadoActual: { notIn: INACTIVE }, deletedAt: null },
       orderBy: { createdAt: "desc" },
@@ -153,6 +187,7 @@ async function getEspecialistaData() {
         tituloIncidencia: true,
         tipoEvento: true,
         estadoActual: true,
+        createdAt: true,
         parroquia: { select: { nombre: true } },
       },
     }),
@@ -181,6 +216,7 @@ async function getEspecialistaData() {
     tituloIncidencia: i.tituloIncidencia,
     tipoEvento: i.tipoEvento,
     estadoActual: i.estadoActual,
+    fecha: i.createdAt.toISOString(),
     parroquia: i.parroquia?.nombre ?? null,
   }));
 
@@ -198,7 +234,11 @@ async function getEspecialistaData() {
     .map((inc) => ({ inc, ...URGENTE_MAP[inc.estadoActual] }));
 
   return {
+    anio: ANIO,
     incidentesActivos,
+    incidentes2026,
+    familias2026,
+    personas2026,
     familias,
     personas,
     brigDisp: brigDispList.length,
@@ -228,20 +268,20 @@ export default async function DashboardPage() {
   // Brigadista → va directo a GRD
   if (role === "brigadista") redirect("/grd");
 
-  // Comité y Jefa OGP → van a GRD también
-  if (role === "comite" || role === "jefaOGP") redirect("/grd");
+  // Comité → va a GRD
+  if (role === "comite") redirect("/grd");
 
   if (role === "admin") {
     const data = await getAdminData();
     return <AdminDashboard {...data} />;
   }
 
-  if (role === "especialistaGRD") {
+  if (role === "especialistaGRD" || role === "jefaOGP") {
     const [data, user] = await Promise.all([
       getEspecialistaData(),
       prisma.user.findUnique({ where: { id: session.userId }, select: { name: true } }),
     ]);
-    return <EspecialistaDashboard {...data} userName={user?.name ?? "Especialista"} />;
+    return <EspecialistaDashboard {...data} userName={user?.name ?? session.name} />;
   }
 
   redirect("/grd");

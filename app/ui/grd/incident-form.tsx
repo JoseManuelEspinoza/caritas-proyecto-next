@@ -35,12 +35,14 @@ import {
 import { extraerTextoPdf } from "@/app/lib/pdf-text";
 import { consultarDni } from "@/app/actions/reniec";
 import { subirArchivoS3 } from "@/app/ui/shared/file-upload";
+import { useConfirm } from "@/app/ui/shared/confirm-modal";
 import { ACCEPT, validarArchivo } from "@/app/lib/upload-config";
 // xlsx se carga de forma dinámica para no aumentar el bundle inicial.
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { CategorySelector } from "./category-selector";
 import { LocationPicker } from "./location-picker";
+import { PersonaModal } from "./persona-modal";
 import {
   createIncidente,
   updateIncidente,
@@ -69,8 +71,11 @@ const DISTRITOS_LIMA = [
   "Ancón",
   "Ate",
   "Barranco",
+  "Bellavista",
   "Breña",
+  "Callao",
   "Carabayllo",
+  "Carmen de la Legua Reynoso",
   "Chaclacayo",
   "Chorrillos",
   "Cieneguilla",
@@ -79,12 +84,16 @@ const DISTRITOS_LIMA = [
   "Independencia",
   "Jesús María",
   "La Molina",
+  "La Perla",
+  "La Punta",
   "La Victoria",
+  "Lima Cercado",
   "Lince",
   "Los Olivos",
   "Lurigancho",
   "Lurín",
   "Magdalena del Mar",
+  "Mi Perú",
   "Miraflores",
   "Pachacámac",
   "Pueblo Libre",
@@ -100,9 +109,9 @@ const DISTRITOS_LIMA = [
   "Santa Anita",
   "Santiago de Surco",
   "Surquillo",
+  "Ventanilla",
   "Villa El Salvador",
   "Villa María del Triunfo",
-  "Lima Cercado",
 ];
 
 const PARROQUIAS_LIMA = [
@@ -498,283 +507,6 @@ function FormSection({
   );
 }
 
-// ─── Modal de persona ─────────────────────────────────────────────────────────
-
-function PersonaModal({
-  onSave,
-  onClose,
-  editing,
-  familias,
-  activeFamiliaId,
-  situaciones = SITUACIONES_ESPECIALES,
-}: {
-  onSave: (p: PersonaForm) => void;
-  onClose: () => void;
-  editing?: PersonaForm;
-  familias: FamiliaForm[];
-  activeFamiliaId?: string;
-  /** Catálogo "Grupos Vulnerables" (respaldo: lista estática). */
-  situaciones?: string[];
-}) {
-  const [form, setForm] = useState<PersonaForm>(
-    editing ?? {
-      id: `PER-${Date.now()}`,
-      tipoDoc: "DNI",
-      dni: "",
-      nombre: "",
-      apellidoPaterno: "",
-      apellidoMaterno: "",
-      edad: "",
-      genero: "Femenino",
-      celular: "",
-      parentesco: "",
-      situacionActual: "",
-      familiaId: activeFamiliaId,
-    }
-  );
-
-  function set(key: keyof PersonaForm, value: string) {
-    setForm((p) => ({ ...p, [key]: value }));
-  }
-
-  function validateDocumento(tipo: string, valor: string): string | null {
-    const v = (valor ?? "").trim();
-    if (tipo === "DNI") {
-      const digits = v.replace(/\D/g, "");
-      if (digits.length < 8) return "El DNI debe tener al menos 8 dígitos.";
-      if (digits.length > 9) return "El DNI no debe exceder 9 dígitos (8 + dígito verificador).";
-      return null;
-    }
-    if (tipo === "CE") {
-      const digits = v.replace(/\D/g, "");
-      if (digits.length < 9) return "El Carnet de Extranjería debe tener al menos 9 dígitos.";
-      if (digits.length > 12) return "El Carnet de Extranjería no debe exceder 12 dígitos.";
-      return null;
-    }
-    if (tipo === "Pasaporte") {
-      const alnum = v.replace(/[^A-Za-z0-9]/g, "");
-      if (alnum.length < 6) return "El pasaporte debe tener al menos 6 caracteres alfanuméricos.";
-      if (alnum.length > 12) return "El pasaporte no debe exceder 12 caracteres.";
-      return null;
-    }
-    return null;
-  }
-
-  function handleSubmit() {
-    if (!form.nombre.trim()) {
-      toast.error("Ingresa el nombre de la persona");
-      return;
-    }
-    if (!form.edad) {
-      toast.error("Ingresa la edad");
-      return;
-    }
-    // Validación del documento según tipo
-    const docErr = validateDocumento(form.tipoDoc, form.dni);
-    if (docErr) {
-      toast.error(docErr);
-      return;
-    }
-    onSave({ ...form, id: editing?.id || `PER-${Date.now()}` });
-    onClose();
-  }
-
-  const familiaActual = familias.find((f) => f.id === activeFamiliaId);
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl max-w-lg w-full max-h-[90vh] overflow-auto shadow-xl">
-        <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-          <h3 className="font-bold text-gray-900">
-            {editing
-              ? "Editar persona"
-              : activeFamiliaId
-                ? `Agregar integrante — ${familiaActual?.nombre ?? ""}`
-                : "Agregar persona afectada"}
-          </h3>
-          <button onClick={onClose} className="text-gray-500 hover:bg-gray-100 rounded p-1">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {activeFamiliaId && (
-          <div className="bg-blue-50 border-b border-blue-100 px-4 py-2 text-xs text-blue-800">
-            Integrante de: <strong>{familiaActual?.nombre}</strong>
-          </div>
-        )}
-
-        <div className="p-4 space-y-3">
-          <div className="grid grid-cols-3 gap-2">
-            <div>
-              <label className="text-xs font-semibold text-gray-600 block mb-1">Tipo Doc.</label>
-              <select
-                value={form.tipoDoc}
-                onChange={(e) => set("tipoDoc", e.target.value)}
-                className="w-full px-2 py-2 text-sm border border-gray-200 rounded-lg"
-              >
-                {["DNI", "CE", "Pasaporte", "Otro"].map((t) => (
-                  <option key={t}>{t}</option>
-                ))}
-              </select>
-            </div>
-            <div className="col-span-2">
-              <label className="text-xs font-semibold text-gray-600 block mb-1">N° Documento</label>
-              <input
-                type="text"
-                value={form.dni}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (form.tipoDoc === "DNI" || form.tipoDoc === "CE") {
-                    const digits = val.replace(/\D/g, "");
-                    // limit to 12 digits for safety
-                    set("dni", digits.slice(0, 12));
-                  } else {
-                    // pasaporte / otro → alfanumérico, mayúsculas
-                    const a = val.toUpperCase().replace(/[^A-Z0-9]/g, "");
-                    set("dni", a.slice(0, 12));
-                  }
-                }}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
-                placeholder={
-                  form.tipoDoc === "DNI"
-                    ? "12345678"
-                    : form.tipoDoc === "CE"
-                      ? "123456789"
-                      : "A12345678"
-                }
-                maxLength={12}
-              />
-              <p className="text-[11px] text-gray-400 mt-1">
-                {form.tipoDoc === "DNI" &&
-                  "DNI: 8 dígitos (opcionalmente seguido de dígito verificador)."}
-                {form.tipoDoc === "Pasaporte" &&
-                  "Pasaporte: código alfanumérico (usualmente 9 caracteres, hasta 12)."}
-                {form.tipoDoc === "CE" && "Carnet de Extranjería: 9 a 12 dígitos numéricos."}
-              </p>
-            </div>
-          </div>
-
-          <div>
-            <label className="text-xs font-semibold text-gray-600 block mb-1">
-              Nombres <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={form.nombre}
-              onChange={(e) => set("nombre", e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
-              placeholder="Ej: María Elena"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs font-semibold text-gray-600 block mb-1">
-                Apellido Paterno
-              </label>
-              <input
-                type="text"
-                value={form.apellidoPaterno}
-                onChange={(e) => set("apellidoPaterno", e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-gray-600 block mb-1">
-                Apellido Materno
-              </label>
-              <input
-                type="text"
-                value={form.apellidoMaterno}
-                onChange={(e) => set("apellidoMaterno", e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs font-semibold text-gray-600 block mb-1">
-                Edad <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="number"
-                value={form.edad}
-                onChange={(e) => set("edad", e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
-                placeholder="0"
-                min="0"
-                max="120"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-gray-600 block mb-1">Género</label>
-              <select
-                value={form.genero}
-                onChange={(e) => set("genero", e.target.value)}
-                className="w-full px-2 py-2 text-sm border border-gray-200 rounded-lg"
-              >
-                {["Femenino", "Masculino", "Otro", "Prefiere no decir"].map((g) => (
-                  <option key={g}>{g}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs font-semibold text-gray-600 block mb-1">Celular</label>
-              <input
-                type="tel"
-                value={form.celular}
-                onChange={(e) => set("celular", e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
-                placeholder="987654321"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-gray-600 block mb-1">Parentesco</label>
-              <SearchableSelect
-                value={form.parentesco}
-                onChange={(v) => set("parentesco", v)}
-                options={PARENTESCOS}
-                placeholder="Buscar parentesco…"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="text-xs font-semibold text-gray-600 block mb-1">
-              Situación especial
-            </label>
-            <SearchableSelect
-              value={form.situacionActual}
-              onChange={(v) => set("situacionActual", v)}
-              options={situaciones}
-              placeholder="Ninguna / buscar…"
-            />
-          </div>
-
-          <div className="flex gap-2 pt-2">
-            <button
-              onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium"
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={handleSubmit}
-              className="flex-1 px-4 py-2 bg-[#009850] text-white rounded-lg text-sm font-medium"
-            >
-              Guardar
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Modal observaciones familia ──────────────────────────────────────────────
 
 function ObsFamiliaModal({
@@ -863,6 +595,7 @@ export function IncidentForm({
   const isEdit = Boolean(incidenciaId);
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const { showConfirm, ConfirmModalJSX } = useConfirm();
 
   // ── Listas desde el módulo Catálogos (las constantes son solo respaldo) ──
   const conOpcion = (lista: string[], extra: string) =>
@@ -890,6 +623,7 @@ export function IncidentForm({
 
   // Sección 1
   const [fechaReporte] = useState(initialData?.fechaReporte ?? nowLocal());
+  const [tipoDocReporta, setTipoDocReporta] = useState<"DNI" | "Pasaporte" | "Carnet de Extranjería">("DNI");
   const [reportaDni, setReportaDni] = useState(initialData?.reportaDni ?? "");
   const [reportaNombre, setReportaNombre] = useState(initialData?.reportaNombre ?? "");
   // El teléfono se guarda como "+51 987654321"; al cargar en edición se separan código y número.
@@ -1128,6 +862,7 @@ export function IncidentForm({
         .sort((a, b) => a.dist - b.dist)
         .map((p) => p.nombre);
       setParroquiasCercanas(ordenadas);
+      if (ordenadas.length > 0) setParroquia(ordenadas[0]);
     } finally {
       setCargandoParroquias(false);
     }
@@ -1167,8 +902,17 @@ export function IncidentForm({
     }
   }
 
+  const PHONE_MAX_LENGTH: Record<string, number> = {
+    "+51": 9,  // Perú
+    "+52": 10, // México
+    "+54": 10, // Argentina
+    "+56": 9,  // Chile
+    "+57": 10, // Colombia
+  };
+
   function handleTelefonoChange(val: string) {
-    setReportaTel(val.replace(/\D/g, ""));
+    const max = PHONE_MAX_LENGTH[reportaTelCodigo] ?? 12;
+    setReportaTel(val.replace(/\D/g, "").slice(0, max));
   }
 
   // Familia
@@ -1278,39 +1022,50 @@ export function IncidentForm({
     toast.success(`Se importaron ${personasNuevas.length} persona(s) correctamente.`);
   }
 
-  function deleteFamilia(familiaId: string) {
+  async function deleteFamilia(familiaId: string) {
     const hasPersonas = personas.some((p) => p.familiaId === familiaId);
-    if (
-      hasPersonas &&
-      !confirm("Esta familia tiene personas registradas. ¿Eliminar junto con sus integrantes?")
-    )
-      return;
+    if (hasPersonas) {
+      const ok = await showConfirm({
+        title: "¿Eliminar familia?",
+        message: "Esta familia tiene personas registradas. Se eliminarán junto con todos sus integrantes.",
+        confirmLabel: "Sí, eliminar",
+        variant: "danger",
+      });
+      if (!ok) return;
+    }
     if (hasPersonas) setPersonas((prev) => prev.filter((p) => p.familiaId !== familiaId));
     setFamilias((prev) => prev.filter((f) => f.id !== familiaId));
   }
 
   // Evidencias
-  function deleteFuente(id: string) {
+  async function deleteFuente(id: string) {
     const f = fuentesEvidencia.find((f) => f.id === id);
-    if (
-      f &&
-      f.archivos.length > 0 &&
-      !confirm(`¿Eliminar "${f.fuente}" y sus ${f.archivos.length} evidencia(s)?`)
-    )
-      return;
+    if (f && f.archivos.length > 0) {
+      const ok = await showConfirm({
+        title: `¿Eliminar "${f.fuente}"?`,
+        message: `Se eliminarán ${f.archivos.length} evidencia(s) asociadas. Esta acción no se puede deshacer.`,
+        confirmLabel: "Sí, eliminar",
+        variant: "danger",
+      });
+      if (!ok) return;
+    }
     setFuentesEvidencia((prev) => prev.filter((f) => f.id !== id));
   }
 
   /** Sincroniza la selección múltiple del desplegable con fuentesEvidencia. */
-  function setFuentesSeleccion(next: string[]) {
+  async function setFuentesSeleccion(next: string[]) {
     // Confirmar si se va a quitar una fuente que ya tiene archivos subidos.
     const aQuitar = fuentesEvidencia.filter((f) => !next.includes(f.fuente));
     for (const f of aQuitar) {
-      if (
-        f.archivos.length > 0 &&
-        !confirm(`¿Quitar "${f.fuente}" y sus ${f.archivos.length} evidencia(s)?`)
-      )
-        return;
+      if (f.archivos.length > 0) {
+        const ok = await showConfirm({
+          title: `¿Quitar "${f.fuente}"?`,
+          message: `Se quitarán ${f.archivos.length} evidencia(s) asociadas.`,
+          confirmLabel: "Sí, quitar",
+          variant: "warning",
+        });
+        if (!ok) return;
+      }
     }
     setFuentesEvidencia((prev) => {
       const conservadas = prev.filter((f) => next.includes(f.fuente));
@@ -1366,8 +1121,9 @@ export function IncidentForm({
     const dni = reportaDni.replace(/\D/g, "");
     const tel = reportaTel.replace(/\D/g, "");
 
-    if (!dni) return "Ingresa el DNI de la persona que reportó.";
-    if (dni.length !== 8) return "El DNI de quien reporta debe tener exactamente 8 dígitos.";
+    if (!dni) return `Ingresa el ${tipoDocReporta} de la persona que reportó.`;
+    if (tipoDocReporta === "DNI" && dni.length !== 8) return "El DNI de quien reporta debe tener exactamente 8 dígitos.";
+    if (tipoDocReporta !== "DNI" && dni.length < 5) return `El ${tipoDocReporta} debe tener al menos 5 caracteres.`;
 
     if (!reportaNombre.trim()) return "Ingresa el nombre completo de quien reportó.";
     if (reportaNombre.trim().length < 5) {
@@ -1392,6 +1148,7 @@ export function IncidentForm({
     if (!categoria.trim()) return "Selecciona la categoría del evento.";
     if (!distrito.trim()) return "Selecciona el distrito del suceso.";
 
+    if (!parroquia.trim()) return "Selecciona la parroquia de referencia.";
     if (!direccion.trim()) return "Ingresa la dirección del suceso.";
     if (direccion.trim().length < 5) return "La dirección debe tener al menos 5 caracteres.";
 
@@ -1600,39 +1357,69 @@ export function IncidentForm({
             <div className="space-y-3">
               <p className="text-xs font-semibold text-gray-600">Persona que reportó el evento</p>
               <div className="grid grid-cols-12 gap-3">
-                <div className="col-span-12 sm:col-span-3">
+                <div className="col-span-12 sm:col-span-4">
                   <label className="text-xs text-gray-500 mb-1.5 block">
-                    DNI <span className="text-red-500">*</span>
+                    Documento de identidad <span className="text-red-500">*</span>
                   </label>
                   <div className="flex gap-2">
+                    <div className="relative flex-shrink-0">
+                      <select
+                        value={tipoDocReporta}
+                        onChange={(e) => {
+                          setTipoDocReporta(e.target.value as typeof tipoDocReporta);
+                          setReportaDni("");
+                        }}
+                        className={`${inputCls} appearance-none pr-6 text-xs`}
+                        aria-label="Tipo de documento"
+                      >
+                        <option value="DNI">DNI</option>
+                        <option value="Pasaporte">Pasaporte</option>
+                        <option value="Carnet de Extranjería">C.E.</option>
+                      </select>
+                      <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                    </div>
                     <input
                       type="text"
-                      inputMode="numeric"
-                      maxLength={8}
-                      placeholder="12345678"
+                      inputMode={tipoDocReporta === "DNI" ? "numeric" : "text"}
+                      maxLength={tipoDocReporta === "DNI" ? 8 : 20}
+                      placeholder={tipoDocReporta === "DNI" ? "12345678" : tipoDocReporta === "Pasaporte" ? "AB123456" : "000123456"}
                       value={reportaDni}
-                      onChange={(e) => setReportaDni(e.target.value.replace(/\D/g, ""))}
+                      onChange={(e) => {
+                        const val = tipoDocReporta === "DNI"
+                          ? e.target.value.replace(/\D/g, "")
+                          : e.target.value.toUpperCase();
+                        setReportaDni(val);
+                      }}
                       onKeyDown={(e) => {
-                        if (e.key === "Enter") {
+                        if (e.key === "Enter" && tipoDocReporta === "DNI") {
                           e.preventDefault();
                           buscarDniReporta();
                         }
                       }}
                       className={`${inputCls} flex-1 min-w-0 ${errBorde(!reportaDni.trim())}`}
                     />
-                    <button
-                      type="button"
-                      onClick={buscarDniReporta}
-                      disabled={buscandoDniReporta}
-                      title="Consultar datos por DNI"
-                      className="flex items-center gap-1 px-3 bg-[#009850] text-white rounded-lg text-xs font-medium hover:opacity-90 disabled:opacity-50 flex-shrink-0"
-                    >
-                      <Search className="w-3.5 h-3.5" />
-                      {buscandoDniReporta ? "…" : "Buscar"}
-                    </button>
+                    {tipoDocReporta === "DNI" && (
+                      <button
+                        type="button"
+                        onClick={buscarDniReporta}
+                        disabled={buscandoDniReporta}
+                        title="Consultar datos por DNI"
+                        className="flex items-center gap-1 px-3 bg-[#009850] text-white rounded-lg text-xs font-medium hover:opacity-90 disabled:opacity-50 flex-shrink-0"
+                      >
+                        {buscandoDniReporta ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Search className="w-3.5 h-3.5" />
+                        )}
+                        {buscandoDniReporta ? "Buscando…" : "Buscar"}
+                      </button>
+                    )}
                   </div>
+                  {tipoDocReporta !== "DNI" && (
+                    <p className="text-[10px] text-gray-400 mt-1">Ingreso manual — no disponible búsqueda automática.</p>
+                  )}
                 </div>
-                <div className="col-span-12 sm:col-span-9">
+                <div className="col-span-12 sm:col-span-8">
                   <label className="text-xs text-gray-500 mb-1.5 block">
                     Nombre y apellidos completos <span className="text-red-500">*</span>
                   </label>
@@ -1674,7 +1461,7 @@ export function IncidentForm({
                       inputMode="numeric"
                       pattern="[0-9]*"
                       placeholder="987654321"
-                      maxLength={12}
+                      maxLength={PHONE_MAX_LENGTH[reportaTelCodigo] ?? 12}
                       value={reportaTel}
                       onChange={(e) => handleTelefonoChange(e.target.value)}
                       className={`${inputCls} flex-1 ${errBorde(!reportaTel.trim())}`}
@@ -1822,12 +1609,16 @@ export function IncidentForm({
                       )}
                     </div>
                     <p className="text-[11px] text-gray-400 mt-1">
-                      Sugerencias basadas en el distrito seleccionado.
+                      Sugerencias basadas en el distrito seleccionado. Escribe con el formato correcto:{" "}
+                      <span className="text-gray-500 font-medium">Av. Nombre 123</span>,{" "}
+                      <span className="text-gray-500 font-medium">Jr. Nombre 456</span>,{" "}
+                      <span className="text-gray-500 font-medium">Calle Nombre 789</span>,{" "}
+                      <span className="text-gray-500 font-medium">Psj. Nombre 10</span>
                     </p>
                   </div>
                   <div>
-                    <label className="text-xs text-gray-500 mb-1.5 block">
-                      Parroquia de referencia
+                    <label className={`text-xs mb-1.5 block ${intentoEnvio && !parroquia.trim() ? "text-red-600" : "text-gray-500"}`}>
+                      Parroquia de referencia <span className="text-red-500">*</span>
                       {cargandoParroquias && (
                         <span className="ml-2 text-[11px] text-[#009850]">buscando cercanas…</span>
                       )}
@@ -1843,6 +1634,7 @@ export function IncidentForm({
                             : PARROQUIAS_LIMA
                       }
                       placeholder="Buscar parroquia del sistema…"
+                      error={intentoEnvio && !parroquia.trim()}
                     />
                     <p className="text-[11px] text-gray-400 mt-1">
                       {parroquiasCercanas && parroquiasCercanas.length > 0
@@ -1877,10 +1669,14 @@ export function IncidentForm({
                         if (la != null && lo != null) buscarParroquiasCercanas(la, lo);
                       }}
                       onAddressResolved={({ direccion: dir, candidatosDistrito }) => {
-                        setDireccion(dir);
+                        // Fix #1: preserva el número que el usuario pudo haber escrito
+                        setDireccion((prev) => fusionarNumero(prev, dir) || dir);
                         setMapSugerencias([]);
+                        // Fix #2: normaliza acentos y espacios para comparar con DISTRITOS_LIMA
+                        const norm = (s: string) =>
+                          s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
                         const match = DISTRITOS_LIMA.find((d) =>
-                          candidatosDistrito.some((c) => c.toLowerCase() === d.toLowerCase())
+                          candidatosDistrito.some((c) => norm(c) === norm(d))
                         );
                         if (match) setDistrito(match);
                       }}
@@ -2342,37 +2138,35 @@ export function IncidentForm({
       </div>
 
       {/* ── Footer sticky ─────────────────────────────────────────────── */}
-      <div className="fixed bottom-0 left-0 right-0 z-20 bg-white/95 backdrop-blur-sm border-t border-[#DDDDDD] shadow-[0_-2px_16px_rgba(0,0,0,0.08)]">
-        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
+      <div className="sticky bottom-0 z-20 bg-white/95 backdrop-blur-sm border-t border-[#DDDDDD] shadow-[0_-2px_16px_rgba(0,0,0,0.08)]">
+        <div className="px-6 py-3 flex items-center justify-center gap-8">
           <Link
             href={isEdit && incidenciaId ? `/grd/${incidenciaId}` : "/grd"}
-            className="flex items-center gap-2 px-5 py-2.5 border border-[#DDDDDD] rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+            className="flex items-center justify-center gap-2 px-5 py-2.5 border border-[#DDDDDD] rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             Cancelar
           </Link>
 
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={isPending}
-              className="flex items-center gap-2 px-8 py-2.5 bg-[#009850] text-white rounded-xl hover:bg-[#007a40] active:scale-[0.98] transition-all font-bold text-sm shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isPending ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Save className="w-4 h-4" />
-              )}
-              {isPending
-                ? isEdit
-                  ? "Guardando..."
-                  : "Registrando..."
-                : isEdit
-                  ? "Guardar Cambios"
-                  : "Registrar Evento"}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={isPending}
+            className="flex items-center justify-center gap-2 px-16 py-2.5 bg-[#009850] text-white rounded-xl hover:bg-[#007a40] active:scale-[0.98] transition-all font-bold text-sm shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isPending ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Save className="w-4 h-4" />
+            )}
+            {isPending
+              ? isEdit
+                ? "Guardando..."
+                : "Registrando..."
+              : isEdit
+                ? "Guardar Cambios"
+                : "Registrar Evento"}
+          </button>
         </div>
       </div>
 
@@ -2413,6 +2207,7 @@ export function IncidentForm({
           onClose={() => setImportPreview(null)}
         />
       )}
+      {ConfirmModalJSX}
     </div>
   );
 }

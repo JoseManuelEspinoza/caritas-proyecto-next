@@ -3,6 +3,8 @@ import { toFrontendRole } from "@/app/lib/roles";
 import { redirect } from "next/navigation";
 import { prisma } from "@/app/lib/prisma";
 import { DonacionesModule, type Caso, type ReporteComite } from "@/app/ui/donaciones/donaciones-module";
+import { cargarTallyParaPagina, type TallyRondaConNombres } from "@/app/lib/comite-donaciones-tally";
+import { getUsuarioGRDId } from "@/app/lib/usuario-grd";
 
 const ESTADOS = [
   "EN EVALUACION",
@@ -24,7 +26,7 @@ function asStringArray(v: unknown): string[] {
 export default async function DonacionesPage() {
   const session = await verifySession();
   const role = toFrontendRole(session.role);
-  if (!["admin", "comite", "jefaOGP"].includes(role)) redirect("/dashboard");
+  if (!["admin", "comite"].includes(role)) redirect("/dashboard");
 
   const rows = await prisma.incidencia.findMany({
     where: { estadoActual: { in: ESTADOS } },
@@ -164,7 +166,23 @@ export default async function DonacionesPage() {
     };
   });
 
-  const canEvaluate = ["comite", "admin", "jefaOGP"].includes(role);
+  const canEvaluate = ["comite", "admin"].includes(role);
+  const soyMiembroDelComite = session.role === "COMITEDONACIONES";
+  const miIdUsuarioGRD = await getUsuarioGRDId();
 
-  return <DonacionesModule casos={casos} canEvaluate={canEvaluate} />;
+  const casosEnEvaluacion = casos.filter((c) => c.estado === "EN EVALUACION");
+  const tallyEntries = await Promise.all(
+    casosEnEvaluacion.map(async (c) => [c.id, await cargarTallyParaPagina(c.id)] as [string, TallyRondaConNombres | null])
+  );
+  const tallyPorCaso: Record<string, TallyRondaConNombres | null> = Object.fromEntries(tallyEntries);
+
+  return (
+    <DonacionesModule
+      casos={casos}
+      canEvaluate={canEvaluate}
+      soyMiembroDelComite={soyMiembroDelComite}
+      miIdUsuarioGRD={miIdUsuarioGRD}
+      tallyPorCaso={tallyPorCaso}
+    />
+  );
 }

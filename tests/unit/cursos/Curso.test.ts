@@ -102,3 +102,40 @@ describe("Curso.cerrar", () => {
     expect(() => c.cerrar()).toThrow(BusinessRuleError);
   });
 });
+
+describe("Curso — assertDuracionValida", () => {
+  it("[negativo] lanza BusinessRuleError cuando duracion no es finita (Infinity)", () => {
+    expect(() => Curso.crear({ ...BASE, duracionEstimadaHoras: Infinity })).toThrow(BusinessRuleError);
+  });
+
+  it("[negativo] lanza BusinessRuleError cuando duracion no es entero", () => {
+    expect(() => Curso.crear({ ...BASE, duracionEstimadaHoras: 2.5 })).toThrow(BusinessRuleError);
+  });
+
+  it("[negativo] lanza BusinessRuleError cuando duracion es 0", () => {
+    expect(() => Curso.crear({ ...BASE, duracionEstimadaHoras: 0 })).toThrow(BusinessRuleError);
+  });
+
+  it("[negativo] lanza BusinessRuleError cuando duracion es negativa", () => {
+    expect(() => Curso.crear({ ...BASE, duracionEstimadaHoras: -5 })).toThrow(BusinessRuleError);
+  });
+
+  it("[positivo] acepta duracion válida", () => {
+    const c = Curso.crear({ ...BASE, duracionEstimadaHoras: 8 });
+    expect(c.snapshot.duracionEstimadaHoras).toBe(8);
+  });
+});
+
+describe("Curso — desdePersistencia e id", () => {
+  it("[positivo] desdePersistencia restaura el estado CERRADO", () => {
+    const c = Curso.desdePersistencia({
+      id: "curso-99",
+      idUsuarioResponsableGRD: "u-1",
+      nombreCurso: "Curso Avanzado",
+      modalidadGeneral: "ASINCRONA",
+      estadoCurso: "CERRADO",
+    });
+    expect(c.snapshot.estadoCurso).toBe("CERRADO");
+    expect(c.id).toBe("curso-99");
+  });
+});
