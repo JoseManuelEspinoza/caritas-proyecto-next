@@ -135,12 +135,6 @@ function validarPayload(body: AfectadoMovilPayload): string {
     throw new MobileSyncError("nombres debe tener al menos 2 caracteres.");
   }
 
-  const numeroDocumento = getNumeroDocumento(body);
-
-  if (numeroDocumento && numeroDocumento.length < 6) {
-    throw new MobileSyncError("numeroDocumento debe tener al menos 6 caracteres.");
-  }
-
   parseFechaOpcional(body.fechaNacimiento);
   parseBooleanOpcional(body.esVulnerable);
 

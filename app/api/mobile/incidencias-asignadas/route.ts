@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
+import { isS3Configured, presignGet } from "@/app/lib/s3";
 
 export const dynamic = "force-dynamic";
 
@@ -284,6 +285,42 @@ export async function GET(request: Request) {
       obsPorIncidencia.set(obs.idReferencia, lista);
     }
 
+    // Cargar evidencias para todas las incidencias
+    const evidenciasDB = allIds.length
+      ? await prisma.evidenciaGRD.findMany({
+          where: { idReferencia: { in: allIds }, estado: "ACTIVO", deletedAt: null },
+          select: {
+            idEvidenciaGRD: true,
+            idReferencia: true,
+            uuidMovil: true,
+            nombreArchivo: true,
+            urlArchivo: true,
+            formatoArchivo: true,
+            descripcion: true,
+            tamanoArchivo: true,
+          },
+          orderBy: { fechaCarga: "asc" },
+        })
+      : [];
+
+    const s3Ok = isS3Configured();
+    const evidenciasConUrl = await Promise.all(
+      evidenciasDB.map(async (ev) => {
+        let urlFirmada = ev.urlArchivo;
+        if (ev.urlArchivo && s3Ok && !/^https?:\/\//i.test(ev.urlArchivo)) {
+          try { urlFirmada = await presignGet(ev.urlArchivo); } catch { /* ignora */ }
+        }
+        return { ...ev, urlFirmada };
+      })
+    );
+
+    const evPorIncidencia = new Map<string, typeof evidenciasConUrl>();
+    for (const ev of evidenciasConUrl) {
+      const lista = evPorIncidencia.get(ev.idReferencia) ?? [];
+      lista.push(ev);
+      evPorIncidencia.set(ev.idReferencia, lista);
+    }
+
     const mapIncidencia = (inc: typeof incidenciasResponsable[number]) => ({
       asignacion: null,
       incidencia: {
@@ -291,6 +328,7 @@ export async function GET(request: Request) {
         latitud: decimalToNumber(inc.latitud),
         longitud: decimalToNumber(inc.longitud),
         observaciones: obsPorIncidencia.get(inc.idIncidencia) ?? [],
+        evidencias: evPorIncidencia.get(inc.idIncidencia) ?? [],
         parroquia: inc.parroquia
           ? {
               ...inc.parroquia,
@@ -325,6 +363,7 @@ export async function GET(request: Request) {
           latitud: decimalToNumber(asignacion.incidencia.latitud),
           longitud: decimalToNumber(asignacion.incidencia.longitud),
           observaciones: obsPorIncidencia.get(asignacion.incidencia.idIncidencia) ?? [],
+          evidencias: evPorIncidencia.get(asignacion.incidencia.idIncidencia) ?? [],
           parroquia: asignacion.incidencia.parroquia
             ? {
                 ...asignacion.incidencia.parroquia,
