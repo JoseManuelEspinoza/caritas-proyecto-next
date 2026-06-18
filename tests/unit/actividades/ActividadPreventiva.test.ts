@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ActividadPreventiva } from "@/core/domain/entities/actividad/ActividadPreventiva";
+import { ActividadPreventiva, ActividadProps } from "@/core/domain/entities/actividad/ActividadPreventiva";
 import { ValidationError, BusinessRuleError } from "@/core/domain/errors/DomainError";
 
 const BASE = {
@@ -94,7 +94,118 @@ describe("ActividadPreventiva.cancelar", () => {
 
   it("[negativo] lanza BusinessRuleError al cancelar una actividad EJECUTADA", () => {
     const a = crearProgramada();
-    a.ejecutar({ resultadoGeneral: "OK" });
+    a.ejecutar({ resultadoGeneral: "Exitoso sin contratiempos" });
     expect(() => a.cancelar("Ya fue ejecutada")).toThrow(BusinessRuleError);
+  });
+});
+
+describe("ActividadPreventiva — nuevo flujo (PROGRAMADA → ASIGNADA → EJECUTADA → VALIDADA)", () => {
+  it("[positivo] asignarEquipo transiciona PROGRAMADA → ASIGNADA", () => {
+    const a = crearProgramada();
+    a.asignarEquipo("Llevar chalecos");
+    expect(a.snapshot.estadoActividad).toBe("ASIGNADA");
+    expect(a.snapshot.indicacionesEquipo).toBe("Llevar chalecos");
+  });
+
+  it("[negativo] asignarEquipo lanza BusinessRuleError si no está PROGRAMADA", () => {
+    const a = crearProgramada();
+    a.asignarEquipo();
+    expect(() => a.asignarEquipo()).toThrow(BusinessRuleError);
+  });
+
+  it("[positivo] autoasignarme transiciona PROGRAMADA → ASIGNADA con idUsuario", () => {
+    const a = crearProgramada();
+    a.autoasignarme("grd-1", "Indicaciones especiales");
+    expect(a.snapshot.estadoActividad).toBe("ASIGNADA");
+    expect(a.snapshot.idUsuarioResponsableGRD).toBe("grd-1");
+  });
+
+  it("[positivo] enviarReporte transiciona ASIGNADA → EJECUTADA", () => {
+    const a = crearProgramada();
+    a.asignarEquipo();
+    a.enviarReporte("Todo salió bien sin inconvenientes");
+    expect(a.snapshot.estadoActividad).toBe("EJECUTADA");
+    expect(a.snapshot.reporteBrigadista).toBe("Todo salió bien sin inconvenientes");
+    expect(a.snapshot.fechaEjecucion).not.toBeNull();
+  });
+
+  it("[negativo] enviarReporte lanza BusinessRuleError si está PROGRAMADA", () => {
+    const a = crearProgramada();
+    expect(() => a.enviarReporte("Reporte sin asignación")).toThrow(BusinessRuleError);
+  });
+
+  it("[negativo] enviarReporte lanza ValidationError con notas vacías", () => {
+    const a = crearProgramada();
+    a.asignarEquipo();
+    expect(() => a.enviarReporte("")).toThrow(ValidationError);
+  });
+
+  it("[positivo] observar transiciona EJECUTADA → OBSERVADA", () => {
+    const a = crearProgramada();
+    a.asignarEquipo();
+    a.enviarReporte("Reporte inicial enviado");
+    a.observar("Falta evidencia fotográfica del simulacro");
+    expect(a.snapshot.estadoActividad).toBe("OBSERVADA");
+    expect(a.snapshot.observaciones).toBe("Falta evidencia fotográfica del simulacro");
+  });
+
+  it("[negativo] observar lanza BusinessRuleError si no está EJECUTADA", () => {
+    const a = crearProgramada();
+    expect(() => a.observar("comentario")).toThrow(BusinessRuleError);
+  });
+
+  it("[positivo] validar transiciona EJECUTADA → VALIDADA", () => {
+    const a = crearProgramada();
+    a.asignarEquipo();
+    a.enviarReporte("Reporte completo y detallado");
+    a.validar();
+    expect(a.snapshot.estadoActividad).toBe("VALIDADA");
+  });
+
+  it("[negativo] validar lanza BusinessRuleError si no está EJECUTADA", () => {
+    const a = crearProgramada();
+    expect(() => a.validar()).toThrow(BusinessRuleError);
+  });
+
+  it("[positivo] cancelar desde ASIGNADA", () => {
+    const a = crearProgramada();
+    a.asignarEquipo();
+    a.cancelar("Cancelada por fuerza mayor");
+    expect(a.snapshot.estadoActividad).toBe("CANCELADA");
+  });
+});
+
+describe("ActividadPreventiva — assertEnteroNoNegativo (via ejecutar)", () => {
+  it("[negativo] lanza BusinessRuleError con numeroParticipantesReal no entero", () => {
+    const a = crearProgramada();
+    expect(() => a.ejecutar({ resultadoGeneral: "Exitoso completo sin problemas", numeroParticipantesReal: 1.5 }))
+      .toThrow(BusinessRuleError);
+  });
+
+  it("[negativo] lanza BusinessRuleError con numeroParticipantesReal negativo", () => {
+    const a = crearProgramada();
+    expect(() => a.ejecutar({ resultadoGeneral: "Exitoso completo sin problemas", numeroParticipantesReal: -1 }))
+      .toThrow(BusinessRuleError);
+  });
+
+  it("[negativo] lanza BusinessRuleError con numeroParticipantesReal NaN", () => {
+    const a = crearProgramada();
+    expect(() => a.ejecutar({ resultadoGeneral: "Exitoso completo sin problemas", numeroParticipantesReal: NaN }))
+      .toThrow(BusinessRuleError);
+  });
+});
+
+describe("ActividadPreventiva — desdePersistencia e id", () => {
+  it("[positivo] desdePersistencia restaura el estado", () => {
+    const a = ActividadPreventiva.desdePersistencia({
+      id: "act-99",
+      idParroquia: "p-1",
+      idUsuarioRegistroGRD: "u-1",
+      idTipoActividadPreventiva: "tipo-1",
+      nombreActividad: "Simulacro",
+      estadoActividad: "VALIDADA",
+    });
+    expect(a.snapshot.estadoActividad).toBe("VALIDADA");
+    expect(a.id).toBe("act-99");
   });
 });

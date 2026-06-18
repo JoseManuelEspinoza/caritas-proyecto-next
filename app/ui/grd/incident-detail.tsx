@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { toast } from "sonner";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -32,8 +33,24 @@ import { ResumenStep } from "@/app/ui/grd/incidente/steps/ResumenStep";
  */
 export function IncidentDetail({ data }: { data: IncidentData }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [activeStep, setActiveStep] = useState(() => indicePaso(data.estadoActual));
   const [showHistory, setShowHistory] = useState(false);
+
+  // Confirmación tras registrar/editar el incidente (el form redirige aquí con
+  // un flag). Se muestra una vez y se limpia el parámetro de la URL.
+  useEffect(() => {
+    const codigo = data.codigoCaso ?? "el incidente";
+    if (searchParams.get("registrado") === "1") {
+      toast.success(`Incidente ${codigo} registrado correctamente.`);
+    } else if (searchParams.get("actualizado") === "1") {
+      toast.success(`Cambios de ${codigo} guardados correctamente.`);
+    } else {
+      return;
+    }
+    router.replace(`/grd/${data.idIncidencia}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const cfg = estadoUI(data.estadoActual);
   const currentStepIdx = indicePaso(data.estadoActual);

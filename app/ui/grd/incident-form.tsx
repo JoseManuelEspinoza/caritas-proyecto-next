@@ -2139,36 +2139,34 @@ export function IncidentForm({
 
       {/* ── Footer sticky ─────────────────────────────────────────────── */}
       <div className="sticky bottom-0 z-20 bg-white/95 backdrop-blur-sm border-t border-[#DDDDDD] shadow-[0_-2px_16px_rgba(0,0,0,0.08)]">
-        <div className="px-6 py-3 flex items-center justify-between gap-4">
+        <div className="px-6 py-3 flex items-center justify-center gap-8">
           <Link
             href={isEdit && incidenciaId ? `/grd/${incidenciaId}` : "/grd"}
-            className="flex items-center gap-2 px-5 py-2.5 border border-[#DDDDDD] rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+            className="flex items-center justify-center gap-2 px-5 py-2.5 border border-[#DDDDDD] rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             Cancelar
           </Link>
 
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={isPending}
-              className="flex items-center gap-2 px-8 py-2.5 bg-[#009850] text-white rounded-xl hover:bg-[#007a40] active:scale-[0.98] transition-all font-bold text-sm shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isPending ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Save className="w-4 h-4" />
-              )}
-              {isPending
-                ? isEdit
-                  ? "Guardando..."
-                  : "Registrando..."
-                : isEdit
-                  ? "Guardar Cambios"
-                  : "Registrar Evento"}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={isPending}
+            className="flex items-center justify-center gap-2 px-16 py-2.5 bg-[#009850] text-white rounded-xl hover:bg-[#007a40] active:scale-[0.98] transition-all font-bold text-sm shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isPending ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Save className="w-4 h-4" />
+            )}
+            {isPending
+              ? isEdit
+                ? "Guardando..."
+                : "Registrando..."
+              : isEdit
+                ? "Guardar Cambios"
+                : "Registrar Evento"}
+          </button>
         </div>
       </div>
 

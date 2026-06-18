@@ -44,7 +44,7 @@ const INPUT: BrigadistaInput = {
 };
 
 function brigadistaActivo(id = "uuid-1"): BrigadistaParroquial {
-  return BrigadistaParroquial.crear({ id, idParroquia: "parroquia-1", nombres: "María" });
+  return BrigadistaParroquial.crear({ id, idParroquia: "parroquia-1", nombres: "María", apellidos: "García" });
 }
 
 function brigadistaInactivo(id = "uuid-1"): BrigadistaParroquial {
@@ -84,11 +84,111 @@ describe("CrearBrigadistaUseCase", () => {
     ).rejects.toThrow(ValidationError);
   });
 
-  it("[borde] omite la validación de DNI cuando el campo está vacío", async () => {
+  it("[negativo] lanza ValidationError cuando el DNI está vacío", async () => {
     const repo = makeRepo();
-    const result = await new CrearBrigadistaUseCase(repo).execute({ ...INPUT, dni: "" });
-    expect(repo.findIdByDni).not.toHaveBeenCalled();
-    expect(result.dni).toBeNull();
+    await expect(
+      new CrearBrigadistaUseCase(repo).execute({ ...INPUT, dni: "" })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando el DNI no tiene exactamente 8 dígitos (línea 42)", async () => {
+    const repo = makeRepo();
+    await expect(
+      new CrearBrigadistaUseCase(repo).execute({ ...INPUT, dni: "1234567" })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando nombres tiene menos de 2 caracteres", async () => {
+    const repo = makeRepo();
+    await expect(
+      new CrearBrigadistaUseCase(repo).execute({ ...INPUT, nombres: "M" })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando apellidos tiene menos de 2 caracteres", async () => {
+    const repo = makeRepo();
+    await expect(
+      new CrearBrigadistaUseCase(repo).execute({ ...INPUT, apellidos: "G" })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando correo tiene formato inválido", async () => {
+    const repo = makeRepo();
+    await expect(
+      new CrearBrigadistaUseCase(repo).execute({ ...INPUT, correo: "no-es-un-email" })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando idParroquia está vacío", async () => {
+    const repo = makeRepo();
+    await expect(
+      new CrearBrigadistaUseCase(repo).execute({ ...INPUT, idParroquia: "" })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando disponibilidad es inválida", async () => {
+    const repo = makeRepo();
+    await expect(
+      new CrearBrigadistaUseCase(repo).execute({ ...INPUT, disponibilidad: "INVALIDA" as any })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando apellidos está vacío", async () => {
+    const repo = makeRepo();
+    await expect(
+      new CrearBrigadistaUseCase(repo).execute({ ...INPUT, apellidos: "" })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[borde] acepta celular con prefijo peruano 51 (cubre rama startsWith('51'))", async () => {
+    const repo = makeRepo();
+    const result = await new CrearBrigadistaUseCase(repo).execute({
+      ...INPUT,
+      celular: "51999888777",
+    });
+    expect(result.nombres).toBe("María");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CrearBrigadistaUseCase — ramas null de ?. y ??
+// ---------------------------------------------------------------------------
+describe("CrearBrigadistaUseCase — ramas null en validarInputBrigadista", () => {
+  it("[borde] correo null no activa la validación de formato (cubre ?. en correo)", async () => {
+    const repo = makeRepo();
+    const result = await new CrearBrigadistaUseCase(repo).execute({
+      ...INPUT,
+      correo: null as any,
+    });
+    expect(result.nombres).toBe("María");
+  });
+
+  it("[negativo] nombres null lanza ValidationError (cubre ?. en nombres)", async () => {
+    const repo = makeRepo();
+    await expect(
+      new CrearBrigadistaUseCase(repo).execute({ ...INPUT, nombres: null as any })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] celular con formato inválido lanza ValidationError (cubre rama regex)", async () => {
+    const repo = makeRepo();
+    await expect(
+      new CrearBrigadistaUseCase(repo).execute({ ...INPUT, celular: "123456789" })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] celular null lanza ValidationError (cubre ramas null en soloDigitos ?? y celular vacío)", async () => {
+    const repo = makeRepo();
+    await expect(
+      new CrearBrigadistaUseCase(repo).execute({ ...INPUT, celular: null as any })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] apellidos null lanza ValidationError (cubre rama ?. en apellidos)", async () => {
+    const repo = makeRepo();
+    await expect(
+      new CrearBrigadistaUseCase(repo).execute({ ...INPUT, apellidos: null as any })
+    ).rejects.toThrow(ValidationError);
   });
 });
 
@@ -215,5 +315,21 @@ describe("ListarBrigadistasUseCase", () => {
     const repo = makeRepo({ findAll: vi.fn().mockResolvedValue([]) });
     const result = await new ListarBrigadistasUseCase(repo).execute();
     expect(result).toEqual([]);
+  });
+
+  it("[borde] brigadista con apellidos null produce apellidos null en el output (cubre ramas ?? en DTO)", async () => {
+    const sinApellidos = BrigadistaParroquial.desdePersistencia({
+      id: "no-ap-1",
+      idParroquia: "parroquia-1",
+      nombres: "Solo",
+      apellidos: null,
+      disponibilidad: DISPONIBILIDAD.DISPONIBLE,
+      estado: ESTADO.ACTIVO,
+      fechaRegistro: new Date(),
+    });
+    const repo = makeRepo({ findAll: vi.fn().mockResolvedValue([sinApellidos]) });
+    const result = await new ListarBrigadistasUseCase(repo).execute();
+    expect(result[0].apellidos).toBeNull();
+    expect(result[0].nombreCompleto).toBe("Solo");
   });
 });

@@ -149,7 +149,8 @@ export async function createIncidente(data: CreateIncidenteData) {
     `Se registró: ${data.categoria} en ${data.distrito}`,
     `/grd/${id}`
   );
-  redirect(`/grd/${id}`);
+  // ?registrado=1 → el detalle muestra la confirmación tras el redirect.
+  redirect(`/grd/${id}?registrado=1`);
 }
 
 export async function updateIncidente(incidenciaId: string, data: CreateIncidenteData) {
@@ -191,7 +192,7 @@ export async function updateIncidente(incidenciaId: string, data: CreateIncident
   }
 
   revalidar(incidenciaId);
-  redirect(`/grd/${incidenciaId}`);
+  redirect(`/grd/${incidenciaId}?actualizado=1`);
 }
 
 // ─── Flujo de campo y evaluación ────────────────────────────────────────────

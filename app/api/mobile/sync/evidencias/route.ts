@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
-import { isS3Configured, presignPut, safeFilename } from "@/app/lib/s3";
+import { isS3Configured, presignPut, presignGet, safeFilename } from "@/app/lib/s3";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -129,20 +129,23 @@ async function resolveIdReferencia(body: EvidenciaMovilPayload): Promise<string>
   );
 }
 
-async function resolveUsuarioCarga(): Promise<string> {
-  const idFromEnv = process.env.MOBILE_SYNC_USUARIO_GRD_ID?.trim();
+async function resolveUsuarioCarga(body: EvidenciaMovilPayload): Promise<string> {
+  const candidates = [
+    body.idUsuarioCargaGRD?.trim(),
+    body.idUsuarioRemoto?.trim(),
+    process.env.MOBILE_SYNC_USUARIO_GRD_ID?.trim(),
+  ].filter(Boolean) as string[];
 
-  if (idFromEnv) {
+  for (const id of candidates) {
     const usuario = await prisma.usuarioGRD.findUnique({
-      where: { idUsuarioGRD: idFromEnv },
+      where: { idUsuarioGRD: id },
       select: { idUsuarioGRD: true },
     });
-
     if (usuario) return usuario.idUsuarioGRD;
   }
 
   throw new Error(
-    "No se puede identificar al usuario para registrar la evidencia. Configura MOBILE_SYNC_USUARIO_GRD_ID."
+    "No se puede identificar al usuario para registrar la evidencia."
   );
 }
 
@@ -201,21 +204,10 @@ const ALLOWED_S3_PREFIXES = [
 ];
 
 function resolveUrlArchivo(body: EvidenciaMovilPayload): string | null {
-  const url =
-    body.urlArchivo?.trim() ||
-    body.urlS3?.trim() ||
-    body.key?.trim() ||
-    null;
-
-  if (!url) return null;
-
-  if (!ALLOWED_S3_PREFIXES.some((prefix) => url.startsWith(prefix))) {
-    throw new Error(
-      "La clave de archivo proporcionada no corresponde a un prefijo S3 conocido."
-    );
-  }
-
-  return url;
+  const candidates = [body.urlArchivo, body.urlS3, body.key].map((v) => v?.trim()).filter(Boolean);
+  // Rechazar URIs locales de Android (content://, file://) — no son válidas en el servidor
+  const valid = candidates.find((v) => v && /^https?:\/\//i.test(v));
+  return valid ?? null;
 }
 
 export async function GET(request: Request) {
@@ -262,6 +254,10 @@ export async function POST(request: Request) {
     });
 
     if (existente) {
+      let urlFirmada: string | null = null;
+      if (existente.urlArchivo && isS3Configured() && !/^https?:\/\//i.test(existente.urlArchivo)) {
+        try { urlFirmada = await presignGet(existente.urlArchivo); } catch { /* ignora */ }
+      }
       return NextResponse.json({
         ok: true,
         duplicated: true,
@@ -271,6 +267,7 @@ export async function POST(request: Request) {
         idReferenciaRemota: existente.idReferencia,
         nombreArchivo: existente.nombreArchivo,
         urlArchivo: existente.urlArchivo,
+        urlFirmada: urlFirmada ?? existente.urlArchivo,
         syncEstado: existente.syncEstado ?? "SINCRONIZADO",
         fechaSincronizacion: existente.fechaSincronizacion,
       });
@@ -279,7 +276,7 @@ export async function POST(request: Request) {
     const tipoCodigo = normalizeTipoReferencia(body.tipoReferencia);
     const tipoReferencia = await resolveTipoReferencia(tipoCodigo);
     const idReferencia = await resolveIdReferencia(body);
-    const idUsuarioCargaGRD = await resolveUsuarioCarga();
+    const idUsuarioCargaGRD = await resolveUsuarioCarga(body);
 
     const subidaS3 = await uploadBase64ToS3(body, idReferencia);
     const urlArchivo = subidaS3?.urlArchivo || resolveUrlArchivo(body);
@@ -305,7 +302,7 @@ export async function POST(request: Request) {
         nombreArchivo: body.nombreArchivo?.trim() || "evidencia-movil",
         urlArchivo,
         formatoArchivo: contentType,
-        descripcion: body.descripcion?.trim() || null,
+        descripcion: body.descripcion?.trim() || "Evidencia de campo",
         tamanoArchivo: subidaS3?.tamanoArchivo ?? body.tamanoArchivo ?? null,
         latitud: body.lat ?? body.latitud ?? null,
         longitud: body.lng ?? body.longitud ?? null,
@@ -324,6 +321,11 @@ export async function POST(request: Request) {
       },
     });
 
+    let urlFirmada: string | null = null;
+    if (evidencia.urlArchivo && isS3Configured() && !/^https?:\/\//i.test(evidencia.urlArchivo)) {
+      try { urlFirmada = await presignGet(evidencia.urlArchivo); } catch { /* ignora */ }
+    }
+
     return NextResponse.json({
       ok: true,
       duplicated: false,
@@ -333,6 +335,7 @@ export async function POST(request: Request) {
       idReferenciaRemota: evidencia.idReferencia,
       nombreArchivo: evidencia.nombreArchivo,
       urlArchivo: evidencia.urlArchivo,
+      urlFirmada: urlFirmada ?? evidencia.urlArchivo,
       syncEstado: evidencia.syncEstado,
       fechaSincronizacion: evidencia.fechaSincronizacion,
     });

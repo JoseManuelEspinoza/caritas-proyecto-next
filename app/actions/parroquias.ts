@@ -32,6 +32,15 @@ export async function createParroquia(data: ParroquiaFormData) {
   const existe = await prisma.parroquia.findFirst({ where: { nombre: { equals: nombre, mode: "insensitive" } } });
   if (existe) return { message: "Ya existe una parroquia con ese nombre." };
 
+  const correo = data.correo.trim();
+  if (correo) {
+    const correoDup = await prisma.parroquia.findFirst({
+      where: { correo: { equals: correo, mode: "insensitive" } },
+      select: { nombre: true },
+    });
+    if (correoDup) return { message: `Ese correo ya está registrado en "${correoDup.nombre}".` };
+  }
+
   await prisma.parroquia.create({
     data: {
       nombre,
@@ -59,6 +68,15 @@ export async function updateParroquia(id: string, data: ParroquiaFormData) {
     where: { nombre: { equals: nombre, mode: "insensitive" }, NOT: { idParroquia: id } },
   });
   if (existe) return { message: "Ya existe una parroquia con ese nombre." };
+
+  const correo = data.correo.trim();
+  if (correo) {
+    const correoDup = await prisma.parroquia.findFirst({
+      where: { correo: { equals: correo, mode: "insensitive" }, NOT: { idParroquia: id } },
+      select: { nombre: true },
+    });
+    if (correoDup) return { message: `Ese correo ya está registrado en "${correoDup.nombre}".` };
+  }
 
   await prisma.parroquia.update({
     where: { idParroquia: id },

@@ -74,6 +74,13 @@ describe("CrearCursoUseCase", () => {
       new CrearCursoUseCase(repo).execute({ ...INPUT, nombreCurso: "AB" })
     ).rejects.toThrow(ValidationError);
   });
+
+  it("[negativo] lanza ValidationError cuando nombreCurso está vacío", async () => {
+    const repo = makeRepo();
+    await expect(
+      new CrearCursoUseCase(repo).execute({ ...INPUT, nombreCurso: "" })
+    ).rejects.toThrow(ValidationError);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -227,6 +234,108 @@ describe("RegistrarEvaluacionUseCase", () => {
     await expect(new RegistrarEvaluacionUseCase(repo).execute("no-existe", 15)).rejects.toThrow(
       NotFoundError
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CrearCursoUseCase — validación duracionEstimadaHoras
+// ---------------------------------------------------------------------------
+describe("CrearCursoUseCase — validación duracionEstimadaHoras", () => {
+  it("[negativo] lanza ValidationError cuando duracion no es número finito", async () => {
+    const repo = makeRepo();
+    await expect(
+      new CrearCursoUseCase(repo).execute({ ...INPUT, duracionEstimadaHoras: NaN })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando duracion no es entero", async () => {
+    const repo = makeRepo();
+    await expect(
+      new CrearCursoUseCase(repo).execute({ ...INPUT, duracionEstimadaHoras: 1.5 })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando duracion es 0", async () => {
+    const repo = makeRepo();
+    await expect(
+      new CrearCursoUseCase(repo).execute({ ...INPUT, duracionEstimadaHoras: 0 })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando duracion es negativa", async () => {
+    const repo = makeRepo();
+    await expect(
+      new CrearCursoUseCase(repo).execute({ ...INPUT, duracionEstimadaHoras: -1 })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando descripcion tiene menos de 5 caracteres", async () => {
+    const repo = makeRepo();
+    await expect(
+      new CrearCursoUseCase(repo).execute({ ...INPUT, descripcion: "Brv" })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[positivo] crea el curso con duracionEstimadaHoras válida (rama false de value<=0)", async () => {
+    const repo = makeRepo();
+    const result = await new CrearCursoUseCase(repo).execute({ ...INPUT, duracionEstimadaHoras: 8 });
+    expect(result.estadoCurso).toBe("BORRADOR");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// RegistrarEvaluacionUseCase — validaciones adicionales
+// ---------------------------------------------------------------------------
+describe("RegistrarEvaluacionUseCase — validaciones adicionales", () => {
+  it("[negativo] lanza ValidationError cuando idInscripcion está vacío", async () => {
+    const repo = makeRepo();
+    await expect(new RegistrarEvaluacionUseCase(repo).execute("", 15)).rejects.toThrow(
+      ValidationError
+    );
+  });
+
+  it("[negativo] lanza ValidationError cuando nota es NaN", async () => {
+    const repo = makeRepo();
+    await expect(new RegistrarEvaluacionUseCase(repo).execute("inscripcion-1", NaN)).rejects.toThrow(
+      ValidationError
+    );
+  });
+
+  it("[negativo] lanza ValidationError cuando numeroIntento es decimal", async () => {
+    const repo = makeRepo();
+    await expect(
+      new RegistrarEvaluacionUseCase(repo).execute("inscripcion-1", 15, { numeroIntento: 1.5 })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando numeroIntento es 0", async () => {
+    const repo = makeRepo();
+    await expect(
+      new RegistrarEvaluacionUseCase(repo).execute("inscripcion-1", 15, { numeroIntento: 0 })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando tipoEvaluacion no es válido", async () => {
+    const repo = makeRepo();
+    await expect(
+      new RegistrarEvaluacionUseCase(repo).execute("inscripcion-1", 15, { tipoEvaluacion: "INVALIDO" })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[positivo] acepta tipoEvaluacion válido FINAL", async () => {
+    const repo = makeRepo({ existsInscripcionId: vi.fn().mockResolvedValue(true) });
+    const result = await new RegistrarEvaluacionUseCase(repo).execute("inscripcion-1", 15, {
+      tipoEvaluacion: "FINAL",
+    });
+    expect(result.resultado).toBe("APROBADO");
+  });
+
+  it("[positivo] acepta numeroIntento positivo válido (rama false de la guardia)", async () => {
+    const repo = makeRepo({ existsInscripcionId: vi.fn().mockResolvedValue(true) });
+    const result = await new RegistrarEvaluacionUseCase(repo).execute("inscripcion-1", 15, {
+      numeroIntento: 2,
+    });
+    expect(result.resultado).toBe("APROBADO");
   });
 });
 

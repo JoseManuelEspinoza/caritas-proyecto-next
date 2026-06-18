@@ -11,7 +11,7 @@ describe("ActualizarBrigadistaUseCase", () => {
       nombres: "Juan",
       apellidos: "Perez",
       dni: "12345678",
-      celular: "999",
+      celular: "999888777",
       correo: "test@test.com",
       disponibilidad: "DISPONIBLE",
     });
@@ -29,7 +29,7 @@ describe("ActualizarBrigadistaUseCase", () => {
       nombres: "Juan Actualizado",
       apellidos: "Perez",
       dni: "12345678",
-      celular: "999",
+      celular: "999888777",
       correo: "test@test.com",
       disponibilidad: "DISPONIBLE",
     };

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
+import { isS3Configured, presignGet } from "@/app/lib/s3";
 
 export const dynamic = "force-dynamic";
 
@@ -542,6 +543,7 @@ export async function GET(request: Request) {
         latitud: decimalToNumber(inc.latitud),
         longitud: decimalToNumber(inc.longitud),
         observaciones: obsPorIncidencia.get(inc.idIncidencia) ?? [],
+        evidencias: evPorIncidencia.get(inc.idIncidencia) ?? [],
         parroquia: inc.parroquia
           ? {
               ...inc.parroquia,
@@ -578,6 +580,7 @@ export async function GET(request: Request) {
           latitud: decimalToNumber(asignacion.incidencia.latitud),
           longitud: decimalToNumber(asignacion.incidencia.longitud),
           observaciones: obsPorIncidencia.get(asignacion.incidencia.idIncidencia) ?? [],
+          evidencias: evPorIncidencia.get(asignacion.incidencia.idIncidencia) ?? [],
           parroquia: asignacion.incidencia.parroquia
             ? {
                 ...asignacion.incidencia.parroquia,

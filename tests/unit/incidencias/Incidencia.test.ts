@@ -78,3 +78,31 @@ describe("Incidencia — flujo completo de transiciones", () => {
     expect(() => inc.asignar()).toThrow(BusinessRuleError);
   });
 });
+
+describe("Incidencia — getters", () => {
+  it("[positivo] get id retorna el id", () => {
+    const inc = Incidencia.crear({ id: "inc-99" });
+    expect(inc.id).toBe("inc-99");
+  });
+
+  it("[positivo] get idAviso retorna null cuando no se pasó", () => {
+    const inc = Incidencia.crear({ id: "inc-100" });
+    expect(inc.idAviso).toBeUndefined();
+  });
+
+  it("[positivo] get idAviso retorna el valor cuando se pasó", () => {
+    const inc = Incidencia.desdePersistencia({ id: "inc-101", idAviso: "aviso-1", estadoActual: "ABIERTO" });
+    expect(inc.idAviso).toBe("aviso-1");
+  });
+
+  it("[positivo] get snapshot retorna los props del estado actual", () => {
+    const inc = Incidencia.desdePersistencia({ id: "inc-102", estadoActual: "ASIGNADO", codigoCaso: "GRD-001" });
+    expect(inc.snapshot.codigoCaso).toBe("GRD-001");
+    expect(inc.snapshot.estadoActual).toBe("ASIGNADO");
+  });
+
+  it("[positivo] estadoAnterior es undefined antes de cualquier transición", () => {
+    const inc = Incidencia.crear({ id: "inc-103" });
+    expect(inc.estadoAnterior).toBeUndefined();
+  });
+});
