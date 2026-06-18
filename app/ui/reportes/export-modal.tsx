@@ -610,6 +610,28 @@ export function ExportModal({
         doc.text(`Pagina ${pageNum} de ${total}`, pageW - mg, pageH - 4, { align: "right" });
       };
 
+      // Bloque de firmas: 3 columnas (Elaborado / Revisado / V°B°) ancladas
+      // sobre el pie. Si el contenido llega muy abajo, agrega una página.
+      const drawFirmas = (yActual: number, banda: string) => {
+        const yF = pageH - 42;
+        if (yActual > yF) {
+          doc.addPage();
+          drawBandHeader(banda);
+        }
+        const roles = ["Elaborado por", "Revisado por", "V° B° Jefatura OGP"];
+        const colW = contentW / 3;
+        roles.forEach((rol, i) => {
+          const cx = mg + colW * i + colW / 2;
+          const lineW = colW - 18;
+          doc.setDrawColor(120, 120, 120); doc.setLineWidth(0.3);
+          doc.line(cx - lineW / 2, yF + 16, cx + lineW / 2, yF + 16);
+          doc.setFontSize(8); doc.setFont("helvetica", "bold"); doc.setTextColor(31, 41, 55);
+          doc.text(s(rol), cx, yF + 21, { align: "center" });
+          doc.setFontSize(6.5); doc.setFont("helvetica", "normal"); doc.setTextColor(120, 120, 120);
+          doc.text("Nombre / Cargo / Fecha", cx, yF + 25, { align: "center" });
+        });
+      };
+
       const sectionTitle = (title: string, y: number): number => {
         doc.setFillColor(...G); doc.rect(mg, y, 3, 5.5, "F");
         doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.setTextColor(31, 41, 55);
@@ -954,6 +976,7 @@ export function ExportModal({
             yG = distRow(lbl, p.pct, 100, rc, yG, i%2===0);
           });
         }
+        drawFirmas(yG, "BRIGADISTAS");
         drawFooter(totalPages, totalPages);
 
       } else if (activeTab === "prevencion" && actividadesData) {
@@ -1008,6 +1031,7 @@ export function ExportModal({
           y = eDcy + 22;
         }
 
+        drawFirmas(y, "PREVENCION");
         drawFooter(1, 1);
 
       } else if (activeTab === "kits" && kitsData) {
@@ -1048,6 +1072,7 @@ export function ExportModal({
             y+=7;
           });
         }
+        drawFirmas(y, "KITS");
         drawFooter(1, 1);
 
       } else if (activeTab === "riesgo" && parroquiasRiesgo) {
@@ -1349,6 +1374,7 @@ export function ExportModal({
         doc.text("Sin Plan GRD(+2)  |  Actividades <40% ejecutadas(+2)  |  CRITICO>=8 pts  |  ALTO>=5  |  MEDIO>=3  |  BAJO<3",mg+3,y+13.5);
         y+=18;
 
+        drawFirmas(y, "AFECTACION PARROQUIAL");
         drawFooter(totalPages, totalPages);
 
       } else {
@@ -1447,6 +1473,7 @@ export function ExportModal({
           y+=4;
         }
 
+        drawFirmas(y, tituloPDF);
         drawFooter(2,2);
       }
 
