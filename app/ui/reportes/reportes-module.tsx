@@ -353,26 +353,23 @@ function TabCasos({ totales, porEstado, porTipo, porParroquia, timeline, byWeek,
       {/* Gravedad + Parroquia — 2 columnas */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <ChartCard title="Por Nivel de Gravedad" subtitle="Urgencia registrada de los casos atendidos">
-          {incidenciasData.porGravedad.length === 0 ? <NoData height={180} /> : (
-            <div className="space-y-3 pt-2">
-              {incidenciasData.porGravedad.map((g, i) => {
-                const total = incidenciasData.porGravedad.reduce((s, x) => s + x.value, 0);
-                const pct = total > 0 ? Math.round((g.value / total) * 100) : 0;
-                const color = g.label === "Alto" || g.label === "Crítico" || g.label === "Severo" ? "#EF4444" : g.label === "Moderado" ? "#F59E0B" : "#009850";
-                return (
-                  <div key={i} className="space-y-1">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-gray-600 font-medium">{g.label}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold" style={{ color }}>{g.value}</span>
-                        <span className="text-gray-400">({pct}%)</span>
-                      </div>
-                    </div>
-                    <ProgressBar pct={pct} color={color} />
-                  </div>
-                );
-              })}
-            </div>
+          {incidenciasData.porGravedad.length === 0 ? <NoData height={190} /> : (
+            <ResponsiveContainer width="100%" height={190}>
+              <PieChart>
+                <Pie data={incidenciasData.porGravedad} dataKey="value" nameKey="label" cx="45%" cy="50%" outerRadius={72} innerRadius={38} strokeWidth={0}>
+                  {incidenciasData.porGravedad.map((g, i) => {
+                    const color = g.label === "Alto" || g.label === "Crítico" || g.label === "Severo"
+                      ? "#EF4444"
+                      : g.label === "Moderado"
+                        ? "#F59E0B"
+                        : "#009850";
+                    return <Cell key={i} fill={color} />;
+                  })}
+                </Pie>
+                <Tooltip formatter={(v) => [`${v}`, "Casos"]} />
+                <Legend layout="vertical" align="right" verticalAlign="middle" iconType="circle" iconSize={7} formatter={v => <span style={{ fontSize: 10, color: "#4B5563" }}>{v}</span>} />
+              </PieChart>
+            </ResponsiveContainer>
           )}
         </ChartCard>
 
