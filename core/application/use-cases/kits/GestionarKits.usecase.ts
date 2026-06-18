@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { KitEmergencia, TipoMovimiento } from "../../../domain/entities/kit/KitEmergencia";
 import { IKitRepository, KitMovimientoRead } from "../../../domain/repositories/IKitRepository";
-import { NotFoundError, ValidationError } from "../../../domain/errors/DomainError";
+import { NotFoundError, ValidationError, BusinessRuleError } from "../../../domain/errors/DomainError";
 
 export interface KitOutput {
   id: string;
@@ -159,5 +159,32 @@ export class RegistrarMovimientoKitUseCase {
     kit.aplicarMovimiento(mov.tipo, mov.cantidad);
     await this.repo.registrarMovimiento(kit, mov);
     return toOutput(kit);
+  }
+}
+
+/** Archiva un kit (queda inactivo; conserva su historial de movimientos). */
+export class ArchivarKitUseCase {
+  constructor(private readonly repo: IKitRepository) {}
+  async execute(idKit: string): Promise<KitOutput> {
+    const kit = await this.repo.findById(idKit);
+    if (!kit) throw new NotFoundError("Kit no encontrado.");
+    kit.archivar();
+    await this.repo.update(kit);
+    return toOutput(kit);
+  }
+}
+
+/** Elimina un kit SOLO si no tiene movimientos; si los tiene, debe archivarse. */
+export class EliminarKitUseCase {
+  constructor(private readonly repo: IKitRepository) {}
+  async execute(idKit: string): Promise<void> {
+    const kit = await this.repo.findById(idKit);
+    if (!kit) throw new NotFoundError("Kit no encontrado.");
+    if ((await this.repo.contarMovimientos(idKit)) > 0) {
+      throw new BusinessRuleError(
+        "El kit tiene movimientos registrados; no se puede eliminar. Archívalo en su lugar."
+      );
+    }
+    await this.repo.delete(idKit);
   }
 }
