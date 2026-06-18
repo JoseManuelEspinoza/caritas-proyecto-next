@@ -105,6 +105,7 @@ function UnidadLectura({ sesion }: { sesion: CursoInscrito["sesiones"][number] }
 
 function DetalleInscrito({ curso, onVolver }: { curso: CursoInscrito; onVolver: () => void }) {
   const [showExamen, setShowExamen] = useState(false);
+  const [showExamenInicial, setShowExamenInicial] = useState(false);
   const aprobado = curso.certificado || curso.resultado === "APROBADO";
 
   return (
@@ -175,7 +176,38 @@ function DetalleInscrito({ curso, onVolver }: { curso: CursoInscrito; onVolver: 
           </div>
         </div>
 
-        {/* Examen */}
+        {/* Evaluación inicial */}
+        {curso.cuestionarioInicial && (
+          <div className="bg-white border border-[var(--caritas-border)] rounded-xl p-5">
+            <h3 className="text-sm font-semibold text-[var(--caritas-text)] mb-3">Evaluación inicial</h3>
+            <div className="flex items-center justify-between gap-4 p-4 bg-amber-50 rounded-xl">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                  <ClipboardList className="w-5 h-5 text-amber-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-[var(--caritas-text)]">{curso.cuestionarioInicial.titulo}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {curso.cuestionarioInicial.totalPreguntas} preguntas · Nota mínima {curso.cuestionarioInicial.notaAprobatoria}/20
+                  </p>
+                  <p className={`text-xs mt-0.5 font-medium ${curso.cuestionarioInicial.intentosUsados >= curso.cuestionarioInicial.maxIntentos ? "text-red-500" : "text-amber-600"}`}>
+                    {curso.cuestionarioInicial.maxIntentos - curso.cuestionarioInicial.intentosUsados} intento(s) restante(s) de {curso.cuestionarioInicial.maxIntentos}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowExamenInicial(true)}
+                disabled={curso.cuestionarioInicial.intentosUsados >= curso.cuestionarioInicial.maxIntentos}
+                className="flex items-center gap-2 px-4 py-2.5 text-sm bg-amber-500 text-white rounded-xl hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shrink-0 font-medium"
+              >
+                <PlayCircle className="w-4 h-4" />
+                {curso.cuestionarioInicial.intentosUsados > 0 ? "Reintentar" : "Rendir examen"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Evaluación final */}
         {curso.cuestionarioFinal && (
           <div className="bg-white border border-[var(--caritas-border)] rounded-xl p-5">
             <h3 className="text-sm font-semibold text-[var(--caritas-text)] mb-3">Evaluación final</h3>
@@ -251,6 +283,13 @@ function DetalleInscrito({ curso, onVolver }: { curso: CursoInscrito; onVolver: 
         </div>
       </div>
 
+      {showExamenInicial && curso.cuestionarioInicial && (
+        <RendirExamenModal
+          idInscripcion={curso.idInscripcion}
+          cuestionario={curso.cuestionarioInicial}
+          onClose={() => setShowExamenInicial(false)}
+        />
+      )}
       {showExamen && curso.cuestionarioFinal && (
         <RendirExamenModal
           idInscripcion={curso.idInscripcion}
