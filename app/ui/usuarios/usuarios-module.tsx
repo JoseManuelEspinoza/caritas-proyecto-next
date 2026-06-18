@@ -1,4 +1,4 @@
-import { Users, Info } from "lucide-react";
+import { Users, ExternalLink, UserPlus } from "lucide-react";
 
 type Usuario = { id: string; email: string; name: string; role: string; estado: string };
 
@@ -23,27 +23,45 @@ const ROLE_BADGE: Record<string, string> = {
  * administran en la consola de Keycloak. Esta tabla espeja los usuarios que ya
  * han iniciado sesión en la app.
  */
-export function UsuariosModule({ usuarios }: { usuarios: Usuario[] }) {
+export function UsuariosModule({
+  usuarios,
+  keycloakAdminUrl,
+}: {
+  usuarios: Usuario[];
+  keycloakAdminUrl?: string;
+}) {
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="w-10 h-10 bg-[var(--caritas-green)]/10 rounded-lg flex items-center justify-center">
-          <Users className="w-5 h-5 text-[var(--caritas-green)]" />
+      <div className="flex items-center justify-between gap-3 mb-6">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-[var(--caritas-green)]/10 rounded-lg flex items-center justify-center">
+            <Users className="w-5 h-5 text-[var(--caritas-green)]" />
+          </div>
+          <div>
+            <h1 className="text-[var(--caritas-text)]">Gestión de Usuarios</h1>
+            <p className="text-sm text-gray-600">Credenciales y roles del sistema</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-[var(--caritas-text)]">Gestión de Usuarios</h1>
-          <p className="text-sm text-gray-600">Credenciales y roles del sistema</p>
-        </div>
+        {keycloakAdminUrl && (
+          <a
+            href={keycloakAdminUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-4 py-2.5 bg-[var(--caritas-green)] text-white rounded-xl text-sm font-semibold hover:bg-[#007a40] transition-colors shadow-sm flex-shrink-0"
+          >
+            <UserPlus className="w-4 h-4" />
+            Administrar usuarios
+            <ExternalLink className="w-3.5 h-3.5 opacity-80" />
+          </a>
+        )}
       </div>
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-5 flex items-start gap-2">
-        <Info className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+        <Users className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
         <p className="text-xs text-blue-800">
-          La autenticación está gestionada por <strong>Keycloak</strong>. Para crear usuarios,
-          asignar roles o restablecer contraseñas, usa la{" "}
-          <strong>consola de administración de Keycloak</strong>(
-          <code className="bg-white px-1 rounded">http://localhost:8080/admin</code>). Esta lista
-          muestra los usuarios que ya han ingresado a la aplicación.
+          Las altas, roles y contraseñas se gestionan en el panel de administración (botón
+          <strong> Administrar usuarios</strong>, arriba a la derecha). Esta lista muestra los
+          usuarios que ya han ingresado a la aplicación.
         </p>
       </div>
 
