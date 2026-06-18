@@ -623,7 +623,9 @@ export function IncidentForm({
 
   // Sección 1
   const [fechaReporte] = useState(initialData?.fechaReporte ?? nowLocal());
-  const [tipoDocReporta, setTipoDocReporta] = useState<"DNI" | "Pasaporte" | "Carnet de Extranjería">("DNI");
+  const [tipoDocReporta, setTipoDocReporta] = useState<"DNI" | "Pasaporte" | "Carnet de Extranjería">(
+    (initialData?.reportaTipoDoc as "DNI" | "Pasaporte" | "Carnet de Extranjería") ?? "DNI"
+  );
   const [reportaDni, setReportaDni] = useState(initialData?.reportaDni ?? "");
   const [reportaNombre, setReportaNombre] = useState(initialData?.reportaNombre ?? "");
   // El teléfono se guarda como "+51 987654321"; al cargar en edición se separan código y número.
@@ -1264,6 +1266,7 @@ export function IncidentForm({
       }
 
       const payload: CreateIncidenteData = {
+        reportaTipoDoc: tipoDocReporta,
         reportaDni,
         reportaNombre,
         reportaTel: `${reportaTelCodigo} ${reportaTel}`.trim(),

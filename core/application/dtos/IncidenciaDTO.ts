@@ -36,6 +36,7 @@ export type EvidenciaInput = {
 
 export type CreateIncidenteData = {
   // Sección 1 - Informante
+  reportaTipoDoc?: string; // "DNI" | "Carnet de Extranjería" | "Pasaporte" | "Otro" (default DNI)
   reportaDni: string;
   reportaNombre: string;
   reportaTel: string;

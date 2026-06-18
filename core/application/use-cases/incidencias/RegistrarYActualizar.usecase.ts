@@ -34,15 +34,22 @@ function validarCoordenadas(data: CreateIncidenteData): void {
 
 /** Validaciones de campos obligatorios y formato del formulario de incidente. */
 function validarCreacion(data: CreateIncidenteData): void {
-  const dni = soloDigitos(data.reportaDni ?? "");
   // reportaTel se almacena como "+51 987654321"; se extrae el código y el número local.
   const telRaw = data.reportaTel ?? "";
   const codigoPais = telRaw.match(/^(\+\d+)\s*/)?.[1] ?? "+51";
   const telLocal = soloDigitos(telRaw.replace(/^\+\d+\s*/, "") || telRaw);
 
-  if (!dni) throw new ValidationError("Ingresa el DNI de quien reportó.");
-  if (dni.length !== 8) {
-    throw new ValidationError("El DNI de quien reporta debe tener exactamente 8 dígitos.");
+  // El formato del documento depende del tipo: los 8 dígitos SOLO aplican al DNI.
+  // Carnet de Extranjería, Pasaporte u Otro usan formatos alfanuméricos distintos.
+  const tipoDoc = (data.reportaTipoDoc ?? "DNI").trim();
+  const docTexto = (data.reportaDni ?? "").trim();
+  if (!docTexto) throw new ValidationError(`Ingresa el documento de quien reportó.`);
+  if (tipoDoc === "DNI") {
+    if (soloDigitos(docTexto).length !== 8) {
+      throw new ValidationError("El DNI de quien reporta debe tener exactamente 8 dígitos.");
+    }
+  } else if (docTexto.length < 5) {
+    throw new ValidationError(`El ${tipoDoc} de quien reporta debe tener al menos 5 caracteres.`);
   }
 
   if (!data.reportaNombre?.trim()) {
