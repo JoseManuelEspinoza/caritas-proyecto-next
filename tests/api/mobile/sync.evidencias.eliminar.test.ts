@@ -18,10 +18,12 @@ vi.mock("@aws-sdk/client-s3", () => ({
 import { POST } from "@/app/api/mobile/sync/evidencias/eliminar/route";
 import { prisma } from "@/app/lib/prisma";
 
+const API_KEY = "test-sync-key-123";
+
 function makeRequest(body: unknown) {
   return new Request("http://localhost/api/mobile/sync/evidencias/eliminar", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-mobile-sync-key": API_KEY },
     body: JSON.stringify(body),
   });
 }
@@ -34,6 +36,7 @@ const EVIDENCIA_BD = {
 describe("POST /api/mobile/sync/evidencias/eliminar", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    process.env.MOBILE_SYNC_API_KEY = API_KEY;
     vi.mocked(prisma.evidenciaGRD.findUnique).mockResolvedValue(null);
     vi.mocked(prisma.evidenciaGRD.update).mockResolvedValue({} as any);
   });
@@ -43,6 +46,7 @@ describe("POST /api/mobile/sync/evidencias/eliminar", () => {
   it("[negativo] body JSON inválido → 400", async () => {
     const req = new Request("http://localhost/api/mobile/sync/evidencias/eliminar", {
       method: "POST",
+      headers: { "x-mobile-sync-key": API_KEY },
       body: "not-json",
     });
     const res = await POST(req);

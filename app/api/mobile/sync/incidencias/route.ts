@@ -71,7 +71,7 @@ type IncidenciaMovilPayload = {
 };
 
 function requireMobileSyncKey(request: Request): NextResponse | null {
-  const expected = process.env.MOBILE_SYNC_API_KEY;
+  const expected = process.env.MOBILE_SYNC_API_KEY?.trim();
 
   if (!expected) {
     return NextResponse.json(
@@ -80,11 +80,11 @@ function requireMobileSyncKey(request: Request): NextResponse | null {
     );
   }
 
-  const provided = request.headers.get("x-mobile-sync-key");
+  const provided = request.headers.get("x-mobile-sync-key")?.trim() ?? "";
 
   if (provided !== expected) {
     return NextResponse.json(
-      { ok: false, message: "No autorizado para sincronización móvil." },
+      { ok: false, message: "No autorizado." },
       { status: 401 }
     );
   }

@@ -9,6 +9,29 @@ const FALLBACK_USUARIO_GRD = "d6deaf92-a3a3-46e6-a3ce-efed1a75c21d";
 const ESTADOS_ASIGNACION_ACTIVOS = ["ASIGNADA", "EN_CAMPO"];
 const ESTADOS_INCIDENCIA_ACTIVOS = ["ABIERTO", "ASIGNADO", "EN EVALUACION", "DATA RECOPILADA", "EN CAMPO"];
 
+function jsonError(message: string, status = 400) {
+  return NextResponse.json({ ok: false, message }, { status });
+}
+
+function requireMobileSyncKey(request: Request): NextResponse | null {
+  const expected = process.env.MOBILE_SYNC_API_KEY?.trim();
+
+  if (!expected) {
+    return NextResponse.json(
+      { ok: false, message: "Sincronización móvil no configurada." },
+      { status: 503 }
+    );
+  }
+
+  const received = request.headers.get("x-mobile-sync-key")?.trim() ?? "";
+
+  if (received !== expected) {
+    return jsonError("No autorizado.", 401);
+  }
+
+  return null;
+}
+
 function decimalToNumber(value: unknown): number | null {
   if (value === null || value === undefined) return null;
   const parsed = Number(value);
@@ -16,6 +39,9 @@ function decimalToNumber(value: unknown): number | null {
 }
 
 export async function GET(request: Request) {
+  const unauthorized = requireMobileSyncKey(request);
+  if (unauthorized) return unauthorized;
+
   try {
     const { searchParams } = new URL(request.url);
 

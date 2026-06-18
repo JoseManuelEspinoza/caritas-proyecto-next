@@ -31,6 +31,25 @@ function jsonError(message: string, status = 400) {
   return NextResponse.json({ ok: false, message }, { status });
 }
 
+function requireMobileSyncKey(request: Request): NextResponse | null {
+  const expected = process.env.MOBILE_SYNC_API_KEY?.trim();
+
+  if (!expected) {
+    return NextResponse.json(
+      { ok: false, message: "Sincronización móvil no configurada." },
+      { status: 503 }
+    );
+  }
+
+  const received = request.headers.get("x-mobile-sync-key")?.trim() ?? "";
+
+  if (received !== expected) {
+    return jsonError("No autorizado.", 401);
+  }
+
+  return null;
+}
+
 function texto(value?: string | null): string {
   return value?.trim() ?? "";
 }
@@ -180,6 +199,9 @@ function usuarioPuedeEjecutar(params: {
 }
 
 export async function POST(request: Request) {
+  const unauthorized = requireMobileSyncKey(request);
+  if (unauthorized) return unauthorized;
+
   let body: SimulacroSyncPayload;
 
   try {
