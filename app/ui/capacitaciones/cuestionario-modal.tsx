@@ -10,22 +10,28 @@ import { useRouter } from "next/navigation";
 function Modal({
   title,
   onClose,
+  footer,
   children,
 }: {
   title: string;
   onClose: () => void;
+  footer: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 overflow-y-auto">
-      <div className="bg-white rounded-xl w-full max-w-2xl shadow-xl my-4">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--caritas-border)]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-xl w-full max-w-2xl shadow-xl flex flex-col max-h-[90vh]">
+        {/* Header fijo */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--caritas-border)] shrink-0">
           <h2 className="text-base font-semibold text-[var(--caritas-text)]">{title}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="px-6 py-5">{children}</div>
+        {/* Cuerpo scrollable */}
+        <div className="px-6 py-5 overflow-y-auto flex-1">{children}</div>
+        {/* Footer fijo */}
+        <div className="px-6 py-4 border-t border-[var(--caritas-border)] shrink-0">{footer}</div>
       </div>
     </div>
   );
@@ -44,7 +50,7 @@ const PREGUNTA_VACIA = (): PreguntaInput => ({
 function fromDetalle(detalle: CuestionarioDetalle): PreguntaInput[] {
   return detalle.preguntas.map((p) => ({
     enunciado: p.enunciado,
-    tipoPregunta: p.tipoPregunta as "OPCION_UNICA" | "VERDADERO_FALSO",
+    tipoPregunta: p.tipoPregunta as "OPCION_UNICA" | "VERDADERO_FALSO" | "OPCION_MULTIPLE",
     puntaje: p.puntaje,
     opciones: p.opciones.map((o) => ({ textoOpcion: o.textoOpcion, esCorrecta: o.esCorrecta })),
   }));
@@ -75,7 +81,7 @@ export function CuestionarioModal({
     inicial?.titulo ?? (tipoDefault === "INICIAL" ? "Evaluación Inicial" : "Evaluación Final")
   );
   const [descripcion, setDescripcion] = useState(inicial?.descripcion ?? "");
-  const [notaAprobatoria, setNotaAprobatoria] = useState(inicial?.notaAprobatoria ?? 11);
+  const notaAprobatoria = 20;
   const [maxIntentos, setMaxIntentos] = useState(inicial?.maxIntentos ?? 3);
   const [preguntas, setPreguntas] = useState<PreguntaInput[]>(
     inicial ? fromDetalle(inicial) : [PREGUNTA_VACIA()]
@@ -91,10 +97,19 @@ export function CuestionarioModal({
       )
     );
 
+  // Para OPCION_UNICA y VERDADERO_FALSO: solo una opción correcta
   const marcarCorrecta = (pi: number, oi: number) =>
     setPreguntas((prev) =>
       prev.map((p, i) =>
         i !== pi ? p : { ...p, opciones: p.opciones.map((o, j) => ({ ...o, esCorrecta: j === oi })) }
+      )
+    );
+
+  // Para OPCION_MULTIPLE: toggle individual
+  const toggleCorrecta = (pi: number, oi: number) =>
+    setPreguntas((prev) =>
+      prev.map((p, i) =>
+        i !== pi ? p : { ...p, opciones: p.opciones.map((o, j) => (j === oi ? { ...o, esCorrecta: !o.esCorrecta } : o)) }
       )
     );
 
@@ -114,10 +129,27 @@ export function CuestionarioModal({
   const eliminarPregunta = (pi: number) => setPreguntas((prev) => prev.filter((_, i) => i !== pi));
 
   const puntajeTotal = preguntas.reduce((s, p) => s + p.puntaje, 0);
+  const totalExcedido = puntajeTotal > notaAprobatoria;
+
+  const clampPuntaje = (pi: number, raw: number) => {
+    const puntajeOtras = preguntas.reduce((s, p, i) => (i !== pi ? s + p.puntaje : s), 0);
+    const maxPermitido = Math.max(1, notaAprobatoria - puntajeOtras);
+    const v = Math.floor(raw);
+    return isNaN(v) ? 1 : Math.min(maxPermitido, Math.max(1, v));
+  };
 
   const guardar = () => {
+    if (preguntas.some((p) => !Number.isInteger(p.puntaje) || p.puntaje < 1)) {
+      toast.error("El puntaje de cada pregunta debe ser un número entero mayor a 0.");
+      return;
+    }
+    if (totalExcedido) {
+      toast.error(`El total de puntos (${puntajeTotal}) supera la nota máxima (${notaAprobatoria}). Ajusta los puntajes.`);
+      return;
+    }
     startTransition(async () => {
-      const payload = { tipoCuestionario: tipo, titulo, descripcion: descripcion || undefined, notaAprobatoria, maxIntentos, preguntas };
+      const preguntasNormalizadas = preguntas.map((p) => ({ ...p, puntaje: Math.floor(p.puntaje) }));
+      const payload = { tipoCuestionario: tipo, titulo, descripcion: descripcion || undefined, notaAprobatoria: 20, maxIntentos, preguntas: preguntasNormalizadas };
       const res = esEdicion
         ? await editarCuestionario(idCuestionario!, payload)
         : await crearCuestionario(idCurso, payload);
@@ -132,8 +164,27 @@ export function CuestionarioModal({
     });
   };
 
+  const footer = (
+    <div className="flex justify-end gap-2">
+      <button
+        onClick={onClose}
+        className="px-4 py-2 text-sm border border-[var(--caritas-border)] rounded-lg hover:bg-gray-50"
+      >
+        Cancelar
+      </button>
+      <button
+        disabled={pending || !titulo.trim() || totalExcedido}
+        onClick={guardar}
+        className="flex items-center gap-2 px-4 py-2 text-sm bg-[var(--caritas-green)] text-white rounded-lg disabled:opacity-50 hover:opacity-90 transition-opacity"
+      >
+        {esEdicion ? <Pencil className="w-4 h-4" /> : <ClipboardList className="w-4 h-4" />}
+        {pending ? "Guardando..." : esEdicion ? "Guardar cambios" : "Crear cuestionario"}
+      </button>
+    </div>
+  );
+
   return (
-    <Modal title={esEdicion ? "Editar Cuestionario" : "Crear Cuestionario"} onClose={onClose}>
+    <Modal title={esEdicion ? "Editar Cuestionario" : "Crear Cuestionario"} onClose={onClose} footer={footer}>
       <div className="space-y-5">
         {/* Tipo de cuestionario — solo informativo, no editable */}
         <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold ${tipo === "INICIAL" ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700"}`}>
@@ -153,10 +204,10 @@ export function CuestionarioModal({
           <div>
             <label className="block text-xs text-gray-500 mb-1">Nota aprobatoria (sobre 20)</label>
             <input
-              type="number" min={0} max={20}
-              value={notaAprobatoria}
-              onChange={(e) => setNotaAprobatoria(Number(e.target.value))}
-              className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]"
+              type="number"
+              value={20}
+              readOnly
+              className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm bg-gray-100 text-gray-500 cursor-not-allowed"
             />
           </div>
           <div>
@@ -182,12 +233,13 @@ export function CuestionarioModal({
         {/* Preguntas */}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-semibold text-[var(--caritas-text)]">
-              Preguntas ({preguntas.length}) · Total: {puntajeTotal} pts
+            <span className={`text-sm font-semibold ${totalExcedido ? "text-red-600" : "text-[var(--caritas-text)]"}`}>
+              Preguntas ({preguntas.length}) · Total: {puntajeTotal} / {notaAprobatoria} pts
+              {totalExcedido && " — excede el máximo"}
             </span>
           </div>
 
-          <div className="space-y-4 max-h-[400px] overflow-y-auto pr-1">
+          <div className="space-y-4">
             {preguntas.map((p, pi) => (
               <div key={pi} className="border border-[var(--caritas-border)] rounded-xl p-4 bg-gray-50">
                 <div className="flex items-center justify-between gap-2 mb-3">
@@ -197,16 +249,51 @@ export function CuestionarioModal({
                   <div className="flex items-center gap-2">
                     <select
                       value={p.tipoPregunta}
-                      onChange={(e) => updatePregunta(pi, "tipoPregunta", e.target.value)}
+                      onChange={(e) => {
+                        const nuevoTipo = e.target.value as PreguntaInput["tipoPregunta"];
+                        updatePregunta(pi, "tipoPregunta", nuevoTipo);
+                        // Al cambiar a V/F: resetear opciones a las dos fijas
+                        if (nuevoTipo === "VERDADERO_FALSO") {
+                          updatePregunta(pi, "opciones", [
+                            { textoOpcion: "Verdadero", esCorrecta: false },
+                            { textoOpcion: "Falso", esCorrecta: false },
+                          ]);
+                        }
+                        // Al cambiar desde V/F a otro: limpiar opciones
+                        if (p.tipoPregunta === "VERDADERO_FALSO" && nuevoTipo !== "VERDADERO_FALSO") {
+                          updatePregunta(pi, "opciones", [
+                            { textoOpcion: "", esCorrecta: false },
+                            { textoOpcion: "", esCorrecta: false },
+                          ]);
+                        }
+                        // Al cambiar a opción única: dejar solo la primera correcta
+                        if (nuevoTipo === "OPCION_UNICA") {
+                          setPreguntas((prev) =>
+                            prev.map((pregunta, i) => {
+                              if (i !== pi) return pregunta;
+                              const primerCorrecta = pregunta.opciones.findIndex((o) => o.esCorrecta);
+                              return {
+                                ...pregunta,
+                                opciones: pregunta.opciones.map((o, j) => ({
+                                  ...o,
+                                  esCorrecta: j === primerCorrecta,
+                                })),
+                              };
+                            })
+                          );
+                        }
+                      }}
                       className="text-xs border border-[var(--caritas-border)] rounded px-2 py-1 bg-white"
                     >
                       <option value="OPCION_UNICA">Opción única</option>
+                      <option value="OPCION_MULTIPLE">Opción múltiple</option>
                       <option value="VERDADERO_FALSO">Verdadero / Falso</option>
                     </select>
                     <input
-                      type="number" min={0.5} step={0.5}
+                      type="number" min={1} step={1}
                       value={p.puntaje}
-                      onChange={(e) => updatePregunta(pi, "puntaje", Number(e.target.value))}
+                      onChange={(e) => updatePregunta(pi, "puntaje", clampPuntaje(pi, Number(e.target.value)))}
+                      onBlur={(e) => updatePregunta(pi, "puntaje", clampPuntaje(pi, Number(e.target.value)))}
                       className="w-14 text-xs border border-[var(--caritas-border)] rounded px-2 py-1 bg-white text-center"
                       title="Puntaje"
                     />
@@ -228,35 +315,42 @@ export function CuestionarioModal({
                 />
 
                 <div className="space-y-2">
-                  {p.opciones.map((o, oi) => (
-                    <div key={oi} className="flex items-center gap-2">
-                      <button
-                        onClick={() => marcarCorrecta(pi, oi)}
-                        className={`shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-                          o.esCorrecta
-                            ? "border-[var(--caritas-green)] bg-[var(--caritas-green)]"
-                            : "border-gray-300 hover:border-[var(--caritas-green)]"
-                        }`}
-                        title="Marcar como correcta"
-                      >
-                        {o.esCorrecta && <CheckCircle2 className="w-3 h-3 text-white" />}
-                      </button>
-                      <input
-                        value={o.textoOpcion}
-                        onChange={(e) => updateOpcion(pi, oi, "textoOpcion", e.target.value)}
-                        placeholder={`Opción ${oi + 1}`}
-                        className="flex-1 px-3 py-1.5 border border-[var(--caritas-border)] rounded-lg text-sm bg-white focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]"
-                      />
-                      {p.opciones.length > 2 && (
-                        <button onClick={() => eliminarOpcion(pi, oi)} className="text-gray-300 hover:text-red-400 shrink-0">
-                          <X className="w-4 h-4" />
+                  {p.tipoPregunta === "OPCION_MULTIPLE" && (
+                    <p className="text-xs text-gray-400 mb-1">Marca todas las opciones correctas</p>
+                  )}
+                  {p.opciones.map((o, oi) => {
+                    const esMultiple = p.tipoPregunta === "OPCION_MULTIPLE";
+                    return (
+                      <div key={oi} className="flex items-center gap-2">
+                        <button
+                          onClick={() => esMultiple ? toggleCorrecta(pi, oi) : marcarCorrecta(pi, oi)}
+                          className={`shrink-0 w-5 h-5 ${esMultiple ? "rounded" : "rounded-full"} border-2 flex items-center justify-center transition-colors ${
+                            o.esCorrecta
+                              ? "border-[var(--caritas-green)] bg-[var(--caritas-green)]"
+                              : "border-gray-300 hover:border-[var(--caritas-green)]"
+                          }`}
+                          title={esMultiple ? "Marcar/desmarcar como correcta" : "Marcar como correcta"}
+                        >
+                          {o.esCorrecta && <CheckCircle2 className="w-3 h-3 text-white" />}
                         </button>
-                      )}
-                    </div>
-                  ))}
+                        <input
+                          value={o.textoOpcion}
+                          onChange={(e) => updateOpcion(pi, oi, "textoOpcion", e.target.value)}
+                          placeholder={`Opción ${oi + 1}`}
+                          disabled={p.tipoPregunta === "VERDADERO_FALSO"}
+                          className="flex-1 px-3 py-1.5 border border-[var(--caritas-border)] rounded-lg text-sm bg-white focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)] disabled:bg-gray-100 disabled:text-gray-500"
+                        />
+                        {p.opciones.length > 2 && p.tipoPregunta !== "VERDADERO_FALSO" && (
+                          <button onClick={() => eliminarOpcion(pi, oi)} className="text-gray-300 hover:text-red-400 shrink-0">
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
 
-                {p.tipoPregunta === "OPCION_UNICA" && p.opciones.length < 5 && (
+                {(p.tipoPregunta === "OPCION_UNICA" || p.tipoPregunta === "OPCION_MULTIPLE") && p.opciones.length < 5 && (
                   <button
                     onClick={() => agregarOpcion(pi)}
                     className="mt-2 text-xs text-[var(--caritas-green)] hover:underline flex items-center gap-1"
@@ -273,24 +367,6 @@ export function CuestionarioModal({
             className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-[var(--caritas-green)]/40 rounded-xl text-sm text-[var(--caritas-green)] hover:bg-[var(--caritas-green)]/5 transition-colors"
           >
             <Plus className="w-4 h-4" /> Agregar pregunta
-          </button>
-        </div>
-
-        {/* Footer */}
-        <div className="flex justify-end gap-2 pt-2 border-t border-[var(--caritas-border)]">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm border border-[var(--caritas-border)] rounded-lg hover:bg-gray-50"
-          >
-            Cancelar
-          </button>
-          <button
-            disabled={pending || !titulo.trim()}
-            onClick={guardar}
-            className="flex items-center gap-2 px-4 py-2 text-sm bg-[var(--caritas-green)] text-white rounded-lg disabled:opacity-50 hover:opacity-90 transition-opacity"
-          >
-            {esEdicion ? <Pencil className="w-4 h-4" /> : <ClipboardList className="w-4 h-4" />}
-            {pending ? "Guardando..." : esEdicion ? "Guardar cambios" : "Crear cuestionario"}
           </button>
         </div>
       </div>

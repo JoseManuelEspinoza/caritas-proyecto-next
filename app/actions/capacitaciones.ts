@@ -1047,7 +1047,7 @@ export async function registrarEvaluacion(
 export type OpcionInput = { textoOpcion: string; esCorrecta: boolean };
 export type PreguntaInput = {
   enunciado: string;
-  tipoPregunta: "OPCION_UNICA" | "VERDADERO_FALSO";
+  tipoPregunta: "OPCION_UNICA" | "VERDADERO_FALSO" | "OPCION_MULTIPLE";
   puntaje: number;
   opciones: OpcionInput[];
 };
