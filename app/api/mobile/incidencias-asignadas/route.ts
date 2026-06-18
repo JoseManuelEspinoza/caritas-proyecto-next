@@ -40,6 +40,12 @@ function parseTake(value: string | null): number {
   return Math.min(Math.max(Math.trunc(parsed), 1), 200);
 }
 
+function puedeRegistrarEntregaKits(estadoActual: string | null | undefined): boolean {
+  return ["APROBADO", "ATENDIDO", "SEGUIMIENTO ABIERTO", "CERRADO"].includes(
+    estadoActual ?? ""
+  );
+}
+
 
 type MobileKitArticuloAsignado = {
   codigo: string;
@@ -570,6 +576,7 @@ export async function GET(request: Request) {
     const mapIncidencia = (inc: typeof incidenciasResponsable[number]) => ({
       asignacion: null,
       kitsAsignados: kitsPorIncidencia.get(inc.idIncidencia) ?? [],
+      kitsEntregaHabilitada: puedeRegistrarEntregaKits(inc.estadoActual),
       entregaMovil: entregaMovilPorIncidencia.get(inc.idIncidencia) ?? null,
       incidencia: {
         ...inc,
@@ -607,6 +614,7 @@ export async function GET(request: Request) {
           fechaSincronizacion: asignacion.fechaSincronizacion,
         },
         kitsAsignados: kitsPorIncidencia.get(asignacion.incidencia.idIncidencia) ?? [],
+        kitsEntregaHabilitada: puedeRegistrarEntregaKits(asignacion.incidencia.estadoActual),
         entregaMovil: entregaMovilPorIncidencia.get(asignacion.incidencia.idIncidencia) ?? null,
         incidencia: {
           ...asignacion.incidencia,
