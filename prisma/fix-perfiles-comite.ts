@@ -13,7 +13,7 @@
  */
 import { Role } from "@prisma/client";
 import { prisma } from "../app/lib/prisma";
-import { Role } from "@prisma/client";
+
 function separar(name: string) {
   const p = (name ?? "").trim().split(/\s+/);
   if (p.length <= 1) return { nombres: name || "Usuario", apellidos: "" };

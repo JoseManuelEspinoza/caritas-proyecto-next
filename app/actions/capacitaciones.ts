@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath, revalidateTag } from "next/cache";
+import { revalidatePath } from "next/cache";
 import { verifySession } from "@/app/lib/dal";
 import { getUsuarioGRDId } from "@/app/lib/usuario-grd";
 import { makeCursoUseCases } from "@/core/infrastructure/factories/makeCursoUseCases";
@@ -1030,7 +1030,7 @@ export async function registrarEvaluacion(
         const constanciaUrl = `/capacitaciones/constancia/${idInscripcion}`;
         await makeCursoUseCases().certificar.execute(idInscripcion, constanciaUrl);
         notificarCertificado(idInscripcion);
-        revalidateTag("reportes-base");
+        revalidatePath("/reportes");
       } catch {
         // Ya certificado o sin evaluación aprobada — no bloquea
       }
@@ -1293,7 +1293,7 @@ export async function enviarRespuestasExamen(
         const constanciaUrl = `/capacitaciones/constancia/${idInscripcion}`;
         await makeCursoUseCases().certificar.execute(idInscripcion, constanciaUrl);
         notificarCertificado(idInscripcion);
-        revalidateTag("reportes-base");
+        revalidatePath("/reportes");
       } catch {
         // Si ya está certificado o falla, no bloquear el resultado
       }

@@ -537,7 +537,7 @@ export async function GET(request: Request) {
       }
     }
 
-    // Cargar evidencias para todas las incidencias
+    // Cargar evidencias para todas las incidencias (con URL prefirmada si aplica)
     const evidenciasDB = allIds.length
       ? await prisma.evidenciaGRD.findMany({
           where: { idReferencia: { in: allIds }, estado: "ACTIVO", deletedAt: null },
