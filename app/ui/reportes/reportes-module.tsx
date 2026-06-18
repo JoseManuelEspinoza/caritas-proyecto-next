@@ -402,9 +402,8 @@ function TabBrigadistas({ totales, brigadistasData }: ReportesProps) {
     { label: "Certificados", value: totales.brigadistasCapacitados },
     { label: "Sin certificación", value: Math.max(sinCert, 0) },
   ];
-  const sorted = [...brigadistasData.porParroquia];
-  const top3 = sorted.slice(0, 3);
-  const bottom3 = [...sorted].sort((a, b) => a.pct - b.pct).filter(p => p.pct < 100).slice(0, 3);
+  const top3 = [...brigadistasData.porParroquia].sort((a, b) => b.pct - a.pct).slice(0, 3);
+  const bottom3 = [...brigadistasData.porParroquia].sort((a, b) => a.pct - b.pct).filter(p => p.pct < 100).slice(0, 3);
   const pctColor = pct >= 80 ? GREEN : pct >= 50 ? "#F59E0B" : "#EF4444";
 
   return (
@@ -497,10 +496,10 @@ function TabBrigadistas({ totales, brigadistasData }: ReportesProps) {
       </div>
 
       {/* Radar de parroquias top */}
-      {brigadistasData.porParroquia.length >= 3 && (
-        <ChartCard title="Comparativa de Certificación por Parroquia" subtitle="% de brigadistas certificados — top 8 parroquias por tamaño">
-          <ResponsiveContainer width="100%" height={220}>
-            <RadarChart data={brigadistasData.porParroquia.slice(0, 8).map(p => ({ parroquia: p.parroquia.length > 12 ? p.parroquia.slice(0, 11) + "…" : p.parroquia, pct: p.pct, meta: 80 }))}>
+      {brigadistasData.porParroquia.length >= 1 && (
+        <ChartCard title="Comparativa de Certificación por Parroquia" subtitle="% de brigadistas certificados — todas las parroquias">
+          <ResponsiveContainer width="100%" height={Math.max(300, brigadistasData.porParroquia.length * 8)}>
+            <RadarChart data={brigadistasData.porParroquia.map(p => ({ parroquia: p.parroquia, pct: p.pct, meta: 80 }))}>
               <PolarGrid stroke="#E5E7EB" />
               <PolarAngleAxis dataKey="parroquia" tick={{ fontSize: 9, fill: "#6B7280" }} />
               <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 8, fill: "#9CA3AF" }} tickCount={5} />
@@ -674,10 +673,10 @@ function TabPrevencion({ actividadesData }: ReportesProps) {
       </div>
 
       {/* Radar por parroquia si hay datos suficientes */}
-      {actividadesData.porParroquia.length >= 4 && (
-        <ChartCard title="Radar de Actividad por Parroquia" subtitle="Distribución relativa de actividades preventivas — top 8 parroquias">
-          <ResponsiveContainer width="100%" height={220}>
-            <RadarChart data={actividadesData.porParroquia.slice(0, 8).map(p => ({ parroquia: p.label.length > 12 ? p.label.slice(0, 11) + "…" : p.label, actividades: p.value }))}>
+      {actividadesData.porParroquia.length >= 1 && (
+        <ChartCard title="Radar de Actividad por Parroquia" subtitle="Simulacros y actividades preventivas — todas las parroquias">
+          <ResponsiveContainer width="100%" height={Math.max(300, actividadesData.porParroquia.length * 8)}>
+            <RadarChart data={actividadesData.porParroquia.map(p => ({ parroquia: p.label, actividades: p.value }))}>
               <PolarGrid stroke="#E5E7EB" />
               <PolarAngleAxis dataKey="parroquia" tick={{ fontSize: 9, fill: "#6B7280" }} />
               <PolarRadiusAxis tick={{ fontSize: 8, fill: "#9CA3AF" }} tickCount={4} />

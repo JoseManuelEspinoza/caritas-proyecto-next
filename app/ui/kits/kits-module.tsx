@@ -1,15 +1,16 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Package, Plus, ArrowDownCircle, ArrowUpCircle, RefreshCw, X, ListChecks, Camera, Upload } from "lucide-react";
+import { Package, Plus, ArrowDownCircle, ArrowUpCircle, RefreshCw, X, ListChecks, Camera, Upload, Trash2, Archive } from "lucide-react";
 import { toast } from "sonner";
 import {
   crearKit,
+  archivarKit,
+  eliminarKit,
   registrarMovimientoKit,
   listarMovimientosKit,
   listarArticulosKit,
-  guardarArticulosKit,
   type ArticuloKit,
 } from "@/app/actions/kits";
 import { registrarEvidenciaKit, listarEvidenciasKit } from "@/app/actions/evidencias";
@@ -24,7 +25,10 @@ type Kit = {
   estadoKit: string;
   codigoAlmacen: string | null;
   ubicacionAlmacen: string | null;
+  fechaRegistro: string | null;
+  ultimoMovimiento: string | null;
 };
+type SortKey = "nombre" | "stock-desc" | "stock-asc" | "actividad" | "creacion";
 type Parroquia = { id: string; nombre: string };
 type Evidencia = { idEvidenciaGRD: string; nombreArchivo: string; urlArchivo: string; fechaCarga: string };
 type Movimiento = {
@@ -46,8 +50,6 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
   const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
   const [evidencias, setEvidencias] = useState<Evidencia[]>([]);
   const [articulos, setArticulos] = useState<ArticuloKit[]>([]);
-  const [editandoComposicion, setEditandoComposicion] = useState(false);
-  const [artDraft, setArtDraft] = useState<ArticuloKit[]>([]);
   const [evidenciaFile, setEvidenciaFile] = useState<File | null>(null);
   const [showKitForm, setShowKitForm] = useState(false);
   const [showMovForm, setShowMovForm] = useState(false);
@@ -55,8 +57,11 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
   const [movementPage, setMovementPage] = useState(1);
   const [kitPageSize, setKitPageSize] = useState(5);
   const [movPageSize, setMovPageSize] = useState(5);
+  const [sortBy, setSortBy] = useState<SortKey>("nombre");
 
   const [kitForm, setKitForm] = useState({ tipoKit: "", descripcion: "", stockInicial: 0, codigoAlmacen: "", ubicacionAlmacen: "" });
+  // Composición del kit nuevo: un kit no puede crearse sin contenido (≥1 artículo).
+  const [kitFormArt, setKitFormArt] = useState<ArticuloKit[]>([{ codigo: "", descripcion: "", cantidad: 1 }]);
   const [movForm, setMovForm] = useState({
     tipo: "ENTREGA" as (typeof TIPOS)[number],
     cantidad: 1,
@@ -72,7 +77,22 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
   const totalKitPages = Math.max(1, Math.ceil(kits.length / kitPageSize));
   const safeKitPage = Math.min(kitPage, totalKitPages);
   const kitStart = (safeKitPage - 1) * kitPageSize;
-  const visibleKits = kits.slice(kitStart, kitStart + kitPageSize);
+  const sortedKits = useMemo(() => {
+    const arr = [...kits];
+    switch (sortBy) {
+      case "stock-desc":
+        return arr.sort((a, b) => b.stockActual - a.stockActual);
+      case "stock-asc":
+        return arr.sort((a, b) => a.stockActual - b.stockActual);
+      case "actividad": // último movimiento más reciente primero; sin movimientos al final
+        return arr.sort((a, b) => (b.ultimoMovimiento ?? "").localeCompare(a.ultimoMovimiento ?? ""));
+      case "creacion": // creados más recientemente primero
+        return arr.sort((a, b) => (b.fechaRegistro ?? "").localeCompare(a.fechaRegistro ?? ""));
+      default:
+        return arr.sort((a, b) => a.tipoKit.localeCompare(b.tipoKit));
+    }
+  }, [kits, sortBy]);
+  const visibleKits = sortedKits.slice(kitStart, kitStart + kitPageSize);
   const kitFrom = kits.length === 0 ? 0 : kitStart + 1;
   const kitTo = Math.min(kitStart + kitPageSize, kits.length);
 
@@ -104,7 +124,6 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
       setMovimientos([]);
       setEvidencias([]);
       setArticulos([]);
-      setEditandoComposicion(false);
       return () => {
         active = false;
       };
@@ -118,7 +137,6 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
       .then((items) => { if (active) setEvidencias(items); })
       .catch(() => { if (active) setEvidencias([]); });
 
-    setEditandoComposicion(false);
     listarArticulosKit(selected)
       .then((items) => { if (active) setArticulos(items); })
       .catch(() => { if (active) setArticulos([]); });
@@ -127,20 +145,6 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
       active = false;
     };
   }, [selected]);
-
-  function guardarComposicion() {
-    if (!selected) return;
-    startTransition(async () => {
-      const res = await guardarArticulosKit(selected, artDraft);
-      if (res && "message" in res) {
-        toast.error(res.message);
-        return;
-      }
-      setArticulos(await listarArticulosKit(selected));
-      setEditandoComposicion(false);
-      toast.success("Composición del kit guardada.");
-    });
-  }
 
   function validarKitForm(): string | null {
     const tipoKit = kitForm.tipoKit.trim();
@@ -159,6 +163,10 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
 
     if (stockInicial < 0) {
       return "El stock inicial no puede ser negativo.";
+    }
+
+    if (kitFormArt.filter((a) => a.descripcion.trim()).length === 0) {
+      return "Define al menos un artículo en el contenido del kit.";
     }
 
     return null;
@@ -196,6 +204,36 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
     return null;
   }
 
+  function handleArchivar() {
+    if (!current) return;
+    startTransition(async () => {
+      const res = await archivarKit(current.id);
+      if (res?.message) {
+        toast.error(res.message);
+        return;
+      }
+      toast.success("Kit archivado.");
+      router.refresh();
+    });
+  }
+
+  function handleEliminar() {
+    if (!current) return;
+    if (!window.confirm(`¿Eliminar el kit "${current.tipoKit}"? Esta acción no se puede deshacer.`)) {
+      return;
+    }
+    startTransition(async () => {
+      const res = await eliminarKit(current.id);
+      if (res?.message) {
+        toast.error(res.message);
+        return;
+      }
+      toast.success("Kit eliminado.");
+      setSelected(null);
+      router.refresh();
+    });
+  }
+
   const submitKit = () => {
     const errorValidacion = validarKitForm();
 
@@ -211,13 +249,15 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
         stockInicial: Number(kitForm.stockInicial),
         codigoAlmacen: kitForm.codigoAlmacen.trim() || undefined,
         ubicacionAlmacen: kitForm.ubicacionAlmacen.trim() || undefined,
+        articulos: kitFormArt,
       });
 
       if (res?.message) toast.error(res.message);
       else {
-        toast.success("Kit creado.");
+        toast.success("Kit creado con su contenido.");
         setShowKitForm(false);
         setKitForm({ tipoKit: "", descripcion: "", stockInicial: 0, codigoAlmacen: "", ubicacionAlmacen: "" });
+        setKitFormArt([{ codigo: "", descripcion: "", cantidad: 1 }]);
         router.refresh();
       }
     });
@@ -330,6 +370,55 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
               className="mt-1 w-full px-3 py-2 border border-[var(--caritas-border)] rounded text-sm"
             />
           </label>
+
+          {/* Composición del kit — obligatoria al crear (no se permite un kit sin contenido) */}
+          <div className="md:col-span-2">
+            <span className="text-xs text-gray-600">
+              Contenido del kit <span className="text-red-500">*</span>
+            </span>
+            <div className="mt-1 border border-[var(--caritas-border)] rounded p-3 space-y-2">
+              {kitFormArt.map((a, i) => (
+                <div key={i} className="flex items-center gap-1.5">
+                  <input
+                    value={a.descripcion}
+                    onChange={(e) =>
+                      setKitFormArt((p) => p.map((x, j) => (j === i ? { ...x, descripcion: e.target.value } : x)))
+                    }
+                    placeholder="Elemento (ej. Arroz 1kg, Frazada...)"
+                    className="flex-1 px-2 py-1.5 text-xs border border-[var(--caritas-border)] rounded"
+                  />
+                  <input
+                    type="number"
+                    min={1}
+                    value={a.cantidad}
+                    onChange={(e) =>
+                      setKitFormArt((p) =>
+                        p.map((x, j) => (j === i ? { ...x, cantidad: parseInt(e.target.value, 10) || 1 } : x))
+                      )
+                    }
+                    className="w-16 px-2 py-1.5 text-xs border border-[var(--caritas-border)] rounded"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setKitFormArt((p) => (p.length > 1 ? p.filter((_, j) => j !== i) : p))}
+                    disabled={kitFormArt.length === 1}
+                    className="p-1 text-gray-400 hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="Quitar artículo"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => setKitFormArt((p) => [...p, { codigo: "", descripcion: "", cantidad: 1 }])}
+                className="text-xs text-[var(--caritas-green)] flex items-center gap-1"
+              >
+                <Plus className="w-3.5 h-3.5" /> Agregar artículo
+              </button>
+            </div>
+          </div>
+
           <div className="md:col-span-2 flex justify-end gap-2">
             <button
               onClick={() => setShowKitForm(false)}
@@ -350,14 +439,40 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div className="lg:col-span-1 space-y-3">
+          {kits.length > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500 whitespace-nowrap">Ordenar por:</span>
+              <select
+                value={sortBy}
+                onChange={(e) => {
+                  setSortBy(e.target.value as SortKey);
+                  setKitPage(1);
+                }}
+                className="flex-1 text-xs border border-[var(--caritas-border)] rounded-lg px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#009850]/20 focus:border-[#009850]"
+              >
+                <option value="nombre">Nombre (A–Z)</option>
+                <option value="stock-desc">Stock (mayor a menor)</option>
+                <option value="stock-asc">Stock (menor a mayor)</option>
+                <option value="actividad">Actividad reciente</option>
+                <option value="creacion">Fecha de creación</option>
+              </select>
+            </div>
+          )}
           {kits.length === 0 && <p className="text-sm text-gray-500">No hay kits registrados.</p>}
           {visibleKits.map((k) => (
             <button
               key={k.id}
               onClick={() => selectKit(k.id)}
-              className={`w-full text-left p-4 border rounded-xl transition-colors ${selected === k.id ? "border-[var(--caritas-green)] bg-[var(--caritas-green)]/5" : "border-[var(--caritas-border)] hover:bg-gray-50"}`}
+              className={`w-full text-left p-4 border rounded-xl transition-colors ${selected === k.id ? "border-[var(--caritas-green)] bg-[var(--caritas-green)]/5" : "border-[var(--caritas-border)] hover:bg-gray-50"} ${k.estadoKit === "ARCHIVADO" ? "opacity-60" : ""}`}
             >
-              <div className="text-sm font-medium text-[var(--caritas-text)]">{k.tipoKit}</div>
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-sm font-medium text-[var(--caritas-text)]">{k.tipoKit}</div>
+                {k.estadoKit === "ARCHIVADO" && (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-500 rounded flex-shrink-0">
+                    <Archive className="w-3 h-3" /> Archivado
+                  </span>
+                )}
+              </div>
               <div className="text-xs text-gray-600 mt-1">
                 Stock:{" "}
                 <span
@@ -366,6 +481,17 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
                   {k.stockActual}
                 </span>
               </div>
+              {k.fechaRegistro && (
+                <div className="text-[10px] text-gray-400 mt-0.5">
+                  Creado el{" "}
+                  {new Date(k.fechaRegistro).toLocaleDateString("es-PE", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                    timeZone: "America/Lima",
+                  })}
+                </div>
+              )}
             </button>
           ))}
           <PaginationControls
@@ -407,12 +533,41 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
                     )}
                   </div>
                 </div>
-                <button
-                  onClick={() => setShowMovForm((s) => !s)}
-                  className="flex items-center gap-2 px-3 py-2 bg-[var(--caritas-green)] text-white text-sm rounded"
-                >
-                  <RefreshCw className="w-4 h-4" /> Movimiento
-                </button>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {current.estadoKit === "ARCHIVADO" ? (
+                    <span className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-gray-100 text-gray-500 rounded">
+                      <Archive className="w-3.5 h-3.5" /> Archivado
+                    </span>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => setShowMovForm((s) => !s)}
+                        className="flex items-center gap-2 px-3 py-2 bg-[var(--caritas-green)] text-white text-sm rounded"
+                      >
+                        <RefreshCw className="w-4 h-4" /> Movimiento
+                      </button>
+                      {movimientos.length === 0 ? (
+                        <button
+                          onClick={handleEliminar}
+                          disabled={pending}
+                          title="El kit no tiene movimientos: puede eliminarse"
+                          className="flex items-center gap-2 px-3 py-2 border border-red-200 text-red-600 text-sm rounded hover:bg-red-50 disabled:opacity-50"
+                        >
+                          <Trash2 className="w-4 h-4" /> Eliminar
+                        </button>
+                      ) : (
+                        <button
+                          onClick={handleArchivar}
+                          disabled={pending}
+                          title="El kit tiene movimientos: solo puede archivarse"
+                          className="flex items-center gap-2 px-3 py-2 border border-[var(--caritas-border)] text-gray-700 text-sm rounded hover:bg-gray-50 disabled:opacity-50"
+                        >
+                          <Archive className="w-4 h-4" /> Archivar
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
 
               {showMovForm && (
@@ -510,105 +665,32 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
                 </div>
               )}
 
-              {/* Composición del kit (contenido y cantidades) */}
+              {/* Composición del kit — SOLO LECTURA: se define al crear y no se edita después. */}
               <div className="mb-6">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm text-gray-600 flex items-center gap-1.5">
-                    <ListChecks className="w-4 h-4 text-[var(--caritas-green)]" />
-                    Composición del kit
-                  </h3>
-                  {!editandoComposicion && (
-                    <button
-                      onClick={() => {
-                        setArtDraft(
-                          articulos.length
-                            ? articulos.map((a) => ({ ...a }))
-                            : [{ codigo: "", descripcion: "", cantidad: 1 }]
-                        );
-                        setEditandoComposicion(true);
-                      }}
-                      className="text-xs font-medium text-[var(--caritas-green)] hover:underline"
-                    >
-                      {articulos.length ? "Editar" : "Definir contenido"}
-                    </button>
-                  )}
-                </div>
+                <h3 className="text-sm text-gray-600 flex items-center gap-1.5 mb-2">
+                  <ListChecks className="w-4 h-4 text-[var(--caritas-green)]" />
+                  Composición del kit
+                </h3>
 
-                {!editandoComposicion ? (
-                  articulos.length === 0 ? (
-                    <p className="text-xs text-gray-400 border border-dashed border-gray-200 rounded p-3">
-                      Este kit aún no tiene contenido definido. Defínelo para que el informe de
-                      ayuda humanitaria precargue sus artículos al asignarlo a una familia.
-                    </p>
-                  ) : (
-                    <ul className="border border-[var(--caritas-border)] rounded divide-y divide-gray-100">
-                      {articulos.map((a, i) => (
-                        <li key={i} className="flex items-center gap-2 px-3 py-1.5 text-sm">
-                          {a.codigo && (
-                            <span className="text-[10px] font-mono bg-gray-100 px-1.5 py-0.5 rounded text-gray-500">
-                              {a.codigo}
-                            </span>
-                          )}
-                          <span className="flex-1 text-gray-700">{a.descripcion}</span>
-                          <span className="text-xs font-semibold text-gray-500">x{a.cantidad}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )
+                {articulos.length === 0 ? (
+                  <p className="text-xs text-gray-400 border border-dashed border-gray-200 rounded p-3">
+                    Este kit no tiene contenido definido. La composición se define al crear el kit
+                    y no puede modificarse después.
+                  </p>
                 ) : (
-                  <div className="border border-[var(--caritas-border)] rounded p-3 space-y-2">
-                    {artDraft.map((a, i) => (
-                      <div key={i} className="flex items-center gap-1.5">
-                        <input
-                          value={a.descripcion}
-                          onChange={(e) =>
-                            setArtDraft((p) => p.map((x, j) => (j === i ? { ...x, descripcion: e.target.value } : x)))
-                          }
-                          placeholder="Elemento (ej. Arroz 1kg, Frazada...)"
-                          className="flex-1 px-2 py-1.5 text-xs border border-[var(--caritas-border)] rounded"
-                        />
-                        <input
-                          type="number"
-                          min={1}
-                          value={a.cantidad}
-                          onChange={(e) =>
-                            setArtDraft((p) =>
-                              p.map((x, j) => (j === i ? { ...x, cantidad: parseInt(e.target.value, 10) || 1 } : x))
-                            )
-                          }
-                          className="w-16 px-2 py-1.5 text-xs border border-[var(--caritas-border)] rounded"
-                        />
-                        <button
-                          onClick={() => setArtDraft((p) => p.filter((_, j) => j !== i))}
-                          className="p-1 text-gray-400 hover:text-red-500"
-                          title="Quitar artículo"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
+                  <ul className="border border-[var(--caritas-border)] rounded divide-y divide-gray-100">
+                    {articulos.map((a, i) => (
+                      <li key={i} className="flex items-center gap-2 px-3 py-1.5 text-sm">
+                        {a.codigo && (
+                          <span className="text-[10px] font-mono bg-gray-100 px-1.5 py-0.5 rounded text-gray-500">
+                            {a.codigo}
+                          </span>
+                        )}
+                        <span className="flex-1 text-gray-700">{a.descripcion}</span>
+                        <span className="text-xs font-semibold text-gray-500">x{a.cantidad}</span>
+                      </li>
                     ))}
-                    <button
-                      onClick={() => setArtDraft((p) => [...p, { codigo: "", descripcion: "", cantidad: 1 }])}
-                      className="text-xs text-[var(--caritas-green)] flex items-center gap-1"
-                    >
-                      <Plus className="w-3.5 h-3.5" /> Agregar artículo
-                    </button>
-                    <div className="flex justify-end gap-2 pt-1">
-                      <button
-                        onClick={() => setEditandoComposicion(false)}
-                        className="px-3 py-1.5 text-xs border border-[var(--caritas-border)] rounded"
-                      >
-                        Cancelar
-                      </button>
-                      <button
-                        onClick={guardarComposicion}
-                        disabled={pending}
-                        className="px-3 py-1.5 text-xs bg-[var(--caritas-green)] text-white rounded disabled:opacity-50"
-                      >
-                        Guardar composición
-                      </button>
-                    </div>
-                  </div>
+                  </ul>
                 )}
               </div>
 

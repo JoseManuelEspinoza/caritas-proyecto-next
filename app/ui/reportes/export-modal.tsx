@@ -578,9 +578,6 @@ export function ExportModal({
       const drawCover = (titulo: string, subtitulo: string) => {
         // Fondo verde superior
         doc.setFillColor(...G); doc.rect(0, 0, pageW, 38, "F");
-        // Línea decorativa blanca
-        doc.setFillColor(255, 255, 255); doc.setFillColor(255, 255, 255, 0.3);
-        doc.rect(0, 34, pageW, 0.8, "F");
         // Título
         doc.setFontSize(18); doc.setFont("helvetica", "bold"); doc.setTextColor(255, 255, 255);
         doc.text(s(titulo), pageW / 2, 13, { align: "center" });
@@ -690,7 +687,7 @@ export function ExportModal({
         const pct = total > 0 ? (count/total)*100 : 0;
         const barW = 60; const barH = 3.5;
         doc.setFontSize(7.5); doc.setFont("helvetica","normal"); doc.setTextColor(31,41,55);
-        doc.text(s(label.length > 28 ? label.slice(0,27)+"..." : label), mg+2, y+5);
+        doc.text(s(label), mg+2, y+5);
         // Bar track
         doc.setFillColor(229,231,235); doc.rect(mg+72, y+2.2, barW, barH, "F");
         // Bar fill
@@ -733,10 +730,12 @@ export function ExportModal({
           // Value label
           doc.setFontSize(6.5); doc.setFont("helvetica","bold"); doc.setTextColor(31,41,55);
           if (bh > 3) doc.text(String(d.value), bx+barW/2, by-2, { align:"center" });
-          // X label
+          // X label — 2 líneas si es largo
           doc.setFontSize(6); doc.setFont("helvetica","normal"); doc.setTextColor(107,114,128);
-          const lbl = d.label.length>9 ? d.label.slice(0,8)+"..." : d.label;
-          doc.text(s(lbl), bx+barW/2, y+chartH+8, { align:"center" });
+          const lblLines = doc.splitTextToSize(s(d.label), slotW - 1);
+          lblLines.slice(0, 2).forEach((ln: string, li: number) => {
+            doc.text(ln, bx+barW/2, y+chartH+5+li*4, { align:"center" });
+          });
         });
         // Baseline
         doc.setDrawColor(200,200,200); doc.setLineWidth(0.5);
@@ -829,8 +828,10 @@ export function ExportModal({
           doc.setFontSize(6.5); doc.setFont("helvetica","bold"); doc.setTextColor(31,41,55);
           if (bh > 3) doc.text(String(d.value), bx+barW/2, by-2, {align:"center"});
           doc.setFontSize(6); doc.setFont("helvetica","normal"); doc.setTextColor(107,114,128);
-          const lbl = d.label.length>9 ? d.label.slice(0,8)+"..." : d.label;
-          doc.text(s(lbl), bx+barW/2, y+chartH+8, {align:"center"});
+          const lblLines2 = doc.splitTextToSize(s(d.label), slotW - 1);
+          lblLines2.slice(0, 2).forEach((ln: string, li: number) => {
+            doc.text(ln, bx+barW/2, y+chartH+5+li*4, {align:"center"});
+          });
         });
         doc.setDrawColor(200,200,200); doc.setLineWidth(0.5);
         doc.line(x, y+chartH, x+w, y+chartH);
@@ -940,7 +941,7 @@ export function ExportModal({
           if (i%2===0){doc.setFillColor(248,250,249);doc.rect(mg,y,contentW,rowH,"F");}
           doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(31,41,55);
           bx=mg;
-          [String(i+1),s(p.parroquia.length>28?p.parroquia.slice(0,27)+"...":p.parroquia),String(p.total),String(p.capacitados),`${p.pct}%`,String(p.total-p.capacitados)]
+          [String(i+1),s(p.parroquia),String(p.total),String(p.capacitados),`${p.pct}%`,String(p.total-p.capacitados)]
           .forEach((v,vi)=>{
             if(vi===4){doc.setTextColor(p.pct>=70?0:p.pct>0?200:220, p.pct>=70?152:p.pct>0?100:50, p.pct>=70?80:0);doc.setFont("helvetica","bold");}
             else{doc.setTextColor(31,41,55);doc.setFont("helvetica","normal");}
@@ -972,7 +973,7 @@ export function ExportModal({
           sorted.forEach((p, i) => {
             if (yG > pageH - 20) { drawFooter(totalPages, totalPages+1); doc.addPage(); drawBandHeader("BRIGADISTAS"); yG = 14; totalPages++; }
             const rc: [number,number,number] = p.pct >= 70 ? [0,152,80] : p.pct >= 40 ? [245,158,11] : [239,68,68];
-            const lbl = `${s(p.parroquia.length > 26 ? p.parroquia.slice(0,25)+"..." : p.parroquia)}  (${p.capacitados}/${p.total} certif.)`;
+            const lbl = `${s(p.parroquia)}  (${p.capacitados}/${p.total} certif.)`;
             yG = distRow(lbl, p.pct, 100, rc, yG, i%2===0);
           });
         }
@@ -1067,7 +1068,7 @@ export function ExportModal({
             if(i%2===0){doc.setFillColor(248,250,249);doc.rect(mg,y,contentW,7,"F");}
             doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(31,41,55);
             bx=mg;
-            [s(k.tipoKit.length>28?k.tipoKit.slice(0,27)+"...":k.tipoKit),String(k.stockActual),`${k.total} kit(s)`]
+            [s(k.tipoKit),String(k.stockActual),`${k.total} kit(s)`]
             .forEach((v,vi)=>{doc.text(v,bx+2,y+4.5);bx+=sthW[vi];});
             y+=7;
           });
@@ -1161,7 +1162,7 @@ export function ExportModal({
             if (i%2===0){doc.setFillColor(248,250,249);doc.rect(mg,y,contentW,9,"F");}
             doc.setFillColor(...col); doc.rect(mg,y,3,9,"F");
             doc.setFontSize(7.5); doc.setFont("helvetica","bold"); doc.setTextColor(31,41,55);
-            doc.text(`${i+1}. ${s(p.nombre.length>42?p.nombre.slice(0,41)+"...":p.nombre)}`, mg+5, y+4.5);
+            doc.text(`${i+1}. ${s(p.nombre)}`, mg+5, y+4.5);
             doc.setFont("helvetica","normal"); doc.setTextColor(107,114,128);
             const actP = p.actividadesTotal>0?Math.round((p.actividadesEjecutadas/p.actividadesTotal)*100):0;
             doc.text(`${p.incidencias} incid.  |  ${p.brigadistas} brigad.  |  ${p.pctCapacitados}% certif.  |  ${actP}% activid.  |  Plan: ${p.tienePlan?"Aprobado":"Sin plan"}`, mg+5, y+8);
@@ -1331,7 +1332,7 @@ export function ExportModal({
         y=sectionTitle("RANKING COMPLETO — NIVEL DE AFECTACION ESTIMADA", y);
 
         const rhC=["#","Parroquia","Nivel","Casos","Brigadistas","%Cert.","Plan GRD","Act."];
-        const rhW=[7,60,20,14,22,16,22,18];
+        const rhW=[7,72,18,12,20,15,20,15];
         doc.setFillColor(...G);doc.rect(mg,y,contentW,8,"F");
         doc.setFontSize(7);doc.setFont("helvetica","bold");doc.setTextColor(255,255,255);
         let bx=mg; rhC.forEach((c,i)=>{doc.text(c,bx+1.5,y+5.5);bx+=rhW[i];}); y+=8;
@@ -1350,7 +1351,7 @@ export function ExportModal({
 
           doc.setFontSize(6.5);doc.setFont("helvetica","normal");
           bx=mg;
-          const vals=[String(i+1),s(p.nombre.length>24?p.nombre.slice(0,23)+"...":p.nombre),
+          const vals=[String(i+1),s(p.nombre),
             s(nKey),String(p.incidencias),String(p.brigadistas),`${p.pctCapacitados}%`,
             p.tienePlan?"Aprobado":"Sin plan",`${p.actividadesEjecutadas}/${p.actividadesTotal}`];
           vals.forEach((v,vi)=>{

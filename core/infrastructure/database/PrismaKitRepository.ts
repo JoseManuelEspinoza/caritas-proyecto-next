@@ -60,4 +60,17 @@ export class PrismaKitRepository implements IKitRepository {
       observaciones: m.observaciones,
     }));
   }
+
+  async update(kit: KitEmergencia): Promise<void> {
+    const { idKitEmergencia, ...data } = KitMapper.toPersistence(kit);
+    await prisma.kitEmergencia.update({ where: { idKitEmergencia }, data });
+  }
+
+  async delete(id: string): Promise<void> {
+    await prisma.kitEmergencia.delete({ where: { idKitEmergencia: id } });
+  }
+
+  async contarMovimientos(idKit: string): Promise<number> {
+    return prisma.movimientoKit.count({ where: { idKitEmergencia: idKit } });
+  }
 }
