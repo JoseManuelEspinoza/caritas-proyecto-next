@@ -13,5 +13,14 @@ export default async function UsuariosPage() {
     select: { id: true, email: true, name: true, role: true, estado: true },
   });
 
-  return <UsuariosModule usuarios={usuarios} />;
+  // URL de la consola admin de Keycloak, derivada del issuer (sirve en dev y prod).
+  const issuer = process.env.AUTH_KEYCLOAK_ISSUER ?? "";
+  let keycloakAdminUrl = "";
+  try {
+    if (issuer) keycloakAdminUrl = `${new URL(issuer).origin}/admin`;
+  } catch {
+    /* issuer inválido → sin botón directo */
+  }
+
+  return <UsuariosModule usuarios={usuarios} keycloakAdminUrl={keycloakAdminUrl} />;
 }
