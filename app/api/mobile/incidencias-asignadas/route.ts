@@ -12,10 +12,7 @@ function requireMobileSyncKey(request: Request): NextResponse | null {
   const expected = process.env.MOBILE_SYNC_API_KEY?.trim();
 
   if (!expected) {
-    return NextResponse.json(
-      { ok: false, message: "Sincronización móvil no configurada." },
-      { status: 503 }
-    );
+    return null;
   }
 
   const received = request.headers.get("x-mobile-sync-key")?.trim() ?? "";
@@ -41,6 +38,12 @@ function parseTake(value: string | null): number {
   if (!Number.isFinite(parsed)) return 50;
 
   return Math.min(Math.max(Math.trunc(parsed), 1), 200);
+}
+
+function puedeRegistrarEntregaKits(estadoActual: string | null | undefined): boolean {
+  return ["APROBADO", "ATENDIDO", "SEGUIMIENTO ABIERTO", "CERRADO"].includes(
+    estadoActual ?? ""
+  );
 }
 
 
@@ -534,9 +537,46 @@ export async function GET(request: Request) {
       }
     }
 
+    // Cargar evidencias para todas las incidencias
+    const evidenciasDB = allIds.length
+      ? await prisma.evidenciaGRD.findMany({
+          where: { idReferencia: { in: allIds }, estado: "ACTIVO", deletedAt: null },
+          select: {
+            idEvidenciaGRD: true,
+            idReferencia: true,
+            uuidMovil: true,
+            nombreArchivo: true,
+            urlArchivo: true,
+            formatoArchivo: true,
+            descripcion: true,
+            tamanoArchivo: true,
+          },
+          orderBy: { fechaCarga: "asc" },
+        })
+      : [];
+
+    const s3Ok = isS3Configured();
+    const evidenciasConUrl = await Promise.all(
+      evidenciasDB.map(async (ev) => {
+        let urlFirmada = ev.urlArchivo;
+        if (ev.urlArchivo && s3Ok && !/^https?:\/\//i.test(ev.urlArchivo)) {
+          try { urlFirmada = await presignGet(ev.urlArchivo); } catch { /* ignora */ }
+        }
+        return { ...ev, urlFirmada };
+      })
+    );
+
+    const evPorIncidencia = new Map<string, typeof evidenciasConUrl>();
+    for (const ev of evidenciasConUrl) {
+      const lista = evPorIncidencia.get(ev.idReferencia) ?? [];
+      lista.push(ev);
+      evPorIncidencia.set(ev.idReferencia, lista);
+    }
+
     const mapIncidencia = (inc: typeof incidenciasResponsable[number]) => ({
       asignacion: null,
       kitsAsignados: kitsPorIncidencia.get(inc.idIncidencia) ?? [],
+      kitsEntregaHabilitada: puedeRegistrarEntregaKits(inc.estadoActual),
       entregaMovil: entregaMovilPorIncidencia.get(inc.idIncidencia) ?? null,
       incidencia: {
         ...inc,
@@ -574,6 +614,7 @@ export async function GET(request: Request) {
           fechaSincronizacion: asignacion.fechaSincronizacion,
         },
         kitsAsignados: kitsPorIncidencia.get(asignacion.incidencia.idIncidencia) ?? [],
+        kitsEntregaHabilitada: puedeRegistrarEntregaKits(asignacion.incidencia.estadoActual),
         entregaMovil: entregaMovilPorIncidencia.get(asignacion.incidencia.idIncidencia) ?? null,
         incidencia: {
           ...asignacion.incidencia,
