@@ -28,4 +28,10 @@ export interface IKitRepository {
   registrarMovimiento(kit: KitEmergencia, mov: MovimientoData): Promise<void>;
   /** Historial de movimientos de un kit (más reciente primero). */
   findMovimientos(idKit: string): Promise<KitMovimientoRead[]>;
+  /** Persiste cambios de un kit existente (p. ej. archivarlo). */
+  update(kit: KitEmergencia): Promise<void>;
+  /** Elimina un kit. Solo debe invocarse si no tiene movimientos. */
+  delete(id: string): Promise<void>;
+  /** Nº de movimientos registrados para un kit. */
+  contarMovimientos(idKit: string): Promise<number>;
 }

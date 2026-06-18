@@ -55,56 +55,40 @@ function prefijoCodigoKit(tipoKit: string): string {
   return iniciales || "KIT";
 }
 
-/** Reemplaza la composición completa del kit (borrar + crear, transaccional). */
-export async function guardarArticulosKit(
-  idKit: string,
-  articulos: ArticuloKit[]
-): Promise<void | { message: string }> {
-  const session = await verifySession();
-  if (!["ESPECIALISTAGRD", "ADMINISTRADOR"].includes(session.role)) {
-    return { message: "No tienes permisos para esta acción." };
-  }
-  const limpios = articulos
+/** Normaliza la lista: trim, cantidad ≥1 y descarta los artículos sin descripción. */
+function limpiarArticulos(articulos: ArticuloKit[]): ArticuloKit[] {
+  return articulos
     .map((a) => ({
       codigo: a.codigo?.trim() || null,
       descripcion: a.descripcion.trim(),
       cantidad: Math.max(1, Math.floor(Number(a.cantidad) || 1)),
     }))
     .filter((a) => a.descripcion);
+}
 
-  try {
-    const { prisma } = await import("@/app/lib/prisma");
-    // Todo elemento recibe código; si no lo trae, se auto-asigna <INICIALES>-<nn>.
-    const kit = await prisma.kitEmergencia.findUnique({
-      where: { idKitEmergencia: idKit },
-      select: { tipoKit: true },
-    });
-    const prefijo = prefijoCodigoKit(kit?.tipoKit ?? "Kit");
-    const conCodigo = limpios.map((a, i) => ({
-      ...a,
-      codigo: a.codigo ?? `${prefijo}-${String(i + 1).padStart(3, "0")}`,
-    }));
-
-    await prisma.$transaction([
-      prisma.kitArticulo.deleteMany({ where: { idKitEmergencia: idKit } }),
-      prisma.kitArticulo.createMany({
-        data: conCodigo.map((a, i) => ({ idKitEmergencia: idKit, ...a, orden: i })),
-      }),
-    ]);
-  } catch (err) {
-    return fail(err, "No se pudo guardar la composición del kit.");
-  }
-  await logGRDAction({
-    userId: session.userId,
-    action: "EDITAR",
-    entity: "Kit",
-    entityId: idKit,
-    entityName: idKit,
-    module: "Kits",
-    field: "Composición",
-    newValue: `${limpios.length} artículo(s)`,
-  });
-  revalidatePath(REVALIDATE);
+/**
+ * Reemplaza la composición de un kit (borrar + crear, transaccional). Auto-asigna
+ * código <INICIALES>-<nn> a los artículos que no lo traigan. Recibe la lista YA
+ * limpia (ver `limpiarArticulos`). Se escribe una sola vez, al crear el kit (`crearKit`),
+ * porque la composición es inmutable después de la creación.
+ */
+async function persistirArticulos(
+  idKit: string,
+  limpios: ArticuloKit[],
+  tipoKit: string
+): Promise<void> {
+  const prefijo = prefijoCodigoKit(tipoKit);
+  const conCodigo = limpios.map((a, i) => ({
+    ...a,
+    codigo: a.codigo ?? `${prefijo}-${String(i + 1).padStart(3, "0")}`,
+  }));
+  const { prisma } = await import("@/app/lib/prisma");
+  await prisma.$transaction([
+    prisma.kitArticulo.deleteMany({ where: { idKitEmergencia: idKit } }),
+    prisma.kitArticulo.createMany({
+      data: conCodigo.map((a, i) => ({ idKitEmergencia: idKit, ...a, orden: i })),
+    }),
+  ]);
 }
 
 export async function crearKit(input: {
@@ -113,13 +97,26 @@ export async function crearKit(input: {
   stockInicial?: number;
   codigoAlmacen?: string;
   ubicacionAlmacen?: string;
+  articulos: ArticuloKit[];
 }) {
   const session = await verifySession();
   if (!["ESPECIALISTAGRD", "ADMINISTRADOR"].includes(session.role)) {
     return { message: "No tienes permisos para esta acción." };
   }
+  // Regla de negocio: un kit NO puede crearse sin contenido definido.
+  const limpios = limpiarArticulos(input.articulos ?? []);
+  if (limpios.length === 0) {
+    return { message: "Define al menos un artículo en el contenido del kit." };
+  }
   try {
-    await makeKitUseCases().crear.execute(input);
+    const kit = await makeKitUseCases().crear.execute({
+      tipoKit: input.tipoKit,
+      descripcion: input.descripcion,
+      stockInicial: input.stockInicial,
+      codigoAlmacen: input.codigoAlmacen,
+      ubicacionAlmacen: input.ubicacionAlmacen,
+    });
+    await persistirArticulos(kit.id, limpios, kit.tipoKit);
   } catch (err) {
     return fail(err, "No se pudo crear el kit.");
   }
@@ -130,6 +127,54 @@ export async function crearKit(input: {
     entityId: input.tipoKit,
     entityName: input.tipoKit,
     module: "Kits",
+    field: "Composición",
+    newValue: `${limpios.length} artículo(s)`,
+  });
+  revalidatePath(REVALIDATE);
+}
+
+export async function archivarKit(idKit: string) {
+  const session = await verifySession();
+  if (!["ESPECIALISTAGRD", "ADMINISTRADOR"].includes(session.role)) {
+    return { message: "No tienes permisos para esta acción." };
+  }
+  try {
+    await makeKitUseCases().archivar.execute(idKit);
+  } catch (err) {
+    return fail(err, "No se pudo archivar el kit.");
+  }
+  await logGRDAction({
+    userId: session.userId,
+    action: "EDITAR",
+    entity: "Kit",
+    entityId: idKit,
+    entityName: idKit,
+    module: "Kits",
+    field: "Estado",
+    newValue: "ARCHIVADO",
+  });
+  revalidatePath(REVALIDATE);
+}
+
+export async function eliminarKit(idKit: string) {
+  const session = await verifySession();
+  if (!["ESPECIALISTAGRD", "ADMINISTRADOR"].includes(session.role)) {
+    return { message: "No tienes permisos para esta acción." };
+  }
+  try {
+    await makeKitUseCases().eliminar.execute(idKit);
+  } catch (err) {
+    return fail(err, "No se pudo eliminar el kit.");
+  }
+  await logGRDAction({
+    userId: session.userId,
+    action: "EDITAR",
+    entity: "Kit",
+    entityId: idKit,
+    entityName: idKit,
+    module: "Kits",
+    field: "Estado",
+    newValue: "ELIMINADO",
   });
   revalidatePath(REVALIDATE);
 }
