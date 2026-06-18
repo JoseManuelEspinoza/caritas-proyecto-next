@@ -4,7 +4,8 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { UserPlus, X, Copy, CheckCircle2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { crearUsuarioSistema, ROLES_ALTA } from "@/app/actions/usuarios";
+import { crearUsuarioSistema } from "@/app/actions/usuarios";
+import { ROLES_ALTA } from "@/app/lib/roles-alta";
 import type { Role } from "@prisma/client";
 
 const inputCls =
