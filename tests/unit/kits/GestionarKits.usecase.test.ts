@@ -126,6 +126,7 @@ describe("RegistrarMovimientoKitUseCase", () => {
       tipo: "ENTREGA",
       cantidad: 3,
       idUsuarioResponsableGRD: "usuario-1",
+      idParroquiaDestino: "parroquia-destino-1",
     });
 
     expect(result.stockActual).toBe(7);
@@ -151,6 +152,7 @@ describe("RegistrarMovimientoKitUseCase", () => {
         tipo: "ENTREGA",
         cantidad: 5,
         idUsuarioResponsableGRD: "usuario-1",
+        idParroquiaDestino: "parroquia-destino-1",
       })
     ).rejects.toThrow(BusinessRuleError);
   });
@@ -163,6 +165,119 @@ describe("RegistrarMovimientoKitUseCase", () => {
       new RegistrarMovimientoKitUseCase(repo).execute("kit-1", {
         tipo: "INGRESO",
         cantidad: 0,
+        idUsuarioResponsableGRD: "usuario-1",
+      })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando cantidad no es entero", async () => {
+    const kit = kitConStock(10);
+    const repo = makeRepo({ findById: vi.fn().mockResolvedValue(kit) });
+
+    await expect(
+      new RegistrarMovimientoKitUseCase(repo).execute("kit-1", {
+        tipo: "INGRESO",
+        cantidad: 1.5,
+        idUsuarioResponsableGRD: "usuario-1",
+      })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando cantidad no es número finito", async () => {
+    const kit = kitConStock(10);
+    const repo = makeRepo({ findById: vi.fn().mockResolvedValue(kit) });
+
+    await expect(
+      new RegistrarMovimientoKitUseCase(repo).execute("kit-1", {
+        tipo: "INGRESO",
+        cantidad: NaN,
+        idUsuarioResponsableGRD: "usuario-1",
+      })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando tipo de movimiento no es válido", async () => {
+    const kit = kitConStock(10);
+    const repo = makeRepo({ findById: vi.fn().mockResolvedValue(kit) });
+
+    await expect(
+      new RegistrarMovimientoKitUseCase(repo).execute("kit-1", {
+        tipo: "INVALIDO" as any,
+        cantidad: 5,
+        idUsuarioResponsableGRD: "usuario-1",
+      })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando idUsuarioResponsableGRD está vacío", async () => {
+    const kit = kitConStock(10);
+    const repo = makeRepo({ findById: vi.fn().mockResolvedValue(kit) });
+
+    await expect(
+      new RegistrarMovimientoKitUseCase(repo).execute("kit-1", {
+        tipo: "INGRESO",
+        cantidad: 5,
+        idUsuarioResponsableGRD: "",
+      })
+    ).rejects.toThrow(ValidationError);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CrearKitUseCase — validaciones adicionales
+// ---------------------------------------------------------------------------
+describe("CrearKitUseCase — validaciones adicionales", () => {
+  it("[negativo] lanza ValidationError cuando tipoKit tiene menos de 3 caracteres", async () => {
+    const repo = makeRepo();
+    await expect(new CrearKitUseCase(repo).execute({ tipoKit: "AB" })).rejects.toThrow(
+      ValidationError
+    );
+  });
+
+  it("[negativo] lanza ValidationError cuando stockInicial no es entero", async () => {
+    const repo = makeRepo();
+    await expect(
+      new CrearKitUseCase(repo).execute({ tipoKit: "Botiquín", stockInicial: 1.5 })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando stockInicial es NaN", async () => {
+    const repo = makeRepo();
+    await expect(
+      new CrearKitUseCase(repo).execute({ tipoKit: "Botiquín", stockInicial: NaN })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando stockInicial es negativo", async () => {
+    const repo = makeRepo();
+    await expect(
+      new CrearKitUseCase(repo).execute({ tipoKit: "Botiquín", stockInicial: -1 })
+    ).rejects.toThrow(ValidationError);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// RegistrarMovimientoKitUseCase — validaciones adicionales de idKit y entrega
+// ---------------------------------------------------------------------------
+describe("RegistrarMovimientoKitUseCase — validaciones de idKit y ENTREGA", () => {
+  it("[negativo] lanza ValidationError cuando idKit está vacío", async () => {
+    const repo = makeRepo();
+    await expect(
+      new RegistrarMovimientoKitUseCase(repo).execute("", {
+        tipo: "INGRESO",
+        cantidad: 5,
+        idUsuarioResponsableGRD: "usuario-1",
+      })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError en ENTREGA sin idParroquiaDestino", async () => {
+    const kit = kitConStock(10);
+    const repo = makeRepo({ findById: vi.fn().mockResolvedValue(kit) });
+    await expect(
+      new RegistrarMovimientoKitUseCase(repo).execute("kit-1", {
+        tipo: "ENTREGA",
+        cantidad: 3,
         idUsuarioResponsableGRD: "usuario-1",
       })
     ).rejects.toThrow(ValidationError);

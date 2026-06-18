@@ -41,4 +41,8 @@ describe("EtapaFlujo — mapeo etapa↔estado", () => {
     expect(indiceEtapaDeEstado("ATENDIDO")).toBe(4);
     expect(indiceEtapaDeEstado("CERRADO")).toBe(6);
   });
+
+  it("[borde] etapaDeEstado retorna REGISTRO como fallback para estado desconocido", () => {
+    expect(etapaDeEstado("DESCONOCIDO" as any)).toBe("REGISTRO");
+  });
 });

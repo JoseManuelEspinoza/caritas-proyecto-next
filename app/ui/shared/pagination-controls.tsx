@@ -60,9 +60,9 @@ export function PaginationControls({
 
   return (
     <div
-      className={`sticky bottom-0 z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white border border-[var(--caritas-border)] rounded-xl px-4 py-3 shadow-[0_-2px_8px_rgba(0,0,0,0.06)] ${className}`.trim()}
+      className={`sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 bg-white border border-[var(--caritas-border)] rounded-xl px-4 py-3 shadow-[0_-2px_8px_rgba(0,0,0,0.06)] ${className}`.trim()}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         {pageSize !== undefined && onPageSizeChange && (
           <PageSizeSelector pageSize={pageSize} onPageSizeChange={onPageSizeChange} />
         )}
@@ -71,7 +71,7 @@ export function PaginationControls({
         </p>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={onPrevious}

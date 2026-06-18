@@ -20,6 +20,7 @@ function makeRepo(overrides: Partial<IIncidenciaRepository> = {}): IIncidenciaRe
     actualizarDatos: vi.fn().mockResolvedValue(undefined),
     guardarTransicion: vi.fn().mockResolvedValue(undefined),
     registrarAsignacion: vi.fn().mockResolvedValue(undefined),
+    asignarEquipo: vi.fn().mockResolvedValue(undefined),
     asignarResponsable: vi.fn().mockResolvedValue(undefined),
     guardarInforme: vi.fn().mockResolvedValue(undefined),
     upsertSolicitudEnEvaluacion: vi.fn().mockResolvedValue(undefined),
@@ -27,6 +28,8 @@ function makeRepo(overrides: Partial<IIncidenciaRepository> = {}): IIncidenciaRe
     registrarEntrega: vi.fn().mockResolvedValue(undefined),
     agregarSeguimiento: vi.fn().mockResolvedValue(undefined),
     liberarBrigadistas: vi.fn().mockResolvedValue(undefined),
+    agregarPersona: vi.fn().mockResolvedValue(undefined),
+    guardarEvidencias: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
@@ -108,6 +111,145 @@ describe("RegistrarIncidenciaUseCase", () => {
     const repo = makeRepo();
     await expect(
       new RegistrarIncidenciaUseCase(repo).execute({ ...INPUT_VALIDO, fechaSuceso: "" })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando fechaSuceso tiene formato inválido", async () => {
+    const repo = makeRepo();
+    await expect(
+      new RegistrarIncidenciaUseCase(repo).execute({ ...INPUT_VALIDO, fechaSuceso: "no-es-fecha" })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando fechaSuceso es futura", async () => {
+    const repo = makeRepo();
+    await expect(
+      new RegistrarIncidenciaUseCase(repo).execute({ ...INPUT_VALIDO, fechaSuceso: "2099-01-01" })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando lat está fuera de rango", async () => {
+    const repo = makeRepo();
+    await expect(
+      new RegistrarIncidenciaUseCase(repo).execute({ ...INPUT_VALIDO, lat: 91 })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando lng está fuera de rango", async () => {
+    const repo = makeRepo();
+    await expect(
+      new RegistrarIncidenciaUseCase(repo).execute({ ...INPUT_VALIDO, lng: 181 })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando reportaDni no tiene 8 dígitos", async () => {
+    const repo = makeRepo();
+    await expect(
+      new RegistrarIncidenciaUseCase(repo).execute({ ...INPUT_VALIDO, reportaDni: "1234567" })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando reportaNombre tiene menos de 5 caracteres", async () => {
+    const repo = makeRepo();
+    await expect(
+      new RegistrarIncidenciaUseCase(repo).execute({ ...INPUT_VALIDO, reportaNombre: "Ana" })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando celular extranjero tiene longitud inválida", async () => {
+    const repo = makeRepo();
+    await expect(
+      new RegistrarIncidenciaUseCase(repo).execute({ ...INPUT_VALIDO, reportaTel: "+1 123" })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando distrito está vacío", async () => {
+    const repo = makeRepo();
+    await expect(
+      new RegistrarIncidenciaUseCase(repo).execute({ ...INPUT_VALIDO, distrito: "" })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando direccion está vacía", async () => {
+    const repo = makeRepo();
+    await expect(
+      new RegistrarIncidenciaUseCase(repo).execute({ ...INPUT_VALIDO, direccion: "" })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando direccion tiene menos de 5 caracteres", async () => {
+    const repo = makeRepo();
+    await expect(
+      new RegistrarIncidenciaUseCase(repo).execute({ ...INPUT_VALIDO, direccion: "Cal" })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando descripcion está vacía", async () => {
+    const repo = makeRepo();
+    await expect(
+      new RegistrarIncidenciaUseCase(repo).execute({ ...INPUT_VALIDO, descripcion: "" })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando descripcion tiene menos de 10 caracteres", async () => {
+    const repo = makeRepo();
+    await expect(
+      new RegistrarIncidenciaUseCase(repo).execute({ ...INPUT_VALIDO, descripcion: "Breve" })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando nivelAfectacion está vacío", async () => {
+    const repo = makeRepo();
+    await expect(
+      new RegistrarIncidenciaUseCase(repo).execute({ ...INPUT_VALIDO, nivelAfectacion: "" })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando necesidades incluye 'Otros' sin necesidadOtra", async () => {
+    const repo = makeRepo();
+    await expect(
+      new RegistrarIncidenciaUseCase(repo).execute({
+        ...INPUT_VALIDO,
+        necesidades: ["Otros"],
+        necesidadOtra: "",
+      })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[borde] llama guardarEvidencias cuando hay evidencias y usuario de carga", async () => {
+    const repo = makeRepo();
+    await new RegistrarIncidenciaUseCase(repo).execute(
+      {
+        ...INPUT_VALIDO,
+        evidencias: [{ key: "s3/foto.jpg", nombreArchivo: "foto.jpg", formato: "jpg", tamano: 512, descripcion: null }],
+      },
+      "usuario-grd-1"
+    );
+
+    expect(repo.guardarEvidencias).toHaveBeenCalledOnce();
+  });
+
+  it("[borde] acepta celular extranjero con longitud válida (cubre rama false de línea 58)", async () => {
+    const repo = makeRepo();
+    await expect(
+      new RegistrarIncidenciaUseCase(repo).execute({
+        ...INPUT_VALIDO,
+        reportaTel: "+1 1234567",
+      })
+    ).resolves.toBe("inc-uuid");
+  });
+
+  it("[borde] reportaDni null activa la rama ?? '' y lanza ValidationError (línea 37)", async () => {
+    const repo = makeRepo();
+    await expect(
+      new RegistrarIncidenciaUseCase(repo).execute({ ...INPUT_VALIDO, reportaDni: null as any })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[borde] reportaTel null activa la rama ?? '' y lanza ValidationError (línea 39)", async () => {
+    const repo = makeRepo();
+    await expect(
+      new RegistrarIncidenciaUseCase(repo).execute({ ...INPUT_VALIDO, reportaTel: null as any })
     ).rejects.toThrow(ValidationError);
   });
 });

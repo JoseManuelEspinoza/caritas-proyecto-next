@@ -21,6 +21,13 @@ describe("Catalogo.crear", () => {
   });
 });
 
+describe("Catalogo — get id", () => {
+  it("[positivo] retorna el id del catálogo", () => {
+    const c = Catalogo.crear({ id: "cat-id-1", nombreCatalogo: "Tipos" });
+    expect(c.id).toBe("cat-id-1");
+  });
+});
+
 describe("Catalogo.toggle", () => {
   it("[positivo] cambia de ACTIVO a INACTIVO", () => {
     const c = Catalogo.crear({ id: "cat-4", nombreCatalogo: "Gravedad" });
@@ -92,6 +99,17 @@ describe("CatalogoDetalle.editar", () => {
     expect(d.snapshot.descripcion).toBe("Sismo de gran magnitud");
   });
 
+  it("[borde] editar con descripcion null borra la descripción (cubre rama ?. cuando descripcion es null)", () => {
+    const d = CatalogoDetalle.crear({
+      id: "det-5b",
+      idCatalogoGRD: "cat-1",
+      codigo: "SIS",
+      valor: "Sismo",
+    });
+    d.editar("Terremoto", null);
+    expect(d.snapshot.descripcion).toBeNull();
+  });
+
   it("[negativo] lanza ValidationError cuando el nuevo valor está vacío", () => {
     const d = CatalogoDetalle.crear({
       id: "det-6",
@@ -100,6 +118,13 @@ describe("CatalogoDetalle.editar", () => {
       valor: "Sismo",
     });
     expect(() => d.editar("")).toThrow(ValidationError);
+  });
+});
+
+describe("CatalogoDetalle — get id", () => {
+  it("[positivo] retorna el id del detalle", () => {
+    const d = CatalogoDetalle.crear({ id: "det-id-1", idCatalogoGRD: "cat-1", codigo: "X", valor: "Valor" });
+    expect(d.id).toBe("det-id-1");
   });
 });
 

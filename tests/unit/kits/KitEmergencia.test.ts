@@ -73,4 +73,28 @@ describe("KitEmergencia.aplicarMovimiento", () => {
     const kit = crearKit(10);
     expect(() => kit.aplicarMovimiento("ENTREGA", -2)).toThrow(ValidationError);
   });
+
+  it("[negativo] tipo de movimiento inválido lanza BusinessRuleError", () => {
+    const kit = crearKit(10);
+    expect(() => kit.aplicarMovimiento("INVALIDO" as any, 5)).toThrow(BusinessRuleError);
+  });
+
+  it("[negativo] cantidad decimal lanza BusinessRuleError", () => {
+    const kit = crearKit(10);
+    expect(() => kit.aplicarMovimiento("INGRESO", 1.5)).toThrow(BusinessRuleError);
+  });
+});
+
+describe("KitEmergencia — desdePersistencia e id", () => {
+  it("[positivo] desdePersistencia restaura el stock", () => {
+    const kit = KitEmergencia.desdePersistencia({
+      id: "kit-99",
+      tipoKit: "Mochila avanzada",
+      stockActual: 25,
+      estadoKit: "ACTIVO",
+    });
+    expect(kit.stockActual).toBe(25);
+    expect(kit.id).toBe("kit-99");
+    expect(kit.snapshot.tipoKit).toBe("Mochila avanzada");
+  });
 });
