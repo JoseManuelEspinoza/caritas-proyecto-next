@@ -180,4 +180,14 @@ describe("CambiarAprobacionPlanUseCase", () => {
       new CambiarAprobacionPlanUseCase(repo).execute("plan-1", "OBSERVAR", "")
     ).rejects.toThrow(ValidationError);
   });
+
+  it("[negativo] lanza ValidationError al OBSERVAR sin pasar observaciones (cubre rama ?? '')", async () => {
+    const plan = planBorrador();
+    plan.enviarRevision();
+    const repo = makeRepo({ findById: vi.fn().mockResolvedValue(plan) });
+
+    await expect(
+      new CambiarAprobacionPlanUseCase(repo).execute("plan-1", "OBSERVAR")
+    ).rejects.toThrow(ValidationError);
+  });
 });

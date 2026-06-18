@@ -120,4 +120,20 @@ describe("ObservarCasoComiteUseCase", () => {
       new ObservarCasoComiteUseCase(comite, incidencias).execute("inc-1", "usuario-grd-1", "Sin ronda activa")
     ).rejects.toThrow(BusinessRuleError);
   });
+
+  it("[borde] umbral es 0 cuando no hay miembros activos (cubre rama false de n > 0)", async () => {
+    const comite = makeComite({ contarMiembrosActivos: vi.fn().mockResolvedValue(0) });
+    const incidencias = makeIncidencias();
+
+    await new ObservarCasoComiteUseCase(comite, incidencias).execute(
+      "inc-1",
+      "usuario-grd-1",
+      "Observación válida con umbral cero"
+    );
+
+    expect(comite.cerrarRonda).toHaveBeenCalledWith(
+      "ronda-1",
+      expect.objectContaining({ umbralSnapshot: 0 })
+    );
+  });
 });

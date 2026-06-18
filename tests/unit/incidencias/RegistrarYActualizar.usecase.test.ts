@@ -228,6 +228,30 @@ describe("RegistrarIncidenciaUseCase", () => {
 
     expect(repo.guardarEvidencias).toHaveBeenCalledOnce();
   });
+
+  it("[borde] acepta celular extranjero con longitud válida (cubre rama false de línea 58)", async () => {
+    const repo = makeRepo();
+    await expect(
+      new RegistrarIncidenciaUseCase(repo).execute({
+        ...INPUT_VALIDO,
+        reportaTel: "+1 1234567",
+      })
+    ).resolves.toBe("inc-uuid");
+  });
+
+  it("[borde] reportaDni null activa la rama ?? '' y lanza ValidationError (línea 37)", async () => {
+    const repo = makeRepo();
+    await expect(
+      new RegistrarIncidenciaUseCase(repo).execute({ ...INPUT_VALIDO, reportaDni: null as any })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[borde] reportaTel null activa la rama ?? '' y lanza ValidationError (línea 39)", async () => {
+    const repo = makeRepo();
+    await expect(
+      new RegistrarIncidenciaUseCase(repo).execute({ ...INPUT_VALIDO, reportaTel: null as any })
+    ).rejects.toThrow(ValidationError);
+  });
 });
 
 // ---------------------------------------------------------------------------

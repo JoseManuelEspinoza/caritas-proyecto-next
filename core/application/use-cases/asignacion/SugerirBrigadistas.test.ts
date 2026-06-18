@@ -439,6 +439,106 @@ describe("🚨 Escenario 4 — Fase 3: sin candidatos disponibles", () => {
 // ════════════════════════════════════════════════════════════════════════════
 // TESTS — Casos borde
 // ════════════════════════════════════════════════════════════════════════════
+describe("⚙️  Config mínima — cobertura de ramas ?? en líneas 84-88", () => {
+  test("config sin radioAdyacenciaKm/distanciaMaxKm/pesos usa los defaults del CONFIG_DEFAULT", async () => {
+    const res = await ejecutar(makeRepo("E2"), ENTRADA_BASE, {
+      topN: 5,
+      pesoManual: 0.4,
+      pesoAutomatico: 0.6,
+      // campos opcionales omitidos → se usarán los ?? CONFIG_DEFAULT...
+    });
+    expect(res.faseResultado).toBe("F2");
+  });
+});
+
+describe("⚠️  Casos borde — parroquia no encontrada y zona pastoral null", () => {
+  test("CB-03: parroquia no encontrada + sin GPS → F3 (cubre líneas 96-99 y rama false de 128)", async () => {
+    const repoSinParroquia: ISugerenciaBrigadistasRepository = {
+      async getParroquia() { return null; },
+      async getBrigadistasDisponiblesPorParroquia() { return []; },
+      async getTodosBrigadistasDisponibles() { return []; },
+      async getIncidenciasAtendidas() { return 0; },
+      async getCargaActual() { return 0; },
+      async getTiempoRespuestaPromedioHoras() { return null; },
+      async getParroquiasConCoords() { return []; },
+      async registrarIntentoFallido() {},
+    };
+    const res = await ejecutar(repoSinParroquia, { ...ENTRADA_BASE, latitud: null, longitud: null });
+    expect(res.faseResultado).toBe("F3");
+  });
+
+  test("F2: zonaPastoralInc=null cuando parroquia no tiene zona pastoral (cubre rama false de línea 158)", async () => {
+    const brigSinZona: BrigadistaMock = {
+      idBrigadistaParroquial: "BRI-SINZONA",
+      idParroquia: "PAR-02",
+      nombres: "Pedro",
+      apellidos: "Gómez",
+      celular: null,
+      correo: null,
+      disponibilidad: "DISPONIBLE",
+      estado: "ACTIVO",
+      certificacionCurso: null,
+      parroquia: { idParroquia: "PAR-02", latitud: -12.1178, longitud: -77.0341, idZonaPastoral: "ZP-01", nombre: "SinZona", idDistrito: "MIR" },
+    };
+    const repoSinZona: ISugerenciaBrigadistasRepository = {
+      async getParroquia() {
+        return { idParroquia: "PAR-01", latitud: -12.1219, longitud: -77.0296, idZonaPastoral: null };
+      },
+      async getBrigadistasDisponiblesPorParroquia() { return []; },
+      async getTodosBrigadistasDisponibles() { return [brigSinZona]; },
+      async getIncidenciasAtendidas() { return 0; },
+      async getCargaActual() { return 0; },
+      async getTiempoRespuestaPromedioHoras() { return null; },
+      async getParroquiasConCoords() {
+        return [
+          { idParroquia: "PAR-01", latitud: -12.1219, longitud: -77.0296 },
+          { idParroquia: "PAR-02", latitud: -12.1178, longitud: -77.0341 },
+        ];
+      },
+      async registrarIntentoFallido() {},
+    };
+    const res = await ejecutar(repoSinZona, ENTRADA_BASE);
+    expect(res.faseResultado).toBe("F2");
+    expect(res.listaSugerida[0].mismaZonaPastoral).toBeNull();
+  });
+
+  test("F2: brigadista en parroquia fuera del grafo recibe nivel 99 (cubre ?? 99 en línea 163)", async () => {
+    const brigFuera: BrigadistaMock = {
+      idBrigadistaParroquial: "BRI-FUERA",
+      idParroquia: "PAR-05",
+      nombres: "Elena",
+      apellidos: "Ramos",
+      celular: null,
+      correo: null,
+      disponibilidad: "DISPONIBLE",
+      estado: "ACTIVO",
+      certificacionCurso: null,
+      parroquia: { idParroquia: "PAR-05", latitud: -12.145, longitud: -77.0196, idZonaPastoral: "ZP-02", nombre: "Fuera", idDistrito: "BAR" },
+    };
+    const repoFuera: ISugerenciaBrigadistasRepository = {
+      async getParroquia() { return { idParroquia: "PAR-01", latitud: -12.1219, longitud: -77.0296, idZonaPastoral: "ZP-01" }; },
+      async getBrigadistasDisponiblesPorParroquia() { return []; },
+      async getTodosBrigadistasDisponibles() { return [brigFuera]; },
+      async getIncidenciasAtendidas() { return 0; },
+      async getCargaActual() { return 0; },
+      async getTiempoRespuestaPromedioHoras() { return null; },
+      async getParroquiasConCoords() {
+        return [
+          { idParroquia: "PAR-01", latitud: -12.1219, longitud: -77.0296 },
+          { idParroquia: "PAR-02", latitud: -12.1178, longitud: -77.0341 },
+          { idParroquia: "PAR-05", latitud: -12.145, longitud: -77.0196 },
+        ];
+      },
+      async registrarIntentoFallido() {},
+    };
+    const config: ConfigAlgoritmo = { ...CONFIG_DEFAULT, radioAdyacenciaKm: 0.6 };
+    const res = await ejecutar(repoFuera, ENTRADA_BASE, config);
+    expect(res.faseResultado).toBe("F2");
+    const brigFueraResult = res.listaSugerida.find((c) => c.idBrigadistaParroquial === "BRI-FUERA");
+    expect(brigFueraResult?.nivel).toBe(99);
+  });
+});
+
 describe("⚠️  Casos borde", () => {
   test("CB-02: incidente sin GPS usa coordenadas de la parroquia", async () => {
     const entradaSinGPS = { ...ENTRADA_BASE, latitud: null, longitud: null };
@@ -514,6 +614,66 @@ describe("🔀 Tie-breaking — orden alfabético cuando scores empatan", () => 
     // Con mismo score, se ordena por apellido: Gonzalez < Hernandez
     expect(res.listaSugerida[0].idBrigadistaParroquial).toBe("BRI-TIE-A");
     expect(res.listaSugerida[1].idBrigadistaParroquial).toBe("BRI-TIE-B");
+  });
+
+  // F2: pesoCercania=0 → mismo scoreFinal con distintas distancias → line 63 ejecuta
+  test("F2: pesoCercania=0 garantiza mismo scoreFinal con distintas distancias → orden por distanciaKm (línea 63)", async () => {
+    const brigCerca2: BrigadistaMock = {
+      idBrigadistaParroquial: "BRI-CERCA2",
+      idParroquia: "PAR-02",
+      nombres: "Rosa",
+      apellidos: "Mendez",
+      celular: null,
+      correo: null,
+      disponibilidad: "DISPONIBLE",
+      estado: "ACTIVO",
+      certificacionCurso: null,
+      parroquia: { idParroquia: "PAR-02", latitud: -12.1178, longitud: -77.0341, idZonaPastoral: "ZP-01", nombre: "Cerca2", idDistrito: "MIR" },
+    };
+    const brigLejos2: BrigadistaMock = {
+      idBrigadistaParroquial: "BRI-LEJOS2",
+      idParroquia: "PAR-03",
+      nombres: "Mario",
+      apellidos: "Vargas",
+      celular: null,
+      correo: null,
+      disponibilidad: "DISPONIBLE",
+      estado: "ACTIVO",
+      certificacionCurso: null,
+      parroquia: { idParroquia: "PAR-03", latitud: -12.1024, longitud: -77.0365, idZonaPastoral: "ZP-01", nombre: "Lejos2", idDistrito: "SIS" },
+    };
+
+    const repoZeroCerc: ISugerenciaBrigadistasRepository = {
+      async getParroquia() { return { idParroquia: "PAR-01", latitud: -12.1219, longitud: -77.0296, idZonaPastoral: "ZP-01" }; },
+      async getBrigadistasDisponiblesPorParroquia() { return []; },
+      async getTodosBrigadistasDisponibles() { return [brigLejos2, brigCerca2]; },
+      async getIncidenciasAtendidas() { return 0; },
+      async getCargaActual() { return 0; },
+      async getTiempoRespuestaPromedioHoras() { return null; },
+      async getParroquiasConCoords() {
+        return [
+          { idParroquia: "PAR-01", latitud: -12.1219, longitud: -77.0296 },
+          { idParroquia: "PAR-02", latitud: -12.1178, longitud: -77.0341 },
+          { idParroquia: "PAR-03", latitud: -12.1024, longitud: -77.0365 },
+        ];
+      },
+      async registrarIntentoFallido() {},
+    };
+
+    const config: ConfigAlgoritmo = {
+      ...CONFIG_DEFAULT,
+      radioAdyacenciaKm: 5,
+      pesoCercania: 0,      // sin peso de cercanía → mismo scoreFinal para ambos
+      pesoConfianza: 0.5,
+      pesoDisponibilidad: 0.5,
+    };
+
+    const res = await ejecutar(repoZeroCerc, ENTRADA_BASE, config);
+    expect(res.faseResultado).toBe("F2");
+    expect(res.listaSugerida.length).toBe(2);
+    // Con pesoCercania=0, ambos tienen mismo scoreFinal. Desempate por distanciaKm:
+    // PAR-02 ~0.48 km va primero que PAR-03 ~2.18 km.
+    expect(res.listaSugerida[0].idBrigadistaParroquial).toBe("BRI-CERCA2");
   });
 
   // F2 con mismo scoreFinal y mismo nivel → tie-break por distancia (líneas 62-64)
@@ -619,5 +779,33 @@ describe("🔀 Tie-breaking — orden alfabético cuando scores empatan", () => 
     expect(res.listaSugerida.length).toBe(2);
     // Mismo score, mismo nivel, misma distancia → orden alfabético por apellido: Avalos < Zapata
     expect(res.listaSugerida[0].idBrigadistaParroquial).toBe("BRI-A");
+  });
+});
+
+describe("🏗️  buildCandidato — ramas defensivas", () => {
+  test("F1: brigadista con parroquia null produce nombreParroquia='' (cubre ?. en línea 37)", async () => {
+    const brigSinParroquia: BrigadistaCandidatoRaw = {
+      idBrigadistaParroquial: "BRI-NULL-PAR",
+      idParroquia: "PAR-01",
+      nombres: "Test",
+      apellidos: "Nulo",
+      celular: null,
+      correo: null,
+      disponibilidad: "DISPONIBLE",
+      parroquia: null as any, // activa la rama ?. en b.parroquia?.nombre
+    };
+    const repoNullPar: ISugerenciaBrigadistasRepository = {
+      async getParroquia() { return { idParroquia: "PAR-01", latitud: -12.1219, longitud: -77.0296, idZonaPastoral: "ZP-01" }; },
+      async getBrigadistasDisponiblesPorParroquia() { return [brigSinParroquia]; },
+      async getTodosBrigadistasDisponibles() { return []; },
+      async getIncidenciasAtendidas() { return 0; },
+      async getCargaActual() { return 0; },
+      async getTiempoRespuestaPromedioHoras() { return null; },
+      async getParroquiasConCoords() { return []; },
+      async registrarIntentoFallido() {},
+    };
+    const res = await ejecutar(repoNullPar, ENTRADA_BASE);
+    expect(res.faseResultado).toBe("F1");
+    expect(res.listaSugerida[0].nombreParroquia).toBe("");
   });
 });

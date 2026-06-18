@@ -136,4 +136,13 @@ describe("RegistrarVotoComiteUseCase", () => {
       new RegistrarVotoComiteUseCase(comite, incidencias).execute("inc-1", "usuario-grd-1", "A_FAVOR")
     ).rejects.toThrow(BusinessRuleError);
   });
+
+  it("[negativo] lanza BusinessRuleError cuando el comité no tiene miembros activos (n < 1)", async () => {
+    const comite = makeComite({ contarMiembrosActivos: vi.fn().mockResolvedValue(0) });
+    const incidencias = makeIncidencias();
+
+    await expect(
+      new RegistrarVotoComiteUseCase(comite, incidencias).execute("inc-1", "usuario-grd-1", "A_FAVOR")
+    ).rejects.toThrow(BusinessRuleError);
+  });
 });
