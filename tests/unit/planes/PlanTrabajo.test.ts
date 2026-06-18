@@ -135,4 +135,10 @@ describe("PlanTrabajo — desdePersistencia e id", () => {
     const p = crearBorrador();
     expect(() => p.actualizar({ nombrePlan: "AB" })).toThrow(ValidationError);
   });
+
+  it("[borde] actualizar sin nombrePlan no lanza error (rama false de la guardia)", () => {
+    const p = crearBorrador();
+    expect(() => p.actualizar({})).not.toThrow();
+    expect(p.snapshot.nombrePlan).toBe("Plan GRD 2026");
+  });
 });

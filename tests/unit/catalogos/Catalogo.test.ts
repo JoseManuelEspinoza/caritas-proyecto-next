@@ -99,6 +99,17 @@ describe("CatalogoDetalle.editar", () => {
     expect(d.snapshot.descripcion).toBe("Sismo de gran magnitud");
   });
 
+  it("[borde] editar con descripcion null borra la descripción (cubre rama ?. cuando descripcion es null)", () => {
+    const d = CatalogoDetalle.crear({
+      id: "det-5b",
+      idCatalogoGRD: "cat-1",
+      codigo: "SIS",
+      valor: "Sismo",
+    });
+    d.editar("Terremoto", null);
+    expect(d.snapshot.descripcion).toBeNull();
+  });
+
   it("[negativo] lanza ValidationError cuando el nuevo valor está vacío", () => {
     const d = CatalogoDetalle.crear({
       id: "det-6",

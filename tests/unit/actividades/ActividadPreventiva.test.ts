@@ -187,6 +187,12 @@ describe("ActividadPreventiva — assertEnteroNoNegativo (via ejecutar)", () => 
     expect(() => a.ejecutar({ resultadoGeneral: "Exitoso completo sin problemas", numeroParticipantesReal: -1 }))
       .toThrow(BusinessRuleError);
   });
+
+  it("[negativo] lanza BusinessRuleError con numeroParticipantesReal NaN", () => {
+    const a = crearProgramada();
+    expect(() => a.ejecutar({ resultadoGeneral: "Exitoso completo sin problemas", numeroParticipantesReal: NaN }))
+      .toThrow(BusinessRuleError);
+  });
 });
 
 describe("ActividadPreventiva — desdePersistencia e id", () => {

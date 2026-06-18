@@ -253,6 +253,28 @@ describe("ProgramarActividadUseCase — validaciones adicionales", () => {
       new ProgramarActividadUseCase(repo).execute({ ...INPUT, numeroParticipantesEstimado: -1 })
     ).rejects.toThrow(ValidationError);
   });
+
+  it("[negativo] lanza ValidationError cuando numeroParticipantesEstimado es NaN", async () => {
+    const repo = makeRepo();
+    await expect(
+      new ProgramarActividadUseCase(repo).execute({ ...INPUT, numeroParticipantesEstimado: NaN })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando nombreActividad está vacío", async () => {
+    const repo = makeRepo();
+    await expect(
+      new ProgramarActividadUseCase(repo).execute({ ...INPUT, nombreActividad: "" })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("[negativo] lanza ValidationError cuando fechaProgramada no se proporciona", async () => {
+    const repo = makeRepo();
+    const { fechaProgramada: _, ...sinFecha } = INPUT;
+    await expect(
+      new ProgramarActividadUseCase(repo).execute(sinFecha as any)
+    ).rejects.toThrow(ValidationError);
+  });
 });
 
 // ---------------------------------------------------------------------------

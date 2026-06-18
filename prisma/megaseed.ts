@@ -188,6 +188,8 @@ async function ensureDemoMasivo(idUsuarioGRD: string) {
     "Salas Rojas",
     "Vargas Huamán",
     "Castro León",
+    "Rojas Díaz",
+    "Huamán Vega",
   ];
 
   const nBrig = await prisma.brigadistaParroquial.count();
@@ -201,7 +203,8 @@ async function ensureDemoMasivo(idUsuarioGRD: string) {
         idParroquia: pick(parroquias, i).idParroquia,
         dni,
         nombres: pick(nombres, i),
-        apellidos: pick(apellidos, i),
+        // Apellido desacoplado del nombre (índice por bloques) → 16×10=160 combinaciones únicas, sin homónimos.
+        apellidos: pick(apellidos, Math.floor(i / nombres.length)),
         celular: `9${String(10000000 + i).slice(0, 8)}`,
         correo: `brigadista.demo.${pad(i)}@caritas.pe`,
         disponibilidad: i % 5 === 0 ? "EN_CAMPO" : "DISPONIBLE",
@@ -925,12 +928,15 @@ async function main() {
   // ── SIMULACROS / Actividades preventivas ──
   if ((await prisma.actividadPreventiva.count()) < 2) {
     console.log("🛡️  Simulacros...");
+    // Fechas relativas a hoy: evita que la validación "fecha ≥ hoy" rompa el seed con el paso del tiempo.
+    const enDiasISO = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
     const a1 = await act.programar.execute({
       idParroquia: p0.idParroquia,
       idUsuarioRegistroGRD: idUsuarioGRD,
       idTipoActividadPreventiva: "Simulacro de Sismo",
       nombreActividad: "Simulacro de Sismo Parroquial",
-      fechaProgramada: "2026-06-15",
+      fechaProgramada: enDiasISO(0),
+      lugarActividad: "Local parroquial",
       numeroParticipantesEstimado: 120,
     });
     await act.ejecutar.execute(a1.id, {
@@ -943,7 +949,8 @@ async function main() {
       idUsuarioRegistroGRD: idUsuarioGRD,
       idTipoActividadPreventiva: "Charla de Prevención",
       nombreActividad: "Charla: Mochila de Emergencia",
-      fechaProgramada: "2026-06-20",
+      fechaProgramada: enDiasISO(10),
+      lugarActividad: "Salón parroquial",
       numeroParticipantesEstimado: 50,
     });
     await act.programar.execute({
@@ -951,7 +958,8 @@ async function main() {
       idUsuarioRegistroGRD: idUsuarioGRD,
       idTipoActividadPreventiva: "Simulacro de Incendio",
       nombreActividad: "Simulacro de Incendio",
-      fechaProgramada: "2026-07-01",
+      fechaProgramada: enDiasISO(20),
+      lugarActividad: "Patio principal",
       numeroParticipantesEstimado: 80,
     });
     console.log("   ✓ 3 actividades (1 ejecutada, 2 programadas)");

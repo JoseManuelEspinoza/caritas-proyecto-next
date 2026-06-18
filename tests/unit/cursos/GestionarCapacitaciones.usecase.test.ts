@@ -275,6 +275,12 @@ describe("CrearCursoUseCase — validación duracionEstimadaHoras", () => {
       new CrearCursoUseCase(repo).execute({ ...INPUT, descripcion: "Brv" })
     ).rejects.toThrow(ValidationError);
   });
+
+  it("[positivo] crea el curso con duracionEstimadaHoras válida (rama false de value<=0)", async () => {
+    const repo = makeRepo();
+    const result = await new CrearCursoUseCase(repo).execute({ ...INPUT, duracionEstimadaHoras: 8 });
+    expect(result.estadoCurso).toBe("BORRADOR");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -320,6 +326,14 @@ describe("RegistrarEvaluacionUseCase — validaciones adicionales", () => {
     const repo = makeRepo({ existsInscripcionId: vi.fn().mockResolvedValue(true) });
     const result = await new RegistrarEvaluacionUseCase(repo).execute("inscripcion-1", 15, {
       tipoEvaluacion: "FINAL",
+    });
+    expect(result.resultado).toBe("APROBADO");
+  });
+
+  it("[positivo] acepta numeroIntento positivo válido (rama false de la guardia)", async () => {
+    const repo = makeRepo({ existsInscripcionId: vi.fn().mockResolvedValue(true) });
+    const result = await new RegistrarEvaluacionUseCase(repo).execute("inscripcion-1", 15, {
+      numeroIntento: 2,
     });
     expect(result.resultado).toBe("APROBADO");
   });
