@@ -105,9 +105,16 @@ function parseBoolean(value?: boolean | string | null): boolean {
   return ["true", "1", "si", "sí", "yes"].includes(limpio);
 }
 
+function puedeRegistrarEntregaKits(estadoActual: string | null | undefined): boolean {
+  return ["APROBADO", "ATENDIDO", "SEGUIMIENTO ABIERTO", "CERRADO"].includes(
+    estadoActual ?? ""
+  );
+}
+
 async function resolveIncidencia(body: EntregaAsignadaMovilPayload): Promise<{
   idIncidencia: string;
   codigoCaso: string | null;
+  estadoActual: string;
 }> {
   const idIncidencia = texto(body.idIncidenciaRemota) || texto(body.idIncidencia);
 
@@ -117,6 +124,7 @@ async function resolveIncidencia(body: EntregaAsignadaMovilPayload): Promise<{
       select: {
         idIncidencia: true,
         codigoCaso: true,
+        estadoActual: true,
       },
     });
 
@@ -131,6 +139,7 @@ async function resolveIncidencia(body: EntregaAsignadaMovilPayload): Promise<{
       select: {
         idIncidencia: true,
         codigoCaso: true,
+        estadoActual: true,
       },
     });
 
@@ -145,6 +154,7 @@ async function resolveIncidencia(body: EntregaAsignadaMovilPayload): Promise<{
       select: {
         idIncidencia: true,
         codigoCaso: true,
+        estadoActual: true,
       },
     });
 
@@ -272,6 +282,13 @@ export async function POST(request: Request) {
     const body = (await request.json()) as EntregaAsignadaMovilPayload;
 
     const incidencia = await resolveIncidencia(body);
+    if (!puedeRegistrarEntregaKits(incidencia.estadoActual)) {
+      throw new MobileSyncError(
+        "La entrega de kits solo está permitida cuando la incidencia está aprobada por el Comité.",
+        409
+      );
+    }
+
     const idUsuarioGRD = await resolveUsuarioGRD(body);
 
     const uuidEntregaMovil =

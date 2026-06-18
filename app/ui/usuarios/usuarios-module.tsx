@@ -1,4 +1,5 @@
-import { Users, ExternalLink, UserPlus } from "lucide-react";
+import { Users, ExternalLink } from "lucide-react";
+import { NuevoUsuarioModal } from "./nuevo-usuario-modal";
 
 type Usuario = { id: string; email: string; name: string; role: string; estado: string };
 
@@ -42,26 +43,30 @@ export function UsuariosModule({
             <p className="text-sm text-gray-600">Credenciales y roles del sistema</p>
           </div>
         </div>
-        {keycloakAdminUrl && (
-          <a
-            href={keycloakAdminUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 px-4 py-2.5 bg-[var(--caritas-green)] text-white rounded-xl text-sm font-semibold hover:bg-[#007a40] transition-colors shadow-sm flex-shrink-0"
-          >
-            <UserPlus className="w-4 h-4" />
-            Administrar usuarios
-            <ExternalLink className="w-3.5 h-3.5 opacity-80" />
-          </a>
-        )}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <NuevoUsuarioModal />
+          {keycloakAdminUrl && (
+            <a
+              href={keycloakAdminUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 px-4 py-2.5 border border-[var(--caritas-border)] text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
+              title="Gestión avanzada: restablecer contraseñas, desactivar, etc."
+            >
+              Panel avanzado
+              <ExternalLink className="w-3.5 h-3.5 opacity-70" />
+            </a>
+          )}
+        </div>
       </div>
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-5 flex items-start gap-2">
         <Users className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
         <p className="text-xs text-blue-800">
-          Las altas, roles y contraseñas se gestionan en el panel de administración (botón
-          <strong> Administrar usuarios</strong>, arriba a la derecha). Esta lista muestra los
-          usuarios que ya han ingresado a la aplicación.
+          Crea especialistas, comité o administradores con <strong>Nuevo usuario</strong>. Para
+          gestión avanzada (restablecer contraseñas, desactivar cuentas) usa el{" "}
+          <strong>Panel avanzado</strong>. Los <strong>brigadistas</strong> se registran desde su
+          propio módulo.
         </p>
       </div>
 

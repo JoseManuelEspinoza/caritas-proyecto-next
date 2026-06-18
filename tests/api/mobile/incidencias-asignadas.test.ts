@@ -8,6 +8,7 @@ vi.mock("@/app/lib/prisma", () => ({
     tipoReferencia: { findMany: vi.fn() },
     observacionGRD: { findMany: vi.fn() },
     evidenciaGRD: { findMany: vi.fn() },
+    informe: { findMany: vi.fn() },
   },
 }));
 
@@ -106,6 +107,7 @@ describe("GET /api/mobile/incidencias-asignadas", () => {
     vi.mocked(prisma.tipoReferencia.findMany).mockResolvedValue([]);
     vi.mocked(prisma.observacionGRD.findMany).mockResolvedValue([]);
     vi.mocked(prisma.evidenciaGRD.findMany).mockResolvedValue([]);
+    vi.mocked(prisma.informe.findMany).mockResolvedValue([]);
   });
   afterEach(() => vi.unstubAllEnvs());
 
