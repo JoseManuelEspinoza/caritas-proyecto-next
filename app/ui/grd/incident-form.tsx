@@ -35,6 +35,7 @@ import {
 import { extraerTextoPdf } from "@/app/lib/pdf-text";
 import { consultarDni } from "@/app/actions/reniec";
 import { subirArchivoS3 } from "@/app/ui/shared/file-upload";
+import { useConfirm } from "@/app/ui/shared/confirm-modal";
 import { ACCEPT, validarArchivo } from "@/app/lib/upload-config";
 // xlsx se carga de forma dinámica para no aumentar el bundle inicial.
 import { toast } from "sonner";
@@ -70,8 +71,11 @@ const DISTRITOS_LIMA = [
   "Ancón",
   "Ate",
   "Barranco",
+  "Bellavista",
   "Breña",
+  "Callao",
   "Carabayllo",
+  "Carmen de la Legua Reynoso",
   "Chaclacayo",
   "Chorrillos",
   "Cieneguilla",
@@ -80,12 +84,16 @@ const DISTRITOS_LIMA = [
   "Independencia",
   "Jesús María",
   "La Molina",
+  "La Perla",
+  "La Punta",
   "La Victoria",
+  "Lima Cercado",
   "Lince",
   "Los Olivos",
   "Lurigancho",
   "Lurín",
   "Magdalena del Mar",
+  "Mi Perú",
   "Miraflores",
   "Pachacámac",
   "Pueblo Libre",
@@ -101,9 +109,9 @@ const DISTRITOS_LIMA = [
   "Santa Anita",
   "Santiago de Surco",
   "Surquillo",
+  "Ventanilla",
   "Villa El Salvador",
   "Villa María del Triunfo",
-  "Lima Cercado",
 ];
 
 const PARROQUIAS_LIMA = [
@@ -587,6 +595,7 @@ export function IncidentForm({
   const isEdit = Boolean(incidenciaId);
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const { showConfirm, ConfirmModalJSX } = useConfirm();
 
   // ── Listas desde el módulo Catálogos (las constantes son solo respaldo) ──
   const conOpcion = (lista: string[], extra: string) =>
@@ -614,6 +623,7 @@ export function IncidentForm({
 
   // Sección 1
   const [fechaReporte] = useState(initialData?.fechaReporte ?? nowLocal());
+  const [tipoDocReporta, setTipoDocReporta] = useState<"DNI" | "Pasaporte" | "Carnet de Extranjería">("DNI");
   const [reportaDni, setReportaDni] = useState(initialData?.reportaDni ?? "");
   const [reportaNombre, setReportaNombre] = useState(initialData?.reportaNombre ?? "");
   // El teléfono se guarda como "+51 987654321"; al cargar en edición se separan código y número.
@@ -1012,39 +1022,50 @@ export function IncidentForm({
     toast.success(`Se importaron ${personasNuevas.length} persona(s) correctamente.`);
   }
 
-  function deleteFamilia(familiaId: string) {
+  async function deleteFamilia(familiaId: string) {
     const hasPersonas = personas.some((p) => p.familiaId === familiaId);
-    if (
-      hasPersonas &&
-      !confirm("Esta familia tiene personas registradas. ¿Eliminar junto con sus integrantes?")
-    )
-      return;
+    if (hasPersonas) {
+      const ok = await showConfirm({
+        title: "¿Eliminar familia?",
+        message: "Esta familia tiene personas registradas. Se eliminarán junto con todos sus integrantes.",
+        confirmLabel: "Sí, eliminar",
+        variant: "danger",
+      });
+      if (!ok) return;
+    }
     if (hasPersonas) setPersonas((prev) => prev.filter((p) => p.familiaId !== familiaId));
     setFamilias((prev) => prev.filter((f) => f.id !== familiaId));
   }
 
   // Evidencias
-  function deleteFuente(id: string) {
+  async function deleteFuente(id: string) {
     const f = fuentesEvidencia.find((f) => f.id === id);
-    if (
-      f &&
-      f.archivos.length > 0 &&
-      !confirm(`¿Eliminar "${f.fuente}" y sus ${f.archivos.length} evidencia(s)?`)
-    )
-      return;
+    if (f && f.archivos.length > 0) {
+      const ok = await showConfirm({
+        title: `¿Eliminar "${f.fuente}"?`,
+        message: `Se eliminarán ${f.archivos.length} evidencia(s) asociadas. Esta acción no se puede deshacer.`,
+        confirmLabel: "Sí, eliminar",
+        variant: "danger",
+      });
+      if (!ok) return;
+    }
     setFuentesEvidencia((prev) => prev.filter((f) => f.id !== id));
   }
 
   /** Sincroniza la selección múltiple del desplegable con fuentesEvidencia. */
-  function setFuentesSeleccion(next: string[]) {
+  async function setFuentesSeleccion(next: string[]) {
     // Confirmar si se va a quitar una fuente que ya tiene archivos subidos.
     const aQuitar = fuentesEvidencia.filter((f) => !next.includes(f.fuente));
     for (const f of aQuitar) {
-      if (
-        f.archivos.length > 0 &&
-        !confirm(`¿Quitar "${f.fuente}" y sus ${f.archivos.length} evidencia(s)?`)
-      )
-        return;
+      if (f.archivos.length > 0) {
+        const ok = await showConfirm({
+          title: `¿Quitar "${f.fuente}"?`,
+          message: `Se quitarán ${f.archivos.length} evidencia(s) asociadas.`,
+          confirmLabel: "Sí, quitar",
+          variant: "warning",
+        });
+        if (!ok) return;
+      }
     }
     setFuentesEvidencia((prev) => {
       const conservadas = prev.filter((f) => next.includes(f.fuente));
@@ -1100,8 +1121,9 @@ export function IncidentForm({
     const dni = reportaDni.replace(/\D/g, "");
     const tel = reportaTel.replace(/\D/g, "");
 
-    if (!dni) return "Ingresa el DNI de la persona que reportó.";
-    if (dni.length !== 8) return "El DNI de quien reporta debe tener exactamente 8 dígitos.";
+    if (!dni) return `Ingresa el ${tipoDocReporta} de la persona que reportó.`;
+    if (tipoDocReporta === "DNI" && dni.length !== 8) return "El DNI de quien reporta debe tener exactamente 8 dígitos.";
+    if (tipoDocReporta !== "DNI" && dni.length < 5) return `El ${tipoDocReporta} debe tener al menos 5 caracteres.`;
 
     if (!reportaNombre.trim()) return "Ingresa el nombre completo de quien reportó.";
     if (reportaNombre.trim().length < 5) {
@@ -1335,39 +1357,69 @@ export function IncidentForm({
             <div className="space-y-3">
               <p className="text-xs font-semibold text-gray-600">Persona que reportó el evento</p>
               <div className="grid grid-cols-12 gap-3">
-                <div className="col-span-12 sm:col-span-3">
+                <div className="col-span-12 sm:col-span-4">
                   <label className="text-xs text-gray-500 mb-1.5 block">
-                    DNI <span className="text-red-500">*</span>
+                    Documento de identidad <span className="text-red-500">*</span>
                   </label>
                   <div className="flex gap-2">
+                    <div className="relative flex-shrink-0">
+                      <select
+                        value={tipoDocReporta}
+                        onChange={(e) => {
+                          setTipoDocReporta(e.target.value as typeof tipoDocReporta);
+                          setReportaDni("");
+                        }}
+                        className={`${inputCls} appearance-none pr-6 text-xs`}
+                        aria-label="Tipo de documento"
+                      >
+                        <option value="DNI">DNI</option>
+                        <option value="Pasaporte">Pasaporte</option>
+                        <option value="Carnet de Extranjería">C.E.</option>
+                      </select>
+                      <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                    </div>
                     <input
                       type="text"
-                      inputMode="numeric"
-                      maxLength={8}
-                      placeholder="12345678"
+                      inputMode={tipoDocReporta === "DNI" ? "numeric" : "text"}
+                      maxLength={tipoDocReporta === "DNI" ? 8 : 20}
+                      placeholder={tipoDocReporta === "DNI" ? "12345678" : tipoDocReporta === "Pasaporte" ? "AB123456" : "000123456"}
                       value={reportaDni}
-                      onChange={(e) => setReportaDni(e.target.value.replace(/\D/g, ""))}
+                      onChange={(e) => {
+                        const val = tipoDocReporta === "DNI"
+                          ? e.target.value.replace(/\D/g, "")
+                          : e.target.value.toUpperCase();
+                        setReportaDni(val);
+                      }}
                       onKeyDown={(e) => {
-                        if (e.key === "Enter") {
+                        if (e.key === "Enter" && tipoDocReporta === "DNI") {
                           e.preventDefault();
                           buscarDniReporta();
                         }
                       }}
                       className={`${inputCls} flex-1 min-w-0 ${errBorde(!reportaDni.trim())}`}
                     />
-                    <button
-                      type="button"
-                      onClick={buscarDniReporta}
-                      disabled={buscandoDniReporta}
-                      title="Consultar datos por DNI"
-                      className="flex items-center gap-1 px-3 bg-[#009850] text-white rounded-lg text-xs font-medium hover:opacity-90 disabled:opacity-50 flex-shrink-0"
-                    >
-                      <Search className="w-3.5 h-3.5" />
-                      {buscandoDniReporta ? "…" : "Buscar"}
-                    </button>
+                    {tipoDocReporta === "DNI" && (
+                      <button
+                        type="button"
+                        onClick={buscarDniReporta}
+                        disabled={buscandoDniReporta}
+                        title="Consultar datos por DNI"
+                        className="flex items-center gap-1 px-3 bg-[#009850] text-white rounded-lg text-xs font-medium hover:opacity-90 disabled:opacity-50 flex-shrink-0"
+                      >
+                        {buscandoDniReporta ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Search className="w-3.5 h-3.5" />
+                        )}
+                        {buscandoDniReporta ? "Buscando…" : "Buscar"}
+                      </button>
+                    )}
                   </div>
+                  {tipoDocReporta !== "DNI" && (
+                    <p className="text-[10px] text-gray-400 mt-1">Ingreso manual — no disponible búsqueda automática.</p>
+                  )}
                 </div>
-                <div className="col-span-12 sm:col-span-9">
+                <div className="col-span-12 sm:col-span-8">
                   <label className="text-xs text-gray-500 mb-1.5 block">
                     Nombre y apellidos completos <span className="text-red-500">*</span>
                   </label>
@@ -2087,36 +2139,34 @@ export function IncidentForm({
 
       {/* ── Footer sticky ─────────────────────────────────────────────── */}
       <div className="sticky bottom-0 z-20 bg-white/95 backdrop-blur-sm border-t border-[#DDDDDD] shadow-[0_-2px_16px_rgba(0,0,0,0.08)]">
-        <div className="px-6 py-3 flex items-center justify-between gap-4">
+        <div className="px-6 py-3 flex items-center justify-center gap-8">
           <Link
             href={isEdit && incidenciaId ? `/grd/${incidenciaId}` : "/grd"}
-            className="flex items-center gap-2 px-5 py-2.5 border border-[#DDDDDD] rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+            className="flex items-center justify-center gap-2 px-5 py-2.5 border border-[#DDDDDD] rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             Cancelar
           </Link>
 
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={isPending}
-              className="flex items-center gap-2 px-8 py-2.5 bg-[#009850] text-white rounded-xl hover:bg-[#007a40] active:scale-[0.98] transition-all font-bold text-sm shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isPending ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Save className="w-4 h-4" />
-              )}
-              {isPending
-                ? isEdit
-                  ? "Guardando..."
-                  : "Registrando..."
-                : isEdit
-                  ? "Guardar Cambios"
-                  : "Registrar Evento"}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={isPending}
+            className="flex items-center justify-center gap-2 px-16 py-2.5 bg-[#009850] text-white rounded-xl hover:bg-[#007a40] active:scale-[0.98] transition-all font-bold text-sm shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isPending ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Save className="w-4 h-4" />
+            )}
+            {isPending
+              ? isEdit
+                ? "Guardando..."
+                : "Registrando..."
+              : isEdit
+                ? "Guardar Cambios"
+                : "Registrar Evento"}
+          </button>
         </div>
       </div>
 
@@ -2157,6 +2207,7 @@ export function IncidentForm({
           onClose={() => setImportPreview(null)}
         />
       )}
+      {ConfirmModalJSX}
     </div>
   );
 }

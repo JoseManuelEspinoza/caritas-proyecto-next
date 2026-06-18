@@ -11,9 +11,9 @@ export type AuditAction =
   | "FORGOT_PASSWORD"
   | "RESET_PASSWORD";
 
-export type GRDAction = "CREAR" | "EDITAR" | "ASIGNAR";
+export type GRDAction = "CREAR" | "EDITAR" | "ASIGNAR" | "VOTAR" | "OBSERVAR";
 
-export const GRD_ACTIONS = new Set<string>(["CREAR", "EDITAR", "ASIGNAR"]);
+export const GRD_ACTIONS = new Set<string>(["CREAR", "EDITAR", "ASIGNAR", "VOTAR", "OBSERVAR"]);
 
 export async function logAudit({
   userId,
