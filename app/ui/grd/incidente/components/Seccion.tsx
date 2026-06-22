@@ -5,13 +5,21 @@ export function Seccion({
   num,
   titulo,
   children,
+  hidden = false,
+  className = "",
 }: {
   num: string;
   titulo: string;
   children: React.ReactNode;
+  /** Oculta la sección sin desmontarla (preserva el estado de los campos). */
+  hidden?: boolean;
+  /** Clases extra para el contenedor (p. ej. ancho completo en grid). */
+  className?: string;
 }) {
   return (
-    <div className="border border-gray-200 rounded-xl overflow-hidden">
+    <div
+      className={`border border-gray-200 rounded-xl overflow-hidden${hidden ? " hidden" : ""}${className ? ` ${className}` : ""}`}
+    >
       <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200 flex items-center gap-2">
         <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-700 text-xs font-bold flex items-center justify-center">
           {num}

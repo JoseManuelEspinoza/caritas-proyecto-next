@@ -616,6 +616,9 @@ export function RevisionStep({
             {!collapsed && (
               <>
                 <div className={informeYaEnviado ? "pointer-events-none opacity-60 select-none" : ""}>
+                {/* Todo visible en 2 columnas: secciones cortas a la mitad, las
+                    grandes (Análisis, Asignación, Evidencias-ref) a lo ancho. */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
                 {/* A) Datos de identificación */}
                 <Seccion num="A" titulo="Datos de Identificación">
                   <div>
@@ -678,7 +681,7 @@ export function RevisionStep({
                 </Seccion>
 
                 {/* C) Análisis y descripción */}
-                <Seccion num="C" titulo="Análisis y Descripción">
+                <Seccion num="C" titulo="Análisis y Descripción" className="lg:col-span-2">
                   {(() => {
                     const campo = data.informes.find((i) => i.tipo === "CAMPO");
                     let ref: any = null;
@@ -759,7 +762,7 @@ export function RevisionStep({
                 </Seccion>
 
                 {/* D) Asignación de ayuda humanitaria por familia */}
-                <Seccion num="D" titulo="Asignación de Ayuda Humanitaria por Familia">
+                <Seccion num="D" titulo="Asignación de Ayuda Humanitaria por Familia" className="lg:col-span-2">
                   {targets.length === 0 ? (
                     <p className="text-xs text-gray-400">Sin familias empadronadas.</p>
                   ) : (
@@ -1098,13 +1101,14 @@ export function RevisionStep({
                 </Seccion>
 
                 {/* Evidencias de referencia (solo visualización) */}
-                <div className="border border-gray-200 rounded-xl p-3">
+                <div className="border border-gray-200 rounded-xl p-3 lg:col-span-2">
                   <p className="text-xs font-semibold text-gray-500 uppercase mb-2">
                     Todas las evidencias del caso (referencia)
                   </p>
                   <EvidenciasRegistro evidencias={data.evidencias} />
                 </div>
-                </div>
+                </div>{/* fin grid de secciones */}
+                </div>{/* fin contenedor */}
 
                 {/* Acciones */}
                 {fieldErrors.size > 0 && (
@@ -1125,7 +1129,7 @@ export function RevisionStep({
                     </span>
                   </div>
                 )}
-                <div className="flex flex-col sm:flex-row gap-2">
+                <div className="flex flex-col sm:flex-row gap-2 sticky bottom-0 z-10 bg-white/95 backdrop-blur pt-3 pb-2 border-t border-gray-100">
                   <button
                     type="button"
                     onClick={handlePdf}
