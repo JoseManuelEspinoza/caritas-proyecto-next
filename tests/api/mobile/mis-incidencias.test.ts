@@ -16,8 +16,12 @@ vi.mock("@/app/lib/s3", () => ({
 import { GET } from "@/app/api/mobile/mis-incidencias/route";
 import { prisma } from "@/app/lib/prisma";
 
+const API_KEY = "test-sync-key-123";
+
 function makeRequest(search = "") {
-  return new Request(`http://localhost/api/mobile/mis-incidencias${search}`);
+  return new Request(`http://localhost/api/mobile/mis-incidencias${search}`, {
+    headers: { "x-mobile-sync-key": API_KEY },
+  });
 }
 
 const BRIGADISTA_MOCK = {
@@ -63,6 +67,7 @@ const INCIDENCIA_MOCK = {
 describe("GET /api/mobile/mis-incidencias", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    process.env.MOBILE_SYNC_API_KEY = API_KEY;
     vi.mocked(prisma.brigadistaParroquial.findFirst).mockResolvedValue(null);
     vi.mocked(prisma.incidencia.findMany).mockResolvedValue([]);
     vi.mocked(prisma.evidenciaGRD.findMany).mockResolvedValue([]);

@@ -1030,6 +1030,7 @@ export async function registrarEvaluacion(
         const constanciaUrl = `/capacitaciones/constancia/${idInscripcion}`;
         await makeCursoUseCases().certificar.execute(idInscripcion, constanciaUrl);
         notificarCertificado(idInscripcion);
+        revalidatePath("/reportes");
       } catch {
         // Ya certificado o sin evaluación aprobada — no bloquea
       }
@@ -1046,7 +1047,7 @@ export async function registrarEvaluacion(
 export type OpcionInput = { textoOpcion: string; esCorrecta: boolean };
 export type PreguntaInput = {
   enunciado: string;
-  tipoPregunta: "OPCION_UNICA" | "VERDADERO_FALSO";
+  tipoPregunta: "OPCION_UNICA" | "VERDADERO_FALSO" | "OPCION_MULTIPLE";
   puntaje: number;
   opciones: OpcionInput[];
 };
@@ -1292,6 +1293,7 @@ export async function enviarRespuestasExamen(
         const constanciaUrl = `/capacitaciones/constancia/${idInscripcion}`;
         await makeCursoUseCases().certificar.execute(idInscripcion, constanciaUrl);
         notificarCertificado(idInscripcion);
+        revalidatePath("/reportes");
       } catch {
         // Si ya está certificado o falla, no bloquear el resultado
       }

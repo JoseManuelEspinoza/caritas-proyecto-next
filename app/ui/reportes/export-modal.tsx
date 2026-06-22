@@ -578,9 +578,6 @@ export function ExportModal({
       const drawCover = (titulo: string, subtitulo: string) => {
         // Fondo verde superior
         doc.setFillColor(...G); doc.rect(0, 0, pageW, 38, "F");
-        // Línea decorativa blanca
-        doc.setFillColor(255, 255, 255); doc.setFillColor(255, 255, 255, 0.3);
-        doc.rect(0, 34, pageW, 0.8, "F");
         // Título
         doc.setFontSize(18); doc.setFont("helvetica", "bold"); doc.setTextColor(255, 255, 255);
         doc.text(s(titulo), pageW / 2, 13, { align: "center" });
@@ -608,6 +605,28 @@ export function ExportModal({
         doc.setFontSize(7); doc.setFont("helvetica", "italic"); doc.setTextColor(150, 150, 150);
         doc.text(`Caritas Lima — Sistema GRD | Generado el ${today}`, mg, pageH - 4);
         doc.text(`Pagina ${pageNum} de ${total}`, pageW - mg, pageH - 4, { align: "right" });
+      };
+
+      // Bloque de firmas: 3 columnas (Elaborado / Revisado / V°B°) ancladas
+      // sobre el pie. Si el contenido llega muy abajo, agrega una página.
+      const drawFirmas = (yActual: number, banda: string) => {
+        const yF = pageH - 42;
+        if (yActual > yF) {
+          doc.addPage();
+          drawBandHeader(banda);
+        }
+        const roles = ["Elaborado por", "Revisado por", "V° B° Jefatura OGP"];
+        const colW = contentW / 3;
+        roles.forEach((rol, i) => {
+          const cx = mg + colW * i + colW / 2;
+          const lineW = colW - 18;
+          doc.setDrawColor(120, 120, 120); doc.setLineWidth(0.3);
+          doc.line(cx - lineW / 2, yF + 16, cx + lineW / 2, yF + 16);
+          doc.setFontSize(8); doc.setFont("helvetica", "bold"); doc.setTextColor(31, 41, 55);
+          doc.text(s(rol), cx, yF + 21, { align: "center" });
+          doc.setFontSize(6.5); doc.setFont("helvetica", "normal"); doc.setTextColor(120, 120, 120);
+          doc.text("Nombre / Cargo / Fecha", cx, yF + 25, { align: "center" });
+        });
       };
 
       const sectionTitle = (title: string, y: number): number => {
@@ -668,7 +687,7 @@ export function ExportModal({
         const pct = total > 0 ? (count/total)*100 : 0;
         const barW = 60; const barH = 3.5;
         doc.setFontSize(7.5); doc.setFont("helvetica","normal"); doc.setTextColor(31,41,55);
-        doc.text(s(label.length > 28 ? label.slice(0,27)+"..." : label), mg+2, y+5);
+        doc.text(s(label), mg+2, y+5);
         // Bar track
         doc.setFillColor(229,231,235); doc.rect(mg+72, y+2.2, barW, barH, "F");
         // Bar fill
@@ -711,10 +730,12 @@ export function ExportModal({
           // Value label
           doc.setFontSize(6.5); doc.setFont("helvetica","bold"); doc.setTextColor(31,41,55);
           if (bh > 3) doc.text(String(d.value), bx+barW/2, by-2, { align:"center" });
-          // X label
+          // X label — 2 líneas si es largo
           doc.setFontSize(6); doc.setFont("helvetica","normal"); doc.setTextColor(107,114,128);
-          const lbl = d.label.length>9 ? d.label.slice(0,8)+"..." : d.label;
-          doc.text(s(lbl), bx+barW/2, y+chartH+8, { align:"center" });
+          const lblLines = doc.splitTextToSize(s(d.label), slotW - 1);
+          lblLines.slice(0, 2).forEach((ln: string, li: number) => {
+            doc.text(ln, bx+barW/2, y+chartH+5+li*4, { align:"center" });
+          });
         });
         // Baseline
         doc.setDrawColor(200,200,200); doc.setLineWidth(0.5);
@@ -807,8 +828,10 @@ export function ExportModal({
           doc.setFontSize(6.5); doc.setFont("helvetica","bold"); doc.setTextColor(31,41,55);
           if (bh > 3) doc.text(String(d.value), bx+barW/2, by-2, {align:"center"});
           doc.setFontSize(6); doc.setFont("helvetica","normal"); doc.setTextColor(107,114,128);
-          const lbl = d.label.length>9 ? d.label.slice(0,8)+"..." : d.label;
-          doc.text(s(lbl), bx+barW/2, y+chartH+8, {align:"center"});
+          const lblLines2 = doc.splitTextToSize(s(d.label), slotW - 1);
+          lblLines2.slice(0, 2).forEach((ln: string, li: number) => {
+            doc.text(ln, bx+barW/2, y+chartH+5+li*4, {align:"center"});
+          });
         });
         doc.setDrawColor(200,200,200); doc.setLineWidth(0.5);
         doc.line(x, y+chartH, x+w, y+chartH);
@@ -918,7 +941,7 @@ export function ExportModal({
           if (i%2===0){doc.setFillColor(248,250,249);doc.rect(mg,y,contentW,rowH,"F");}
           doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(31,41,55);
           bx=mg;
-          [String(i+1),s(p.parroquia.length>28?p.parroquia.slice(0,27)+"...":p.parroquia),String(p.total),String(p.capacitados),`${p.pct}%`,String(p.total-p.capacitados)]
+          [String(i+1),s(p.parroquia),String(p.total),String(p.capacitados),`${p.pct}%`,String(p.total-p.capacitados)]
           .forEach((v,vi)=>{
             if(vi===4){doc.setTextColor(p.pct>=70?0:p.pct>0?200:220, p.pct>=70?152:p.pct>0?100:50, p.pct>=70?80:0);doc.setFont("helvetica","bold");}
             else{doc.setTextColor(31,41,55);doc.setFont("helvetica","normal");}
@@ -950,10 +973,11 @@ export function ExportModal({
           sorted.forEach((p, i) => {
             if (yG > pageH - 20) { drawFooter(totalPages, totalPages+1); doc.addPage(); drawBandHeader("BRIGADISTAS"); yG = 14; totalPages++; }
             const rc: [number,number,number] = p.pct >= 70 ? [0,152,80] : p.pct >= 40 ? [245,158,11] : [239,68,68];
-            const lbl = `${s(p.parroquia.length > 26 ? p.parroquia.slice(0,25)+"..." : p.parroquia)}  (${p.capacitados}/${p.total} certif.)`;
+            const lbl = `${s(p.parroquia)}  (${p.capacitados}/${p.total} certif.)`;
             yG = distRow(lbl, p.pct, 100, rc, yG, i%2===0);
           });
         }
+        drawFirmas(yG, "BRIGADISTAS");
         drawFooter(totalPages, totalPages);
 
       } else if (activeTab === "prevencion" && actividadesData) {
@@ -1008,6 +1032,7 @@ export function ExportModal({
           y = eDcy + 22;
         }
 
+        drawFirmas(y, "PREVENCION");
         drawFooter(1, 1);
 
       } else if (activeTab === "kits" && kitsData) {
@@ -1043,11 +1068,12 @@ export function ExportModal({
             if(i%2===0){doc.setFillColor(248,250,249);doc.rect(mg,y,contentW,7,"F");}
             doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(31,41,55);
             bx=mg;
-            [s(k.tipoKit.length>28?k.tipoKit.slice(0,27)+"...":k.tipoKit),String(k.stockActual),`${k.total} kit(s)`]
+            [s(k.tipoKit),String(k.stockActual),`${k.total} kit(s)`]
             .forEach((v,vi)=>{doc.text(v,bx+2,y+4.5);bx+=sthW[vi];});
             y+=7;
           });
         }
+        drawFirmas(y, "KITS");
         drawFooter(1, 1);
 
       } else if (activeTab === "riesgo" && parroquiasRiesgo) {
@@ -1136,7 +1162,7 @@ export function ExportModal({
             if (i%2===0){doc.setFillColor(248,250,249);doc.rect(mg,y,contentW,9,"F");}
             doc.setFillColor(...col); doc.rect(mg,y,3,9,"F");
             doc.setFontSize(7.5); doc.setFont("helvetica","bold"); doc.setTextColor(31,41,55);
-            doc.text(`${i+1}. ${s(p.nombre.length>42?p.nombre.slice(0,41)+"...":p.nombre)}`, mg+5, y+4.5);
+            doc.text(`${i+1}. ${s(p.nombre)}`, mg+5, y+4.5);
             doc.setFont("helvetica","normal"); doc.setTextColor(107,114,128);
             const actP = p.actividadesTotal>0?Math.round((p.actividadesEjecutadas/p.actividadesTotal)*100):0;
             doc.text(`${p.incidencias} incid.  |  ${p.brigadistas} brigad.  |  ${p.pctCapacitados}% certif.  |  ${actP}% activid.  |  Plan: ${p.tienePlan?"Aprobado":"Sin plan"}`, mg+5, y+8);
@@ -1306,7 +1332,7 @@ export function ExportModal({
         y=sectionTitle("RANKING COMPLETO — NIVEL DE AFECTACION ESTIMADA", y);
 
         const rhC=["#","Parroquia","Nivel","Casos","Brigadistas","%Cert.","Plan GRD","Act."];
-        const rhW=[7,60,20,14,22,16,22,18];
+        const rhW=[7,72,18,12,20,15,20,15];
         doc.setFillColor(...G);doc.rect(mg,y,contentW,8,"F");
         doc.setFontSize(7);doc.setFont("helvetica","bold");doc.setTextColor(255,255,255);
         let bx=mg; rhC.forEach((c,i)=>{doc.text(c,bx+1.5,y+5.5);bx+=rhW[i];}); y+=8;
@@ -1325,7 +1351,7 @@ export function ExportModal({
 
           doc.setFontSize(6.5);doc.setFont("helvetica","normal");
           bx=mg;
-          const vals=[String(i+1),s(p.nombre.length>24?p.nombre.slice(0,23)+"...":p.nombre),
+          const vals=[String(i+1),s(p.nombre),
             s(nKey),String(p.incidencias),String(p.brigadistas),`${p.pctCapacitados}%`,
             p.tienePlan?"Aprobado":"Sin plan",`${p.actividadesEjecutadas}/${p.actividadesTotal}`];
           vals.forEach((v,vi)=>{
@@ -1349,6 +1375,7 @@ export function ExportModal({
         doc.text("Sin Plan GRD(+2)  |  Actividades <40% ejecutadas(+2)  |  CRITICO>=8 pts  |  ALTO>=5  |  MEDIO>=3  |  BAJO<3",mg+3,y+13.5);
         y+=18;
 
+        drawFirmas(y, "AFECTACION PARROQUIAL");
         drawFooter(totalPages, totalPages);
 
       } else {
@@ -1422,14 +1449,11 @@ export function ExportModal({
         // Distribución por estado
         if (porEstado && porEstado.length>0) {
           y=sectionTitle("DISTRIBUCION DE INCIDENCIAS POR ESTADO",y);
-          // Stacked bar visual
-          const stackEst=porEstado.map((e,i)=>({label:e.label,value:e.value,color:[[0,152,80],[59,130,246],[245,158,11],[239,68,68],[145,85,168],[249,115,22],[0,200,180],[100,100,100]][i%8] as [number,number,number]}));
-          drawStackedBar(stackEst,mg,y,contentW,10); y+=12;
-          let lx2=mg;
-          stackEst.slice(0,4).forEach(e=>{doc.setFillColor(...e.color);doc.rect(lx2,y,4,4,"F");doc.setFontSize(6.5);doc.setFont("helvetica","normal");doc.setTextColor(31,41,55);doc.text(s(`${e.label}:${e.value}`),lx2+5.5,y+3.2);lx2+=46;});
-          y+=8;
-          porEstado.forEach((e,i)=>{y=distRow(e.label,e.value,totalInc,[0,152,80],y,i%2===0);});
-          y+=5;
+          // Grafico circular (pastel) + leyenda al costado
+          const estItems=porEstado.map((e,i)=>({label:e.label,value:e.value,color:[[0,152,80],[59,130,246],[245,158,11],[239,68,68],[145,85,168],[249,115,22],[0,200,180],[100,100,100]][i%8] as [number,number,number]}));
+          const estH=Math.max(34, estItems.length*10+6);
+          drawDonut(estItems, mg+22, y+estH/2, 17, 9, mg+52, y+4, 9);
+          y+=estH+4;
         }
 
         // Top parroquias
@@ -1439,14 +1463,21 @@ export function ExportModal({
           y+=4;
         }
 
-        // Gravedad
+        // Gravedad — grafico circular (pastel) con colores por severidad
         const gravedad=incidenciasData?.porGravedad??[];
         if(gravedad.length>0){
           y=sectionTitle("DISTRIBUCION POR GRAVEDAD",y);
-          gravedad.forEach((g,i)=>{y=distRow(g.label,g.value,totalInc,[239,68,68],y,i%2===0);});
-          y+=4;
+          const gravItems=gravedad.map(g=>{
+            const c: [number,number,number] = (g.label==="Alto"||g.label==="Critico"||g.label==="Crítico"||g.label==="Severo")
+              ? [239,68,68] : g.label==="Moderado" ? [245,158,11] : [0,152,80];
+            return {label:g.label,value:g.value,color:c};
+          });
+          const gravH=Math.max(34, gravItems.length*10+6);
+          drawDonut(gravItems, mg+22, y+gravH/2, 17, 9, mg+52, y+4, 9);
+          y+=gravH+4;
         }
 
+        drawFirmas(y, tituloPDF);
         drawFooter(2,2);
       }
 

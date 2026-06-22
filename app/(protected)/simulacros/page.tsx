@@ -3,6 +3,7 @@ import { toFrontendRole } from "@/app/lib/roles";
 import { redirect } from "next/navigation";
 import { prisma } from "@/app/lib/prisma";
 import { SimulacrosModule } from "@/app/ui/simulacros/simulacros-module";
+import { cargarCatalogosSimulacro } from "@/app/lib/grd/catalogos-form";
 
 export default async function SimulacrosPage() {
   const session = await verifySession();
@@ -27,6 +28,16 @@ export default async function SimulacrosPage() {
     where: { codigoEntidad: "SIMULACRO" },
     select: { idTipoReferencia: true },
   });
+
+  const catalogos = await cargarCatalogosSimulacro();
+
+  const TIPOS_FALLBACK = [
+    "Simulacro de Sismo", "Simulacro de Incendio", "Simulacro de Inundación",
+    "Charla de Prevención", "Taller", "Campaña",
+  ];
+  const tiposActividad = catalogos.tiposActividad.length > 0
+    ? catalogos.tiposActividad
+    : TIPOS_FALLBACK;
 
   const [actividades, parroquias, brigadistasDisp, evidencias] = await Promise.all([
     prisma.actividadPreventiva.findMany({
@@ -100,6 +111,7 @@ export default async function SimulacrosPage() {
   return (
     <SimulacrosModule
       role={role}
+      tiposActividad={tiposActividad}
       currentUsuarioGRDId={usuarioGRD?.idUsuarioGRD ?? null}
       currentBrigadistaId={brigadistaPerfil?.idBrigadistaParroquial ?? null}
       currentNombre={usuarioGRD ? `${usuarioGRD.nombres} ${usuarioGRD.apellidos}` : "Usuario"}

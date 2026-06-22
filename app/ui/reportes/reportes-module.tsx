@@ -353,26 +353,23 @@ function TabCasos({ totales, porEstado, porTipo, porParroquia, timeline, byWeek,
       {/* Gravedad + Parroquia — 2 columnas */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <ChartCard title="Por Nivel de Gravedad" subtitle="Urgencia registrada de los casos atendidos">
-          {incidenciasData.porGravedad.length === 0 ? <NoData height={180} /> : (
-            <div className="space-y-3 pt-2">
-              {incidenciasData.porGravedad.map((g, i) => {
-                const total = incidenciasData.porGravedad.reduce((s, x) => s + x.value, 0);
-                const pct = total > 0 ? Math.round((g.value / total) * 100) : 0;
-                const color = g.label === "Alto" || g.label === "Crítico" || g.label === "Severo" ? "#EF4444" : g.label === "Moderado" ? "#F59E0B" : "#009850";
-                return (
-                  <div key={i} className="space-y-1">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-gray-600 font-medium">{g.label}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold" style={{ color }}>{g.value}</span>
-                        <span className="text-gray-400">({pct}%)</span>
-                      </div>
-                    </div>
-                    <ProgressBar pct={pct} color={color} />
-                  </div>
-                );
-              })}
-            </div>
+          {incidenciasData.porGravedad.length === 0 ? <NoData height={190} /> : (
+            <ResponsiveContainer width="100%" height={190}>
+              <PieChart>
+                <Pie data={incidenciasData.porGravedad} dataKey="value" nameKey="label" cx="45%" cy="50%" outerRadius={72} innerRadius={38} strokeWidth={0}>
+                  {incidenciasData.porGravedad.map((g, i) => {
+                    const color = g.label === "Alto" || g.label === "Crítico" || g.label === "Severo"
+                      ? "#EF4444"
+                      : g.label === "Moderado"
+                        ? "#F59E0B"
+                        : "#009850";
+                    return <Cell key={i} fill={color} />;
+                  })}
+                </Pie>
+                <Tooltip formatter={(v) => [`${v}`, "Casos"]} />
+                <Legend layout="vertical" align="right" verticalAlign="middle" iconType="circle" iconSize={7} formatter={v => <span style={{ fontSize: 10, color: "#4B5563" }}>{v}</span>} />
+              </PieChart>
+            </ResponsiveContainer>
           )}
         </ChartCard>
 
@@ -405,9 +402,8 @@ function TabBrigadistas({ totales, brigadistasData }: ReportesProps) {
     { label: "Certificados", value: totales.brigadistasCapacitados },
     { label: "Sin certificación", value: Math.max(sinCert, 0) },
   ];
-  const sorted = [...brigadistasData.porParroquia];
-  const top3 = sorted.slice(0, 3);
-  const bottom3 = [...sorted].sort((a, b) => a.pct - b.pct).filter(p => p.pct < 100).slice(0, 3);
+  const top3 = [...brigadistasData.porParroquia].sort((a, b) => b.pct - a.pct).slice(0, 3);
+  const bottom3 = [...brigadistasData.porParroquia].sort((a, b) => a.pct - b.pct).filter(p => p.pct < 100).slice(0, 3);
   const pctColor = pct >= 80 ? GREEN : pct >= 50 ? "#F59E0B" : "#EF4444";
 
   return (
@@ -500,10 +496,10 @@ function TabBrigadistas({ totales, brigadistasData }: ReportesProps) {
       </div>
 
       {/* Radar de parroquias top */}
-      {brigadistasData.porParroquia.length >= 3 && (
-        <ChartCard title="Comparativa de Certificación por Parroquia" subtitle="% de brigadistas certificados — top 8 parroquias por tamaño">
-          <ResponsiveContainer width="100%" height={220}>
-            <RadarChart data={brigadistasData.porParroquia.slice(0, 8).map(p => ({ parroquia: p.parroquia.length > 12 ? p.parroquia.slice(0, 11) + "…" : p.parroquia, pct: p.pct, meta: 80 }))}>
+      {brigadistasData.porParroquia.length >= 1 && (
+        <ChartCard title="Comparativa de Certificación por Parroquia" subtitle="% de brigadistas certificados — todas las parroquias">
+          <ResponsiveContainer width="100%" height={Math.max(300, brigadistasData.porParroquia.length * 8)}>
+            <RadarChart data={brigadistasData.porParroquia.map(p => ({ parroquia: p.parroquia, pct: p.pct, meta: 80 }))}>
               <PolarGrid stroke="#E5E7EB" />
               <PolarAngleAxis dataKey="parroquia" tick={{ fontSize: 9, fill: "#6B7280" }} />
               <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 8, fill: "#9CA3AF" }} tickCount={5} />
@@ -590,8 +586,6 @@ function TabPrevencion({ actividadesData }: ReportesProps) {
   const pendientes = actividadesData.total - actividadesData.ejecutadas;
   const promPart = actividadesData.ejecutadas > 0 ? Math.round(actividadesData.totalParticipantes / actividadesData.ejecutadas) : 0;
 
-  const sinCatalogo = actividadesData.porTipo.length === 1 && actividadesData.porTipo[0].label === "Sin clasificar";
-
   return (
     <div className="space-y-5">
       {/* KPIs */}
@@ -638,8 +632,8 @@ function TabPrevencion({ actividadesData }: ReportesProps) {
         </ChartCard>
 
         {/* Tipo de actividad */}
-        <ChartCard title="Por Tipo de Actividad" subtitle={sinCatalogo ? "Catálogo de tipos no configurado" : "Distribución por modalidad o simulacro"}>
-          {actividadesData.porTipo.length === 0 || sinCatalogo ? (
+        <ChartCard title="Por Tipo de Actividad" subtitle="Distribución por modalidad o simulacro">
+          {actividadesData.porTipo.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-48 gap-2 text-center">
               <Info className="w-5 h-5 text-gray-300" />
               <p className="text-xs text-gray-400 max-w-40 leading-snug">Los tipos de actividad no están vinculados al catálogo del sistema</p>
@@ -679,10 +673,10 @@ function TabPrevencion({ actividadesData }: ReportesProps) {
       </div>
 
       {/* Radar por parroquia si hay datos suficientes */}
-      {actividadesData.porParroquia.length >= 4 && (
-        <ChartCard title="Radar de Actividad por Parroquia" subtitle="Distribución relativa de actividades preventivas — top 8 parroquias">
-          <ResponsiveContainer width="100%" height={220}>
-            <RadarChart data={actividadesData.porParroquia.slice(0, 8).map(p => ({ parroquia: p.label.length > 12 ? p.label.slice(0, 11) + "…" : p.label, actividades: p.value }))}>
+      {actividadesData.porParroquia.length >= 1 && (
+        <ChartCard title="Radar de Actividad por Parroquia" subtitle="Simulacros y actividades preventivas — todas las parroquias">
+          <ResponsiveContainer width="100%" height={Math.max(300, actividadesData.porParroquia.length * 8)}>
+            <RadarChart data={actividadesData.porParroquia.map(p => ({ parroquia: p.label, actividades: p.value }))}>
               <PolarGrid stroke="#E5E7EB" />
               <PolarAngleAxis dataKey="parroquia" tick={{ fontSize: 9, fill: "#6B7280" }} />
               <PolarRadiusAxis tick={{ fontSize: 8, fill: "#9CA3AF" }} tickCount={4} />

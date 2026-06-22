@@ -15,6 +15,27 @@ export const dynamic = "force-dynamic";
 // ── Cache 1: datos base (no filtrados por fecha) — TTL 1 hora ────────────────
 const fetchBaseData = unstable_cache(
   async () => {
+    // DNIs de participantes con al menos una certificación emitida.
+    // Se usa para contar brigadistas certificados via la cadena real
+    // Participante→InscripcionCurso→CertificacionCurso, ya que
+    // BrigadistaParroquial.idCertificacionCurso puede no estar sincronizado.
+    const participantesCert = await prisma.participante.findMany({
+      where: { inscripciones: { some: { certificacion: { isNot: null } } } },
+      select: { numeroDocumento: true },
+    });
+    const dnisCertificados = participantesCert
+      .map((p) => p.numeroDocumento)
+      .filter((d): d is string => d !== null && d !== undefined && d.trim() !== "");
+
+    const whereCertificado = dnisCertificados.length > 0
+      ? {
+          OR: [
+            { idCertificacionCurso: { not: null as null } },
+            { dni: { in: dnisCertificados } },
+          ],
+        }
+      : { idCertificacionCurso: { not: null as null } };
+
     const [
       totalBrigadistas,
       brigadistasCapacitadosTotal,
@@ -27,7 +48,7 @@ const fetchBaseData = unstable_cache(
       parroquiasList,
     ] = await Promise.all([
       prisma.brigadistaParroquial.count({ where: { estado: "ACTIVO" } }),
-      prisma.brigadistaParroquial.count({ where: { estado: "ACTIVO", idCertificacionCurso: { not: null } } }),
+      prisma.brigadistaParroquial.count({ where: { estado: "ACTIVO", ...whereCertificado } }),
       prisma.parroquia.count({ where: { estado: "ACTIVO" } }),
       prisma.parroquia.count({ where: { planesTrabajo: { some: { estadoAprobacion: "APROBADO" } } } }),
       prisma.brigadistaParroquial.groupBy({
@@ -37,7 +58,7 @@ const fetchBaseData = unstable_cache(
       }),
       prisma.brigadistaParroquial.groupBy({
         by: ["idParroquia"],
-        where: { estado: "ACTIVO", idCertificacionCurso: { not: null } },
+        where: { estado: "ACTIVO", ...whereCertificado },
         _count: { _all: true },
       }),
       prisma.kitEmergencia.groupBy({
@@ -83,7 +104,7 @@ const fetchBaseData = unstable_cache(
     };
   },
   ["reportes-base"],
-  { revalidate: 3600 }
+  { revalidate: 60, tags: ["reportes-base"] }
 );
 
 // ── Cache 2: datos filtrados por fecha — TTL 30 minutos ──────────────────────
@@ -91,11 +112,21 @@ const fetchFilteredData = unstable_cache(
   async (desdeISO: string, hastaISO: string, parroquiasStr: string) => {
     const desde = new Date(desdeISO);
     const hasta = new Date(hastaISO);
+    hasta.setUTCHours(23, 59, 59, 999); // incluir todo el día hasta (no cortar en medianoche UTC)
     const parroquiasFiltro = parroquiasStr ? parroquiasStr.split(",").filter(Boolean) : [];
     const filtroFecha = { gte: desde, lte: hasta };
     const whereInc = {
       fechaRegistro: filtroFecha,
       ...(parroquiasFiltro.length > 0 ? { idParroquia: { in: parroquiasFiltro } } : {}),
+    };
+    const whereAct = {
+      fechaRegistro: filtroFecha,
+      ...(parroquiasFiltro.length > 0 ? { idParroquia: { in: parroquiasFiltro } } : {}),
+    };
+    const whereKit = {
+      tipoMovimiento: "SALIDA",
+      fechaMovimiento: filtroFecha,
+      ...(parroquiasFiltro.length > 0 ? { idParroquiaDestino: { in: parroquiasFiltro } } : {}),
     };
 
     const [
@@ -113,7 +144,6 @@ const fetchFilteredData = unstable_cache(
       actividadesPorParroquiaEjec,
       movimientosKitsTotal,
       movimientosSalida,
-      catalogoTipos,
     ] = await Promise.all([
       prisma.incidencia.count({ where: whereInc }),
       prisma.incidencia.findMany({
@@ -124,19 +154,18 @@ const fetchFilteredData = unstable_cache(
       prisma.incidencia.groupBy({ by: ["estadoActual"], where: whereInc, _count: { _all: true } }),
       prisma.incidencia.groupBy({ by: ["tipoEvento"], where: whereInc, _count: { _all: true } }),
       prisma.incidencia.groupBy({ by: ["gravedad"], where: whereInc, _count: { _all: true } }),
-      prisma.actividadPreventiva.count(),
-      prisma.actividadPreventiva.count({ where: { estadoActividad: "EJECUTADA" } }),
-      prisma.actividadPreventiva.groupBy({ by: ["estadoActividad"], _count: { _all: true } }),
-      prisma.actividadPreventiva.groupBy({ by: ["idTipoActividadPreventiva"], _count: { _all: true } }),
-      prisma.actividadPreventiva.aggregate({ _sum: { numeroParticipantesReal: true } }),
-      prisma.actividadPreventiva.groupBy({ by: ["idParroquia"], _count: { _all: true } }),
-      prisma.actividadPreventiva.groupBy({ by: ["idParroquia"], where: { estadoActividad: "EJECUTADA" }, _count: { _all: true } }),
-      prisma.movimientoKit.aggregate({ where: { tipoMovimiento: "SALIDA" }, _sum: { cantidad: true } }),
+      prisma.actividadPreventiva.count({ where: whereAct }),
+      prisma.actividadPreventiva.count({ where: { ...whereAct, estadoActividad: "EJECUTADA" } }),
+      prisma.actividadPreventiva.groupBy({ by: ["estadoActividad"], where: whereAct, _count: { _all: true } }),
+      prisma.actividadPreventiva.groupBy({ by: ["idTipoActividadPreventiva"], where: whereAct, _count: { _all: true } }),
+      prisma.actividadPreventiva.aggregate({ where: whereAct, _sum: { numeroParticipantesReal: true } }),
+      prisma.actividadPreventiva.groupBy({ by: ["idParroquia"], where: whereAct, _count: { _all: true } }),
+      prisma.actividadPreventiva.groupBy({ by: ["idParroquia"], where: { ...whereAct, estadoActividad: "EJECUTADA" }, _count: { _all: true } }),
+      prisma.movimientoKit.aggregate({ where: whereKit, _sum: { cantidad: true } }),
       prisma.movimientoKit.findMany({
-        where: { tipoMovimiento: "SALIDA" },
+        where: whereKit,
         select: { cantidad: true, idParroquiaDestino: true, kitEmergencia: { select: { tipoKit: true } } },
       }),
-      prisma.catalogoDetalleGRD.findMany({ select: { idCatalogoDetalleGRD: true, valor: true } }),
     ]);
 
     // Pre-compute aggregations while raw dates are available
@@ -186,7 +215,6 @@ const fetchFilteredData = unstable_cache(
 
     const estadoCount = (estado: string) => estadoGroups.find(g => g.estadoActual === estado)?._count._all ?? 0;
 
-    const tipoLabelMap = new Map(catalogoTipos.map(c => [c.idCatalogoDetalleGRD, c.valor]));
 
     // Serialize incidencias list (remove Date objects)
     const incidenciasRows = incidenciasList.map(inc => ({
@@ -230,21 +258,10 @@ const fetchFilteredData = unstable_cache(
       totalActividades,
       actividadesEjecutadas,
       actividadesEstado: actividadesEstadoGrp.map(g => ({ label: g.estadoActividad, value: g._count._all })),
-      // Deduplica etiquetas "sin catálogo" para que no aparezcan N veces como "Otro"
-      actividadesTipo: (() => {
-        const sinCatalogo: { label: string; value: number }[] = [];
-        const conCatalogo: { label: string; value: number }[] = [];
-        actividadesTipoGrp.forEach(g => {
-          const lbl = tipoLabelMap.get(g.idTipoActividadPreventiva);
-          if (lbl) { conCatalogo.push({ label: lbl, value: g._count._all }); }
-          else { sinCatalogo.push({ label: `Tipo ${sinCatalogo.length + 1}`, value: g._count._all }); }
-        });
-        // Si TODOS los tipos son desconocidos, agrúpalos en "Sin clasificar"
-        if (conCatalogo.length === 0 && sinCatalogo.length > 0) {
-          return [{ label: "Sin clasificar", value: sinCatalogo.reduce((s, x) => s + x.value, 0) }];
-        }
-        return [...conCatalogo, ...sinCatalogo];
-      })(),
+      actividadesTipo: actividadesTipoGrp
+        .filter(g => g.idTipoActividadPreventiva?.trim())
+        .map(g => ({ label: g.idTipoActividadPreventiva as string, value: g._count._all }))
+        .sort((a, b) => b.value - a.value),
       actividadesParticipantes: actividadesParticipantes._sum.numeroParticipantesReal ?? 0,
       actividadesPorParroquiaTotal: actividadesPorParroquiaTotal.map(g => ({ idParroquia: g.idParroquia, count: g._count._all })),
       actividadesPorParroquiaEjec: actividadesPorParroquiaEjec.map(g => ({ idParroquia: g.idParroquia, count: g._count._all })),
@@ -300,8 +317,7 @@ export default async function ReportesPage({
         return { parroquia: p.nombre, total, capacitados, pct: total > 0 ? Math.round((capacitados / total) * 100) : 0 };
       })
       .filter(p => p.total > 0)
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 12),
+      .sort((a, b) => b.total - a.total),
   };
 
   // ── Kits data ──────────────────────────────────────────────────────────────
@@ -317,12 +333,10 @@ export default async function ReportesPage({
     stockActual: base.kitsPorTipo,
   };
 
-  // ── Actividades por parroquia ─────────────────────────────────────────────
+  // ── Actividades por parroquia — TODAS las parroquias activas, con 0 si no tienen ──
   const actividadesPorParroquia = base.parroquiasData
-    .filter(p => actividadesTotalMap.has(p.idParroquia))
     .map(p => ({ label: p.nombre, value: actividadesTotalMap.get(p.idParroquia) ?? 0 }))
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 10);
+    .sort((a, b) => b.value - a.value);
 
   const actividadesData: ActividadesData = {
     total: filtered.totalActividades,

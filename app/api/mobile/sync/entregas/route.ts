@@ -161,10 +161,17 @@ function validarPayload(body: EntregaMovilPayload): string {
   return uuidMovil;
 }
 
+function puedeRegistrarEntregaKits(estadoActual: string | null | undefined): boolean {
+  return ["APROBADO", "ATENDIDO", "SEGUIMIENTO ABIERTO", "CERRADO"].includes(
+    estadoActual ?? ""
+  );
+}
+
 async function resolveIncidencia(body: EntregaMovilPayload): Promise<{
   idIncidencia: string;
   codigoCaso: string | null;
   idParroquia: string | null;
+  estadoActual: string;
 }> {
   const idIncidencia =
     texto(body.idIncidenciaRemota) ||
@@ -178,6 +185,7 @@ async function resolveIncidencia(body: EntregaMovilPayload): Promise<{
         idIncidencia: true,
         codigoCaso: true,
         idParroquia: true,
+        estadoActual: true,
       },
     });
 
@@ -196,6 +204,7 @@ async function resolveIncidencia(body: EntregaMovilPayload): Promise<{
         idIncidencia: true,
         codigoCaso: true,
         idParroquia: true,
+        estadoActual: true,
       },
     });
 
@@ -211,6 +220,7 @@ async function resolveIncidencia(body: EntregaMovilPayload): Promise<{
         idIncidencia: true,
         codigoCaso: true,
         idParroquia: true,
+        estadoActual: true,
       },
     });
 
@@ -558,6 +568,13 @@ export async function POST(request: Request) {
     }
 
     const incidencia = await resolveIncidencia(body);
+    if (!puedeRegistrarEntregaKits(incidencia.estadoActual)) {
+      throw new MobileSyncError(
+        "La entrega de kits solo está permitida cuando la incidencia está aprobada por el Comité.",
+        409
+      );
+    }
+
     const idSolicitud = await resolveSolicitudId(body);
     const idUsuarioResponsableGRD = await resolveUsuarioResponsableId();
 

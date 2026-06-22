@@ -126,9 +126,12 @@ export function IncidentDetail({ data }: { data: IncidentData }) {
             const current = idx === currentStepIdx;
             const active = idx === activeStep;
             const isNextStep = idx === currentStepIdx + 1;
-            // ATENCION (idx=4) solo se habilita como "siguiente paso" si el comité aprobó
+            // ATENCION (idx=4) se habilita si el comité aprobó o el estado ya es APROBADO
             const nextStepAllowed =
-              isNextStep && (idx !== 4 || data.solicitudComite?.resultado === "APROBAR");
+              isNextStep &&
+              (idx !== 4 ||
+                data.estadoActual === "APROBADO" ||
+                data.solicitudComite?.resultado === "APROBAR");
             return (
               <button
                 key={step.etapa}
