@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { isS3Configured, presignPut, presignGet, safeFilename } from "@/app/lib/s3";
+import { TIPOS_UPLOAD } from "@/app/lib/upload-config";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -130,11 +131,19 @@ async function resolveIdReferencia(body: EvidenciaMovilPayload): Promise<string>
 }
 
 async function resolveUsuarioCarga(body: EvidenciaMovilPayload): Promise<string> {
-  const candidates = [
-    body.idUsuarioCargaGRD?.trim(),
-    body.idUsuarioRemoto?.trim(),
-    process.env.MOBILE_SYNC_USUARIO_GRD_ID?.trim(),
-  ].filter(Boolean) as string[];
+  // H3 — Anti-suplantación: si el servidor fija la identidad mediante
+  // MOBILE_SYNC_USUARIO_GRD_ID (recomendado en producción), se IGNORA cualquier
+  // id enviado en el body. Así un llamante no puede atribuir la evidencia a un
+  // usuario arbitrario. Si la variable no está definida, se mantiene el
+  // comportamiento previo (id desde el body) para no romper el cliente móvil
+  // actual, que aún no envía un token por usuario.
+  const idFijadoServidor = process.env.MOBILE_SYNC_USUARIO_GRD_ID?.trim();
+
+  const candidates = idFijadoServidor
+    ? [idFijadoServidor]
+    : ([body.idUsuarioCargaGRD?.trim(), body.idUsuarioRemoto?.trim()].filter(
+        Boolean
+      ) as string[]);
 
   for (const id of candidates) {
     const usuario = await prisma.usuarioGRD.findUnique({
@@ -197,17 +206,70 @@ async function uploadBase64ToS3(
   };
 }
 
-const ALLOWED_S3_PREFIXES = [
-  "evidencias/",
-  "evidencia-kit/",
-  "evidencia-grd/",
-];
+// H4 — Prefijos S3 permitidos: se derivan de la MISMA configuración que usa el
+// proxy web (TIPOS_UPLOAD), no de nombres hardcodeados. Así la lista no depende
+// de que el archivo se llame "evidencia" y queda consistente con todo el sistema
+// (evidencias/, kits/, entregas/, capacitaciones/materiales/...).
+const ALLOWED_S3_PREFIXES = Object.values(TIPOS_UPLOAD).map((t) => `${t.prefijo}/`);
 
+/**
+ * H4 — ¿El valor apunta al almacén S3 propio del sistema?
+ * Acepta URLs http(s) que correspondan al bucket configurado (virtual-hosted o
+ * path-style), al endpoint S3-compatible (MinIO/R2) o a la base pública. Así se
+ * deja pasar la URL legítima que envía el móvil y se rechaza cualquier URL
+ * externa (p. ej. de phishing).
+ */
+function esUrlDelAlmacenPropio(valor: string): boolean {
+  if (!/^https?:\/\//i.test(valor)) return false;
+
+  const v = valor.toLowerCase();
+
+  const publicBase = process.env.AWS_S3_PUBLIC_BASE_URL?.trim().toLowerCase();
+  if (publicBase && v.startsWith(publicBase.replace(/\/$/, ""))) return true;
+
+  try {
+    const url = new URL(valor);
+    const host = url.host.toLowerCase();
+    const path = url.pathname.toLowerCase();
+
+    const endpoint = process.env.AWS_S3_ENDPOINT?.trim().toLowerCase();
+    if (endpoint) {
+      try {
+        if (host === new URL(endpoint).host.toLowerCase()) return true;
+      } catch {
+        /* endpoint mal formado: se ignora */
+      }
+    }
+
+    const bucket = process.env.AWS_S3_BUCKET?.trim().toLowerCase();
+    if (bucket) {
+      // virtual-hosted: <bucket>.s3.<region>.amazonaws.com
+      // path-style:     s3.<region>.amazonaws.com/<bucket>/...
+      if (host.startsWith(`${bucket}.`)) return true;
+      if (host.includes(".amazonaws.com") && path.startsWith(`/${bucket}/`)) return true;
+    }
+  } catch {
+    return false;
+  }
+
+  return false;
+}
+
+/**
+ * H4 — Solo se aceptan (a) keys relativos con prefijo conocido o (b) URLs del
+ * almacén propio. Se rechazan URLs externas y URIs locales de Android
+ * (content://, file://), que no son válidas en el servidor.
+ */
 function resolveUrlArchivo(body: EvidenciaMovilPayload): string | null {
-  const candidates = [body.urlArchivo, body.urlS3, body.key].map((v) => v?.trim()).filter(Boolean);
-  // Rechazar URIs locales de Android (content://, file://) — no son válidas en el servidor
-  const valid = candidates.find((v) => v && /^https?:\/\//i.test(v));
-  return valid ?? null;
+  const candidates = [body.urlArchivo, body.urlS3, body.key]
+    .map((v) => v?.trim())
+    .filter((v): v is string => Boolean(v));
+
+  const valido = candidates.find(
+    (v) => ALLOWED_S3_PREFIXES.some((p) => v.startsWith(p)) || esUrlDelAlmacenPropio(v)
+  );
+
+  return valido ?? null;
 }
 
 export async function GET(request: Request) {
