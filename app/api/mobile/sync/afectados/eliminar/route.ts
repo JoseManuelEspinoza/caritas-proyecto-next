@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
+import { logger } from "@/app/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +53,12 @@ export async function POST(request: Request) {
       where: { idPersonaAfectada: persona.idPersonaAfectada },
       data: { deletedAt: new Date() },
     });
+
+    // H7 — Trazabilidad: dejar constancia del borrado para auditoría.
+    logger.warn(
+      { idPersonaAfectada: persona.idPersonaAfectada, uuidMovil, source: "mobile-sync" },
+      "[Mobile Sync][Afectados Eliminar] Afectado marcado como eliminado"
+    );
 
     return NextResponse.json({ ok: true, idPersonaAfectada: persona.idPersonaAfectada });
   } catch (err) {
