@@ -457,13 +457,15 @@ export function DonacionesModule({
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <button
-                    onClick={() => router.push(`/grd/${current.id}`)}
-                    title="Ir a Incidencia"
-                    className="p-1.5 text-gray-400 hover:text-[var(--caritas-green)] rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
-                  >
-                    <ArrowUpRight className="w-4 h-4" />
-                  </button>
+                  {!soyMiembroDelComite && (
+                    <button
+                      onClick={() => router.push(`/grd/${current.id}`)}
+                      title="Ir a Incidencia"
+                      className="p-1.5 text-gray-400 hover:text-[var(--caritas-green)] rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
+                    >
+                      <ArrowUpRight className="w-4 h-4" />
+                    </button>
+                  )}
                   {puedeVotar && (
                     <button
                       onClick={() => setShowVotacion(true)}
@@ -512,13 +514,15 @@ export function DonacionesModule({
                     )}
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <button
-                      onClick={() => router.push(`/grd/${current.id}`)}
-                      title="Ir a Incidencia"
-                      className="p-1.5 text-gray-400 hover:text-[var(--caritas-green)] rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
-                    >
-                      <ArrowUpRight className="w-4 h-4" />
-                    </button>
+                    {!soyMiembroDelComite && (
+                      <button
+                        onClick={() => router.push(`/grd/${current.id}`)}
+                        title="Ir a Incidencia"
+                        className="p-1.5 text-gray-400 hover:text-[var(--caritas-green)] rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
+                      >
+                        <ArrowUpRight className="w-4 h-4" />
+                      </button>
+                    )}
                     {puedeVotar && (
                       <button
                         onClick={() => setShowVotacion(true)}
@@ -532,32 +536,34 @@ export function DonacionesModule({
                 </div>
 
                 <div className="p-4 space-y-3">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                    {[
-                      { label: "Categoría", value: current.categoria },
-                      { label: "Gravedad", value: current.gravedad },
-                      { label: "Tipo de ayuda", value: current.solicitudTipo },
-                      { label: "Fecha suceso", value: fmtFecha(current.fechaSuceso) },
-                      { label: "Distrito", value: current.parroquia },
-                      { label: "Familias", value: String(current.familias) },
-                      { label: "Personas", value: String(current.personas) },
-                      { label: "Reportado por", value: current.reportadoPor },
-                    ]
-                      .filter((f) => f.value)
-                      .map(({ label, value }) => (
-                        <div key={label} className="bg-gray-50 rounded-lg p-2.5 border border-gray-100">
-                          <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-0.5">{label}</p>
-                          <p className="text-xs font-semibold text-gray-900">{value}</p>
-                        </div>
-                      ))}
-                  </div>
-
-                  {current.descripcion && (
-                    <div className="bg-gray-50 rounded-lg p-2.5 border border-gray-100">
-                      <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-0.5">Descripción del evento</p>
-                      <p className="text-xs text-gray-800">{current.descripcion}</p>
+                  {/* Información general — colapsable */}
+                  <InfoSeccion titulo="Información del caso">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                      {[
+                        { label: "Categoría", value: current.categoria },
+                        { label: "Gravedad", value: current.gravedad },
+                        { label: "Tipo de ayuda", value: current.solicitudTipo },
+                        { label: "Fecha suceso", value: fmtFecha(current.fechaSuceso) },
+                        { label: "Distrito", value: current.parroquia },
+                        { label: "Familias", value: String(current.familias) },
+                        { label: "Personas", value: String(current.personas) },
+                        { label: "Reportado por", value: current.reportadoPor },
+                      ]
+                        .filter((f) => f.value)
+                        .map(({ label, value }) => (
+                          <div key={label} className="bg-gray-50 rounded-lg p-2.5 border border-gray-100">
+                            <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-0.5">{label}</p>
+                            <p className="text-xs font-semibold text-gray-900">{value}</p>
+                          </div>
+                        ))}
                     </div>
-                  )}
+                    {current.descripcion && (
+                      <div className="mt-2 bg-gray-50 rounded-lg p-2.5 border border-gray-100">
+                        <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-0.5">Descripción del evento</p>
+                        <p className="text-xs text-gray-800">{current.descripcion}</p>
+                      </div>
+                    )}
+                  </InfoSeccion>
 
                   {current.reporte ? (
                     <ReporteReadOnly
@@ -820,17 +826,28 @@ function ReadSeccion({
   letra,
   titulo,
   children,
+  defaultOpen = true,
 }: {
   letra: string;
   titulo: string;
   children: React.ReactNode;
+  defaultOpen?: boolean;
 }) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
-    <div>
-      <p className="text-[11px] font-bold text-purple-700 uppercase tracking-wider mb-2">
-        {letra}) {titulo}
-      </p>
-      {children}
+    <div className="border border-gray-100 rounded-lg overflow-hidden">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between gap-2 px-3 py-2.5 bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer"
+      >
+        <span className="text-[11px] font-bold text-purple-700 uppercase tracking-wider">
+          {letra}) {titulo}
+        </span>
+        <ChevronDown
+          className={`w-3.5 h-3.5 text-gray-400 flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+      {open && <div className="p-3">{children}</div>}
     </div>
   );
 }
@@ -840,6 +857,112 @@ function ReadCampo({ label, value }: { label: string; value: string }) {
     <div className="bg-gray-50 rounded-lg border border-gray-100 px-2.5 py-1.5">
       <p className="text-[10px] text-gray-400 uppercase tracking-wider">{label}</p>
       <p className="text-xs font-medium text-gray-800">{value}</p>
+    </div>
+  );
+}
+
+function InfoSeccion({
+  titulo,
+  children,
+  defaultOpen = true,
+}: {
+  titulo: string;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="border border-gray-200 rounded-xl overflow-hidden">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between gap-2 px-4 py-2.5 bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer"
+      >
+        <span className="text-xs font-semibold text-gray-700">{titulo}</span>
+        <ChevronDown
+          className={`w-3.5 h-3.5 text-gray-400 flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+      {open && <div className="p-3">{children}</div>}
+    </div>
+  );
+}
+
+function FamiliaCard({ fam }: { fam: ReporteFamilia }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded-lg border border-purple-100 bg-purple-50/40 overflow-hidden">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between gap-2 p-3 cursor-pointer hover:bg-purple-50 transition-colors"
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <Users className="w-3.5 h-3.5 text-purple-600 flex-shrink-0" />
+          <p className="text-xs font-bold text-purple-800 truncate">{fam.nombre}</p>
+          <span className="text-[10px] text-gray-500 flex-shrink-0">
+            {fam.integrantes.length} integrante(s) · {fam.kits.length} kit(s)
+          </span>
+        </div>
+        <ChevronDown
+          className={`w-3.5 h-3.5 text-gray-400 flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+      {open && (
+        <div className="px-3 pb-3 space-y-2">
+          {fam.integrantes.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {fam.integrantes.map((nombre, i) => (
+                <span
+                  key={i}
+                  className="text-[10px] bg-white border border-purple-100 rounded-full px-2 py-0.5 text-gray-700"
+                >
+                  {nombre}
+                </span>
+              ))}
+            </div>
+          )}
+          {fam.nota && (
+            <p className="text-[11px] text-purple-700 italic">
+              <span className="font-semibold not-italic">Brigadista: </span>
+              {fam.nota}
+            </p>
+          )}
+          {fam.kits.length === 0 ? (
+            <p className="text-[11px] text-gray-400 italic">Sin kits asignados.</p>
+          ) : (
+            <div className="space-y-2">
+              {fam.kits.map((kit, ki) => (
+                <div key={ki} className="bg-white rounded-lg border border-gray-100 overflow-hidden">
+                  <p className="text-[11px] font-bold text-[#009850] px-2.5 py-1.5 border-b border-gray-100">
+                    {kit.tipoKit}
+                  </p>
+                  <table className="w-full text-[11px]">
+                    <thead>
+                      <tr className="text-gray-400 bg-gray-50">
+                        <th className="text-left font-semibold px-2.5 py-1 w-8">N°</th>
+                        <th className="text-left font-semibold px-2.5 py-1">Código</th>
+                        <th className="text-left font-semibold px-2.5 py-1">Descripción</th>
+                        <th className="text-right font-semibold px-2.5 py-1 w-16">Cant.</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {kit.articulos.map((a, ai) => (
+                        <tr key={ai} className="border-t border-gray-50">
+                          <td className="px-2.5 py-1 text-gray-400">{ai + 1}</td>
+                          <td className="px-2.5 py-1 font-mono text-gray-600">{a.codigo || "—"}</td>
+                          <td className="px-2.5 py-1 text-gray-700">{a.descripcion || "—"}</td>
+                          <td className="px-2.5 py-1 text-right font-semibold text-gray-800">
+                            {a.cantidad}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -940,70 +1063,9 @@ function ReporteReadOnly({
 
         {/* D) Asignación de ayuda por familia */}
         <ReadSeccion letra="D" titulo="Asignación de Ayuda Humanitaria por Familia">
-          <div className="space-y-3">
+          <div className="space-y-2">
             {reporte.familias.map((fam) => (
-              <div key={fam.refId} className="rounded-lg border border-purple-100 bg-purple-50/40 p-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <Users className="w-3.5 h-3.5 text-purple-600" />
-                  <p className="text-xs font-bold text-purple-800">{fam.nombre}</p>
-                  <span className="text-[10px] text-gray-500">
-                    {fam.integrantes.length} integrante(s) · {fam.kits.length} kit(s)
-                  </span>
-                </div>
-                {fam.integrantes.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mb-2">
-                    {fam.integrantes.map((nombre, i) => (
-                      <span
-                        key={i}
-                        className="text-[10px] bg-white border border-purple-100 rounded-full px-2 py-0.5 text-gray-700"
-                      >
-                        {nombre}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {fam.nota && (
-                  <p className="text-[11px] text-purple-700 italic mb-2">
-                    <span className="font-semibold not-italic">Brigadista: </span>
-                    {fam.nota}
-                  </p>
-                )}
-                {fam.kits.length === 0 ? (
-                  <p className="text-[11px] text-gray-400 italic">Sin kits asignados.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {fam.kits.map((kit, ki) => (
-                      <div key={ki} className="bg-white rounded-lg border border-gray-100 overflow-hidden">
-                        <p className="text-[11px] font-bold text-[#009850] px-2.5 py-1.5 border-b border-gray-100">
-                          {kit.tipoKit}
-                        </p>
-                        <table className="w-full text-[11px]">
-                          <thead>
-                            <tr className="text-gray-400 bg-gray-50">
-                              <th className="text-left font-semibold px-2.5 py-1 w-8">N°</th>
-                              <th className="text-left font-semibold px-2.5 py-1">Código</th>
-                              <th className="text-left font-semibold px-2.5 py-1">Descripción</th>
-                              <th className="text-right font-semibold px-2.5 py-1 w-16">Cant.</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {kit.articulos.map((a, ai) => (
-                              <tr key={ai} className="border-t border-gray-50">
-                                <td className="px-2.5 py-1 text-gray-400">{ai + 1}</td>
-                                <td className="px-2.5 py-1 font-mono text-gray-600">{a.codigo || "—"}</td>
-                                <td className="px-2.5 py-1 text-gray-700">{a.descripcion || "—"}</td>
-                                <td className="px-2.5 py-1 text-right font-semibold text-gray-800">
-                                  {a.cantidad}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <FamiliaCard key={fam.refId} fam={fam} />
             ))}
           </div>
 

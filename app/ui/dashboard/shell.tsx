@@ -32,7 +32,7 @@ const ALL_NAV = [
     icon: LayoutDashboard,
     label: "Dashboard",
     exact: true,
-    roles: ["admin", "especialistaGRD", "comite", "jefaOGP"],
+    roles: ["admin", "especialistaGRD", "jefaOGP"],
   },
   {
     href: "/grd",
@@ -74,7 +74,7 @@ const ALL_NAV = [
     icon: FileText,
     label: "Reportes",
     exact: false,
-    roles: ["admin", "especialistaGRD", "comite", "jefaOGP"],
+    roles: ["admin", "especialistaGRD", "jefaOGP"],
   },
 ];
 
