@@ -76,7 +76,7 @@ function KitSeccion({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="border border-gray-100 rounded-xl overflow-hidden">
+    <div className="border-t border-gray-100">
       <button
         onClick={() => setOpen((v) => !v)}
         className="w-full flex items-center justify-between gap-2 px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer"
@@ -311,42 +311,59 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
           </div>
         </div>
         <button
-          onClick={() => setShowKitForm((s) => !s)}
+          onClick={() => setShowKitForm(true)}
           className="flex items-center gap-2 px-4 py-2 bg-[var(--caritas-green)] text-white rounded-lg text-sm font-medium hover:bg-[var(--caritas-green)]/90 transition-colors cursor-pointer"
         >
           <Plus className="w-4 h-4" /> Nuevo kit
         </button>
       </div>
 
-      {/* Formulario nuevo kit */}
+      {/* Modal nuevo kit */}
       {showKitForm && (
-        <div className="bg-white border border-[var(--caritas-border)] rounded-xl p-5 mb-5 grid grid-cols-1 md:grid-cols-2 gap-3">
-          <Input label="Tipo de kit" value={kitForm.tipoKit} onChange={(v) => setKitForm({ ...kitForm, tipoKit: v })} required />
-          <Input label="Stock inicial" type="number" value={String(kitForm.stockInicial)} onChange={(v) => setKitForm({ ...kitForm, stockInicial: Number(v) })} required />
-          <Input label="Código de almacén" value={kitForm.codigoAlmacen} onChange={(v) => setKitForm({ ...kitForm, codigoAlmacen: v })} />
-          <Input label="Ubicación de almacén" value={kitForm.ubicacionAlmacen} onChange={(v) => setKitForm({ ...kitForm, ubicacionAlmacen: v })} />
-          <label className="block md:col-span-2">
-            <span className="text-xs text-gray-600">Contenido / descripción</span>
-            <textarea value={kitForm.descripcion} onChange={(e) => setKitForm({ ...kitForm, descripcion: e.target.value })} rows={2} className="mt-1 w-full px-3 py-2 border border-[var(--caritas-border)] rounded text-sm" />
-          </label>
-          <div className="md:col-span-2">
-            <span className="text-xs text-gray-600">Contenido del kit <span className="text-red-500">*</span></span>
-            <div className="mt-1 border border-[var(--caritas-border)] rounded p-3 space-y-2">
-              {kitFormArt.map((a, i) => (
-                <div key={i} className="flex items-center gap-1.5">
-                  <input value={a.descripcion} onChange={(e) => setKitFormArt((p) => p.map((x, j) => j === i ? { ...x, descripcion: e.target.value } : x))} placeholder="Elemento (ej. Arroz 1kg, Frazada...)" className="flex-1 px-2 py-1.5 text-xs border border-[var(--caritas-border)] rounded" />
-                  <input type="number" min={1} value={a.cantidad} onChange={(e) => setKitFormArt((p) => p.map((x, j) => j === i ? { ...x, cantidad: parseInt(e.target.value, 10) || 1 } : x))} className="w-16 px-2 py-1.5 text-xs border border-[var(--caritas-border)] rounded" />
-                  <button type="button" onClick={() => setKitFormArt((p) => p.length > 1 ? p.filter((_, j) => j !== i) : p)} disabled={kitFormArt.length === 1} className="p-1 text-gray-400 hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"><X className="w-4 h-4" /></button>
-                </div>
-              ))}
-              <button type="button" onClick={() => setKitFormArt((p) => [...p, { codigo: "", descripcion: "", cantidad: 1 }])} className="text-xs text-[var(--caritas-green)] flex items-center gap-1 cursor-pointer">
-                <Plus className="w-3.5 h-3.5" /> Agregar artículo
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowKitForm(false)} />
+          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+            {/* Cabecera modal */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <Package className="w-4 h-4 text-[var(--caritas-green)]" />
+                <h2 className="text-sm font-semibold text-gray-900">Nuevo kit de emergencia</h2>
+              </div>
+              <button onClick={() => setShowKitForm(false)} className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer">
+                <X className="w-4 h-4" />
               </button>
             </div>
-          </div>
-          <div className="md:col-span-2 flex justify-end gap-2">
-            <button onClick={() => setShowKitForm(false)} className="px-4 py-2 border border-[var(--caritas-border)] rounded text-sm cursor-pointer hover:bg-gray-50 transition-colors">Cancelar</button>
-            <button onClick={submitKit} disabled={pending} className="px-4 py-2 bg-[var(--caritas-green)] text-white rounded text-sm disabled:opacity-50 cursor-pointer hover:bg-[var(--caritas-green)]/90 transition-colors">Guardar</button>
+            {/* Cuerpo modal con scroll */}
+            <div className="overflow-y-auto p-5 grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Input label="Tipo de kit" value={kitForm.tipoKit} onChange={(v) => setKitForm({ ...kitForm, tipoKit: v })} required />
+              <Input label="Stock inicial" type="number" value={String(kitForm.stockInicial)} onChange={(v) => setKitForm({ ...kitForm, stockInicial: Number(v) })} required />
+              <Input label="Código de almacén" value={kitForm.codigoAlmacen} onChange={(v) => setKitForm({ ...kitForm, codigoAlmacen: v })} />
+              <Input label="Ubicación de almacén" value={kitForm.ubicacionAlmacen} onChange={(v) => setKitForm({ ...kitForm, ubicacionAlmacen: v })} />
+              <label className="block md:col-span-2">
+                <span className="text-xs text-gray-600">Descripción</span>
+                <textarea value={kitForm.descripcion} onChange={(e) => setKitForm({ ...kitForm, descripcion: e.target.value })} rows={2} className="mt-1 w-full px-3 py-2 border border-[var(--caritas-border)] rounded text-sm" />
+              </label>
+              <div className="md:col-span-2">
+                <span className="text-xs text-gray-600">Contenido del kit <span className="text-red-500">*</span></span>
+                <div className="mt-1 border border-[var(--caritas-border)] rounded p-3 space-y-2">
+                  {kitFormArt.map((a, i) => (
+                    <div key={i} className="flex items-center gap-1.5">
+                      <input value={a.descripcion} onChange={(e) => setKitFormArt((p) => p.map((x, j) => j === i ? { ...x, descripcion: e.target.value } : x))} placeholder="Elemento (ej. Arroz 1kg, Frazada...)" className="flex-1 px-2 py-1.5 text-xs border border-[var(--caritas-border)] rounded" />
+                      <input type="number" min={1} value={a.cantidad} onChange={(e) => setKitFormArt((p) => p.map((x, j) => j === i ? { ...x, cantidad: parseInt(e.target.value, 10) || 1 } : x))} className="w-16 px-2 py-1.5 text-xs border border-[var(--caritas-border)] rounded" />
+                      <button type="button" onClick={() => setKitFormArt((p) => p.length > 1 ? p.filter((_, j) => j !== i) : p)} disabled={kitFormArt.length === 1} className="p-1 text-gray-400 hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"><X className="w-4 h-4" /></button>
+                    </div>
+                  ))}
+                  <button type="button" onClick={() => setKitFormArt((p) => [...p, { codigo: "", descripcion: "", cantidad: 1 }])} className="text-xs text-[var(--caritas-green)] flex items-center gap-1 cursor-pointer">
+                    <Plus className="w-3.5 h-3.5" /> Agregar artículo
+                  </button>
+                </div>
+              </div>
+            </div>
+            {/* Footer modal */}
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
+              <button onClick={() => setShowKitForm(false)} className="px-4 py-2 border border-[var(--caritas-border)] rounded-lg text-sm cursor-pointer hover:bg-gray-50 transition-colors">Cancelar</button>
+              <button onClick={submitKit} disabled={pending} className="px-4 py-2 bg-[var(--caritas-green)] text-white rounded-lg text-sm disabled:opacity-50 cursor-pointer hover:bg-[var(--caritas-green)]/90 transition-colors font-medium">Guardar kit</button>
+            </div>
           </div>
         </div>
       )}
@@ -359,17 +376,20 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
           <div className="flex-1 flex flex-col bg-white border border-[var(--caritas-border)] rounded-xl overflow-hidden">
             {/* Ordenar + colapsar */}
             <div className="flex items-center gap-1 px-3 py-2.5 border-b border-gray-100 shrink-0">
-              <select
-                value={sortBy}
-                onChange={(e) => { setSortBy(e.target.value as SortKey); setKitPage(1); }}
-                className="flex-1 text-xs border border-[var(--caritas-border)] rounded-lg px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]"
-              >
-                <option value="nombre">Nombre (A–Z)</option>
-                <option value="stock-desc">Stock (mayor a menor)</option>
-                <option value="stock-asc">Stock (menor a mayor)</option>
-                <option value="actividad">Actividad reciente</option>
-                <option value="creacion">Fecha de creación</option>
-              </select>
+              <div className="flex-1 flex items-center gap-1.5 min-w-0">
+                <span className="text-xs text-gray-500 whitespace-nowrap flex-shrink-0">Ordenar:</span>
+                <select
+                  value={sortBy}
+                  onChange={(e) => { setSortBy(e.target.value as SortKey); setKitPage(1); }}
+                  className="flex-1 min-w-0 text-xs border border-[var(--caritas-border)] rounded-lg px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]"
+                >
+                  <option value="nombre">Nombre (A–Z)</option>
+                  <option value="stock-desc">Stock (mayor a menor)</option>
+                  <option value="stock-asc">Stock (menor a mayor)</option>
+                  <option value="actividad">Actividad reciente</option>
+                  <option value="creacion">Fecha de creación</option>
+                </select>
+              </div>
               <button onClick={() => setPanelAbierto(false)} title="Colapsar panel" className="hidden md:flex shrink-0 w-8 h-8 items-center justify-center rounded-lg text-gray-400 border border-transparent hover:border-gray-200 hover:text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer">
                 <PanelLeftClose className="w-4 h-4" />
               </button>
@@ -407,7 +427,7 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
                       </p>
                       {k.fechaRegistro && (
                         <p className="text-[10px] text-gray-400 mt-0.5">
-                          {new Date(k.fechaRegistro).toLocaleDateString("es-PE", { day: "2-digit", month: "short", year: "numeric", timeZone: "America/Lima" })}
+                          Creado el {new Date(k.fechaRegistro).toLocaleDateString("es-PE", { day: "2-digit", month: "short", year: "numeric", timeZone: "America/Lima" })}
                         </p>
                       )}
                     </button>
@@ -448,16 +468,16 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
           )}
 
           {/* Scroll del detalle */}
-          <div className="flex-1 overflow-y-auto space-y-3">
+          <div className="flex-1 overflow-y-auto">
             {!current ? (
               <div className="bg-white border border-[var(--caritas-border)] rounded-xl p-12 text-center flex flex-col items-center justify-center min-h-64">
                 <AlertCircle className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                 <p className="text-gray-500 text-sm font-medium">Selecciona un kit para ver el detalle</p>
               </div>
             ) : (
-              <>
+              <div className="bg-white border border-[var(--caritas-border)] rounded-xl overflow-hidden">
                 {/* Cabecera del kit */}
-                <div className="bg-white border border-[var(--caritas-border)] rounded-xl p-4 flex items-start justify-between gap-3">
+                <div className="p-4 border-b border-gray-100 flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h2 className="text-base font-bold text-gray-900">{current.tipoKit}</h2>
@@ -498,7 +518,7 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
 
                 {/* Formulario de movimiento */}
                 {showMovForm && (
-                  <div className="bg-gray-50 border border-[var(--caritas-border)] rounded-xl p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="border-t border-gray-100 bg-gray-50 p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
                     <Select label="Tipo" value={movForm.tipo} options={TIPOS as unknown as string[]} onChange={(v) => setMovForm({ ...movForm, tipo: v as (typeof TIPOS)[number] })} />
                     <Input label="Cantidad" type="number" value={String(movForm.cantidad)} onChange={(v) => setMovForm({ ...movForm, cantidad: Number(v) })} />
                     {movForm.tipo === "ENTREGA" && (
@@ -628,7 +648,7 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
                     </ul>
                   </KitSeccion>
                 )}
-              </>
+              </div>
             )}
           </div>
         </div>
