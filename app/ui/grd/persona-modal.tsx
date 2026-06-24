@@ -252,6 +252,7 @@ export function PersonaModal({
       celular: "",
       parentesco: "",
       situacionActual: "",
+      comentario: "",
       familiaId: activeFamiliaId,
     }
   );
@@ -507,6 +508,18 @@ export function PersonaModal({
               onChange={(v) => set("situacionActual", v)}
               options={situaciones}
               placeholder="Ninguna / buscar…"
+            />
+          </div>
+
+          {/* Comentario individual */}
+          <div>
+            <label className="text-xs font-semibold text-gray-600 block mb-1">Comentario</label>
+            <textarea
+              rows={2}
+              value={form.comentario ?? ""}
+              onChange={(e) => set("comentario", e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-[#009850]/20 focus:border-[#009850]"
+              placeholder="Comentario u observación de esta persona (opcional)"
             />
           </div>
 

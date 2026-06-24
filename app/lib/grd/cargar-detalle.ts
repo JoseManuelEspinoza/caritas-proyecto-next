@@ -87,6 +87,7 @@ export async function cargarDetalleIncidencia(
               parentesco: true,
               condicionEspecial: true,
               telefono: true,
+              observaciones: true,
             },
           },
         },
@@ -223,8 +224,12 @@ export async function cargarDetalleIncidencia(
     })
   );
 
+  // Todos los brigadistas ACTIVOS, sin filtrar por disponibilidad: la UI los
+  // muestra con su badge (DISPONIBLE / EN CAMPO / NO DISPONIBLE) y ordena los
+  // disponibles primero. Antes, filtrar por disponibilidad ocultaba brigadistas
+  // activos que solo estaban "EN CAMPO" o "NO DISPONIBLE".
   const brigadistasDisp = await prisma.brigadistaParroquial.findMany({
-    where: { estado: "ACTIVO", disponibilidad: "DISPONIBLE" },
+    where: { estado: "ACTIVO" },
     select: {
       idBrigadistaParroquial: true,
       nombres: true,
@@ -234,7 +239,7 @@ export async function cargarDetalleIncidencia(
       parroquia: { select: { nombre: true } },
     },
     orderBy: { nombres: "asc" },
-    take: 100,
+    take: 500,
   });
 
   // Kits reales del módulo de Kits de Emergencia (con composición y stock),
@@ -306,6 +311,7 @@ export async function cargarDetalleIncidencia(
     gruposFamiliares: inc.gruposFamiliares.map((g) => ({
       id: g.idGrupoFamiliar,
       nombreReferencia: g.nombreReferencia,
+      observaciones: g.observaciones,
       totalPersonas: g.personas.length,
       personas: g.personas.map((p) => {
         // Calcular edad aproximada desde fechaNacimiento
@@ -323,6 +329,7 @@ export async function cargarDetalleIncidencia(
           parentesco: p.parentesco,
           condicionEspecial: p.condicionEspecial,
           telefono: p.telefono,
+          observaciones: p.observaciones,
         };
       }),
     })),

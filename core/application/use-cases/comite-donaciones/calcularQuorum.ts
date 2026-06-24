@@ -3,14 +3,13 @@ export type EstadoQuorum =
   | { tipo: "APROBAR" }
   | { tipo: "RECHAZAR" };
 
-const TOPE_QUORUM = 4;
-
 export function calcularUmbral(n: number): number {
   if (n < 1) {
     throw new Error("Comité sin miembros activos: no se puede calcular umbral.");
   }
-  const mayoria = Math.floor(n / 2) + 1;
-  return Math.min(TOPE_QUORUM, mayoria);
+  // Aprobación con el 50% o más del total de miembros del comité.
+  // ceil(n/2): n=1→1, n=2→1, n=3→2, n=4→2, n=5→3, n=10→5.
+  return Math.ceil(n / 2);
 }
 
 export function evaluarQuorum(

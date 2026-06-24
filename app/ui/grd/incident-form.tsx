@@ -669,6 +669,8 @@ export function IncidentForm({
   const [editingPersona, setEditingPersona] = useState<PersonaForm | undefined>();
   const [activeFamiliaId, setActiveFamiliaId] = useState<string | undefined>();
   const [editingFamiliaObs, setEditingFamiliaObs] = useState<FamiliaForm | null>(null);
+  const [showAddFamilia, setShowAddFamilia] = useState(false);
+  const [nuevaFamilia, setNuevaFamilia] = useState("");
   const [importPreview, setImportPreview] = useState<PersonaImportada[] | null>(null);
 
   // Sección 5
@@ -917,11 +919,14 @@ export function IncidentForm({
     setReportaTel(val.replace(/\D/g, "").slice(0, max));
   }
 
-  // Familia
+  // Familia — pide el nombre antes de crearla (no se autogenera).
   function createFamilia() {
+    const nombre = nuevaFamilia.trim();
+    if (!nombre) return;
     const id = `FAM-${Date.now()}`;
-    const nombre = `Grupo Familiar ${familias.length + 1}`;
     setFamilias((prev) => [...prev, { id, nombre }]);
+    setNuevaFamilia("");
+    setShowAddFamilia(false);
     setActiveFamiliaId(id);
     toast.success(`${nombre} creado`);
   }
@@ -1851,27 +1856,63 @@ export function IncidentForm({
             )}
 
             {/* Botones de acción (al final) */}
-            <div className="flex flex-col sm:flex-row gap-2 pt-1">
-              <button
-                type="button"
-                onClick={createFamilia}
-                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 border-2 border-dashed border-blue-300 text-blue-600 rounded-lg hover:bg-blue-50 transition-colors text-sm font-medium"
-              >
-                <Plus className="w-4 h-4" />
-                Registrar Grupo Familiar
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveFamiliaId(undefined);
-                  setShowPersonaModal(true);
-                }}
-                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 border-2 border-dashed border-green-300 text-green-600 rounded-lg hover:bg-green-50 transition-colors text-sm font-medium"
-              >
-                <Plus className="w-4 h-4" />
-                Agregar Persona
-              </button>
-            </div>
+            {showAddFamilia ? (
+              <div className="flex gap-2 items-center pt-1">
+                <input
+                  autoFocus
+                  type="text"
+                  value={nuevaFamilia}
+                  onChange={(e) => setNuevaFamilia(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      createFamilia();
+                    }
+                  }}
+                  placeholder="Nombre del grupo familiar"
+                  className="flex-1 px-3 py-2 border border-blue-300 rounded-lg text-sm focus:outline-none focus:border-blue-500"
+                />
+                <button
+                  type="button"
+                  onClick={createFamilia}
+                  className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm flex-shrink-0 hover:bg-blue-700"
+                >
+                  Crear
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddFamilia(false);
+                    setNuevaFamilia("");
+                  }}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm flex-shrink-0 hover:bg-gray-50"
+                >
+                  Cancelar
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowAddFamilia(true)}
+                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 border-2 border-dashed border-blue-300 text-blue-600 rounded-lg hover:bg-blue-50 transition-colors text-sm font-medium"
+                >
+                  <Plus className="w-4 h-4" />
+                  Registrar Grupo Familiar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveFamiliaId(undefined);
+                    setShowPersonaModal(true);
+                  }}
+                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 border-2 border-dashed border-green-300 text-green-600 rounded-lg hover:bg-green-50 transition-colors text-sm font-medium"
+                >
+                  <Plus className="w-4 h-4" />
+                  Agregar Persona
+                </button>
+              </div>
+            )}
           </FormSection>
 
           {/* ── SECCIONES 5 y 6: lado a lado en desktop ─────────────────────── */}

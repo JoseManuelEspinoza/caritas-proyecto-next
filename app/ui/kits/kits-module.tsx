@@ -11,7 +11,9 @@ import {
   registrarMovimientoKit,
   listarMovimientosKit,
   listarArticulosKit,
+  reponerStockArticulo,
   type ArticuloKit,
+  type ArticuloKitDetalle,
 } from "@/app/actions/kits";
 import { registrarEvidenciaKit, listarEvidenciasKit } from "@/app/actions/evidencias";
 import { subirArchivoS3 } from "@/app/ui/shared/file-upload";
@@ -49,7 +51,7 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
   const [selected, setSelected] = useState<string | null>(kits[0]?.id ?? null);
   const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
   const [evidencias, setEvidencias] = useState<Evidencia[]>([]);
-  const [articulos, setArticulos] = useState<ArticuloKit[]>([]);
+  const [articulos, setArticulos] = useState<ArticuloKitDetalle[]>([]);
   const [evidenciaFile, setEvidenciaFile] = useState<File | null>(null);
   const [showKitForm, setShowKitForm] = useState(false);
   const [showMovForm, setShowMovForm] = useState(false);
@@ -61,7 +63,7 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
 
   const [kitForm, setKitForm] = useState({ tipoKit: "", descripcion: "", stockInicial: 0, codigoAlmacen: "", ubicacionAlmacen: "" });
   // Composición del kit nuevo: un kit no puede crearse sin contenido (≥1 artículo).
-  const [kitFormArt, setKitFormArt] = useState<ArticuloKit[]>([{ codigo: "", descripcion: "", cantidad: 1 }]);
+  const [kitFormArt, setKitFormArt] = useState<ArticuloKit[]>([{ codigo: "", descripcion: "", cantidad: 1, stock: 0 }]);
   const [movForm, setMovForm] = useState({
     tipo: "ENTREGA" as (typeof TIPOS)[number],
     cantidad: 1,
@@ -257,9 +259,20 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
         toast.success("Kit creado con su contenido.");
         setShowKitForm(false);
         setKitForm({ tipoKit: "", descripcion: "", stockInicial: 0, codigoAlmacen: "", ubicacionAlmacen: "" });
-        setKitFormArt([{ codigo: "", descripcion: "", cantidad: 1 }]);
+        setKitFormArt([{ codigo: "", descripcion: "", cantidad: 1, stock: 0 }]);
         router.refresh();
       }
+    });
+  };
+
+  const guardarStockArticulo = (idKitArticulo: string, stock: number) => {
+    startTransition(async () => {
+      const res = await reponerStockArticulo(idKitArticulo, stock);
+      if (res?.message) {
+        toast.error(res.message);
+        return;
+      }
+      toast.success("Stock del elemento actualizado.");
     });
   };
 
@@ -396,6 +409,20 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
                         p.map((x, j) => (j === i ? { ...x, cantidad: parseInt(e.target.value, 10) || 1 } : x))
                       )
                     }
+                    title="Cantidad por kit"
+                    className="w-14 px-2 py-1.5 text-xs border border-[var(--caritas-border)] rounded"
+                  />
+                  <input
+                    type="number"
+                    min={0}
+                    value={a.stock}
+                    onChange={(e) =>
+                      setKitFormArt((p) =>
+                        p.map((x, j) => (j === i ? { ...x, stock: parseInt(e.target.value, 10) || 0 } : x))
+                      )
+                    }
+                    title="Stock disponible de este elemento"
+                    placeholder="Stock"
                     className="w-16 px-2 py-1.5 text-xs border border-[var(--caritas-border)] rounded"
                   />
                   <button
@@ -411,7 +438,7 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
               ))}
               <button
                 type="button"
-                onClick={() => setKitFormArt((p) => [...p, { codigo: "", descripcion: "", cantidad: 1 }])}
+                onClick={() => setKitFormArt((p) => [...p, { codigo: "", descripcion: "", cantidad: 1, stock: 0 }])}
                 className="text-xs text-[var(--caritas-green)] flex items-center gap-1"
               >
                 <Plus className="w-3.5 h-3.5" /> Agregar artículo
@@ -665,11 +692,11 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
                 </div>
               )}
 
-              {/* Composición del kit — SOLO LECTURA: se define al crear y no se edita después. */}
+              {/* Composición del kit — la composición se define al crear; el stock de cada elemento se puede reponer. */}
               <div className="mb-6">
                 <h3 className="text-sm text-gray-600 flex items-center gap-1.5 mb-2">
                   <ListChecks className="w-4 h-4 text-[var(--caritas-green)]" />
-                  Composición del kit
+                  Composición y stock por elemento
                 </h3>
 
                 {articulos.length === 0 ? (
@@ -680,14 +707,36 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
                 ) : (
                   <ul className="border border-[var(--caritas-border)] rounded divide-y divide-gray-100">
                     {articulos.map((a, i) => (
-                      <li key={i} className="flex items-center gap-2 px-3 py-1.5 text-sm">
+                      <li key={a.idKitArticulo} className="flex items-center gap-2 px-3 py-1.5 text-sm">
                         {a.codigo && (
                           <span className="text-[10px] font-mono bg-gray-100 px-1.5 py-0.5 rounded text-gray-500">
                             {a.codigo}
                           </span>
                         )}
                         <span className="flex-1 text-gray-700">{a.descripcion}</span>
-                        <span className="text-xs font-semibold text-gray-500">x{a.cantidad}</span>
+                        <span className="text-xs text-gray-400">x{a.cantidad} / kit</span>
+                        <input
+                          type="number"
+                          min={0}
+                          value={a.stock}
+                          onChange={(e) =>
+                            setArticulos((p) =>
+                              p.map((x, j) =>
+                                j === i ? { ...x, stock: Math.max(0, parseInt(e.target.value, 10) || 0) } : x
+                              )
+                            )
+                          }
+                          title="Stock disponible de este elemento"
+                          className={`w-16 px-2 py-1 text-xs border rounded ${a.stock < a.cantidad ? "border-red-400 text-red-600" : "border-[var(--caritas-border)]"}`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => guardarStockArticulo(a.idKitArticulo, a.stock)}
+                          disabled={pending}
+                          className="text-xs px-2 py-1 rounded bg-[var(--caritas-green)] text-white disabled:opacity-50"
+                        >
+                          Reponer
+                        </button>
                       </li>
                     ))}
                   </ul>

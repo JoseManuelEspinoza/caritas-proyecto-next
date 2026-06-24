@@ -23,9 +23,11 @@ import {
   updatePersonaCampo,
   deletePersonaCampo,
   agregarPersonaAFamiliaCampo,
+  agregarPersonaIndividualCampo,
   addGrupoFamiliarCampo,
   deleteGrupoFamiliarCampo,
   addEvidenciasCampo,
+  guardarNotasFamiliasCampo,
 } from "@/app/actions/incidents";
 import type { PersonaForm } from "@/app/actions/incidents";
 import type {
@@ -42,6 +44,8 @@ import { fmtDate } from "@/app/ui/grd/incidente/lib/format";
 import { inputCls, textareaCls } from "@/app/ui/grd/incidente/lib/ui-classes";
 
 const MARCA_CAMPO = "Evidencia de campo";
+/** Centinela: agregar una persona sin familia (grupo "Personas individuales"). */
+const INDIVIDUAL = "__INDIVIDUAL__";
 
 /** Paso "Recopilar Información": verificación del evento, empadronamiento y evidencias de campo. */
 export function CampoStep({
@@ -69,7 +73,11 @@ export function CampoStep({
 
   const [obsCampo, setObsCampo] = useState("");
   const [obsBrig, setObsBrig] = useState("");
-  const [familyNotes, setFamilyNotes] = useState<Record<string, string>>({});
+  // Notas por familia precargadas desde la observación del grupo (fuente única):
+  // lo que se anotó al registrar aparece aquí y el brigadista puede modificarlo.
+  const [familyNotes, setFamilyNotes] = useState<Record<string, string>>(() =>
+    Object.fromEntries(data.gruposFamiliares.map((g) => [g.id, g.observaciones ?? ""]))
+  );
   const [familyOpen, setFamilyOpen] = useState<Record<string, boolean>>({});
   // Modal de empadronamiento
   const [showPersonaModal, setShowPersonaModal] = useState(false);
@@ -96,6 +104,7 @@ export function CampoStep({
       celular: p.telefono ?? "",
       parentesco: p.parentesco ?? "",
       situacionActual: p.condicionEspecial ?? "",
+      comentario: p.observaciones ?? "",
       familiaId,
     };
   }
@@ -109,6 +118,12 @@ export function CampoStep({
   function handleAddToFamilia(familiaId: string) {
     setEditingPersonaForm(null);
     setAddingToFamiliaId(familiaId);
+    setShowPersonaModal(true);
+  }
+
+  function handleAddIndividual() {
+    setEditingPersonaForm(null);
+    setAddingToFamiliaId(INDIVIDUAL);
     setShowPersonaModal(true);
   }
 
@@ -126,12 +141,15 @@ export function CampoStep({
       parentesco: form.parentesco || null,
       condicionEspecial: form.situacionActual || null,
       telefono: form.celular || null,
+      observaciones: form.comentario?.trim() || null,
     };
     const isEditing = !!editingPersonaForm;
     startTransition(async () => {
       let res;
       if (isEditing) {
         res = await updatePersonaCampo(data.idIncidencia, form.id, payload);
+      } else if (addingToFamiliaId === INDIVIDUAL) {
+        res = await agregarPersonaIndividualCampo(data.idIncidencia, payload);
       } else if (addingToFamiliaId) {
         res = await agregarPersonaAFamiliaCampo(data.idIncidencia, addingToFamiliaId, payload);
       }
@@ -243,7 +261,17 @@ export function CampoStep({
     const notasGuardar = Object.entries(familyNotes)
       .filter(([, nota]) => nota.trim())
       .map(([id, nota]) => ({ id, nota: nota.trim() }));
+    // Fuente única: persistir la anotación de cada familia en grupo.observaciones.
+    const notasGrupos = data.gruposFamiliares.map((g) => ({
+      grupoId: g.id,
+      nota: familyNotes[g.id] ?? "",
+    }));
     startTransition(async () => {
+      const notasRes = await guardarNotasFamiliasCampo(data.idIncidencia, notasGrupos);
+      if (notasRes && "message" in notasRes) {
+        toast.error(notasRes.message);
+        return;
+      }
       const res = await saveInfoCampo(data.idIncidencia, {
         fechaVisita: new Date().toISOString().split("T")[0],
         responsable: data.currentUserName || "Equipo de campo",
@@ -616,6 +644,12 @@ export function CampoStep({
                             </span>
                           )}
                         </div>
+                        {p.observaciones && (
+                          <p className="text-[11px] text-gray-600 italic ml-6 mt-1">
+                            <span className="not-italic font-semibold text-gray-500">Comentario: </span>
+                            {p.observaciones}
+                          </p>
+                        )}
                       </div>
                       <div className="flex gap-1 flex-shrink-0">
                         <button
@@ -682,13 +716,22 @@ export function CampoStep({
               </button>
             </div>
           ) : (
-            <button
-              type="button"
-              onClick={() => setShowAddFamilia(true)}
-              className="w-full flex items-center justify-center gap-2 py-2 border-2 border-dashed border-blue-300 rounded-lg text-sm text-blue-600 hover:border-blue-500 hover:bg-blue-50 transition-colors font-medium"
-            >
-              <Plus className="w-4 h-4" /> Agregar grupo familiar
-            </button>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button
+                type="button"
+                onClick={() => setShowAddFamilia(true)}
+                className="flex-1 flex items-center justify-center gap-2 py-2 border-2 border-dashed border-blue-300 rounded-lg text-sm text-blue-600 hover:border-blue-500 hover:bg-blue-50 transition-colors font-medium"
+              >
+                <Plus className="w-4 h-4" /> Registrar Grupo Familiar
+              </button>
+              <button
+                type="button"
+                onClick={handleAddIndividual}
+                className="flex-1 flex items-center justify-center gap-2 py-2 border-2 border-dashed border-green-300 rounded-lg text-sm text-green-600 hover:border-green-500 hover:bg-green-50 transition-colors font-medium"
+              >
+                <UserPlus className="w-4 h-4" /> Agregar Persona
+              </button>
+            </div>
           )}
         </div>
       </details>

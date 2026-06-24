@@ -18,8 +18,10 @@ export interface PermisosIncidencia {
   puedeEvaluar: boolean;
   /** Decidir como Comité (aprobar/observar/rechazar). */
   puedeDecidir: boolean;
-  /** Registrar la entrega de ayuda (atender). */
+  /** Registrar la entrega de ayuda (atender). GRD o brigadista asignado. */
   puedeAtender: boolean;
+  /** Decidir seguimiento/cierre tras la atención. Solo Especialista GRD. */
+  puedeDecidirSeguimiento: boolean;
   /** Registrar el seguimiento post-atención. */
   puedeSeguir: boolean;
 }
@@ -36,8 +38,15 @@ export function permisosIncidencia(ctx: ContextoPermisos): PermisosIncidencia {
     puedeAsignar: ES_GRD(ctx.rol),
     puedeEvaluar: ES_GRD(ctx.rol),
     puedeDecidir: ES_COMITE(ctx.rol),
-    puedeAtender: ES_GRD(ctx.rol),
-    puedeSeguir: ES_GRD(ctx.rol) || ctx.esResponsableGRD || ctx.esBrigadistaAsignado,
+    // El brigadista asignado registra la entrega del caso aprobado (recopilación);
+    // los no asignados solo pueden visualizarla. La decisión de seguimiento/cierre
+    // sigue siendo exclusiva del Especialista GRD (ver `puedeDecidirSeguimiento`).
+    puedeAtender: ES_GRD(ctx.rol) || ctx.esBrigadistaAsignado,
+    puedeDecidirSeguimiento: ES_GRD(ctx.rol),
+    // Registrar el seguimiento es exclusivo del responsable asignado a esa fase:
+    // el brigadista asignado o el GRD que se auto-asignó como responsable. Un
+    // especialista NO asignado solo puede visualizar lo que registró el brigadista.
+    puedeSeguir: ctx.esResponsableGRD || ctx.esBrigadistaAsignado,
   };
 }
 

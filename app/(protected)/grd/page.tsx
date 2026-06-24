@@ -29,8 +29,13 @@ export default async function GrdPage() {
       : null;
 
     if (brigadista) {
+      // Solo casos con asignación ACTIVA: si al reasignar se le quita el caso,
+      // su asignación pasa a CERRADA y deja de verlo en la lista.
       whereClause.asignaciones = {
-        some: { idBrigadistaParroquial: brigadista.idBrigadistaParroquial },
+        some: {
+          idBrigadistaParroquial: brigadista.idBrigadistaParroquial,
+          estadoAsignacion: "ASIGNADA",
+        },
       };
     } else {
       // Sin registro operativo → lista vacía por seguridad (no debe ver nada)

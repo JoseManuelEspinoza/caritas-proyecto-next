@@ -106,6 +106,21 @@ export interface IIncidenciaRepository {
   liberarBrigadistas(idIncidencia: string): Promise<void>;
 
   /**
+   * Marca como EN CAMPO a los brigadistas con asignación ASIGNADA del caso,
+   * sin cerrar la asignación (siguen siendo el equipo del caso). Se usa al
+   * arrancar una fase operativa (atención, seguimiento).
+   */
+  marcarBrigadistasEnCampo(idIncidencia: string): Promise<void>;
+
+  /**
+   * Marca como DISPONIBLE a los brigadistas con asignación ASIGNADA del caso,
+   * sin cerrar la asignación. Se usa al ENVIAR el resultado de una fase
+   * (levantamiento de campo, atención, seguimiento): quedan libres mientras
+   * el caso espera el siguiente paso.
+   */
+  marcarBrigadistasDisponibles(idIncidencia: string): Promise<void>;
+
+  /**
    * Agrega una persona afectada durante el levantamiento de campo.
    * Si `familiaNombre` coincide con un grupo existente lo usa; si no, crea/usa
    * un grupo por defecto para la incidencia.
