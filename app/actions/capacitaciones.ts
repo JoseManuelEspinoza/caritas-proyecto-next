@@ -10,6 +10,7 @@ import { prisma } from "@/app/lib/prisma";
 import { TIPOS_MATERIAL as TIPOS_MATERIAL_VALIDOS } from "@/app/lib/capacitaciones-tipos";
 import type { ParticipanteData } from "@/core/domain/repositories/ICursoRepository";
 import { sendCertificadoEmail } from "@/app/lib/email";
+import { notificarRoles, notificarUsuario, notificarPorEmail } from "@/app/lib/notificaciones";
 
 const REVALIDATE = "/capacitaciones";
 
@@ -708,6 +709,15 @@ export async function cambiarEstadoCurso(id: string, accion: "PUBLICAR" | "CERRA
     field: "Estado",
     newValue: accion,
   });
+  if (accion === "PUBLICAR" && curso) {
+    notificarRoles(
+      ["BRIGADISTA", "ESPECIALISTAGRD"],
+      "CAPACITACION_PUBLICADA",
+      "Nueva capacitación disponible",
+      `Se publicó el curso "${curso.nombreCurso}". Ya puedes inscribirte.`,
+      "/capacitaciones"
+    );
+  }
   revalidatePath(REVALIDATE);
 }
 
@@ -923,7 +933,7 @@ export async function inscribirme(idCurso: string): Promise<void | { message: st
   try {
     const curso = await prisma.cursoCapacitacion.findUnique({
       where: { idCursoCapacitacion: idCurso },
-      select: { estadoCurso: true },
+      select: { estadoCurso: true, nombreCurso: true, idUsuarioResponsableGRD: true },
     });
     if (!curso) return { message: "Curso no encontrado." };
     if (curso.estadoCurso !== "PUBLICADO")
@@ -967,6 +977,22 @@ export async function inscribirme(idCurso: string): Promise<void | { message: st
       entityName: nombreSesion,
       module: "Capacitaciones",
     });
+    // Notificar al responsable del curso
+    if (curso.idUsuarioResponsableGRD) {
+      const responsable = await prisma.usuarioGRD.findUnique({
+        where: { idUsuarioGRD: curso.idUsuarioResponsableGRD },
+        select: { idCredencial: true },
+      });
+      if (responsable) {
+        notificarUsuario(
+          responsable.idCredencial,
+          "CAPACITACION_INSCRIPCION",
+          "Nueva inscripción en tu curso",
+          `${nombreSesion} se inscribió en "${curso.nombreCurso}".`,
+          "/capacitaciones"
+        );
+      }
+    }
   } catch (err) {
     return fail(err, "No se pudo completar la inscripción.");
   }
@@ -1447,5 +1473,23 @@ export async function certificarParticipante(idInscripcion: string, constanciaUr
     field: "Estado",
     newValue: "CERTIFICADO",
   });
+  // Notificar al participante por su correo
+  const ins = await prisma.inscripcionCurso.findUnique({
+    where: { idInscripcionCurso: idInscripcion },
+    select: {
+      curso: { select: { nombreCurso: true } },
+      participante: { select: { correo: true } },
+    },
+  });
+  if (ins?.participante.correo) {
+    notificarPorEmail(
+      ins.participante.correo,
+      "CAPACITACION_CERTIFICADO",
+      "¡Obtuviste tu certificado!",
+      `Completaste exitosamente el curso "${ins.curso.nombreCurso}". Tu constancia ya está disponible.`,
+      "/capacitaciones"
+    );
+  }
+  notificarCertificado(idInscripcion);
   revalidatePath(REVALIDATE);
 }

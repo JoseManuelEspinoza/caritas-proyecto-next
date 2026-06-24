@@ -16,6 +16,10 @@ import {
   X,
   XCircle,
   Search,
+  Package,
+  ClipboardList,
+  Camera,
+  Target,
 } from "lucide-react";
 import {
   saveInformeEvaluacion,
@@ -572,18 +576,18 @@ export function RevisionStep({
             </datalist>
 
             {/* Header morado + resumen del evento */}
-            <div className="rounded-xl bg-purple-600 text-white p-4">
+            <div className="rounded-xl bg-purple-200 border border-purple-500 p-4">
               <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
-                  <BarChart3 className="w-5 h-5" />
+                <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
+                  <BarChart3 className="w-5 h-5 text-purple-600" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold">Informe de Atención de Ayuda Humanitaria</p>
-                  <p className="text-sm text-white/90">
+                  <p className="font-semibold text-gray-900">Informe de Atención de Ayuda Humanitaria</p>
+                  <p className="text-sm text-gray-500">
                     Revisa el levantamiento de campo y asigna los kits que recibirá cada familia.
                   </p>
                 </div>
-                <span className="text-[10px] font-bold bg-white/20 px-2 py-1 rounded-full uppercase flex-shrink-0">
+                <span className="text-[10px] font-bold bg-purple-100 text-purple-700 px-2 py-1 rounded-full uppercase flex-shrink-0">
                   Especialista GRD
                 </span>
               </div>
@@ -596,9 +600,9 @@ export function RevisionStep({
                   ["Categoría", data.tipoEvento ?? "—"],
                   ["Fecha suceso", fmtDate(data.fechaRegistro)],
                 ].map(([l, v]) => (
-                  <div key={l} className="bg-white/10 rounded-lg px-2.5 py-1.5">
-                    <p className="text-[10px] text-white/70 uppercase">{l}</p>
-                    <p className="text-xs font-semibold truncate">{v}</p>
+                  <div key={l} className="bg-white border border-purple-100 rounded-lg px-2.5 py-1.5">
+                    <p className="text-[10px] text-gray-400 uppercase">{l}</p>
+                    <p className="text-xs font-semibold text-gray-800 truncate">{v}</p>
                   </div>
                 ))}
               </div>
@@ -610,14 +614,13 @@ export function RevisionStep({
               className="text-xs text-purple-700 font-medium flex items-center gap-1"
             >
               {collapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-              {collapsed ? "Mostrar formulario" : "Ocultar formulario"}
+              {collapsed ? "Expandir todo" : "Contraer todo"}
             </button>
 
-            {!collapsed && (
-              <>
-                <div className={informeYaEnviado ? "pointer-events-none opacity-60 select-none" : ""}>
+            <>
+                <div className={`space-y-4 ${informeYaEnviado ? "pointer-events-none opacity-60 select-none" : ""}`}>
                 {/* A) Datos de identificación */}
-                <Seccion num="A" titulo="Datos de Identificación">
+                <Seccion key={`s1-${collapsed}`} defaultOpen={!collapsed} num="1" titulo="Datos de Identificación" icon={FileText} color="purple">
                   <div>
                     <label className={`block text-xs font-medium mb-1 ${fieldErrors.has("motivo") ? "text-red-600" : "text-gray-700"}`}>
                       Motivo <span className="text-red-500">*</span>
@@ -647,7 +650,7 @@ export function RevisionStep({
                 </Seccion>
 
                 {/* B) Objetivos de la visita */}
-                <Seccion num="B" titulo="Objetivos de la Visita">
+                <Seccion key={`s2-${collapsed}`} defaultOpen={!collapsed} num="2" titulo="Objetivos de la Visita" icon={Target} color="purple">
                   <div>
                     <label className={`block text-xs font-medium mb-1 ${fieldErrors.has("objetivoGeneral") ? "text-red-600" : "text-gray-700"}`}>
                       Objetivo general <span className="text-red-500">*</span>
@@ -678,7 +681,7 @@ export function RevisionStep({
                 </Seccion>
 
                 {/* C) Análisis y descripción */}
-                <Seccion num="C" titulo="Análisis y Descripción">
+                <Seccion key={`s3-${collapsed}`} defaultOpen={!collapsed} num="3" titulo="Análisis y Descripción" icon={BarChart3} color="purple">
                   {(() => {
                     const campo = data.informes.find((i) => i.tipo === "CAMPO");
                     let ref: any = null;
@@ -759,7 +762,7 @@ export function RevisionStep({
                 </Seccion>
 
                 {/* D) Asignación de ayuda humanitaria por familia */}
-                <Seccion num="D" titulo="Asignación de Ayuda Humanitaria por Familia">
+                <Seccion key={`s4-${collapsed}`} defaultOpen={!collapsed} num="4" titulo="Asignación de Ayuda Humanitaria por Familia" icon={Package} color="purple">
                   {targets.length === 0 ? (
                     <p className="text-xs text-gray-400">Sin familias empadronadas.</p>
                   ) : (
@@ -1013,7 +1016,7 @@ export function RevisionStep({
                 </Seccion>
 
                 {/* E) Evidencias a incluir en el informe */}
-                <Seccion num="E" titulo="Evidencias a incluir en el informe">
+                <Seccion key={`s5-${collapsed}`} defaultOpen={!collapsed} num="5" titulo="Evidencias a incluir en el informe" icon={Camera} color="purple">
                   {data.evidencias.length === 0 ? (
                     <p className="text-xs text-gray-400">
                       No hay evidencias registradas para este caso.
@@ -1028,7 +1031,7 @@ export function RevisionStep({
                           </span>
                         )}
                       </p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                         {data.evidencias.map((ev) => {
                           const selected = evidenciasSeleccionadas.has(ev.id);
                           return (
@@ -1074,7 +1077,7 @@ export function RevisionStep({
                 </Seccion>
 
                 {/* F) Conclusiones */}
-                <Seccion num="F" titulo="Conclusiones">
+                <Seccion key={`s6-${collapsed}`} defaultOpen={!collapsed} num="6" titulo="Conclusiones" icon={ClipboardList} color="purple">
                   <div>
                     <label className={`block text-xs font-medium mb-1 ${fieldErrors.has("conclusiones") ? "text-red-600" : "text-gray-700"}`}>
                       Conclusiones <span className="text-red-500">*</span>
@@ -1151,8 +1154,7 @@ export function RevisionStep({
                   </button>
                 </div>
 
-              </>
-            )}
+            </>
           </div>
         ) : informeEval ? (
           <div className="space-y-3">
