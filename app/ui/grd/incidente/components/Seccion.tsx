@@ -1,24 +1,41 @@
+"use client";
+
+import { useState } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import type React from "react";
 
-/** Sección numerada con cabecera (usada en el formulario de evaluación). */
+/** Sección numerada con cabecera colapsable (usada en el formulario de evaluación). */
 export function Seccion({
   num,
   titulo,
   children,
+  defaultOpen = true,
 }: {
   num: string;
   titulo: string;
   children: React.ReactNode;
+  defaultOpen?: boolean;
 }) {
+  const [open, setOpen] = useState(defaultOpen);
+
   return (
     <div className="border border-gray-200 rounded-xl overflow-hidden">
-      <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200 flex items-center gap-2">
-        <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-700 text-xs font-bold flex items-center justify-center">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full px-4 py-2.5 bg-gray-50 border-b border-gray-200 flex items-center gap-2 cursor-pointer hover:bg-gray-100 transition-colors text-left"
+      >
+        <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-700 text-xs font-bold flex items-center justify-center flex-shrink-0">
           {num}
         </span>
-        <span className="text-sm font-semibold text-gray-800 uppercase tracking-wide">{titulo}</span>
-      </div>
-      <div className="p-4 space-y-3">{children}</div>
+        <span className="flex-1 text-sm font-semibold text-gray-800 uppercase tracking-wide">{titulo}</span>
+        {open ? (
+          <ChevronUp className="w-4 h-4 text-gray-400 flex-shrink-0" />
+        ) : (
+          <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" />
+        )}
+      </button>
+      {open && <div className="p-4 space-y-3">{children}</div>}
     </div>
   );
 }

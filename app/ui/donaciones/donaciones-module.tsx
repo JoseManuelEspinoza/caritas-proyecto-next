@@ -206,18 +206,24 @@ export function DonacionesModule({
     setShowDetail(true);
   };
 
-  // Sticky header: observe when the main case header scrolls out of view
+  // Al cambiar de caso: resetear scroll y sticky
   useEffect(() => {
-    const el = headerRef.current;
-    const root = detailScrollRef.current;
+    if (detailScrollRef.current) detailScrollRef.current.scrollTop = 0;
     setStickyVisible(false);
-    if (!el || !root) return;
-    const obs = new IntersectionObserver(
-      ([entry]) => setStickyVisible(!entry.isIntersecting),
-      { root, threshold: 0 }
-    );
-    obs.observe(el);
-    return () => obs.disconnect();
+  }, [current?.id]);
+
+  // Sticky header: aparece solo cuando el header principal sale del área visible
+  useEffect(() => {
+    const scrollEl = detailScrollRef.current;
+    if (!scrollEl) return;
+    const handleScroll = () => {
+      if (!headerRef.current) return;
+      const headerBottom = headerRef.current.getBoundingClientRect().bottom;
+      const containerTop = scrollEl.getBoundingClientRect().top;
+      setStickyVisible(headerBottom <= containerTop);
+    };
+    scrollEl.addEventListener("scroll", handleScroll, { passive: true });
+    return () => scrollEl.removeEventListener("scroll", handleScroll);
   }, [current?.id]);
 
   useEffect(() => {
@@ -311,7 +317,7 @@ export function DonacionesModule({
 
   // Clases responsivas para list y detail
   const listClasses = [
-    "flex-shrink-0 flex-col gap-3",
+    "flex-shrink-0 flex-col",
     "w-full md:w-[260px] xl:w-[320px]",
     showDetail ? "hidden md:flex" : "flex",   // móvil: oculto si hay detalle abierto
     !panelAbierto ? "md:hidden" : "md:flex",  // desktop: oculto si panel colapsado
@@ -340,73 +346,75 @@ export function DonacionesModule({
 
         {/* ── Cola de Evaluación (panel lateral) ── */}
         <div className={listClasses}>
-          {/* Barra superior: lupa + dropdown / botón colapsar (desktop only) */}
-          <div className="flex items-center gap-2 shrink-0">
-            {searchOpen ? (
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  value={busqueda}
-                  onChange={(e) => setBusqueda(e.target.value)}
-                  placeholder="Buscar por código, título o parroquia..."
-                  autoFocus
-                  className="w-full pl-9 pr-9 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]"
-                />
-                <button
-                  onClick={() => { setSearchOpen(false); setBusqueda(""); }}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
-                  title="Cerrar búsqueda"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            ) : (
-              <>
-                <button
-                  onClick={() => setSearchOpen(true)}
-                  title="Buscar"
-                  className="shrink-0 w-9 h-9 flex items-center justify-center border border-[var(--caritas-border)] rounded-lg text-gray-500 hover:text-[var(--caritas-green)] hover:border-[var(--caritas-green)]/40 transition-colors cursor-pointer"
-                >
-                  <Search className="w-4 h-4" />
-                </button>
-                <FiltroDropdown
-                  filtroId={filtroId}
-                  onChange={setFiltroId}
-                  casos={casos}
-                />
-              </>
-            )}
-            {/* Botón colapsar: solo desktop */}
-            <button
-              onClick={() => setPanelAbierto(false)}
-              title="Colapsar panel"
-              className="hidden md:flex shrink-0 w-9 h-9 items-center justify-center text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
-            >
-              <PanelLeftClose className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Lista de casos (scroll independiente) */}
-          <div className="flex-1 overflow-y-auto bg-white border border-[var(--caritas-border)] rounded-xl">
-            {listaFiltrada.length === 0 ? (
-              <div className="p-8 text-center">
-                <CheckCircle className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-                <p className="text-sm text-gray-400">
-                  {busqueda ? "Sin resultados para tu búsqueda." : "No hay casos en esta vista."}
-                </p>
-              </div>
-            ) : (
-              <div className="divide-y divide-gray-100">
-                {listaFiltrada.map((c) => (
-                  <CasoRow
-                    key={c.id}
-                    c={c}
-                    selected={selectedId === c.id}
-                    onClick={() => handleSelectCase(c.id)}
+          <div className="flex-1 flex flex-col bg-white border border-[var(--caritas-border)] rounded-xl overflow-hidden">
+            {/* Barra superior: lupa + dropdown / botón colapsar (desktop only) */}
+            <div className="flex items-center gap-1 px-2 py-2 border-b border-gray-100 shrink-0">
+              {searchOpen ? (
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    value={busqueda}
+                    onChange={(e) => setBusqueda(e.target.value)}
+                    placeholder="Buscar por código, título..."
+                    autoFocus
+                    className="w-full pl-9 pr-9 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]"
                   />
-                ))}
-              </div>
-            )}
+                  <button
+                    onClick={() => { setSearchOpen(false); setBusqueda(""); }}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                    title="Cerrar búsqueda"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setSearchOpen(true)}
+                    title="Buscar"
+                    className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 border border-transparent hover:border-gray-200 hover:text-[var(--caritas-green)] hover:bg-gray-50 transition-colors cursor-pointer"
+                  >
+                    <Search className="w-4 h-4" />
+                  </button>
+                  <FiltroDropdown
+                    filtroId={filtroId}
+                    onChange={setFiltroId}
+                    casos={casos}
+                  />
+                </>
+              )}
+              {/* Botón colapsar: solo desktop */}
+              <button
+                onClick={() => setPanelAbierto(false)}
+                title="Colapsar panel"
+                className="hidden md:flex shrink-0 w-8 h-8 items-center justify-center rounded-lg text-gray-400 border border-transparent hover:border-gray-200 hover:text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer"
+              >
+                <PanelLeftClose className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Lista de casos (scroll independiente) */}
+            <div className="flex-1 overflow-y-auto">
+              {listaFiltrada.length === 0 ? (
+                <div className="p-8 text-center">
+                  <CheckCircle className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                  <p className="text-sm text-gray-400">
+                    {busqueda ? "Sin resultados para tu búsqueda." : "No hay casos en esta vista."}
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-100">
+                  {listaFiltrada.map((c) => (
+                    <CasoRow
+                      key={c.id}
+                      c={c}
+                      selected={selectedId === c.id}
+                      onClick={() => handleSelectCase(c.id)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -734,8 +742,10 @@ function FiltroDropdown({
     <div ref={ref} className="relative flex-1">
       <button
         onClick={() => setOpen((v) => !v)}
-        className={`flex items-center justify-between gap-2 w-full px-3 py-2 border rounded-lg text-sm bg-white transition-colors cursor-pointer ${
-          open ? "border-[var(--caritas-green)] ring-1 ring-[var(--caritas-green)]/30" : "border-[var(--caritas-border)] hover:border-gray-300"
+        className={`flex items-center justify-between gap-2 w-full px-3 py-2 rounded-lg text-sm bg-transparent transition-colors cursor-pointer border ${
+          open
+            ? "border-[var(--caritas-green)] ring-1 ring-[var(--caritas-green)]/30 bg-white"
+            : "border-transparent hover:border-gray-200 hover:bg-gray-50"
         }`}
       >
         <span className="font-medium text-gray-800 truncate">
