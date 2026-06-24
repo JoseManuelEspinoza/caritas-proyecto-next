@@ -1,4 +1,4 @@
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef, useEffect } from "react";
 import { toast } from "sonner";
 import {
   AlertTriangle,
@@ -6,16 +6,22 @@ import {
   CheckCircle,
   ChevronDown,
   ChevronUp,
+  Download,
   ExternalLink,
   FileCheck,
   FileText,
   Loader2,
   Plus,
+  Send,
   Upload,
   Users,
   X,
   XCircle,
   Search,
+  Package,
+  ClipboardList,
+  Camera,
+  Target,
 } from "lucide-react";
 import {
   saveInformeEvaluacion,
@@ -127,7 +133,45 @@ export function RevisionStep({
   const [savingForPdf, setSavingForPdf] = useState(false);
   const [descargandoPdf, setDescargandoPdf] = useState(false);
   const [kitSearch, setKitSearch] = useState<Record<string, string>>({});
+  // Persiste "PDF generado" en localStorage para que sobreviva recargas.
+  // Se inicializa a true si el informe ya fue enviado al Comité (servidor).
+  const _storageKey = `pdf_generado_${data.idIncidencia}`;
+  const [pdfGenerado, setPdfGenerado] = useState(() => {
+    if (!!informeEval && data.estadoActual === "EN EVALUACION") return true;
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem(`pdf_generado_${data.idIncidencia}`) === "1";
+  });
+  const [informeStickyVisible, setInformeStickyVisible] = useState(false);
+  // Left del <main> para que el bar fijo no tape el sidebar (varía al colapsar/expandir).
+  const [fixedBarLeft, setFixedBarLeft] = useState(0);
+  const informeHeaderRef = useRef<HTMLDivElement>(null);
   const [kitDropdownOpen, setKitDropdownOpen] = useState<Record<string, boolean>>({});
+
+  // Mide el left de <main> con ResizeObserver para detectar cambios de sidebar.
+  useEffect(() => {
+    const mainEl = document.querySelector("main");
+    if (!mainEl) return;
+    const update = () => setFixedBarLeft(mainEl.getBoundingClientRect().left);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(mainEl);
+    return () => ro.disconnect();
+  }, []);
+
+  // El scroll del layout es sobre <main> (shell.tsx: flex-1 overflow-auto), no el window.
+  // 48px = altura del top-bar (h-12).
+  useEffect(() => {
+    const el = informeHeaderRef.current;
+    if (!el) return;
+    const check = () => {
+      if (!informeHeaderRef.current) { setInformeStickyVisible(false); return; }
+      setInformeStickyVisible(informeHeaderRef.current.getBoundingClientRect().bottom <= 48);
+    };
+    const scrollEl = document.querySelector("main") ?? window;
+    check();
+    scrollEl.addEventListener("scroll", check, { passive: true });
+    return () => { scrollEl.removeEventListener("scroll", check); setInformeStickyVisible(false); };
+  }, [view]);
 
   const addKit = (refId: string, tipo: string) =>
     setAsignaciones((p) => ({
@@ -359,6 +403,8 @@ export function RevisionStep({
     }
     toast.success("Informe guardado");
     await generarPdf();
+    setPdfGenerado(true);
+    if (typeof window !== "undefined") localStorage.setItem(_storageKey, "1");
   }
 
   // Genera y descarga el PDF con los valores actuales del informe (sin guardar).
@@ -480,14 +526,46 @@ export function RevisionStep({
                 </p>
               </div>
             )}
-            {informeEval && (
-              <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <FileCheck className="w-4 h-4 text-blue-600" />
-                <span className="text-sm font-medium text-blue-800">
-                  Última versión guardada: {fmtDate(informeEval.fecha)}
-                </span>
+            {/* Mini-header fijo: aparece al scrollear más allá del encabezado del informe */}
+            {informeStickyVisible && pdfGenerado && (
+              <div
+                className="fixed top-12 right-0 z-50 bg-white border-b border-gray-100 shadow-sm flex items-center justify-between px-6 py-2.5 gap-3"
+                style={{ left: fixedBarLeft }}
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <BarChart3 className="w-4 h-4 text-purple-600 flex-shrink-0" />
+                  <p className="text-sm font-semibold text-purple-800 truncate">Informe de Ayuda Humanitaria</p>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  {informeEval && (
+                    <span className="text-[11px] text-gray-400 hidden sm:block">
+                      Última versión {fmtDate(informeEval.fecha)}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handlePdf}
+                    disabled={savingForPdf || isPending}
+                    title="Descargar Informe en PDF"
+                    className="p-1.5 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-50 cursor-pointer"
+                  >
+                    {savingForPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                  </button>
+                  {!informeYaEnviado && (
+                    <button
+                      type="button"
+                      onClick={handleClickEnviar}
+                      disabled={isPending}
+                      title="Enviar al Comité"
+                      className="p-1.5 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-50 cursor-pointer"
+                    >
+                      <Send className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
               </div>
             )}
+
             {/* Un datalist por tipo de kit: cada kit muestra solo su catálogo */}
             {KIT_TIPOS.map((tipo, ti) => (
               <datalist key={tipo} id={`cat-${ti}`}>
@@ -509,23 +587,49 @@ export function RevisionStep({
               ))}
             </datalist>
 
-            {/* Header morado + resumen del evento */}
-            <div className="rounded-xl bg-purple-600 text-white p-4">
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
-                  <BarChart3 className="w-5 h-5" />
+            {/* Header informe de atención */}
+            <div ref={informeHeaderRef} className="rounded-xl border border-purple-200 overflow-hidden">
+              <div className="bg-white px-4 py-3 flex items-center gap-3 border-b border-purple-100">
+                <div className="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center flex-shrink-0">
+                  <BarChart3 className="w-4 h-4 text-purple-600" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold">Informe de Atención de Ayuda Humanitaria</p>
-                  <p className="text-sm text-white/90">
+                  <p className="font-semibold text-purple-800 text-sm">Informe de Atención de Ayuda Humanitaria</p>
+                  <p className="text-[11px] text-gray-500">
                     Revisa el levantamiento de campo y asigna los kits que recibirá cada familia.
                   </p>
                 </div>
-                <span className="text-[10px] font-bold bg-white/20 px-2 py-1 rounded-full uppercase flex-shrink-0">
-                  Especialista GRD
-                </span>
+                {pdfGenerado && (
+                  <div className="flex items-center gap-3 shrink-0">
+                    {informeEval && (
+                      <span className="text-[11px] text-gray-400 hidden sm:block">
+                        Última versión {fmtDate(informeEval.fecha)}
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handlePdf}
+                      disabled={savingForPdf || isPending}
+                      title="Descargar Informe en PDF"
+                      className="p-1.5 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-50 cursor-pointer"
+                    >
+                      {savingForPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                    </button>
+                    {!informeYaEnviado && (
+                      <button
+                        type="button"
+                        onClick={handleClickEnviar}
+                        disabled={isPending}
+                        title="Enviar al Comité"
+                        className="p-1.5 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-50 cursor-pointer"
+                      >
+                        <Send className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-4 bg-purple-50/30">
                 {[
                   ["Código", data.codigoCaso ?? "—"],
                   ["Familias", String(targets.length)],
@@ -534,9 +638,9 @@ export function RevisionStep({
                   ["Categoría", data.tipoEvento ?? "—"],
                   ["Fecha suceso", fmtDate(data.fechaRegistro)],
                 ].map(([l, v]) => (
-                  <div key={l} className="bg-white/10 rounded-lg px-2.5 py-1.5">
-                    <p className="text-[10px] text-white/70 uppercase">{l}</p>
-                    <p className="text-xs font-semibold truncate">{v}</p>
+                  <div key={l} className="bg-white border border-purple-100 rounded-lg px-2.5 py-1.5">
+                    <p className="text-[10px] text-gray-500 uppercase">{l}</p>
+                    <p className="text-xs font-semibold text-gray-800 truncate">{v}</p>
                   </div>
                 ))}
               </div>
@@ -548,7 +652,7 @@ export function RevisionStep({
               className="text-xs text-purple-700 font-medium flex items-center gap-1"
             >
               {collapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-              {collapsed ? "Mostrar formulario" : "Ocultar formulario"}
+              {collapsed ? "Expandir todo" : "Contraer todo"}
             </button>
 
             {!collapsed && (
@@ -558,7 +662,7 @@ export function RevisionStep({
                     grandes (Análisis, Asignación, Evidencias-ref) a lo ancho. */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
                 {/* A) Datos de identificación */}
-                <Seccion num="A" titulo="Datos de Identificación">
+                <Seccion key={`s1-${collapsed}`} defaultOpen={!collapsed} num="1" titulo="Datos de Identificación" icon={FileText} color="purple">
                   <div>
                     <label className={`block text-xs font-medium mb-1 ${fieldErrors.has("motivo") ? "text-red-600" : "text-gray-700"}`}>
                       Motivo <span className="text-red-500">*</span>
@@ -588,7 +692,7 @@ export function RevisionStep({
                 </Seccion>
 
                 {/* B) Objetivos de la visita */}
-                <Seccion num="B" titulo="Objetivos de la Visita">
+                <Seccion key={`s2-${collapsed}`} defaultOpen={!collapsed} num="2" titulo="Objetivos de la Visita" icon={Target} color="purple">
                   <div>
                     <label className={`block text-xs font-medium mb-1 ${fieldErrors.has("objetivoGeneral") ? "text-red-600" : "text-gray-700"}`}>
                       Objetivo general <span className="text-red-500">*</span>
@@ -619,7 +723,7 @@ export function RevisionStep({
                 </Seccion>
 
                 {/* C) Análisis y descripción */}
-                <Seccion num="C" titulo="Análisis y Descripción" className="lg:col-span-2">
+                <Seccion key={`s3-${collapsed}`} defaultOpen={!collapsed} num="3" titulo="Análisis y Descripción" icon={BarChart3} color="purple" className="lg:col-span-2">
                   {(() => {
                     const campo = data.informes.find((i) => i.tipo === "CAMPO");
                     let ref: any = null;
@@ -700,7 +804,7 @@ export function RevisionStep({
                 </Seccion>
 
                 {/* D) Asignación de ayuda humanitaria por familia */}
-                <Seccion num="D" titulo="Asignación de Ayuda Humanitaria por Familia" className="lg:col-span-2">
+                <Seccion key={`s4-${collapsed}`} defaultOpen={!collapsed} num="4" titulo="Asignación de Ayuda Humanitaria por Familia" icon={Package} color="purple" className="lg:col-span-2">
                   {targets.length === 0 ? (
                     <p className="text-xs text-gray-400">Sin familias empadronadas.</p>
                   ) : (
@@ -954,7 +1058,7 @@ export function RevisionStep({
                 </Seccion>
 
                 {/* E) Evidencias a incluir en el informe */}
-                <Seccion num="E" titulo="Evidencias a incluir en el informe">
+                <Seccion key={`s5-${collapsed}`} defaultOpen={!collapsed} num="5" titulo="Evidencias a incluir en el informe" icon={Camera} color="purple">
                   {data.evidencias.length === 0 ? (
                     <p className="text-xs text-gray-400">
                       No hay evidencias registradas para este caso.
@@ -969,7 +1073,7 @@ export function RevisionStep({
                           </span>
                         )}
                       </p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                         {data.evidencias.map((ev) => {
                           const selected = evidenciasSeleccionadas.has(ev.id);
                           return (
@@ -1015,7 +1119,7 @@ export function RevisionStep({
                 </Seccion>
 
                 {/* F) Conclusiones */}
-                <Seccion num="F" titulo="Conclusiones">
+                <Seccion key={`s6-${collapsed}`} defaultOpen={!collapsed} num="6" titulo="Conclusiones" icon={ClipboardList} color="purple">
                   <div>
                     <label className={`block text-xs font-medium mb-1 ${fieldErrors.has("conclusiones") ? "text-red-600" : "text-gray-700"}`}>
                       Conclusiones <span className="text-red-500">*</span>
@@ -1098,7 +1202,7 @@ export function RevisionStep({
                   </button>
                 </div>
 
-              </>
+            </>
             )}
           </div>
         ) : informeEval ? (
@@ -1213,10 +1317,10 @@ export function RevisionStep({
 
               {/* Informe de atención (solo lectura) */}
               <div className="rounded-xl border border-purple-200 overflow-hidden">
-                <div className="bg-purple-600 text-white px-4 py-3 flex items-center justify-between gap-3">
+                <div className="bg-white px-4 py-3 flex items-center justify-between gap-3 border-b border-purple-100">
                   <div className="flex items-center gap-2 min-w-0">
-                    <BarChart3 className="w-4 h-4 flex-shrink-0" />
-                    <p className="font-semibold text-sm truncate">
+                    <BarChart3 className="w-4 h-4 flex-shrink-0 text-purple-600" />
+                    <p className="font-semibold text-sm truncate text-purple-800">
                       Informe de Atención de Ayuda Humanitaria
                     </p>
                   </div>
@@ -1224,7 +1328,7 @@ export function RevisionStep({
                     type="button"
                     onClick={descargarInforme}
                     disabled={descargandoPdf}
-                    className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-semibold px-3 py-1.5 rounded-lg disabled:opacity-50 flex-shrink-0"
+                    className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-50 flex-shrink-0 cursor-pointer"
                   >
                     {descargandoPdf ? (
                       <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generando…</>
@@ -1419,18 +1523,18 @@ export function RevisionStep({
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
           onClick={(e) => { if (e.target === e.currentTarget) setShowDocStep(false); }}
         >
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md space-y-4 p-6">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg space-y-4 p-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <FileCheck className="w-5 h-5 text-purple-700" />
-                <p className="text-base font-semibold text-purple-900">
-                  Adjuntar documento de respaldo
+                <Send className="w-5 h-5 text-gray-800" />
+                <p className="text-base font-semibold text-gray-900">
+                  Enviar Informe al Comité
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setShowDocStep(false)}
-                className="text-gray-400 hover:text-gray-600 rounded-full p-1 hover:bg-gray-100"
+                className="cursor-pointer text-gray-400 hover:text-gray-600 rounded-full p-1 hover:bg-gray-100"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1443,9 +1547,9 @@ export function RevisionStep({
               <button
                 type="button"
                 onClick={() => setDocTipo("link")}
-                className={`px-3 py-1.5 text-xs rounded-lg border font-medium transition-colors ${
+                className={`cursor-pointer px-3 py-1.5 text-xs rounded-lg border font-medium transition-colors ${
                   docTipo === "link"
-                    ? "bg-purple-700 text-white border-purple-700"
+                    ? "bg-[var(--caritas-green)] text-white border-[var(--caritas-green)]"
                     : "border-gray-300 text-gray-700 hover:bg-gray-50"
                 }`}
               >
@@ -1454,9 +1558,9 @@ export function RevisionStep({
               <button
                 type="button"
                 onClick={() => setDocTipo("file")}
-                className={`px-3 py-1.5 text-xs rounded-lg border font-medium transition-colors ${
+                className={`cursor-pointer px-3 py-1.5 text-xs rounded-lg border font-medium transition-colors ${
                   docTipo === "file"
-                    ? "bg-purple-700 text-white border-purple-700"
+                    ? "bg-[var(--caritas-green)] text-white border-[var(--caritas-green)]"
                     : "border-gray-300 text-gray-700 hover:bg-gray-50"
                 }`}
               >
@@ -1472,7 +1576,7 @@ export function RevisionStep({
                 onChange={(e) => setDocLink(e.target.value)}
               />
             ) : (
-              <label className="flex items-center justify-center gap-2 py-4 border-2 border-dashed border-purple-300 rounded-xl text-purple-700 cursor-pointer hover:bg-purple-50 transition-colors">
+              <label className="flex items-center justify-center gap-2 py-4 border-2 border-dashed border-[var(--caritas-green)]/50 rounded-xl text-[var(--caritas-green)] cursor-pointer hover:bg-[var(--caritas-green)]/5 transition-colors">
                 <Upload className="w-4 h-4" />
                 <span className="text-sm">
                   {docFile ? docFile.name : "Seleccionar archivo (PDF, Word, imagen)"}
@@ -1489,7 +1593,7 @@ export function RevisionStep({
               <button
                 type="button"
                 onClick={() => setShowDocStep(false)}
-                className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-medium hover:bg-gray-50"
+                className="cursor-pointer shrink-0 px-5 py-2.5 border border-gray-200 rounded-xl text-sm font-medium hover:bg-gray-50"
               >
                 Cancelar
               </button>
@@ -1512,7 +1616,7 @@ export function RevisionStep({
                 {isPending || subiendoDoc ? (
                   <><Loader2 className="w-4 h-4 animate-spin" /> Enviando…</>
                 ) : (
-                  <><FileCheck className="w-4 h-4" /> Confirmar y enviar al Comité</>
+                  <><Send className="w-4 h-4" /> Confirmar y enviar al Comité</>
                 )}
               </button>
             </div>

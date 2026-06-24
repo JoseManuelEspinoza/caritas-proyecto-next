@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import Link from "next/link";
+import { ModalUbicacion } from "@/app/ui/donaciones/ModalUbicacion";
 import {
   ArrowLeft,
   Edit,
@@ -31,11 +32,21 @@ import { ResumenStep } from "@/app/ui/grd/incidente/steps/ResumenStep";
  * del paso activo. Cada paso vive en `@/app/ui/grd/incidente/steps/`. El flujo
  * (etapas/estados) viene del dominio vía `pasos.config`.
  */
+const CATEGORY_COLORS: Record<string, { bg: string; text: string }> = {
+  Incendios:     { bg: "bg-red-100",    text: "text-red-700" },
+  Inundaciones:  { bg: "bg-blue-100",   text: "text-blue-700" },
+  Sismos:        { bg: "bg-orange-100", text: "text-orange-700" },
+  Derrumbes:     { bg: "bg-stone-100",  text: "text-stone-700" },
+  Deslizamientos:{ bg: "bg-amber-100",  text: "text-amber-700" },
+  Tsunamis:      { bg: "bg-cyan-100",   text: "text-cyan-700" },
+};
+
 export function IncidentDetail({ data }: { data: IncidentData }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [activeStep, setActiveStep] = useState(() => indicePaso(data.estadoActual));
   const [showHistory, setShowHistory] = useState(false);
+  const [showUbicacion, setShowUbicacion] = useState(false);
 
   // Confirmación tras registrar/editar el incidente (el form redirige aquí con
   // un flag). Se muestra una vez y se limpia el parámetro de la URL.
@@ -75,29 +86,36 @@ export function IncidentDetail({ data }: { data: IncidentData }) {
         </Link>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
-            <span className="font-mono text-sm text-gray-500">{data.codigoCaso ?? "—"}</span>
+            <span className="font-mono text-xs text-gray-400">{data.codigoCaso ?? "—"}</span>
             <span
               className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${cfg.badge}`}
             >
               <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
               {cfg.label}
             </span>
+            {data.tipoEvento && (() => {
+              const clr = CATEGORY_COLORS[data.tipoEvento] ?? { bg: "bg-gray-100", text: "text-gray-600" };
+              return (
+                <span className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold ${clr.bg} ${clr.text}`}>
+                  <CatIcon className="w-3 h-3" />
+                  {data.tipoEvento}
+                </span>
+              );
+            })()}
           </div>
           <h1 className="text-lg md:text-xl font-semibold text-gray-900 mb-1">
             {data.tituloIncidencia ?? "Sin título"}
           </h1>
           <div className="flex items-center gap-4 text-sm text-gray-500 flex-wrap">
-            {data.tipoEvento && (
-              <span className="flex items-center gap-1">
-                <CatIcon className="w-4 h-4" />
-                {data.tipoEvento}
-              </span>
-            )}
             {data.direccionEvento && (
-              <span className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setShowUbicacion(true)}
+                className="flex items-center gap-1 hover:text-[#009850] cursor-pointer transition-colors"
+              >
                 <MapPin className="w-4 h-4" />
                 {data.direccionEvento}
-              </span>
+              </button>
             )}
             <span className="flex items-center gap-1">
               <Calendar className="w-4 h-4" />
@@ -137,7 +155,7 @@ export function IncidentDetail({ data }: { data: IncidentData }) {
                 key={step.etapa}
                 onClick={() => setActiveStep(idx)}
                 disabled={!current && !completed && !nextStepAllowed}
-                className={`flex flex-col items-center gap-1 px-3 md:px-4 py-3 text-xs font-medium transition-colors border-b-2 flex-shrink-0 min-w-[70px] ${
+                className={`flex flex-row items-center gap-2 px-3 md:px-4 py-3 text-xs font-medium transition-colors border-b-2 flex-shrink-0 whitespace-nowrap cursor-pointer ${
                   active
                     ? "border-[#009850] text-[#009850] bg-[#009850]/5"
                     : completed
@@ -150,7 +168,7 @@ export function IncidentDetail({ data }: { data: IncidentData }) {
                 }`}
               >
                 <div
-                  className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                  className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${
                     completed
                       ? "bg-[#009850] text-white"
                       : current
@@ -159,12 +177,12 @@ export function IncidentDetail({ data }: { data: IncidentData }) {
                   }`}
                 >
                   {completed ? (
-                    <CheckCircle className="w-3.5 h-3.5" />
+                    <CheckCircle className="w-3 h-3" />
                   ) : (
-                    <StepIcon className="w-3.5 h-3.5" />
+                    <StepIcon className="w-3 h-3" />
                   )}
                 </div>
-                <span className="hidden sm:block leading-tight text-center">{step.label}</span>
+                <span className="leading-tight">{step.label}</span>
               </button>
             );
           })}
@@ -223,6 +241,16 @@ export function IncidentDetail({ data }: { data: IncidentData }) {
             </div>
           )}
         </div>
+      )}
+
+      {showUbicacion && (
+        <ModalUbicacion
+          lat={data.latitud ?? null}
+          lng={data.longitud ?? null}
+          direccion={data.direccionEvento ?? null}
+          parroquia={data.parroquia ?? null}
+          onClose={() => setShowUbicacion(false)}
+        />
       )}
     </div>
   );

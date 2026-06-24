@@ -10,6 +10,7 @@ import { prisma } from "@/app/lib/prisma";
 import { TIPOS_MATERIAL as TIPOS_MATERIAL_VALIDOS } from "@/app/lib/capacitaciones-tipos";
 import type { ParticipanteData } from "@/core/domain/repositories/ICursoRepository";
 import { sendCertificadoEmail } from "@/app/lib/email";
+import { notificarRoles, notificarUsuario, notificarPorEmail } from "@/app/lib/notificaciones";
 
 const REVALIDATE = "/capacitaciones";
 
@@ -708,6 +709,15 @@ export async function cambiarEstadoCurso(id: string, accion: "PUBLICAR" | "CERRA
     field: "Estado",
     newValue: accion,
   });
+  if (accion === "PUBLICAR" && curso) {
+    notificarRoles(
+      ["BRIGADISTA", "ESPECIALISTAGRD"],
+      "CAPACITACION_PUBLICADA",
+      "Nueva capacitación disponible",
+      `Se publicó el curso "${curso.nombreCurso}". Ya puedes inscribirte.`,
+      "/capacitaciones"
+    );
+  }
   revalidatePath(REVALIDATE);
 }
 
@@ -923,7 +933,7 @@ export async function inscribirme(idCurso: string): Promise<void | { message: st
   try {
     const curso = await prisma.cursoCapacitacion.findUnique({
       where: { idCursoCapacitacion: idCurso },
-      select: { estadoCurso: true },
+      select: { estadoCurso: true, nombreCurso: true, idUsuarioResponsableGRD: true },
     });
     if (!curso) return { message: "Curso no encontrado." };
     if (curso.estadoCurso !== "PUBLICADO")
@@ -967,6 +977,22 @@ export async function inscribirme(idCurso: string): Promise<void | { message: st
       entityName: nombreSesion,
       module: "Capacitaciones",
     });
+    // Notificar al responsable del curso
+    if (curso.idUsuarioResponsableGRD) {
+      const responsable = await prisma.usuarioGRD.findUnique({
+        where: { idUsuarioGRD: curso.idUsuarioResponsableGRD },
+        select: { idCredencial: true },
+      });
+      if (responsable) {
+        notificarUsuario(
+          responsable.idCredencial,
+          "CAPACITACION_INSCRIPCION",
+          "Nueva inscripción en tu curso",
+          `${nombreSesion} se inscribió en "${curso.nombreCurso}".`,
+          "/capacitaciones"
+        );
+      }
+    }
   } catch (err) {
     return fail(err, "No se pudo completar la inscripción.");
   }
@@ -1081,7 +1107,7 @@ export async function obtenerCuestionarioPorId(
         where: { estado: "ACTIVO" },
         orderBy: { orden: "asc" },
         include: {
-          opciones: { where: { estado: "ACTIVO" }, orderBy: { orden: "asc" } },
+          opciones: { orderBy: { orden: "asc" } },
         },
       },
     },
@@ -1122,7 +1148,7 @@ export async function obtenerCuestionarioCurso(
         where: { estado: "ACTIVO" },
         orderBy: { orden: "asc" },
         include: {
-          opciones: { where: { estado: "ACTIVO" }, orderBy: { orden: "asc" } },
+          opciones: { orderBy: { orden: "asc" } },
         },
       },
     },
@@ -1197,6 +1223,7 @@ export async function crearCuestionario(
                 textoOpcion: o.textoOpcion.trim(),
                 esCorrecta: o.esCorrecta,
                 orden: oi + 1,
+                estado: "ACTIVO",
               })),
             },
           })),
@@ -1220,7 +1247,7 @@ export async function crearCuestionario(
 export async function enviarRespuestasExamen(
   idInscripcion: string,
   idCuestionario: string,
-  respuestas: Record<string, string> // { idPregunta: idOpcion }
+  respuestas: Record<string, string | string[]> // { idPregunta: idOpcion } | { idPregunta: [idOpcion, ...] }
 ): Promise<
   | { resultado: { nota: number; puntajeObtenido: number; puntajeTotal: number; porcentaje: number; aprobado: boolean } }
   | { message: string }
@@ -1250,14 +1277,30 @@ export async function enviarRespuestasExamen(
     const puntajeTotal = cuestionario.preguntas.reduce((s, p) => s + Number(p.puntaje), 0);
 
     const respuestasData = cuestionario.preguntas.map((p) => {
-      const idOpcionElegida = respuestas[p.idPreguntaCuestionario];
-      const opcionElegida = p.opciones.find((o) => o.idOpcionPregunta === idOpcionElegida);
-      const esCorrecta = opcionElegida?.esCorrecta ?? false;
+      const respuestaPregunta = respuestas[p.idPreguntaCuestionario];
+      let esCorrecta = false;
+      let idOpcionSeleccionada: string | null = null;
+
+      if (p.tipoPregunta === "OPCION_MULTIPLE") {
+        // Para opción múltiple: el conjunto seleccionado debe coincidir exactamente con el conjunto correcto
+        const idsSeleccionados = Array.isArray(respuestaPregunta)
+          ? respuestaPregunta
+          : respuestaPregunta ? [respuestaPregunta] : [];
+        const idsCorrectos = p.opciones.filter((o) => o.esCorrecta).map((o) => o.idOpcionPregunta);
+        esCorrecta =
+          idsSeleccionados.length === idsCorrectos.length &&
+          idsSeleccionados.every((id) => idsCorrectos.includes(id));
+      } else {
+        idOpcionSeleccionada = typeof respuestaPregunta === "string" ? respuestaPregunta : null;
+        const opcionElegida = p.opciones.find((o) => o.idOpcionPregunta === idOpcionSeleccionada);
+        esCorrecta = opcionElegida?.esCorrecta ?? false;
+      }
+
       const pts = esCorrecta ? Number(p.puntaje) : 0;
       puntajeObtenido += pts;
       return {
         idPreguntaCuestionario: p.idPreguntaCuestionario,
-        idOpcionPregunta: idOpcionElegida ?? null,
+        idOpcionPregunta: idOpcionSeleccionada,
         esCorrecta,
         puntajeObtenido: pts,
       };
@@ -1273,7 +1316,7 @@ export async function enviarRespuestasExamen(
       data: {
         idInscripcionCurso: idInscripcion,
         idCuestionarioCurso: idCuestionario,
-        tipoEvaluacion: "FINAL",
+        tipoEvaluacion: cuestionario.tipoCuestionario,
         numeroIntento: intentosUsados + 1,
         nota,
         puntajeObtenido,
@@ -1325,39 +1368,53 @@ export async function editarCuestionario(
     if (!p.opciones.some((o) => o.esCorrecta)) return { message: "Cada pregunta debe tener una opción correcta." };
   }
   try {
-    // Eliminar preguntas y opciones anteriores y recrear
-    const preguntasExistentes = await prisma.preguntaCuestionario.findMany({
-      where: { idCuestionarioCurso: idCuestionario },
-      select: { idPreguntaCuestionario: true },
-    });
-    const idPreguntas = preguntasExistentes.map((p) => p.idPreguntaCuestionario);
-    await prisma.opcionPregunta.deleteMany({ where: { idPreguntaCuestionario: { in: idPreguntas } } });
-    await prisma.preguntaCuestionario.deleteMany({ where: { idCuestionarioCurso: idCuestionario } });
+    await prisma.$transaction(async (tx) => {
+      const preguntasExistentes = await tx.preguntaCuestionario.findMany({
+        where: { idCuestionarioCurso: idCuestionario },
+        select: { idPreguntaCuestionario: true },
+      });
+      const idPreguntas = preguntasExistentes.map((p) => p.idPreguntaCuestionario);
 
-    await prisma.cuestionarioCurso.update({
-      where: { idCuestionarioCurso: idCuestionario },
-      data: {
-        titulo: data.titulo.trim(),
-        descripcion: data.descripcion?.trim() || null,
-        notaAprobatoria: data.notaAprobatoria,
-        maxIntentos: data.maxIntentos,
-        preguntas: {
-          create: data.preguntas.map((p, pi) => ({
-            enunciado: p.enunciado.trim(),
-            tipoPregunta: p.tipoPregunta,
-            puntaje: p.puntaje,
-            orden: pi + 1,
-            opciones: {
-              create: p.opciones.map((o, oi) => ({
-                textoOpcion: o.textoOpcion.trim(),
-                esCorrecta: o.esCorrecta,
-                orden: oi + 1,
-              })),
-            },
-          })),
+      if (idPreguntas.length > 0) {
+        // Las respuestas individuales se eliminan (el puntaje total queda en EvaluacionCurso)
+        await tx.respuestaEvaluacion.deleteMany({
+          where: { idPreguntaCuestionario: { in: idPreguntas } },
+        });
+        await tx.opcionPregunta.deleteMany({
+          where: { idPreguntaCuestionario: { in: idPreguntas } },
+        });
+        await tx.preguntaCuestionario.deleteMany({
+          where: { idCuestionarioCurso: idCuestionario },
+        });
+      }
+
+      await tx.cuestionarioCurso.update({
+        where: { idCuestionarioCurso: idCuestionario },
+        data: {
+          titulo: data.titulo.trim(),
+          descripcion: data.descripcion?.trim() || null,
+          notaAprobatoria: data.notaAprobatoria,
+          maxIntentos: data.maxIntentos,
+          preguntas: {
+            create: data.preguntas.map((p, pi) => ({
+              enunciado: p.enunciado.trim(),
+              tipoPregunta: p.tipoPregunta,
+              puntaje: p.puntaje,
+              orden: pi + 1,
+              opciones: {
+                create: p.opciones.map((o, oi) => ({
+                  textoOpcion: o.textoOpcion.trim(),
+                  esCorrecta: o.esCorrecta,
+                  orden: oi + 1,
+                  estado: "ACTIVO",
+                })),
+              },
+            })),
+          },
         },
-      },
+      });
     });
+
     await logGRDAction({
       userId: session.userId,
       action: "EDITAR",
@@ -1416,5 +1473,23 @@ export async function certificarParticipante(idInscripcion: string, constanciaUr
     field: "Estado",
     newValue: "CERTIFICADO",
   });
+  // Notificar al participante por su correo
+  const ins = await prisma.inscripcionCurso.findUnique({
+    where: { idInscripcionCurso: idInscripcion },
+    select: {
+      curso: { select: { nombreCurso: true } },
+      participante: { select: { correo: true } },
+    },
+  });
+  if (ins?.participante.correo) {
+    notificarPorEmail(
+      ins.participante.correo,
+      "CAPACITACION_CERTIFICADO",
+      "¡Obtuviste tu certificado!",
+      `Completaste exitosamente el curso "${ins.curso.nombreCurso}". Tu constancia ya está disponible.`,
+      "/capacitaciones"
+    );
+  }
+  notificarCertificado(idInscripcion);
   revalidatePath(REVALIDATE);
 }

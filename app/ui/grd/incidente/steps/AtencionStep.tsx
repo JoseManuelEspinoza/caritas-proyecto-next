@@ -446,33 +446,43 @@ export function AtencionStep({
 
         {/* Registro de entrega */}
         <div className="rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
-            <Package className="w-4 h-4 text-cyan-600" />
-            <p className="text-sm font-bold text-gray-800">Registro de Entrega</p>
+          {/* Header */}
+          <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Package className="w-4 h-4 text-cyan-600" />
+              <p className="text-sm font-bold text-gray-800">Registro de Entrega</p>
+            </div>
+            <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wide ${
+              data.estadoActual === "CERRADO"
+                ? "bg-gray-100 text-gray-600 border border-gray-200"
+                : "bg-cyan-100 text-cyan-700 border border-cyan-200"
+            }`}>
+              {data.estadoActual}
+            </span>
           </div>
-          <div className="p-4 space-y-3">
+
+          <div className="p-5 space-y-4">
+            {/* Fecha y responsable */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="bg-gray-50 rounded-lg border border-gray-100 px-3 py-2">
-                <p className="text-[10px] text-gray-400 uppercase tracking-wider">Fecha de entrega</p>
-                <p className="text-sm font-medium text-gray-800">{e.fecha ? fmtDate(e.fecha) : "—"}</p>
+              <div className="bg-gray-100 rounded-xl border border-gray-200 px-4 py-3">
+                <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Fecha de entrega</p>
+                <p className="text-sm font-semibold text-gray-900">{e.fecha ? fmtDate(e.fecha) : "—"}</p>
               </div>
-              <div className="bg-gray-50 rounded-lg border border-gray-100 px-3 py-2">
-                <p className="text-[10px] text-gray-400 uppercase tracking-wider">Elaborado por</p>
-                <p className="text-sm font-medium text-gray-800">{data.currentUserName}</p>
+              <div className="bg-gray-100 rounded-xl border border-gray-200 px-4 py-3">
+                <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Elaborado por</p>
+                <p className="text-sm font-semibold text-gray-900">{data.currentUserName}</p>
               </div>
             </div>
-            <div className="bg-cyan-50 border border-cyan-100 rounded-lg px-3 py-2">
-              <p className="text-[10px] text-cyan-600 uppercase tracking-wider mb-0.5">
+
+            {/* Descripción */}
+            <div className="bg-cyan-50 border border-cyan-200 rounded-xl px-4 py-4">
+              <p className="text-[10px] font-bold text-cyan-700 uppercase tracking-wider mb-2">
                 Descripción de la entrega
               </p>
-              <p className="text-xs text-cyan-900 whitespace-pre-line">{e.descripcionAyuda ?? "—"}</p>
+              <p className="text-sm text-cyan-900 whitespace-pre-line leading-relaxed">
+                {e.descripcionAyuda ?? "—"}
+              </p>
             </div>
-            {!enAtendido && (
-              <div className="flex items-center gap-2 text-xs text-gray-500">
-                <CheckCircle className="w-4 h-4 text-cyan-600" />
-                Caso en estado <span className="font-semibold">{data.estadoActual}</span>.
-              </div>
-            )}
           </div>
         </div>
       </div>

@@ -9,7 +9,10 @@ export type TipoNotificacion =
   | "INFORME_ENVIADO_COMITE"
   | "DECISION_APROBADO"
   | "DECISION_OBSERVADO"
-  | "DECISION_RECHAZADO";
+  | "DECISION_RECHAZADO"
+  | "CAPACITACION_PUBLICADA"
+  | "CAPACITACION_INSCRIPCION"
+  | "CAPACITACION_CERTIFICADO";
 
 async function crearNotificacion(
   userId: string,
@@ -119,6 +122,23 @@ export function notificarRoles(
   crearNotificacionParaRoles(roles, tipo, titulo, mensaje, enlace).catch((e) =>
     console.error("[Notif] Error creando notificaciones por rol:", e)
   );
+}
+
+/** Fire-and-forget: notifica a un usuario buscándolo por su email. */
+export function notificarPorEmail(
+  email: string,
+  tipo: TipoNotificacion,
+  titulo: string,
+  mensaje: string,
+  enlace?: string
+) {
+  prisma.user
+    .findUnique({ where: { email }, select: { id: true } })
+    .then((u) => {
+      if (!u) return;
+      return crearNotificacion(u.id, tipo, titulo, mensaje, enlace);
+    })
+    .catch((e) => console.error("[Notif] Error notificando por email:", e));
 }
 
 /** Fire-and-forget: notifica a brigadistas que tienen cuenta en el sistema. */

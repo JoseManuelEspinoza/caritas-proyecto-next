@@ -130,27 +130,40 @@ export function ResumenStep({ data }: { data: IncidenciaDetalleOutput }) {
 
   return (
     <div className="space-y-4">
-      {/* Estado y métricas */}
-      <div className="flex items-center gap-3 p-4 bg-gray-50 border border-gray-200 rounded-xl">
-        <CheckCircle className={`w-6 h-6 ${cerrado ? "text-green-600" : "text-gray-500"}`} />
-        <div>
-          <p className="font-semibold text-gray-800">Caso {cerrado ? "cerrado" : data.estadoActual}</p>
-          <p className="text-xs text-gray-500">
+      {/* Banner de estado */}
+      <div className={`flex items-center gap-4 p-4 rounded-xl border ${
+        cerrado
+          ? "bg-green-100 border-green-300"
+          : "bg-[#009850]/10 border-[#009850]/30"
+      }`}>
+        <div className="w-11 h-11 rounded-xl bg-green-200 flex items-center justify-center flex-shrink-0">
+          <CheckCircle className="w-6 h-6 text-green-700" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-green-900 text-base">
+            Caso {cerrado ? "cerrado" : data.estadoActual}
+          </p>
+          <p className="text-sm text-green-700">
             {data.codigoCaso} · Registrado el {fmtDate(data.fechaRegistro)}
           </p>
         </div>
+        <span className="text-[11px] font-bold bg-green-200 text-green-800 px-3 py-1 rounded-full uppercase flex-shrink-0">
+          {data.estadoActual}
+        </span>
       </div>
+
+      {/* Métricas */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-center">
         {[
-          { label: "Familias", value: data.gruposFamiliares.length },
-          { label: "Personas", value: totalPersonas },
-          { label: "Informes", value: data.informes.length },
-          { label: "Entregas", value: data.entregas.length },
-          { label: "Documentos", value: data.evidencias.length },
+          { label: "Familias", value: data.gruposFamiliares.length, color: "bg-blue-50 border-blue-200 text-blue-700" },
+          { label: "Personas", value: totalPersonas, color: "bg-purple-50 border-purple-200 text-purple-700" },
+          { label: "Informes", value: data.informes.length, color: "bg-amber-50 border-amber-200 text-amber-700" },
+          { label: "Entregas", value: data.entregas.length, color: "bg-cyan-50 border-cyan-200 text-cyan-700" },
+          { label: "Documentos", value: data.evidencias.length, color: "bg-green-50 border-green-200 text-green-700" },
         ].map((s) => (
-          <div key={s.label} className="bg-white border border-[#DDDDDD] rounded-xl p-3">
-            <p className="text-2xl font-bold text-gray-900">{s.value}</p>
-            <p className="text-xs text-gray-500">{s.label}</p>
+          <div key={s.label} className={`border rounded-xl p-3 ${s.color}`}>
+            <p className="text-2xl font-bold">{s.value}</p>
+            <p className="text-xs font-medium mt-0.5">{s.label}</p>
           </div>
         ))}
       </div>

@@ -1,12 +1,35 @@
-import { MapPin, Phone, Users, UserCircle } from "lucide-react";
+"use client";
+
+import dynamic from "next/dynamic";
+import { MapPin, Phone, Users, UserCircle, Loader2 } from "lucide-react";
 import type { IncidenciaDetalleOutput } from "@/core/application/dtos/IncidenciaDetalleDTO";
 import { InfoField } from "@/app/ui/grd/incidente/components/InfoField";
 import { iconoCategoria } from "@/app/ui/grd/incidente/config/estado-ui";
 import { fmtDate } from "@/app/ui/grd/incidente/lib/format";
 
+const LocationMap = dynamic(() => import("@/app/ui/grd/location-map"), {
+  ssr: false,
+  loading: () => (
+    <div className="h-full w-full bg-gray-100 flex items-center justify-center gap-2 text-xs text-gray-400">
+      <Loader2 className="w-4 h-4 animate-spin" /> Cargando mapa…
+    </div>
+  ),
+});
+
+const CATEGORY_COLORS: Record<string, { bg: string; text: string }> = {
+  Incendios:     { bg: "bg-red-100",    text: "text-red-700" },
+  Inundaciones:  { bg: "bg-blue-100",   text: "text-blue-700" },
+  Sismos:        { bg: "bg-orange-100", text: "text-orange-700" },
+  Derrumbes:     { bg: "bg-stone-100",  text: "text-stone-700" },
+  Deslizamientos:{ bg: "bg-amber-100",  text: "text-amber-700" },
+  Tsunamis:      { bg: "bg-cyan-100",   text: "text-cyan-700" },
+};
+
 /** Paso "Registrar": muestra los datos del incidente y el empadronamiento inicial (solo lectura). */
 export function RegistroStep({ data }: { data: IncidenciaDetalleOutput }) {
   const CatIcon = iconoCategoria(data.tipoEvento);
+  const catColor = data.tipoEvento ? (CATEGORY_COLORS[data.tipoEvento] ?? { bg: "bg-gray-100", text: "text-gray-600" }) : null;
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -15,10 +38,12 @@ export function RegistroStep({ data }: { data: IncidenciaDetalleOutput }) {
         <InfoField
           label="Tipo de evento"
           value={
-            <span className="flex items-center gap-1.5">
-              <CatIcon className="w-4 h-4" />
-              {data.tipoEvento ?? "—"}
-            </span>
+            catColor && data.tipoEvento ? (
+              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${catColor.bg} ${catColor.text}`}>
+                <CatIcon className="w-3.5 h-3.5" />
+                {data.tipoEvento}
+              </span>
+            ) : "—"
           }
         />
         <InfoField label="Gravedad" value={data.gravedad ?? "—"} />
@@ -33,6 +58,19 @@ export function RegistroStep({ data }: { data: IncidenciaDetalleOutput }) {
         />
         <InfoField label="Parroquia" value={data.parroquia ?? "—"} />
       </div>
+
+      {/* Mapa de ubicación — isolation crea un stacking context para contener los z-index de Leaflet */}
+      {(data.latitud != null && data.longitud != null) && (
+        <div className="rounded-xl overflow-hidden border border-gray-200 h-48 relative" style={{ isolation: "isolate", zIndex: 0 }}>
+          <LocationMap
+            lat={data.latitud}
+            lng={data.longitud}
+            onChange={() => {}}
+            className="h-full w-full"
+          />
+        </div>
+      )}
+
       {data.descripcionEvento && (
         <div>
           <p className="text-xs font-medium text-gray-500 mb-1">Descripción</p>
