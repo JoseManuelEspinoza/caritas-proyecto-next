@@ -1220,7 +1220,7 @@ export async function crearCuestionario(
 export async function enviarRespuestasExamen(
   idInscripcion: string,
   idCuestionario: string,
-  respuestas: Record<string, string> // { idPregunta: idOpcion }
+  respuestas: Record<string, string | string[]> // { idPregunta: idOpcion } | { idPregunta: [idOpcion, ...] }
 ): Promise<
   | { resultado: { nota: number; puntajeObtenido: number; puntajeTotal: number; porcentaje: number; aprobado: boolean } }
   | { message: string }
@@ -1250,14 +1250,30 @@ export async function enviarRespuestasExamen(
     const puntajeTotal = cuestionario.preguntas.reduce((s, p) => s + Number(p.puntaje), 0);
 
     const respuestasData = cuestionario.preguntas.map((p) => {
-      const idOpcionElegida = respuestas[p.idPreguntaCuestionario];
-      const opcionElegida = p.opciones.find((o) => o.idOpcionPregunta === idOpcionElegida);
-      const esCorrecta = opcionElegida?.esCorrecta ?? false;
+      const respuestaPregunta = respuestas[p.idPreguntaCuestionario];
+      let esCorrecta = false;
+      let idOpcionSeleccionada: string | null = null;
+
+      if (p.tipoPregunta === "OPCION_MULTIPLE") {
+        // Para opción múltiple: el conjunto seleccionado debe coincidir exactamente con el conjunto correcto
+        const idsSeleccionados = Array.isArray(respuestaPregunta)
+          ? respuestaPregunta
+          : respuestaPregunta ? [respuestaPregunta] : [];
+        const idsCorrectos = p.opciones.filter((o) => o.esCorrecta).map((o) => o.idOpcionPregunta);
+        esCorrecta =
+          idsSeleccionados.length === idsCorrectos.length &&
+          idsSeleccionados.every((id) => idsCorrectos.includes(id));
+      } else {
+        idOpcionSeleccionada = typeof respuestaPregunta === "string" ? respuestaPregunta : null;
+        const opcionElegida = p.opciones.find((o) => o.idOpcionPregunta === idOpcionSeleccionada);
+        esCorrecta = opcionElegida?.esCorrecta ?? false;
+      }
+
       const pts = esCorrecta ? Number(p.puntaje) : 0;
       puntajeObtenido += pts;
       return {
         idPreguntaCuestionario: p.idPreguntaCuestionario,
-        idOpcionPregunta: idOpcionElegida ?? null,
+        idOpcionPregunta: idOpcionSeleccionada,
         esCorrecta,
         puntajeObtenido: pts,
       };
@@ -1273,7 +1289,7 @@ export async function enviarRespuestasExamen(
       data: {
         idInscripcionCurso: idInscripcion,
         idCuestionarioCurso: idCuestionario,
-        tipoEvaluacion: "FINAL",
+        tipoEvaluacion: cuestionario.tipoCuestionario,
         numeroIntento: intentosUsados + 1,
         nota,
         puntajeObtenido,

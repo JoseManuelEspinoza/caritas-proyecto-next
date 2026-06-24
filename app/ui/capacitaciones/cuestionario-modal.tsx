@@ -233,9 +233,16 @@ export function CuestionarioModal({
         {/* Preguntas */}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <span className={`text-sm font-semibold ${totalExcedido ? "text-red-600" : "text-[var(--caritas-text)]"}`}>
+            <span className={`text-sm font-semibold ${
+              totalExcedido
+                ? "text-red-600"
+                : puntajeTotal < notaAprobatoria
+                ? "text-amber-600"
+                : "text-[var(--caritas-text)]"
+            }`}>
               Preguntas ({preguntas.length}) · Total: {puntajeTotal} / {notaAprobatoria} pts
               {totalExcedido && " — excede el máximo"}
+              {!totalExcedido && puntajeTotal < notaAprobatoria && ` — faltan ${notaAprobatoria - puntajeTotal} pts para llegar a 20`}
             </span>
           </div>
 
