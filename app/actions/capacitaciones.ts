@@ -1081,7 +1081,7 @@ export async function obtenerCuestionarioPorId(
         where: { estado: "ACTIVO" },
         orderBy: { orden: "asc" },
         include: {
-          opciones: { where: { estado: "ACTIVO" }, orderBy: { orden: "asc" } },
+          opciones: { orderBy: { orden: "asc" } },
         },
       },
     },
@@ -1122,7 +1122,7 @@ export async function obtenerCuestionarioCurso(
         where: { estado: "ACTIVO" },
         orderBy: { orden: "asc" },
         include: {
-          opciones: { where: { estado: "ACTIVO" }, orderBy: { orden: "asc" } },
+          opciones: { orderBy: { orden: "asc" } },
         },
       },
     },
@@ -1197,6 +1197,7 @@ export async function crearCuestionario(
                 textoOpcion: o.textoOpcion.trim(),
                 esCorrecta: o.esCorrecta,
                 orden: oi + 1,
+                estado: "ACTIVO",
               })),
             },
           })),
@@ -1341,39 +1342,53 @@ export async function editarCuestionario(
     if (!p.opciones.some((o) => o.esCorrecta)) return { message: "Cada pregunta debe tener una opción correcta." };
   }
   try {
-    // Eliminar preguntas y opciones anteriores y recrear
-    const preguntasExistentes = await prisma.preguntaCuestionario.findMany({
-      where: { idCuestionarioCurso: idCuestionario },
-      select: { idPreguntaCuestionario: true },
-    });
-    const idPreguntas = preguntasExistentes.map((p) => p.idPreguntaCuestionario);
-    await prisma.opcionPregunta.deleteMany({ where: { idPreguntaCuestionario: { in: idPreguntas } } });
-    await prisma.preguntaCuestionario.deleteMany({ where: { idCuestionarioCurso: idCuestionario } });
+    await prisma.$transaction(async (tx) => {
+      const preguntasExistentes = await tx.preguntaCuestionario.findMany({
+        where: { idCuestionarioCurso: idCuestionario },
+        select: { idPreguntaCuestionario: true },
+      });
+      const idPreguntas = preguntasExistentes.map((p) => p.idPreguntaCuestionario);
 
-    await prisma.cuestionarioCurso.update({
-      where: { idCuestionarioCurso: idCuestionario },
-      data: {
-        titulo: data.titulo.trim(),
-        descripcion: data.descripcion?.trim() || null,
-        notaAprobatoria: data.notaAprobatoria,
-        maxIntentos: data.maxIntentos,
-        preguntas: {
-          create: data.preguntas.map((p, pi) => ({
-            enunciado: p.enunciado.trim(),
-            tipoPregunta: p.tipoPregunta,
-            puntaje: p.puntaje,
-            orden: pi + 1,
-            opciones: {
-              create: p.opciones.map((o, oi) => ({
-                textoOpcion: o.textoOpcion.trim(),
-                esCorrecta: o.esCorrecta,
-                orden: oi + 1,
-              })),
-            },
-          })),
+      if (idPreguntas.length > 0) {
+        // Las respuestas individuales se eliminan (el puntaje total queda en EvaluacionCurso)
+        await tx.respuestaEvaluacion.deleteMany({
+          where: { idPreguntaCuestionario: { in: idPreguntas } },
+        });
+        await tx.opcionPregunta.deleteMany({
+          where: { idPreguntaCuestionario: { in: idPreguntas } },
+        });
+        await tx.preguntaCuestionario.deleteMany({
+          where: { idCuestionarioCurso: idCuestionario },
+        });
+      }
+
+      await tx.cuestionarioCurso.update({
+        where: { idCuestionarioCurso: idCuestionario },
+        data: {
+          titulo: data.titulo.trim(),
+          descripcion: data.descripcion?.trim() || null,
+          notaAprobatoria: data.notaAprobatoria,
+          maxIntentos: data.maxIntentos,
+          preguntas: {
+            create: data.preguntas.map((p, pi) => ({
+              enunciado: p.enunciado.trim(),
+              tipoPregunta: p.tipoPregunta,
+              puntaje: p.puntaje,
+              orden: pi + 1,
+              opciones: {
+                create: p.opciones.map((o, oi) => ({
+                  textoOpcion: o.textoOpcion.trim(),
+                  esCorrecta: o.esCorrecta,
+                  orden: oi + 1,
+                  estado: "ACTIVO",
+                })),
+              },
+            })),
+          },
         },
-      },
+      });
     });
+
     await logGRDAction({
       userId: session.userId,
       action: "EDITAR",
