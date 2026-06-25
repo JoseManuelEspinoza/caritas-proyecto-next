@@ -34,6 +34,7 @@ import { permisosDeDetalle } from "@/app/lib/permisos-incidencia";
 import { InfoField } from "@/app/ui/grd/incidente/components/InfoField";
 import { Seccion, ReadSeccion, ReadCampo } from "@/app/ui/grd/incidente/components/Seccion";
 import { ListaEditable } from "@/app/ui/grd/incidente/components/ListaEditable";
+import { DestinatariosPreview } from "@/app/ui/grd/incidente/components/DestinatariosPreview";
 import {
   EvidenciasRegistro,
   EvidenciaChip,
@@ -1245,16 +1246,19 @@ export function RevisionStep({
                   </button>
                 ) : (
                   !informeYaEnviado && (
-                    <button
-                      type="button"
-                      onClick={handleClickEnviar}
-                      disabled={isPending}
-                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-white font-semibold hover:opacity-90 disabled:opacity-50"
-                      style={{ background: "var(--caritas-green)" }}
-                    >
-                      <Send className="w-4 h-4" />
-                      Enviar al Comité
-                    </button>
+                    <div className="space-y-2">
+                      <DestinatariosPreview step="informe" incidenciaId={data.idIncidencia} />
+                      <button
+                        type="button"
+                        onClick={handleClickEnviar}
+                        disabled={isPending}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-white font-semibold hover:opacity-90 disabled:opacity-50"
+                        style={{ background: "var(--caritas-green)" }}
+                      >
+                        <Send className="w-4 h-4" />
+                        Enviar al Comité
+                      </button>
+                    </div>
                   )
                 )}
 
@@ -1645,27 +1649,30 @@ export function RevisionStep({
                 />
               </label>
             )}
-            <div className="flex gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowDocStep(false)}
-                className="cursor-pointer shrink-0 px-5 py-2.5 border border-gray-200 rounded-xl text-sm font-medium hover:bg-gray-50"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleEvaluar}
-                disabled={isPending || subiendoDoc}
-                className="cursor-pointer flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50 flex items-center justify-center gap-2"
-                style={{ background: "var(--caritas-green)" }}
-              >
-                {isPending || subiendoDoc ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" /> Enviando…</>
-                ) : (
-                  <><Send className="w-4 h-4" /> Confirmar y enviar al Comité</>
-                )}
-              </button>
+            <div className="space-y-2 pt-2">
+              <DestinatariosPreview step="informe" incidenciaId={data.idIncidencia} />
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowDocStep(false)}
+                  className="cursor-pointer shrink-0 px-5 py-2.5 border border-gray-200 rounded-xl text-sm font-medium hover:bg-gray-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleEvaluar}
+                  disabled={isPending || subiendoDoc}
+                  className="cursor-pointer flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50 flex items-center justify-center gap-2"
+                  style={{ background: "var(--caritas-green)" }}
+                >
+                  {isPending || subiendoDoc ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Enviando…</>
+                  ) : (
+                    <><Send className="w-4 h-4" /> Confirmar y enviar al Comité</>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

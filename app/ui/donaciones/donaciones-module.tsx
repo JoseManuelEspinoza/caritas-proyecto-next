@@ -31,6 +31,7 @@ import { ModalUbicacion } from "./ModalUbicacion";
 import type { TallyRondaConNombres } from "@/app/lib/comite-donaciones-tally";
 import { registrarEvidenciaEntrega, listarEvidenciasEntrega } from "@/app/actions/evidencias";
 import { subirArchivoS3 } from "@/app/ui/shared/file-upload";
+import { DestinatariosPreview } from "@/app/ui/grd/incidente/components/DestinatariosPreview";
 
 export type Entrega = {
   idEntrega: string;
@@ -524,13 +525,16 @@ export function DonacionesModule({
                       </button>
                     )}
                     {puedeVotar && (
-                      <button
-                        onClick={() => setShowVotacion(true)}
-                        className="flex items-center gap-1.5 text-[var(--caritas-green)] text-sm font-medium px-2.5 py-1.5 rounded-lg border border-transparent hover:border-[var(--caritas-green)]/40 hover:bg-[var(--caritas-green)]/5 transition-all cursor-pointer"
-                      >
-                        <Hand className="w-4 h-4" />
-                        <span>Votar</span>
-                      </button>
+                      <div className="flex flex-col items-end gap-1">
+                        <DestinatariosPreview step="decision" incidenciaId={current.id} />
+                        <button
+                          onClick={() => setShowVotacion(true)}
+                          className="flex items-center gap-1.5 text-[var(--caritas-green)] text-sm font-medium px-2.5 py-1.5 rounded-lg border border-transparent hover:border-[var(--caritas-green)]/40 hover:bg-[var(--caritas-green)]/5 transition-all cursor-pointer"
+                        >
+                          <Hand className="w-4 h-4" />
+                          <span>Votar</span>
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
