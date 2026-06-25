@@ -200,6 +200,9 @@ export function DonacionesModule({
 
   const current = casos.find((c) => c.id === selectedId) ?? null;
   const puedeVotar = canEvaluate && current?.estado === "EN EVALUACION";
+  const miVoto = current && miIdUsuarioGRD
+    ? (tallyPorCaso[current.id]?.votos.find((v) => v.idUsuarioGRD === miIdUsuarioGRD)?.decision ?? null)
+    : null;
 
   // En móvil navega automáticamente al detalle al seleccionar un caso
   const handleSelectCase = (id: string) => {
@@ -349,16 +352,16 @@ export function DonacionesModule({
         <div className={listClasses}>
           <div className="flex-1 flex flex-col bg-white border border-[var(--caritas-border)] rounded-xl overflow-hidden">
             {/* Barra superior: lupa + dropdown / botón colapsar (desktop only) */}
-            <div className="flex items-center gap-1 px-2 py-2 border-b border-gray-100 shrink-0">
+            <div className="flex items-center gap-1.5 px-2.5 py-2.5 border-b border-gray-200 bg-gray-50 shrink-0">
               {searchOpen ? (
                 <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                   <input
                     value={busqueda}
                     onChange={(e) => setBusqueda(e.target.value)}
                     placeholder="Buscar por código, título..."
                     autoFocus
-                    className="w-full pl-9 pr-9 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]"
+                    className="w-full pl-9 pr-9 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)] focus:border-[var(--caritas-green)] text-gray-800 placeholder:text-gray-400"
                   />
                   <button
                     onClick={() => { setSearchOpen(false); setBusqueda(""); }}
@@ -373,7 +376,7 @@ export function DonacionesModule({
                   <button
                     onClick={() => setSearchOpen(true)}
                     title="Buscar"
-                    className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 border border-transparent hover:border-gray-200 hover:text-[var(--caritas-green)] hover:bg-gray-50 transition-colors cursor-pointer"
+                    className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 border border-gray-200 hover:border-gray-300 hover:text-[var(--caritas-green)] hover:bg-white transition-colors cursor-pointer"
                   >
                     <Search className="w-4 h-4" />
                   </button>
@@ -388,9 +391,9 @@ export function DonacionesModule({
               <button
                 onClick={() => setPanelAbierto(false)}
                 title="Colapsar panel"
-                className="hidden md:flex shrink-0 w-8 h-8 items-center justify-center rounded-lg text-gray-400 border border-transparent hover:border-gray-200 hover:text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer"
+                className="hidden md:flex shrink-0 w-9 h-9 items-center justify-center rounded-lg text-[var(--caritas-green)] border border-[var(--caritas-green)]/30 bg-[var(--caritas-green)]/8 hover:bg-[var(--caritas-green)]/15 hover:border-[var(--caritas-green)]/50 transition-colors cursor-pointer"
               >
-                <PanelLeftClose className="w-4 h-4" />
+                <PanelLeftClose className="w-5 h-5" />
               </button>
             </div>
 
@@ -404,7 +407,7 @@ export function DonacionesModule({
                   </p>
                 </div>
               ) : (
-                <div className="divide-y divide-gray-100">
+                <div className="divide-y divide-gray-200">
                   {listaFiltrada.map((c) => (
                     <CasoRow
                       key={c.id}
@@ -468,13 +471,20 @@ export function DonacionesModule({
                     </button>
                   )}
                   {puedeVotar && (
-                    <button
-                      onClick={() => setShowVotacion(true)}
-                      className="flex items-center gap-1.5 text-[var(--caritas-green)] text-sm font-medium px-2.5 py-1.5 rounded-lg border border-transparent hover:border-[var(--caritas-green)]/40 hover:bg-[var(--caritas-green)]/5 transition-all cursor-pointer"
-                    >
-                      <Hand className="w-4 h-4" />
-                      <span>Votar</span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {miVoto && (
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${miVoto === "A_FAVOR" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-600 border-red-200"}`}>
+                          {miVoto === "A_FAVOR" ? "✓ A favor" : "✗ En contra"}
+                        </span>
+                      )}
+                      <button
+                        onClick={() => setShowVotacion(true)}
+                        className="flex items-center gap-1.5 text-[var(--caritas-green)] text-sm font-semibold px-3 py-1.5 rounded-lg border border-[var(--caritas-green)]/40 bg-[var(--caritas-green)]/8 hover:bg-[var(--caritas-green)]/15 hover:border-[var(--caritas-green)]/60 transition-all cursor-pointer"
+                      >
+                        <Hand className="w-4 h-4" />
+                        <span>Votar</span>
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -525,15 +535,22 @@ export function DonacionesModule({
                       </button>
                     )}
                     {puedeVotar && (
-                      <div className="flex flex-col items-end gap-1">
+                      <div className="flex flex-col items-end gap-1.5">
                         <DestinatariosPreview step="decision" incidenciaId={current.id} />
-                        <button
-                          onClick={() => setShowVotacion(true)}
-                          className="flex items-center gap-1.5 text-[var(--caritas-green)] text-sm font-medium px-2.5 py-1.5 rounded-lg border border-transparent hover:border-[var(--caritas-green)]/40 hover:bg-[var(--caritas-green)]/5 transition-all cursor-pointer"
-                        >
-                          <Hand className="w-4 h-4" />
-                          <span>Votar</span>
-                        </button>
+                        <div className="flex items-center gap-2">
+                          {miVoto && (
+                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${miVoto === "A_FAVOR" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-600 border-red-200"}`}>
+                              {miVoto === "A_FAVOR" ? "✓ A favor" : "✗ En contra"}
+                            </span>
+                          )}
+                          <button
+                            onClick={() => setShowVotacion(true)}
+                            className="flex items-center gap-1.5 text-[var(--caritas-green)] text-sm font-semibold px-3 py-1.5 rounded-lg border border-[var(--caritas-green)]/40 bg-[var(--caritas-green)]/8 hover:bg-[var(--caritas-green)]/15 hover:border-[var(--caritas-green)]/60 transition-all cursor-pointer"
+                          >
+                            <Hand className="w-4 h-4" />
+                            <span>Votar</span>
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -647,16 +664,16 @@ function FiltroDropdown({
     <div ref={ref} className="relative flex-1">
       <button
         onClick={() => setOpen((v) => !v)}
-        className={`flex items-center justify-between gap-2 w-full px-3 py-2 rounded-lg text-sm bg-transparent transition-colors cursor-pointer border ${
+        className={`flex items-center justify-between gap-2 w-full px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer border ${
           open
             ? "border-[var(--caritas-green)] ring-1 ring-[var(--caritas-green)]/30 bg-white"
-            : "border-transparent hover:border-gray-200 hover:bg-gray-50"
+            : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
         }`}
       >
-        <span className="font-medium text-gray-800 truncate">
-          {activo.label} <span className="text-gray-400 font-normal">({contar(activo.estados)})</span>
+        <span className="font-semibold text-gray-800 truncate">
+          {activo.label} <span className="text-gray-500 font-normal">({contar(activo.estados)})</span>
         </span>
-        <ChevronDown className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
+        <ChevronDown className={`w-4 h-4 text-gray-500 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
 
       {open && (
@@ -696,21 +713,21 @@ function CasoRow({
   return (
     <button
       onClick={onClick}
-      className={`w-full text-left px-4 py-3 transition-colors cursor-pointer ${
+      className={`w-full text-left px-4 py-3.5 transition-colors cursor-pointer ${
         selected
-          ? "bg-[var(--caritas-green)]/5 border-r-4 border-r-[var(--caritas-green)]"
+          ? "bg-[var(--caritas-green)]/8 border-r-4 border-r-[var(--caritas-green)]"
           : "hover:bg-gray-50"
       }`}
     >
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-xs font-mono text-gray-400">{c.codigo}</p>
-          <p className="text-sm font-semibold text-gray-900 leading-tight truncate">
+          <p className="text-[11px] font-mono text-gray-500 font-medium">{c.codigo}</p>
+          <p className="text-sm font-semibold text-gray-900 leading-tight truncate mt-0.5">
             {c.titulo}
           </p>
         </div>
         <span
-          className={`flex-shrink-0 px-2 py-0.5 text-[10px] rounded-full font-semibold ${STATUS_COLOR[c.estado] ?? "bg-gray-100"}`}
+          className={`flex-shrink-0 px-2 py-0.5 text-[10px] rounded-full font-semibold border ${STATUS_COLOR[c.estado] ?? "bg-gray-100"}`}
         >
           {c.estado}
         </span>
@@ -734,28 +751,31 @@ function ReadSeccion({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="border border-gray-100 rounded-lg overflow-hidden">
+    <div className="border border-purple-200 rounded-xl overflow-hidden">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between gap-2 px-3 py-2.5 bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer"
+        className="w-full flex items-center gap-2 px-4 py-3 bg-purple-50 border-b border-purple-100 hover:bg-purple-100 transition-colors text-left"
       >
-        <span className="text-[11px] font-bold text-purple-700 uppercase tracking-wider">
-          {letra}) {titulo}
+        <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-700 text-xs font-bold flex items-center justify-center flex-shrink-0">
+          {letra}
+        </span>
+        <span className="text-sm font-bold text-gray-800 uppercase tracking-wide flex-1">
+          {titulo}
         </span>
         <ChevronDown
-          className={`w-3.5 h-3.5 text-gray-400 flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+          className={`w-4 h-4 text-purple-400 flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
         />
       </button>
-      {open && <div className="p-3">{children}</div>}
+      {open && <div className="p-4 bg-white space-y-3">{children}</div>}
     </div>
   );
 }
 
 function ReadCampo({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-gray-50 rounded-lg border border-gray-100 px-2.5 py-1.5">
-      <p className="text-[10px] text-gray-400 uppercase tracking-wider">{label}</p>
-      <p className="text-xs font-medium text-gray-800">{value}</p>
+    <div className="bg-gray-50 rounded-lg border border-gray-200 px-3 py-2.5">
+      <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">{label}</p>
+      <p className="text-sm font-medium text-gray-800">{value}</p>
     </div>
   );
 }
@@ -774,14 +794,14 @@ function InfoSeccion({
     <div className="border border-gray-200 rounded-xl overflow-hidden">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between gap-2 px-4 py-2.5 bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer"
+        className="w-full flex items-center justify-between gap-2 px-4 py-3 bg-gray-50 border-b border-gray-100 hover:bg-gray-100 transition-colors text-left"
       >
-        <span className="text-xs font-semibold text-gray-700">{titulo}</span>
+        <span className="text-sm font-bold text-gray-700 uppercase tracking-wide">{titulo}</span>
         <ChevronDown
-          className={`w-3.5 h-3.5 text-gray-400 flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+          className={`w-4 h-4 text-gray-400 flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
         />
       </button>
-      {open && <div className="p-3">{children}</div>}
+      {open && <div className="p-4 bg-white">{children}</div>}
     </div>
   );
 }

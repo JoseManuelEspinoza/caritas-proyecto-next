@@ -273,6 +273,7 @@ export function PlanesModule({ planes, parroquias }: { planes: Plan[]; parroquia
         onNext={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
         pageSize={pageSize}
         onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
+        pageSizeOptions={[5, 10, 25, 50]}
         className="mt-6"
       />
     </div>

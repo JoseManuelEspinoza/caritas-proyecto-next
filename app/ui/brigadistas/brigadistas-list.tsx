@@ -573,7 +573,7 @@ export function BrigadistasList({ brigadistas, parroquias, canEdit = true }: Pro
   const [filterParroquia, setFilterParroquia] = useState("all");
   const [filterEstado, setFilterEstado] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(5);
+  const [pageSize, setPageSize] = useState(7);
 
   const { showConfirm, ConfirmModalJSX } = useConfirm();
 
@@ -1019,6 +1019,7 @@ export function BrigadistasList({ brigadistas, parroquias, canEdit = true }: Pro
         onNext={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
         pageSize={pageSize}
         onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
+        pageSizeOptions={[7, 10, 25, 50]}
       />
 
       {showModal && (

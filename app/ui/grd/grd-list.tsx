@@ -255,7 +255,7 @@ export function GrdList({ items, role, globalCounts }: GrdListProps) {
   const [fechaHasta, setFechaHasta] = useState("");
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(5);
+  const [rowsPerPage, setRowsPerPage] = useState(6);
   const [exportando, setExportando] = useState(false);
 
   // Parroquias y categorías únicas derivadas de los items reales
@@ -411,13 +411,18 @@ export function GrdList({ items, role, globalCounts }: GrdListProps) {
     }
   };
 
+  // Convierte un ISO UTC a fecha local Lima (YYYY-MM-DD) para comparar igual que el display.
+  const limaDate = (iso: string) =>
+    new Date(iso).toLocaleDateString("sv", { timeZone: "America/Lima" });
+
   // Filtros
   const filtered = items.filter((i) => {
     if (statusFilter !== "all" && i.estadoActual !== statusFilter) return false;
     if (categoryFilter.length > 0 && !categoryFilter.includes(i.tipoEvento ?? "")) return false;
     if (parroquiaFilter.length > 0 && !parroquiaFilter.includes(i.parroquia ?? "")) return false;
-    if (fechaDesde && i.fechaRegistro.slice(0, 10) < fechaDesde) return false;
-    if (fechaHasta && i.fechaRegistro.slice(0, 10) > fechaHasta) return false;
+    const fechaLocal = limaDate(i.fechaRegistro);
+    if (fechaDesde && fechaLocal < fechaDesde) return false;
+    if (fechaHasta && fechaLocal > fechaHasta) return false;
     if (search) {
       const q = search.toLowerCase();
       const hayMatch = [

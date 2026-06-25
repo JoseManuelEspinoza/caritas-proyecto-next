@@ -528,7 +528,7 @@ export function ParroquiasList({ parroquias, canEdit = false }: Props) {
   const [filterTelefono, setFilterTelefono] = useState("all");
   const [filterCorreo, setFilterCorreo] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(5);
+  const [pageSize, setPageSize] = useState(6);
   const [exportando, setExportando] = useState(false);
 
   // Estado para el flujo de eliminación de parroquia
