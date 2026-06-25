@@ -52,6 +52,9 @@ export class RegistrarVotoComiteUseCase {
     const umbral = calcularUmbral(n);
 
     if (decisionQuorum.tipo === "APROBAR") {
+      // Valida y descuenta el stock de los elementos ANTES de aprobar.
+      // Si no hay stock, lanza error con los faltantes y la aprobación se aborta.
+      await this.comite.descontarInventarioAprobacion(idIncidencia, idUsuarioGRD);
       inc.aprobar();
       await this.comite.cerrarRonda(ronda.idRonda, {
         estado: "CERRADA_APROBADA",
@@ -59,6 +62,8 @@ export class RegistrarVotoComiteUseCase {
         umbralSnapshot: umbral,
       });
       await this.incidencias.resolverSolicitud(idIncidencia, "APROBADA");
+      // Caso aprobado: el equipo sale a la entrega → vuelve a campo.
+      await this.incidencias.marcarBrigadistasEnCampo(idIncidencia);
       await this.incidencias.guardarTransicion(inc, "Caso aprobado por quórum del Comité");
       const tally = (await this.comite.tally(idIncidencia))!;
       return { estado: "APROBADA", tally };

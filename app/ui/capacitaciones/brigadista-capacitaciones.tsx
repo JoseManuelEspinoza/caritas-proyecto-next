@@ -211,38 +211,69 @@ function DetalleInscrito({ curso, onVolver }: { curso: CursoInscrito; onVolver: 
           </SeccionAcordeon>
         )}
 
-        {/* Evaluación final */}
-        {curso.cuestionarioFinal && (
-          <SeccionAcordeon titulo="Evaluación final">
-            <div className="flex items-center justify-between gap-4 p-4 bg-gray-50 rounded-xl">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-[var(--caritas-green)]/10 flex items-center justify-center shrink-0">
-                  <ClipboardList className="w-5 h-5 text-[var(--caritas-green)]" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-[var(--caritas-text)]">{curso.cuestionarioFinal.titulo}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    {curso.cuestionarioFinal.totalPreguntas} preguntas
-                  </p>
-                  <p className={`text-xs mt-0.5 font-medium ${curso.cuestionarioFinal.intentosUsados >= curso.cuestionarioFinal.maxIntentos ? "text-red-500" : "text-[var(--caritas-green)]"}`}>
-                    {curso.cuestionarioFinal.maxIntentos - curso.cuestionarioFinal.intentosUsados} intento(s) restante(s) de {curso.cuestionarioFinal.maxIntentos}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowExamen(true)}
-                disabled={curso.cuestionarioFinal.intentosUsados >= curso.cuestionarioFinal.maxIntentos}
-                className="flex items-center gap-2 px-4 py-2.5 text-sm bg-[var(--caritas-green)] text-white rounded-xl hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shrink-0 font-medium"
-              >
-                <PlayCircle className="w-4 h-4" />
-                {curso.cuestionarioFinal.intentosUsados > 0 ? "Reintentar" : "Rendir examen"}
-              </button>
+        {/* Contenido del curso */}
+        <SeccionAcordeon titulo="Contenido del curso" badge={curso.sesiones.length}>
+          {curso.sesiones.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-gray-200 rounded-xl py-10 text-gray-400">
+              <BookOpen className="w-8 h-8" />
+              <p className="text-sm">El contenido aún no está disponible.</p>
             </div>
-          </SeccionAcordeon>
-        )}
+          ) : (
+            <div className="space-y-2">
+              {curso.sesiones.map((s) => (
+                <UnidadLectura key={s.id} sesion={s} />
+              ))}
+            </div>
+          )}
+        </SeccionAcordeon>
 
-        {/* Constancia de certificación */}
-        {curso.certificado && (
+        {/* Evaluación final — se desbloquea solo si rindió al menos 1 vez el examen inicial */}
+        {curso.cuestionarioFinal && (() => {
+          const inicialRendido = !curso.cuestionarioInicial || curso.cuestionarioInicial.intentosUsados > 0;
+          const sinIntentos = curso.cuestionarioFinal.intentosUsados >= curso.cuestionarioFinal.maxIntentos;
+          return (
+            <SeccionAcordeon titulo="Evaluación final">
+              {!inicialRendido ? (
+                <div className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                  <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+                    <ClipboardList className="w-4 h-4 text-amber-600" />
+                  </div>
+                  <p className="text-sm text-amber-700 font-medium">
+                    Debes rendir el examen inicial primero.
+                  </p>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-4 p-4 bg-gray-50 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-[var(--caritas-green)]/10 flex items-center justify-center shrink-0">
+                      <ClipboardList className="w-5 h-5 text-[var(--caritas-green)]" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-[var(--caritas-text)]">{curso.cuestionarioFinal.titulo}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {curso.cuestionarioFinal.totalPreguntas} preguntas
+                      </p>
+                      <p className={`text-xs mt-0.5 font-medium ${sinIntentos ? "text-red-500" : "text-[var(--caritas-green)]"}`}>
+                        {curso.cuestionarioFinal.maxIntentos - curso.cuestionarioFinal.intentosUsados} intento(s) restante(s) de {curso.cuestionarioFinal.maxIntentos}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowExamen(true)}
+                    disabled={sinIntentos}
+                    className="flex items-center gap-2 px-4 py-2.5 text-sm bg-[var(--caritas-green)] text-white rounded-xl hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shrink-0 font-medium"
+                  >
+                    <PlayCircle className="w-4 h-4" />
+                    {curso.cuestionarioFinal.intentosUsados > 0 ? "Reintentar" : "Rendir examen"}
+                  </button>
+                </div>
+              )}
+            </SeccionAcordeon>
+          );
+        })()}
+
+        {/* Constancia — solo si rindió el examen final al menos 1 vez */}
+        {curso.certificado && curso.cuestionarioFinal && curso.cuestionarioFinal.intentosUsados > 0 && (
           <SeccionAcordeon titulo="Constancia de certificación">
             <div className={`flex items-center justify-between gap-4 p-4 rounded-xl border ${curso.constanciaUrl ? "bg-green-50 border-green-200" : "bg-gray-50 border-[var(--caritas-border)]"}`}>
               <div className="flex items-center gap-3">
@@ -250,7 +281,7 @@ function DetalleInscrito({ curso, onVolver }: { curso: CursoInscrito; onVolver: 
                   <Award className="w-5 h-5 text-green-600" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-green-800">¡Curso completado!</p>
+                  <p className="text-sm font-semibold text-green-800">¡Evaluación final rendida!</p>
                   <p className="text-xs text-green-700 mt-0.5">
                     {curso.constanciaUrl ? "Tu constancia está lista para descargar." : "Tu constancia está siendo procesada por el especialista."}
                   </p>
@@ -269,22 +300,6 @@ function DetalleInscrito({ curso, onVolver }: { curso: CursoInscrito; onVolver: 
             </div>
           </SeccionAcordeon>
         )}
-
-        {/* Contenido del curso */}
-        <SeccionAcordeon titulo="Contenido del curso" badge={curso.sesiones.length}>
-          {curso.sesiones.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-gray-200 rounded-xl py-10 text-gray-400">
-              <BookOpen className="w-8 h-8" />
-              <p className="text-sm">El contenido aún no está disponible.</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {curso.sesiones.map((s) => (
-                <UnidadLectura key={s.id} sesion={s} />
-              ))}
-            </div>
-          )}
-        </SeccionAcordeon>
       </div>
 
       {showExamenInicial && curso.cuestionarioInicial && (

@@ -29,6 +29,8 @@ function makeRepo(overrides: Partial<IIncidenciaRepository> = {}): IIncidenciaRe
     registrarEntrega: vi.fn().mockResolvedValue(undefined),
     agregarSeguimiento: vi.fn().mockResolvedValue(undefined),
     liberarBrigadistas: vi.fn().mockResolvedValue(undefined),
+    marcarBrigadistasEnCampo: vi.fn().mockResolvedValue(undefined),
+    marcarBrigadistasDisponibles: vi.fn().mockResolvedValue(undefined),
     agregarPersona: vi.fn().mockResolvedValue(undefined),
     guardarEvidencias: vi.fn().mockResolvedValue(undefined),
     ...overrides,

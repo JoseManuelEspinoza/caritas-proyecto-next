@@ -15,188 +15,25 @@ import {
   Loader2,
   Pencil,
   CheckCircle,
-  Search,
-  Plus,
-  UserCheck,
 } from "lucide-react";
-import { registrarAtencion, cerrarCaso, assignEquipo } from "@/app/actions/incidents";
+import {
+  registrarAtencion,
+  cerrarCaso,
+  addEvidenciasCampo,
+  iniciarSeguimientoCaso,
+} from "@/app/actions/incidents";
 import type { IncidenciaDetalleOutput } from "@/core/application/dtos/IncidenciaDetalleDTO";
 import { parseInforme } from "@/core/application/dtos/InformeContenidoDTO";
 import { permisosDeDetalle } from "@/app/lib/permisos-incidencia";
 import { subirEvidencia } from "@/app/ui/grd/incidente/lib/subir-evidencia";
-import { avatarColor, iniciales } from "@/app/ui/grd/incidente/lib/avatar";
-import { BrigCard } from "@/app/ui/grd/incidente/components/BrigadistaCard";
 import { fmtDate } from "@/app/ui/grd/incidente/lib/format";
 import { inputCls, textareaCls } from "@/app/ui/grd/incidente/lib/ui-classes";
-import { AsignarSeguimientoPanel } from "@/app/ui/grd/incidente/steps/seguimiento/AsignarResponsable";
+import { AsignacionStep } from "@/app/ui/grd/incidente/steps/AsignacionStep";
+import { EvidenciaUploader } from "@/app/ui/grd/incidente/components/EvidenciaUploader";
+import { EvidenciaChip } from "@/app/ui/grd/incidente/components/EvidenciasRegistro";
 
-// ─── Panel de equipo reasignable dentro de AtencionStep ─────────────────────
-function EquipoAsignacionPanel({
-  data,
-  onDone,
-}: {
-  data: IncidenciaDetalleOutput;
-  onDone: () => void;
-}) {
-  const [editando, setEditando] = useState(false);
-  const [isPending, startTransition] = useTransition();
-  const [query, setQuery] = useState("");
-
-  const respInicial = data.asignaciones.find((a) => a.esResponsable)?.brigadistaId ?? "";
-  const equipoInicial = data.asignaciones.filter((a) => !a.esResponsable).map((a) => a.brigadistaId);
-  const [responsable, setResponsable] = useState(respInicial);
-  const [equipo, setEquipo] = useState<string[]>(equipoInicial);
-
-  const seleccionados = [responsable, ...equipo].filter(Boolean);
-  const tieneEquipo = data.asignaciones.length > 0 || Boolean(data.responsableGRD);
-
-  function findBrig(id: string) {
-    return data.brigadistasDisponibles.find((b) => b.id === id)
-      ?? data.asignaciones.find((a) => a.brigadistaId === id);
-  }
-
-  const catalogo = data.brigadistasDisponibles
-    .filter((b) => !seleccionados.includes(b.id))
-    .filter((b) => {
-      const q = query.trim().toLowerCase();
-      return !q || `${b.nombres} ${b.apellidos ?? ""}`.toLowerCase().includes(q)
-        || (b.parroquia ?? "").toLowerCase().includes(q);
-    });
-
-  function agregar(id: string) {
-    if (!responsable) setResponsable(id);
-    else if (!equipo.includes(id) && id !== responsable) setEquipo((p) => [...p, id]);
-  }
-
-  function guardar() {
-    if (!responsable) { toast.error("Designa un brigadista responsable."); return; }
-    startTransition(async () => {
-      const res = await assignEquipo(data.idIncidencia, responsable, equipo, data.instruccionesAsignacion ?? "");
-      if (res && "message" in res) { toast.error(res.message); return; }
-      toast.success("Equipo reasignado correctamente.");
-      setEditando(false);
-      onDone();
-    });
-  }
-
-  const respBrig = data.asignaciones.find((a) => a.esResponsable);
-  const integrantes = data.asignaciones.filter((a) => !a.esResponsable);
-
-  return (
-    <div className="rounded-lg border border-cyan-100 overflow-hidden">
-      <div className="bg-cyan-50 px-3 py-2 flex items-center justify-between border-b border-cyan-100">
-        <div className="flex items-center gap-2">
-          <Users className="w-4 h-4 text-cyan-600" />
-          <p className="text-xs font-bold text-cyan-800 uppercase tracking-wide">Equipo asignado</p>
-        </div>
-        {!editando && (
-          <button type="button" onClick={() => setEditando(true)}
-            className="flex items-center gap-1 text-xs text-cyan-700 hover:text-cyan-900 border border-cyan-200 rounded-lg px-2 py-1 hover:bg-cyan-100">
-            <Pencil className="w-3 h-3" /> Reasignar
-          </button>
-        )}
-        {editando && (
-          <button type="button" onClick={() => { setEditando(false); setResponsable(respInicial); setEquipo(equipoInicial); }}
-            className="text-xs text-gray-500 hover:text-gray-700">
-            Cancelar
-          </button>
-        )}
-      </div>
-
-      <div className="p-3 space-y-2">
-        {!editando ? (
-          !tieneEquipo ? (
-            <p className="text-xs text-gray-400 italic text-center py-2">Sin equipo asignado</p>
-          ) : data.responsableGRD ? (
-            <div className="flex items-center gap-2">
-              <UserCheck className="w-4 h-4 text-cyan-600" />
-              <p className="text-sm font-medium text-gray-800">{data.responsableGRD.nombre}</p>
-              <span className="text-[10px] bg-cyan-100 text-cyan-700 px-1.5 py-0.5 rounded-full font-bold">Especialista GRD</span>
-            </div>
-          ) : (
-            <div className="space-y-1.5">
-              {respBrig && (
-                <BrigCard id={respBrig.brigadistaId} nombres={respBrig.nombres}
-                  apellidos={respBrig.apellidos} parroquia={respBrig.parroquia}
-                  celular={respBrig.celular} badge="RESPONSABLE" />
-              )}
-              {integrantes.map((m) => (
-                <BrigCard key={m.brigadistaId} id={m.brigadistaId} nombres={m.nombres}
-                  apellidos={m.apellidos} parroquia={m.parroquia} celular={m.celular} />
-              ))}
-            </div>
-          )
-        ) : (
-          <div className="space-y-3">
-            {/* Seleccionados */}
-            {seleccionados.length > 0 && (
-              <div className="space-y-1.5">
-                {responsable && (() => {
-                  const b = findBrig(responsable);
-                  if (!b) return null;
-                  return (
-                    <BrigCard id={responsable} nombres={b.nombres}
-                      apellidos={"apellidos" in b ? b.apellidos : null}
-                      parroquia={"parroquia" in b ? b.parroquia : null}
-                      celular={"celular" in b ? b.celular : null}
-                      badge="RESPONSABLE"
-                      onRemove={() => { if (equipo.length > 0) { setResponsable(equipo[0]); setEquipo((p) => p.slice(1)); } else setResponsable(""); }}
-                    />
-                  );
-                })()}
-                {equipo.map((id) => {
-                  const b = findBrig(id);
-                  if (!b) return null;
-                  return (
-                    <BrigCard key={id} id={id} nombres={b.nombres}
-                      apellidos={"apellidos" in b ? b.apellidos : null}
-                      parroquia={"parroquia" in b ? b.parroquia : null}
-                      celular={"celular" in b ? b.celular : null}
-                      onRemove={() => setEquipo((p) => p.filter((x) => x !== id))}
-                    />
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Buscador */}
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-              <input value={query} onChange={(e) => setQuery(e.target.value)}
-                placeholder="Buscar brigadista..."
-                className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-cyan-400" />
-            </div>
-
-            {/* Lista */}
-            <div className="max-h-40 overflow-y-auto border border-gray-100 rounded-lg divide-y divide-gray-50">
-              {catalogo.length === 0 ? (
-                <p className="text-center py-3 text-xs text-gray-400">Sin resultados</p>
-              ) : catalogo.map((b) => (
-                <button key={b.id} type="button" onClick={() => agregar(b.id)}
-                  className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-left">
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${avatarColor(b.id)}`}>
-                    <span className="text-white text-[10px] font-bold">{iniciales(b.nombres, b.apellidos)}</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-gray-800 truncate">{b.nombres} {b.apellidos ?? ""}</p>
-                    <p className="text-[10px] text-gray-400">{b.parroquia ?? "—"}</p>
-                  </div>
-                  <Plus className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                </button>
-              ))}
-            </div>
-
-            <button type="button" onClick={guardar} disabled={isPending || !responsable}
-              className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-white text-xs font-semibold disabled:opacity-50"
-              style={{ background: "#0e7490" }}>
-              {isPending ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Guardando…</> : <><UserCheck className="w-3.5 h-3.5" /> Guardar reasignación ({seleccionados.length})</>}
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+/** Marca para distinguir las evidencias subidas durante la entrega (igual patrón que campo). */
+const MARCA_ENTREGA = "Evidencia de entrega";
 
 type ActaArt = { codigo: string; descripcion: string; cantidad: number };
 type ActaKit = { tipoKit: string; articulos: ActaArt[] };
@@ -213,9 +50,22 @@ export function AtencionStep({
   onNavigate: (step: number) => void;
 }) {
   const [isPending, startTransition] = useTransition();
-  const { puedeAtender: canAct } = permisosDeDetalle(data);
+  const { puedeAtender: canAct, puedeDecidirSeguimiento, puedeAsignar } = permisosDeDetalle(data);
   const done = data.entregas.length > 0;
   const yaAtendido = ["ATENDIDO", "CERRADO", "EN SEGUIMIENTO"].includes(data.estadoActual ?? "");
+
+  // Responsable de la entrega: el Especialista GRD (dueño del caso) o el
+  // brigadista marcado como responsable del equipo. Solo este genera el acta y
+  // marca Atendido; los demás integrantes solo envían su información (evidencias).
+  const esResponsableEntrega =
+    puedeAsignar ||
+    (!!data.currentUserBrigadistaId &&
+      data.asignaciones.some(
+        (a) => a.esResponsable && a.brigadistaId === data.currentUserBrigadistaId
+      ));
+
+  // Evidencias de la entrega ya registradas (mismo origen y visor que las de campo).
+  const evidEntrega = data.evidencias.filter((e) => e.descripcion === MARCA_ENTREGA);
 
   // Kits aprobados por familia (del informe de evaluación enviado al Comité)
   const informeEval = data.informes.find((i) => i.tipo === "EVALUACION");
@@ -262,9 +112,10 @@ export function AtencionStep({
   const [confirmados, setConfirmados] = useState<Set<string>>(new Set());
   const [descripcion, setDescripcion] = useState("");
   const [colapsadas, setColapsadas] = useState<Set<string>>(new Set());
-  const [evidencia, setEvidencia] = useState<File | null>(null);
   const [fotosFamilia, setFotosFamilia] = useState<Record<string, File | null>>({});
   const [subiendo, setSubiendo] = useState(false);
+  // Subida estandarizada de evidencias de entrega (mismo patrón que el campo).
+  const [subiendoEvid, setSubiendoEvid] = useState<string[]>([]);
   const [showActaModal, setShowActaModal] = useState(false);
   const [actaFile, setActaFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -309,6 +160,54 @@ export function AtencionStep({
     return `Ítems confirmados: ${totalConfirmados}/${totalItems}.\n${partes.join("\n")}`;
   }
 
+  // Subida estandarizada de evidencias de entrega: sube cada archivo y lo
+  // registra de inmediato (mismo flujo que la recopilación de campo).
+  async function handleUploadEntrega(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const arr = Array.from(files);
+    setSubiendoEvid(arr.map((f) => f.name));
+    const subidas: {
+      key: string;
+      nombreArchivo: string;
+      formato: string | null;
+      tamano: number | null;
+      descripcion: string;
+    }[] = [];
+    for (const file of arr) {
+      try {
+        const key = await subirEvidencia(file, data.idIncidencia);
+        subidas.push({
+          key,
+          nombreArchivo: file.name,
+          formato: file.type || "application/octet-stream",
+          tamano: file.size,
+          descripcion: MARCA_ENTREGA,
+        });
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "No se pudo subir el archivo.");
+      }
+    }
+    setSubiendoEvid([]);
+    if (subidas.length) {
+      const r = await addEvidenciasCampo(data.idIncidencia, subidas);
+      if (r && "message" in r) {
+        toast.error(r.message);
+        return;
+      }
+      toast.success(
+        subidas.length === 1 ? "Evidencia de entrega subida." : `${subidas.length} evidencias subidas.`
+      );
+      onDone();
+    }
+  }
+
+  // Integrantes no responsables: su aporte son las evidencias (ya subidas);
+  // este botón confirma el envío al responsable, que es quien cierra la entrega.
+  function enviarInformacion() {
+    toast.success("Tu información fue enviada al responsable del equipo.");
+    onDone();
+  }
+
   function generarActa() {
     startTransition(async () => {
       const { generarActaEntregaPdf } = await import("@/app/lib/acta-entrega-pdf");
@@ -319,10 +218,10 @@ export function AtencionStep({
         urls.push(u);
         return u;
       };
-      const evidencias =
-        evidencia && evidencia.type.startsWith("image/")
-          ? [{ url: objUrl(evidencia)!, nombre: evidencia.name }]
-          : [];
+      // Las evidencias de la entrega ya están subidas; el acta usa sus URLs reales.
+      const evidencias = evidEntrega
+        .filter((e) => (e.formato ?? "").startsWith("image/") && !!e.urlArchivo)
+        .map((e) => ({ url: e.urlArchivo, nombre: e.nombreArchivo }));
       try {
         await generarActaEntregaPdf({
           codigo: data.codigoCaso ?? "GRD",
@@ -388,7 +287,6 @@ export function AtencionStep({
     setSubiendo(true);
     try {
       const files: File[] = [actaFile];
-      if (evidencia) files.push(evidencia);
       for (const f of Object.values(fotosFamilia)) if (f) files.push(f);
       for (const f of files) {
         try {
@@ -438,13 +336,29 @@ export function AtencionStep({
     });
   }
 
+  // Tras reasignar el responsable del seguimiento (con el AsignacionStep
+  // reutilizado), inicia la fase de seguimiento (ATENDIDO → SEGUIMIENTO ABIERTO).
+  function iniciarSeguimientoTrasAsignar() {
+    startTransition(async () => {
+      const res = await iniciarSeguimientoCaso(data.idIncidencia);
+      if (res && "message" in res) {
+        toast.error(res.message);
+        return;
+      }
+      toast.success("Responsable asignado. Seguimiento iniciado.");
+      setAsignandoSeg(false);
+      onNavigate(5);
+      onDone();
+    });
+  }
+
   if (done) {
     const e = data.entregas[0];
     const enAtendido = data.estadoActual === "ATENDIDO";
     return (
       <div className="space-y-4">
-        {/* Decisión de seguimiento (solo cuando está ATENDIDO) */}
-        {enAtendido && canAct && (
+        {/* Decisión de seguimiento (solo cuando está ATENDIDO; exclusiva del Especialista GRD) */}
+        {enAtendido && puedeDecidirSeguimiento && (
           <div className="rounded-xl border border-cyan-200 overflow-hidden">
             <div className="bg-cyan-700 text-white p-4 flex items-start justify-between gap-3">
               <div className="flex items-start gap-3 min-w-0">
@@ -472,15 +386,31 @@ export function AtencionStep({
               </div>
 
               {asignandoSeg ? (
-                <AsignarSeguimientoPanel
-                  data={data}
-                  onCancel={() => setAsignandoSeg(false)}
-                  onListo={() => {
-                    setAsignandoSeg(false);
-                    onNavigate(5);
-                    onDone();
-                  }}
-                />
+                <div className="space-y-3 border border-green-200 rounded-xl p-3 bg-green-50/40">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-bold text-green-800 uppercase tracking-wider">
+                      Asignar responsable del seguimiento
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setAsignandoSeg(false)}
+                      disabled={isPending}
+                      className="text-gray-400 hover:text-gray-600 p-1 disabled:opacity-50"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-green-700">
+                    Designa el responsable del seguimiento con el mismo algoritmo de sugerencia.
+                    Al guardar la asignación se inicia el seguimiento.
+                  </p>
+                  {/* Mismo paso de asignación de brigadistas (algoritmo + responsable), tal cual. */}
+                  <AsignacionStep
+                    data={data}
+                    iniciarEditando
+                    onDone={iniciarSeguimientoTrasAsignar}
+                  />
+                </div>
               ) : (
                 <>
                   <p className="text-sm font-semibold text-gray-800 text-center">
@@ -581,26 +511,15 @@ export function AtencionStep({
             </div>
           </div>
           <span className="text-[10px] font-bold bg-white/20 px-2 py-1 rounded-full uppercase flex-shrink-0">
-            Especialista GRD
+            {puedeAsignar ? "Especialista GRD" : "Brigadista asignado"}
           </span>
         </div>
 
         <div className="p-4 space-y-4 bg-white">
-          {/* Equipo asignado con opción de reasignar */}
-          <EquipoAsignacionPanel data={data} onDone={() => {}} />
-
-          {/* Resolución del Comité */}
-          {data.solicitudComite?.observaciones && (
-            <div className="flex items-start gap-2 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
-              <FileCheck className="w-4 h-4 text-cyan-600 mt-0.5 flex-shrink-0" />
-              <div>
-                <p className="text-[11px] font-bold text-cyan-800 uppercase tracking-wider">
-                  Resolución del Comité de Donaciones
-                </p>
-                <p className="text-xs text-cyan-800 mt-0.5">{data.solicitudComite.observaciones}</p>
-              </div>
-            </div>
-          )}
+          {/* Equipo asignado y reasignación: se reutiliza el mismo paso de
+              asignación (algoritmo de sugerencia + responsable). Solo el
+              Especialista GRD puede modificarlo; el brigadista lo ve en lectura. */}
+          <AsignacionStep data={data} onDone={onDone} />
 
           {/* Fecha de entrega */}
           <div>
@@ -743,43 +662,35 @@ export function AtencionStep({
             )}
           </div>
 
-          {/* Evidencia de entrega general */}
+          {/* Evidencia de entrega (subida estandarizada: múltiples archivos,
+              mismo componente y flujo que las evidencias de campo) */}
           <div>
             <p className="text-[11px] font-bold text-cyan-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
               <Camera className="w-3.5 h-3.5" /> Evidencia de entrega
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <label className="flex flex-col items-center justify-center gap-1.5 py-5 border-2 border-cyan-200 rounded-xl text-cyan-700 cursor-pointer hover:bg-cyan-50">
-                <Camera className="w-5 h-5" />
-                <span className="text-xs font-medium">
-                  {evidencia && evidencia.type.startsWith("image/") ? evidencia.name : "Foto / Acta"}
-                </span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => setEvidencia(e.target.files?.[0] ?? null)}
-                />
-              </label>
-              <label className="flex flex-col items-center justify-center gap-1.5 py-5 border-2 border-gray-200 rounded-xl text-gray-500 cursor-pointer hover:bg-gray-50">
-                <Upload className="w-5 h-5" />
-                <span className="text-xs font-medium">
-                  {evidencia && !evidencia.type.startsWith("image/") ? evidencia.name : "Documento"}
-                </span>
-                <input
-                  type="file"
-                  accept=".pdf,.doc,.docx,image/*"
-                  className="hidden"
-                  onChange={(e) => setEvidencia(e.target.files?.[0] ?? null)}
-                />
-              </label>
-            </div>
+            <EvidenciaUploader
+              onFiles={handleUploadEntrega}
+              accept="image/*,video/*,.pdf"
+              loading={subiendoEvid.length > 0}
+              loadingCount={subiendoEvid.length}
+            />
+            {evidEntrega.length === 0 && subiendoEvid.length === 0 ? (
+              <p className="text-center text-xs text-gray-400 py-2">
+                No hay evidencias de entrega registradas
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                {evidEntrega.map((ev) => (
+                  <EvidenciaChip key={ev.id} ev={ev} />
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Descripción */}
           <div>
             <p className="text-[11px] font-bold text-cyan-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-              <FileText className="w-3.5 h-3.5" /> Descripción de la entrega (Especialista GRD)
+              <FileText className="w-3.5 h-3.5" /> Descripción de la entrega
             </p>
             <textarea
               rows={3}
@@ -790,39 +701,58 @@ export function AtencionStep({
             />
           </div>
 
-          {/* Acciones */}
-          <div className="flex flex-col sm:flex-row gap-2 pt-1">
-            <button
-              type="button"
-              onClick={generarActa}
-              disabled={isPending || subiendo}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 border border-cyan-300 text-cyan-700 rounded-xl font-medium hover:bg-cyan-50 disabled:opacity-50"
-            >
-              <Download className="w-4 h-4" /> Generar Acta PDF
-            </button>
-            <button
-              type="button"
-              onClick={marcarAtendido}
-              disabled={isPending || subiendo || yaAtendido}
-              title={yaAtendido ? "Este caso ya fue marcado como Atendido" : undefined}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold transition-all ${
-                yaAtendido
-                  ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                  : "text-white disabled:opacity-50"
-              }`}
-              style={yaAtendido ? undefined : { background: "#0e7490" }}
-            >
-              {isPending || subiendo ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" /> Procesando…
-                </>
-              ) : (
-                <>
-                  <FileCheck className="w-4 h-4" /> Marcar como Atendido
-                </>
-              )}
-            </button>
-          </div>
+          {/* Acciones: el responsable genera el acta y cierra la entrega; los
+              demás integrantes solo envían su información (evidencias). */}
+          {esResponsableEntrega ? (
+            <div className="flex flex-col sm:flex-row gap-2 pt-1">
+              <button
+                type="button"
+                onClick={generarActa}
+                disabled={isPending || subiendo}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 border border-cyan-300 text-cyan-700 rounded-xl font-medium hover:bg-cyan-50 disabled:opacity-50"
+              >
+                <Download className="w-4 h-4" /> Generar Acta PDF
+              </button>
+              <button
+                type="button"
+                onClick={marcarAtendido}
+                disabled={isPending || subiendo || yaAtendido}
+                title={yaAtendido ? "Este caso ya fue marcado como Atendido" : undefined}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold transition-all ${
+                  yaAtendido
+                    ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                    : "text-white disabled:opacity-50"
+                }`}
+                style={yaAtendido ? undefined : { background: "#0e7490" }}
+              >
+                {isPending || subiendo ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" /> Procesando…
+                  </>
+                ) : (
+                  <>
+                    <FileCheck className="w-4 h-4" /> Marcar como Atendido
+                  </>
+                )}
+              </button>
+            </div>
+          ) : (
+            <div className="pt-1 space-y-2">
+              <p className="text-[11px] text-gray-500 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
+                El acta y el cierre de la entrega los realiza el brigadista responsable del
+                equipo. Sube tus evidencias y envía tu información.
+              </p>
+              <button
+                type="button"
+                onClick={enviarInformacion}
+                disabled={isPending || subiendoEvid.length > 0}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold text-white disabled:opacity-50"
+                style={{ background: "#0e7490" }}
+              >
+                <Upload className="w-4 h-4" /> Enviar información
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

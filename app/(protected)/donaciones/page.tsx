@@ -5,6 +5,7 @@ import { prisma } from "@/app/lib/prisma";
 import { DonacionesModule, type Caso, type ReporteComite } from "@/app/ui/donaciones/donaciones-module";
 import { cargarTallyParaPagina, type TallyRondaConNombres } from "@/app/lib/comite-donaciones-tally";
 import { getUsuarioGRDId } from "@/app/lib/usuario-grd";
+import { makeComiteDonacionesUseCases } from "@/core/infrastructure/factories/makeComiteDonacionesUseCases";
 
 const ESTADOS = [
   "EN EVALUACION",
@@ -49,6 +50,7 @@ export default async function DonacionesPage() {
         select: {
           idGrupoFamiliar: true,
           nombreReferencia: true,
+          observaciones: true,
           personas: { select: { nombres: true, apellidos: true } },
         },
       },
@@ -66,7 +68,6 @@ export default async function DonacionesPage() {
 
   const casos: Caso[] = rows.map((r) => {
     const evalInforme = r.informes.find((i) => i.tipoInforme === "EVALUACION");
-    const campoInforme = r.informes.find((i) => i.tipoInforme === "CAMPO");
 
     let sc: Record<string, unknown> | null = null;
     if (evalInforme?.contenido) {
@@ -77,17 +78,9 @@ export default async function DonacionesPage() {
       }
     }
 
-    // Notas del brigadista por grupo familiar (del informe de campo)
-    const notasFamilias: { id: string; nota: string }[] = (() => {
-      try {
-        const p = campoInforme?.contenido ? JSON.parse(campoInforme.contenido) : null;
-        return Array.isArray(p?.notasFamilias) ? p.notasFamilias : [];
-      } catch {
-        return [];
-      }
-    })();
+    // Anotación de la familia (fuente única: GrupoFamiliar.observaciones).
     const notaDe = (refId: string) =>
-      notasFamilias.find((n) => n.id === refId)?.nota?.trim() || null;
+      r.gruposFamiliares.find((g) => g.idGrupoFamiliar === refId)?.observaciones?.trim() || null;
 
     const integrantesDe = (refId: string): string[] => {
       const g = r.gruposFamiliares.find((gf) => gf.idGrupoFamiliar === refId);
@@ -175,6 +168,15 @@ export default async function DonacionesPage() {
   const miIdUsuarioGRD = await getUsuarioGRDId();
 
   const casosEnEvaluacion = casos.filter((c) => c.estado === "EN EVALUACION");
+
+  // Auto-sana: garantiza que todo caso EN EVALUACION tenga una ronda de votación
+  // abierta (idempotente). Cubre casos que entraron a evaluación antes de existir
+  // la creación automática, o donde esta no se ejecutó.
+  const comiteUC = makeComiteDonacionesUseCases();
+  await Promise.all(
+    casosEnEvaluacion.map((c) => comiteUC.abrirRonda.execute(c.id).catch(() => null))
+  );
+
   const tallyEntries = await Promise.all(
     casosEnEvaluacion.map(async (c) => [c.id, await cargarTallyParaPagina(c.id)] as [string, TallyRondaConNombres | null])
   );

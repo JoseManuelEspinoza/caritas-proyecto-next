@@ -16,6 +16,8 @@ export type PersonaForm = {
   celular: string;
   parentesco: string;
   situacionActual: string;
+  /** Comentario/observación individual de la persona (opcional). */
+  comentario?: string;
   familiaId?: string;
 };
 

@@ -26,7 +26,6 @@ import {
 import {
   saveInformeEvaluacion,
   saveBorradorInformeEvaluacion,
-  corregirYReenviar,
 } from "@/app/actions/incidents";
 import type { IncidenciaDetalleOutput } from "@/core/application/dtos/IncidenciaDetalleDTO";
 import { parseInforme } from "@/core/application/dtos/InformeContenidoDTO";
@@ -41,7 +40,7 @@ import {
 } from "@/app/ui/grd/incidente/components/EvidenciasRegistro";
 import { subirEvidencia } from "@/app/ui/grd/incidente/lib/subir-evidencia";
 import { fmtDate } from "@/app/ui/grd/incidente/lib/format";
-import { inputCls, textareaCls, btnPrimary, btnDanger } from "@/app/ui/grd/incidente/lib/ui-classes";
+import { inputCls, textareaCls } from "@/app/ui/grd/incidente/lib/ui-classes";
 
 /** Paso "Revisar Caso": informe del Especialista, vista de solo lectura del Comité y decisión. */
 export function RevisionStep({
@@ -63,15 +62,6 @@ export function RevisionStep({
       ? "decidir"
       : "evaluar";
   const [view, setView] = useState<"evaluar" | "decidir">(defaultView);
-  const [evalForm, setEvalForm] = useState({
-    analisis: "",
-    hallazgos: "",
-    conclusiones: "",
-    urgencia: "Alta",
-    intervencion: "Donación en especie",
-    recomendacion: "",
-  });
-  const setE = (k: string, v: string) => setEvalForm((p) => ({ ...p, [k]: v }));
 
   // ── Informe enriquecido del Especialista ──
   type ArtLocal = { codigo: string; descripcion: string; cantidad: number };
@@ -244,17 +234,6 @@ export function RevisionStep({
   // El informe ya fue enviado al comité cuando existe informe de evaluación y el estado avanzó a EN EVALUACION
   const informeYaEnviado = !!informeEval && data.estadoActual === "EN EVALUACION";
 
-  // Anotaciones por familia registradas en el levantamiento de campo
-  const notasFamiliasRef: { id: string; nota: string }[] = (() => {
-    const campo = data.informes.find((i) => i.tipo === "CAMPO");
-    try {
-      const p = campo?.contenido ? JSON.parse(campo.contenido) : null;
-      return Array.isArray(p?.notasFamilias) ? p.notasFamilias : [];
-    } catch {
-      return [];
-    }
-  })();
-
   const targets = data.gruposFamiliares;
   const integrantesDe = (g: IncidenciaDetalleOutput["gruposFamiliares"][number]) =>
     g.personas.map((p) => `${p.nombres} ${p.apellidos ?? ""}`.trim());
@@ -276,9 +255,9 @@ export function RevisionStep({
       .filter((k) => k.articulos.length);
   }
 
-  // Nota del brigadista registrada por familia en el levantamiento de campo
+  // Anotación de la familia (fuente única: GrupoFamiliar.observaciones).
   function notaFamiliaDe(refId: string): string | null {
-    return notasFamiliasRef.find((n) => n.id === refId)?.nota?.trim() || null;
+    return targets.find((g) => g.id === refId)?.observaciones?.trim() || null;
   }
 
   // Resumen consolidado de todos los artículos asignados (suma por kit/código)
@@ -337,6 +316,11 @@ export function RevisionStep({
 
   // Segundo click (desde el paso de documento): sube documento y envía
   async function handleEvaluar() {
+    // Obligatorio: al menos un enlace o un archivo.
+    if (docTipo === "link" ? !docLink.trim() : !docFile) {
+      toast.error("Adjunta un enlace o un archivo para enviar al Comité.");
+      return;
+    }
     let docAdjunto: string | null = null;
 
     if (docTipo === "link" && docLink.trim()) {
@@ -501,68 +485,6 @@ export function RevisionStep({
     );
   }
 
-  if (data.estadoActual === "OBSERVADO") {
-    return (
-      <div className="space-y-4">
-        <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
-          <p className="text-sm font-semibold text-amber-800 mb-1">
-            El Comité devolvió con observaciones
-          </p>
-          <p className="text-sm text-amber-700">
-            {solicitud?.observaciones ?? "Sin observaciones registradas"}
-          </p>
-        </div>
-        {canEvaluar && (
-          <div className="space-y-3">
-            <p className="text-xs font-medium text-gray-700">Corrección del informe</p>
-            <textarea
-              rows={3}
-              className={textareaCls}
-              value={evalForm.analisis}
-              onChange={(e) => setE("analisis", e.target.value)}
-              placeholder="Nuevo análisis de la situación..."
-            />
-            <textarea
-              rows={2}
-              className={textareaCls}
-              value={evalForm.hallazgos}
-              onChange={(e) => setE("hallazgos", e.target.value)}
-              placeholder="Hallazgos actualizados..."
-            />
-            <textarea
-              rows={2}
-              className={textareaCls}
-              value={evalForm.conclusiones}
-              onChange={(e) => setE("conclusiones", e.target.value)}
-              placeholder="Conclusiones corregidas..."
-            />
-            <div className="flex justify-end">
-              <button
-                onClick={() => {
-                  startTransition(async () => {
-                    await corregirYReenviar(data.idIncidencia, {
-                      analisisSituacion: evalForm.analisis,
-                      hallazgosTexto: evalForm.hallazgos,
-                      conclusiones: evalForm.conclusiones,
-                      recomendacionComite: evalForm.recomendacion,
-                    });
-                    toast.success("Informe corregido y reenviado");
-                    onDone();
-                  });
-                }}
-                disabled={isPending}
-                className={btnPrimary}
-                style={{ background: "var(--caritas-green)" }}
-              >
-                {isPending ? "Enviando..." : "Reenviar al Comité"}
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-4">
       {/* Tabs: Evaluar / Decidir */}
@@ -589,6 +511,22 @@ export function RevisionStep({
       {view === "evaluar" &&
         (canEvaluar ? (
           <div className="space-y-4">
+            {data.estadoActual === "OBSERVADO" && (
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                <div className="flex items-center gap-2 mb-1">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                  <p className="text-sm font-semibold text-amber-800">
+                    El Comité devolvió el caso con observaciones
+                  </p>
+                </div>
+                <p className="text-sm text-amber-700">
+                  {solicitud?.observaciones ?? "Sin observaciones registradas"}
+                </p>
+                <p className="text-xs text-amber-600 mt-1.5">
+                  Corrige el informe completo y vuelve a enviarlo al Comité.
+                </p>
+              </div>
+            )}
             {/* Mini-header fijo: aparece al scrollear más allá del encabezado del informe */}
             {informeStickyVisible && pdfGenerado && (
               <div
@@ -720,7 +658,10 @@ export function RevisionStep({
 
             {!collapsed && (
               <>
-                <div className={`space-y-4 ${informeYaEnviado ? "pointer-events-none opacity-60 select-none" : ""}`}>
+                <div className={informeYaEnviado ? "pointer-events-none opacity-60 select-none" : ""}>
+                {/* Todo visible en 2 columnas: secciones cortas a la mitad, las
+                    grandes (Análisis, Asignación, Evidencias-ref) a lo ancho. */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
                 {/* A) Datos de identificación */}
                 <Seccion key={`s1-${collapsed}`} defaultOpen={!collapsed} num="1" titulo="Datos de Identificación" icon={FileText} color="purple">
                   <div>
@@ -783,7 +724,7 @@ export function RevisionStep({
                 </Seccion>
 
                 {/* C) Análisis y descripción */}
-                <Seccion key={`s3-${collapsed}`} defaultOpen={!collapsed} num="3" titulo="Análisis y Descripción" icon={BarChart3} color="purple">
+                <Seccion key={`s3-${collapsed}`} defaultOpen={!collapsed} num="3" titulo="Análisis y Descripción" icon={BarChart3} color="purple" className="lg:col-span-2">
                   {(() => {
                     const campo = data.informes.find((i) => i.tipo === "CAMPO");
                     let ref: any = null;
@@ -864,7 +805,7 @@ export function RevisionStep({
                 </Seccion>
 
                 {/* D) Asignación de ayuda humanitaria por familia */}
-                <Seccion key={`s4-${collapsed}`} defaultOpen={!collapsed} num="4" titulo="Asignación de Ayuda Humanitaria por Familia" icon={Package} color="purple">
+                <Seccion key={`s4-${collapsed}`} defaultOpen={!collapsed} num="4" titulo="Asignación de Ayuda Humanitaria por Familia" icon={Package} color="purple" className="lg:col-span-2">
                   {targets.length === 0 ? (
                     <p className="text-xs text-gray-400">Sin familias empadronadas.</p>
                   ) : (
@@ -902,16 +843,16 @@ export function RevisionStep({
                             </div>
                           </div>
 
-                          {/* Anotación del brigadista para esta familia */}
+                          {/* Anotación de la familia (registro + brigadista, unificada) */}
                           {(() => {
-                            const notaItem = notasFamiliasRef.find((n) => n.id === g.id);
-                            if (!notaItem?.nota) return null;
+                            const nota = notaFamiliaDe(g.id);
+                            if (!nota) return null;
                             return (
                               <div className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 text-xs">
                                 <p className="text-[10px] font-semibold text-blue-700 uppercase tracking-wide mb-0.5">
-                                  Anotación del brigadista
+                                  Anotación de la familia
                                 </p>
-                                <p className="text-blue-900">{notaItem.nota}</p>
+                                <p className="text-blue-900">{nota}</p>
                               </div>
                             );
                           })()}
@@ -1203,13 +1144,14 @@ export function RevisionStep({
                 </Seccion>
 
                 {/* Evidencias de referencia (solo visualización) */}
-                <div className="border border-gray-200 rounded-xl p-3">
+                <div className="border border-gray-200 rounded-xl p-3 lg:col-span-2">
                   <p className="text-xs font-semibold text-gray-500 uppercase mb-2">
                     Todas las evidencias del caso (referencia)
                   </p>
                   <EvidenciasRegistro evidencias={data.evidencias} />
                 </div>
-                </div>
+                </div>{/* fin grid de secciones */}
+                </div>{/* fin contenedor */}
 
                 {/* Acciones */}
                 {fieldErrors.size > 0 && (
@@ -1230,13 +1172,16 @@ export function RevisionStep({
                     </span>
                   </div>
                 )}
-                {!pdfGenerado ? (
+                {!informeYaEnviado && (
+                  <DestinatariosPreview step="informe" incidenciaId={data.idIncidencia} />
+                )}
+                <div className="flex flex-col sm:flex-row gap-2 sticky bottom-0 z-10 bg-white/95 backdrop-blur pt-3 pb-2 border-t border-gray-100">
                   <button
                     type="button"
                     onClick={handlePdf}
-                    disabled={savingForPdf || isPending}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-white font-semibold hover:opacity-90 disabled:opacity-50"
-                    style={{ background: "var(--caritas-green)" }}
+                    disabled={savingForPdf || isPending || informeYaEnviado}
+                    title={informeYaEnviado ? "El informe ya fue enviado al Comité" : undefined}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 border border-purple-300 text-purple-700 rounded-xl font-medium hover:bg-purple-50 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {savingForPdf ? (
                       <><Loader2 className="w-4 h-4 animate-spin" /> Guardando…</>
@@ -1244,23 +1189,22 @@ export function RevisionStep({
                       <><FileText className="w-4 h-4" /> Generar y descargar PDF</>
                     )}
                   </button>
-                ) : (
-                  !informeYaEnviado && (
-                    <div className="space-y-2">
-                      <DestinatariosPreview step="informe" incidenciaId={data.idIncidencia} />
-                      <button
-                        type="button"
-                        onClick={handleClickEnviar}
-                        disabled={isPending}
-                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-white font-semibold hover:opacity-90 disabled:opacity-50"
-                        style={{ background: "var(--caritas-green)" }}
-                      >
-                        <Send className="w-4 h-4" />
-                        Enviar al Comité
-                      </button>
-                    </div>
-                  )
-                )}
+                  <button
+                    type="button"
+                    onClick={handleClickEnviar}
+                    disabled={isPending || informeYaEnviado}
+                    title={informeYaEnviado ? "El informe ya fue enviado al Comité" : undefined}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{ background: "#7c3aed" }}
+                  >
+                    <FileCheck className="w-4 h-4" />
+                    {informeYaEnviado
+                      ? "Informe ya enviado"
+                      : data.estadoActual === "OBSERVADO"
+                        ? "Reenviar al Comité"
+                        : "Enviar Informe al Comité"}
+                  </button>
+                </div>
 
             </>
             )}
@@ -1600,8 +1544,8 @@ export function RevisionStep({
               </button>
             </div>
             <p className="text-xs text-gray-500">
-              Opcional — puedes adjuntar un enlace (Google Drive, OneDrive…) o subir un
-              archivo PDF/Word directamente.
+              Obligatorio — adjunta un enlace (Google Drive, OneDrive…) <strong>o</strong> sube un
+              archivo PDF/Word. Debes proporcionar al menos uno para enviar al Comité.
             </p>
             <div className="flex gap-2">
               <button
@@ -1662,9 +1606,18 @@ export function RevisionStep({
                 <button
                   type="button"
                   onClick={handleEvaluar}
-                  disabled={isPending || subiendoDoc}
-                  className="cursor-pointer flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50 flex items-center justify-center gap-2"
-                  style={{ background: "var(--caritas-green)" }}
+                  disabled={
+                    isPending ||
+                    subiendoDoc ||
+                    (docTipo === "link" ? !docLink.trim() : !docFile)
+                  }
+                  title={
+                    (docTipo === "link" ? !docLink.trim() : !docFile)
+                      ? "Adjunta un enlace o un archivo para poder enviar"
+                      : undefined
+                  }
+                  className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  style={{ background: "#7c3aed" }}
                 >
                   {isPending || subiendoDoc ? (
                     <><Loader2 className="w-4 h-4 animate-spin" /> Enviando…</>

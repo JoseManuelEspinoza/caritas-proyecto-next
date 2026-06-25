@@ -349,16 +349,16 @@ export function DonacionesModule({
         <div className={listClasses}>
           <div className="flex-1 flex flex-col bg-white border border-[var(--caritas-border)] rounded-xl overflow-hidden">
             {/* Barra superior: lupa + dropdown / botón colapsar (desktop only) */}
-            <div className="flex items-center gap-1 px-2 py-2 border-b border-gray-100 shrink-0">
+            <div className="flex items-center gap-1.5 px-2.5 py-2.5 border-b border-gray-200 bg-gray-50 shrink-0">
               {searchOpen ? (
                 <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                   <input
                     value={busqueda}
                     onChange={(e) => setBusqueda(e.target.value)}
                     placeholder="Buscar por código, título..."
                     autoFocus
-                    className="w-full pl-9 pr-9 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]"
+                    className="w-full pl-9 pr-9 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)] focus:border-[var(--caritas-green)] text-gray-800 placeholder:text-gray-400"
                   />
                   <button
                     onClick={() => { setSearchOpen(false); setBusqueda(""); }}
@@ -373,7 +373,7 @@ export function DonacionesModule({
                   <button
                     onClick={() => setSearchOpen(true)}
                     title="Buscar"
-                    className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 border border-transparent hover:border-gray-200 hover:text-[var(--caritas-green)] hover:bg-gray-50 transition-colors cursor-pointer"
+                    className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 border border-gray-200 hover:border-gray-300 hover:text-[var(--caritas-green)] hover:bg-white transition-colors cursor-pointer"
                   >
                     <Search className="w-4 h-4" />
                   </button>
@@ -388,9 +388,9 @@ export function DonacionesModule({
               <button
                 onClick={() => setPanelAbierto(false)}
                 title="Colapsar panel"
-                className="hidden md:flex shrink-0 w-8 h-8 items-center justify-center rounded-lg text-gray-400 border border-transparent hover:border-gray-200 hover:text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer"
+                className="hidden md:flex shrink-0 w-9 h-9 items-center justify-center rounded-lg text-[var(--caritas-green)] border border-[var(--caritas-green)]/30 bg-[var(--caritas-green)]/8 hover:bg-[var(--caritas-green)]/15 hover:border-[var(--caritas-green)]/50 transition-colors cursor-pointer"
               >
-                <PanelLeftClose className="w-4 h-4" />
+                <PanelLeftClose className="w-5 h-5" />
               </button>
             </div>
 
@@ -404,7 +404,7 @@ export function DonacionesModule({
                   </p>
                 </div>
               ) : (
-                <div className="divide-y divide-gray-100">
+                <div className="divide-y divide-gray-200">
                   {listaFiltrada.map((c) => (
                     <CasoRow
                       key={c.id}
@@ -583,111 +583,6 @@ export function DonacionesModule({
                     </div>
                   )}
 
-                  {/* ── Entrega de Ayuda Humanitaria ── */}
-                  {["APROBADO", "ATENDIDO", "SEGUIMIENTO ABIERTO", "CERRADO"].includes(current.estado) && (
-                    <div className="border border-green-200 rounded-xl overflow-hidden">
-                      <div className="bg-green-700 px-4 py-3 flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <Package className="w-4 h-4 text-white" />
-                          <p className="text-white font-bold text-sm">Entrega de Ayuda Humanitaria</p>
-                        </div>
-                        <button
-                          onClick={() => setShowEntregaForm((s) => !s)}
-                          className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-semibold px-3 py-1.5 rounded-lg cursor-pointer transition-colors"
-                        >
-                          <Plus className="w-3.5 h-3.5" /> Nueva entrega
-                        </button>
-                      </div>
-
-                      {showEntregaForm && (
-                        <div className="p-4 bg-green-50 border-b border-green-200 grid grid-cols-1 md:grid-cols-2 gap-3">
-                          <label className="block">
-                            <span className="text-xs text-gray-600">Fecha de entrega <span className="text-red-500">*</span></span>
-                            <input type="date" value={entregaForm.fechaEntrega} onChange={(e) => setEntregaForm({ ...entregaForm, fechaEntrega: e.target.value })} className="mt-1 w-full px-3 py-2 border border-green-200 rounded text-sm bg-white cursor-pointer" />
-                          </label>
-                          <label className="block">
-                            <span className="text-xs text-gray-600">Lugar de entrega <span className="text-red-500">*</span></span>
-                            <input value={entregaForm.lugarEntrega} onChange={(e) => setEntregaForm({ ...entregaForm, lugarEntrega: e.target.value })} className="mt-1 w-full px-3 py-2 border border-green-200 rounded text-sm bg-white" />
-                          </label>
-                          <label className="block">
-                            <span className="text-xs text-gray-600">Tipo de ayuda <span className="text-red-500">*</span></span>
-                            <input value={entregaForm.tipoAyuda} onChange={(e) => setEntregaForm({ ...entregaForm, tipoAyuda: e.target.value })} placeholder="Ej: Kit alimentario, Kit de abrigo" className="mt-1 w-full px-3 py-2 border border-green-200 rounded text-sm bg-white" />
-                          </label>
-                          <label className="block">
-                            <span className="text-xs text-gray-600">Cantidad entregada</span>
-                            <input type="number" min="0" value={entregaForm.cantidadEntregada} onChange={(e) => setEntregaForm({ ...entregaForm, cantidadEntregada: e.target.value })} placeholder="Ej: 10" className="mt-1 w-full px-3 py-2 border border-green-200 rounded text-sm bg-white" />
-                          </label>
-                          <label className="block">
-                            <span className="text-xs text-gray-600">Actor parroquial presente</span>
-                            <input value={entregaForm.actorParroquial} onChange={(e) => setEntregaForm({ ...entregaForm, actorParroquial: e.target.value })} className="mt-1 w-full px-3 py-2 border border-green-200 rounded text-sm bg-white" />
-                          </label>
-                          <label className="md:col-span-2 block">
-                            <span className="text-xs text-gray-600">Composición / descripción de la ayuda <span className="text-red-500">*</span></span>
-                            <textarea value={entregaForm.descripcionAyuda} onChange={(e) => setEntregaForm({ ...entregaForm, descripcionAyuda: e.target.value })} rows={2} className="mt-1 w-full px-3 py-2 border border-green-200 rounded text-sm bg-white" />
-                          </label>
-                          <label className="md:col-span-2 block">
-                            <span className="text-xs text-gray-600">Observaciones</span>
-                            <textarea value={entregaForm.observaciones} onChange={(e) => setEntregaForm({ ...entregaForm, observaciones: e.target.value })} rows={2} className="mt-1 w-full px-3 py-2 border border-green-200 rounded text-sm bg-white" />
-                          </label>
-                          <div className="md:col-span-2">
-                            <span className="text-xs text-gray-600 block mb-1">Acta firmada <span className="text-gray-400">(opcional)</span></span>
-                            <div className="flex gap-2">
-                              <label className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#91D723] text-[#009850] rounded-lg cursor-pointer hover:bg-[#91D723]/10 text-xs font-medium transition-colors">
-                                <Upload className="w-3.5 h-3.5" /> Adjuntar archivo
-                                <input type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => setActaFile(e.target.files?.[0] ?? null)} />
-                              </label>
-                            </div>
-                            {actaFile && (
-                              <span className="inline-flex items-center gap-1 text-[10px] bg-gray-100 border border-gray-200 rounded-full pl-2 pr-1 py-0.5 text-gray-700 mt-2">
-                                {actaFile.name}
-                                <button type="button" onClick={() => setActaFile(null)} className="text-gray-400 hover:text-red-500 transition-colors cursor-pointer"><X className="w-3 h-3" /></button>
-                              </span>
-                            )}
-                          </div>
-                          <div className="md:col-span-2 flex justify-end gap-2">
-                            <button onClick={() => { setShowEntregaForm(false); setActaFile(null); }} className="px-4 py-2 border border-gray-300 rounded text-sm cursor-pointer hover:bg-gray-50 transition-colors">Cancelar</button>
-                            <button onClick={submitEntrega} disabled={pending} className="px-4 py-2 bg-green-700 text-white rounded text-sm disabled:opacity-50 cursor-pointer hover:bg-green-800 transition-colors">Registrar entrega</button>
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="p-4 bg-white space-y-2">
-                        {entregas.length === 0 ? (
-                          <div className="text-center py-6">
-                            <ClipboardList className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                            <p className="text-xs text-gray-500">Sin entregas registradas para este caso.</p>
-                          </div>
-                        ) : (
-                          entregas.map((e) => (
-                            <div key={e.idEntrega} className="border border-gray-100 rounded-lg p-3 bg-gray-50">
-                              <div className="flex items-center justify-between gap-2 mb-1">
-                                <span className="text-xs font-mono text-green-700 font-bold">{e.codigoEntrega}</span>
-                                <span className="text-[10px] text-gray-500">{e.fechaEntrega ? new Date(e.fechaEntrega).toLocaleDateString("es-PE", { timeZone: "UTC" }) : "—"}</span>
-                              </div>
-                              <p className="text-xs font-semibold text-gray-800">{e.tipoAyuda}{e.cantidadEntregada != null ? <span className="ml-2 text-green-700 font-normal">× {e.cantidadEntregada}</span> : null}</p>
-                              {e.lugarEntrega && <p className="text-[11px] text-gray-600">📍 {e.lugarEntrega}</p>}
-                              {e.descripcionAyuda && <p className="text-[11px] text-gray-700 mt-1">{e.descripcionAyuda}</p>}
-                              {e.observaciones && <p className="text-[11px] text-gray-500 italic mt-1">{e.observaciones}</p>}
-                            </div>
-                          ))
-                        )}
-                      </div>
-
-                      {evidenciasEntrega.length > 0 && (
-                        <div className="px-4 pb-4 bg-white space-y-1">
-                          <p className="text-xs text-gray-500 font-medium mb-1">Actas adjuntas</p>
-                          {evidenciasEntrega.map((ev) => (
-                            <div key={ev.idEvidenciaGRD} className="flex items-center gap-2 text-xs border border-gray-100 rounded p-2 bg-gray-50">
-                              <span>📎</span>
-                              <span className="flex-1 truncate text-gray-700">{ev.nombreArchivo}</span>
-                              <span className="text-gray-400">{new Date(ev.fechaCarga).toLocaleDateString("es-PE", { timeZone: "UTC" })}</span>
-                              <a href={`/api/archivos?key=${encodeURIComponent(ev.urlArchivo)}`} target="_blank" rel="noopener noreferrer" className="text-green-700 hover:underline font-medium cursor-pointer">Ver</a>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </div>
               </div>
             )}
@@ -752,16 +647,16 @@ function FiltroDropdown({
     <div ref={ref} className="relative flex-1">
       <button
         onClick={() => setOpen((v) => !v)}
-        className={`flex items-center justify-between gap-2 w-full px-3 py-2 rounded-lg text-sm bg-transparent transition-colors cursor-pointer border ${
+        className={`flex items-center justify-between gap-2 w-full px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer border ${
           open
             ? "border-[var(--caritas-green)] ring-1 ring-[var(--caritas-green)]/30 bg-white"
-            : "border-transparent hover:border-gray-200 hover:bg-gray-50"
+            : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
         }`}
       >
-        <span className="font-medium text-gray-800 truncate">
-          {activo.label} <span className="text-gray-400 font-normal">({contar(activo.estados)})</span>
+        <span className="font-semibold text-gray-800 truncate">
+          {activo.label} <span className="text-gray-500 font-normal">({contar(activo.estados)})</span>
         </span>
-        <ChevronDown className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
+        <ChevronDown className={`w-4 h-4 text-gray-500 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
 
       {open && (
@@ -801,21 +696,21 @@ function CasoRow({
   return (
     <button
       onClick={onClick}
-      className={`w-full text-left px-4 py-3 transition-colors cursor-pointer ${
+      className={`w-full text-left px-4 py-3.5 transition-colors cursor-pointer ${
         selected
-          ? "bg-[var(--caritas-green)]/5 border-r-4 border-r-[var(--caritas-green)]"
+          ? "bg-[var(--caritas-green)]/8 border-r-4 border-r-[var(--caritas-green)]"
           : "hover:bg-gray-50"
       }`}
     >
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-xs font-mono text-gray-400">{c.codigo}</p>
-          <p className="text-sm font-semibold text-gray-900 leading-tight truncate">
+          <p className="text-[11px] font-mono text-gray-500 font-medium">{c.codigo}</p>
+          <p className="text-sm font-semibold text-gray-900 leading-tight truncate mt-0.5">
             {c.titulo}
           </p>
         </div>
         <span
-          className={`flex-shrink-0 px-2 py-0.5 text-[10px] rounded-full font-semibold ${STATUS_COLOR[c.estado] ?? "bg-gray-100"}`}
+          className={`flex-shrink-0 px-2 py-0.5 text-[10px] rounded-full font-semibold border ${STATUS_COLOR[c.estado] ?? "bg-gray-100"}`}
         >
           {c.estado}
         </span>
@@ -839,28 +734,31 @@ function ReadSeccion({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="border border-gray-100 rounded-lg overflow-hidden">
+    <div className="border border-purple-200 rounded-xl overflow-hidden">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between gap-2 px-3 py-2.5 bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer"
+        className="w-full flex items-center gap-2 px-4 py-3 bg-purple-50 border-b border-purple-100 hover:bg-purple-100 transition-colors text-left"
       >
-        <span className="text-[11px] font-bold text-purple-700 uppercase tracking-wider">
-          {letra}) {titulo}
+        <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-700 text-xs font-bold flex items-center justify-center flex-shrink-0">
+          {letra}
+        </span>
+        <span className="text-sm font-bold text-gray-800 uppercase tracking-wide flex-1">
+          {titulo}
         </span>
         <ChevronDown
-          className={`w-3.5 h-3.5 text-gray-400 flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+          className={`w-4 h-4 text-purple-400 flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
         />
       </button>
-      {open && <div className="p-3">{children}</div>}
+      {open && <div className="p-4 bg-white space-y-3">{children}</div>}
     </div>
   );
 }
 
 function ReadCampo({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-gray-50 rounded-lg border border-gray-100 px-2.5 py-1.5">
-      <p className="text-[10px] text-gray-400 uppercase tracking-wider">{label}</p>
-      <p className="text-xs font-medium text-gray-800">{value}</p>
+    <div className="bg-gray-50 rounded-lg border border-gray-200 px-3 py-2.5">
+      <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">{label}</p>
+      <p className="text-sm font-medium text-gray-800">{value}</p>
     </div>
   );
 }
@@ -879,14 +777,14 @@ function InfoSeccion({
     <div className="border border-gray-200 rounded-xl overflow-hidden">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between gap-2 px-4 py-2.5 bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer"
+        className="w-full flex items-center justify-between gap-2 px-4 py-3 bg-gray-50 border-b border-gray-100 hover:bg-gray-100 transition-colors text-left"
       >
-        <span className="text-xs font-semibold text-gray-700">{titulo}</span>
+        <span className="text-sm font-bold text-gray-700 uppercase tracking-wide">{titulo}</span>
         <ChevronDown
-          className={`w-3.5 h-3.5 text-gray-400 flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+          className={`w-4 h-4 text-gray-400 flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
         />
       </button>
-      {open && <div className="p-3">{children}</div>}
+      {open && <div className="p-4 bg-white">{children}</div>}
     </div>
   );
 }
