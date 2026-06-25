@@ -384,13 +384,16 @@ function ImportBrigadistaModal({
   }
 
   async function downloadTemplate() {
-    const XLSX = await import("xlsx");
+    const { exportarExcel } = await import("@/app/ui/shared/export-excel");
     const headers = ["nombres", "apellidos", "dni", "celular", "correo", "parroquia", "disponibilidad"];
     const example = ["Ana María", "Torres Quispe", "12345678", "987654321", "correo@ejemplo.com", parroquias[0]?.nombre ?? "Nombre de parroquia", "DISPONIBLE"];
-    const ws = XLSX.utils.aoa_to_sheet([headers, example]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Brigadistas");
-    XLSX.writeFile(wb, "plantilla_brigadistas.xlsx");
+    const row: Record<string, string> = {};
+    headers.forEach((h, i) => { row[h] = example[i]; });
+    // Sin título: los encabezados quedan en la fila 1 para que la importación los lea.
+    await exportarExcel({
+      fileName: "plantilla_brigadistas",
+      sheets: [{ name: "Brigadistas", columns: headers.map((h) => ({ header: h })), rows: [row] }],
+    });
   }
 
   function handleImport() {
@@ -685,12 +688,14 @@ export function BrigadistasList({ brigadistas, parroquias, canEdit = true }: Pro
   }
 
   async function handleExportExcel() {
-    const XLSX = await import("xlsx");
+    const { exportarExcel } = await import("@/app/ui/shared/export-excel");
     const { headers, rows } = buildExportData();
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Brigadistas");
-    XLSX.writeFile(wb, `brigadistas_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    const objRows = rows.map((r) => Object.fromEntries(headers.map((h, i) => [h, r[i]])));
+    await exportarExcel({
+      fileName: `brigadistas_${new Date().toISOString().slice(0, 10)}`,
+      title: "Brigadistas — Cáritas Lima",
+      sheets: [{ name: "Brigadistas", columns: headers.map((h) => ({ header: h })), rows: objRows }],
+    });
   }
 
   const filtersActive =

@@ -372,13 +372,16 @@ function ImportParroquiaModal({ onClose }: { onClose: () => void }) {
   }
 
   async function downloadTemplate() {
-    const XLSX = await import("xlsx");
+    const { exportarExcel } = await import("@/app/ui/shared/export-excel");
     const headers = ["nombre", "direccion", "referencia", "telefono", "correo", "latitud", "longitud"];
     const example = ["Parroquia San Juan Bautista", "Av. Principal 123", "Cerca al parque", "987654321", "parroquia@ejemplo.com", "-12.046374", "-77.042793"];
-    const ws = XLSX.utils.aoa_to_sheet([headers, example]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Parroquias");
-    XLSX.writeFile(wb, "plantilla_parroquias.xlsx");
+    const row: Record<string, string> = {};
+    headers.forEach((h, i) => { row[h] = example[i]; });
+    // Sin título: los encabezados quedan en la fila 1 para que la importación los lea.
+    await exportarExcel({
+      fileName: "plantilla_parroquias",
+      sheets: [{ name: "Parroquias", columns: headers.map((h) => ({ header: h })), rows: [row] }],
+    });
   }
 
   function handleImport() {
@@ -557,23 +560,23 @@ export function ParroquiasList({ parroquias, canEdit = false }: Props) {
   async function handleExport() {
     setExportando(true);
     try {
-      const XLSX = await import("xlsx");
-      const headers = ["Nombre", "Estado", "Teléfono", "Correo", "Dirección", "Referencia", "Brigadistas", "Incidencias", "Planes GRD"];
-      const rows = filtered.map((p) => [
-        p.nombre,
-        p.estado,
-        p.telefono ?? "",
-        p.correo ?? "",
-        p.direccion ?? "",
-        p.referencia ?? "",
-        p._count.brigadistas,
-        p._count.incidencias,
-        p._count.planesTrabajo,
-      ]);
-      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Parroquias");
-      XLSX.writeFile(wb, `parroquias_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      const { exportarExcel } = await import("@/app/ui/shared/export-excel");
+      const rows = filtered.map((p) => ({
+        Nombre: p.nombre,
+        Estado: p.estado,
+        "Teléfono": p.telefono ?? "",
+        Correo: p.correo ?? "",
+        "Dirección": p.direccion ?? "",
+        Referencia: p.referencia ?? "",
+        Brigadistas: p._count.brigadistas,
+        Incidencias: p._count.incidencias,
+        "Planes GRD": p._count.planesTrabajo,
+      }));
+      await exportarExcel({
+        fileName: `parroquias_${new Date().toISOString().slice(0, 10)}`,
+        title: "Parroquias — Cáritas Lima",
+        sheets: [{ name: "Parroquias", rows }],
+      });
     } finally {
       setExportando(false);
     }
