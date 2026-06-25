@@ -258,8 +258,9 @@ export function GrdList({ items, role, globalCounts }: GrdListProps) {
   const [rowsPerPage, setRowsPerPage] = useState(5);
   const [exportando, setExportando] = useState(false);
 
-  // Parroquias únicas derivadas de los items
+  // Parroquias y categorías únicas derivadas de los items reales
   const parroquias = Array.from(new Set(items.map((i) => i.parroquia).filter(Boolean))) as string[];
+  const categorias = Array.from(new Set(items.map((i) => i.tipoEvento).filter(Boolean))) as string[];
 
   const canCreate = role === "admin" || role === "especialistaGRD";
 
@@ -316,9 +317,19 @@ export function GrdList({ items, role, globalCounts }: GrdListProps) {
     if (fechaHasta && i.fechaRegistro.slice(0, 10) > fechaHasta) return false;
     if (search) {
       const q = search.toLowerCase();
-      const inTitle = i.tituloIncidencia?.toLowerCase().includes(q) ?? false;
-      const inCode = i.codigoCaso?.toLowerCase().includes(q) ?? false;
-      if (!inTitle && !inCode) return false;
+      const hayMatch = [
+        i.idIncidencia,
+        i.codigoCaso,
+        i.tituloIncidencia,
+        i.tipoEvento,
+        i.estadoActual,
+        i.direccionEvento,
+        i.parroquia,
+        ...i.brigadistas,
+      ]
+        .filter(Boolean)
+        .some((v) => v!.toLowerCase().includes(q));
+      if (!hayMatch) return false;
     }
     return true;
   });
@@ -431,14 +442,7 @@ export function GrdList({ items, role, globalCounts }: GrdListProps) {
 
           {/* Tipo de incidente */}
           <MultiSelect
-            options={[
-              { value: "Incendios", label: "Incendios" },
-              { value: "Inundaciones", label: "Inundaciones" },
-              { value: "Sismos", label: "Sismos" },
-              { value: "Derrumbes", label: "Derrumbes" },
-              { value: "Deslizamientos", label: "Deslizamientos" },
-              { value: "Tsunamis", label: "Tsunamis" },
-            ]}
+            options={categorias.map((c) => ({ value: c, label: c }))}
             value={categoryFilter}
             onChange={setCategoryFilter}
             placeholder="Tipo de incidente"

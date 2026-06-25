@@ -143,10 +143,6 @@ export function RendirExamenModal({ idInscripcion, cuestionario, onClose }: Prop
                   <span className="font-semibold">{cuestionario.totalPreguntas}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Nota aprobatoria</span>
-                  <span className="font-semibold">{cuestionario.notaAprobatoria}/20</span>
-                </div>
-                <div className="flex justify-between text-sm">
                   <span className="text-gray-500">Intentos restantes</span>
                   <span className={`font-semibold ${agotado ? "text-red-500" : "text-[var(--caritas-green)]"}`}>
                     {intentosRestantes} de {cuestionario.maxIntentos}
@@ -187,7 +183,16 @@ export function RendirExamenModal({ idInscripcion, cuestionario, onClose }: Prop
           ) : (
             /* ── Preguntas ──────────────────────────────────── */
             <div>
-              <div className="space-y-5 max-h-[420px] overflow-y-auto pr-1 mb-4">
+              {/* Info bar */}
+              <div className="flex items-center gap-4 bg-gray-50 border border-[var(--caritas-border)] rounded-lg px-4 py-2 mb-4 text-xs text-gray-500">
+                <span>
+                  {detalle.preguntas.length} pregunta{detalle.preguntas.length !== 1 ? "s" : ""}
+                </span>
+                <span className="text-gray-300">·</span>
+                <span>Debes responder todas correctamente para aprobar</span>
+              </div>
+
+              <div className="space-y-5 max-h-[380px] overflow-y-auto pr-1 mb-4">
                 {detalle.preguntas.map((p, pi) => {
                   const esMultiple = p.tipoPregunta === "OPCION_MULTIPLE";
                   const seleccionadas = esMultiple
@@ -201,6 +206,9 @@ export function RendirExamenModal({ idInscripcion, cuestionario, onClose }: Prop
                           <span className="text-[var(--caritas-green)] font-bold mr-1">{pi + 1}.</span>
                           {p.enunciado}
                         </p>
+                        <span className="text-[10px] text-gray-400 bg-gray-100 rounded px-1.5 py-0.5 shrink-0 whitespace-nowrap">
+                          {p.puntaje} pt{p.puntaje !== 1 ? "s" : ""}
+                        </span>
                       </div>
                       {esMultiple && (
                         <p className="text-xs text-blue-500 font-medium mb-2">

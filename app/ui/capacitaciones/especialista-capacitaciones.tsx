@@ -36,6 +36,8 @@ import { CuestionarioModal } from "@/app/ui/capacitaciones/cuestionario-modal";
 import { TIPOS_MATERIAL } from "@/app/lib/capacitaciones-tipos";
 import { MaterialModal } from "@/app/ui/capacitaciones/MaterialModal";
 import type { CursoDetalle } from "@/app/actions/capacitaciones";
+import { SeccionAcordeon } from "@/app/ui/capacitaciones/seccion-acordeon";
+import { ParticipantesTable } from "@/app/ui/capacitaciones/participantes-table";
 
 function getMaterialMeta(tipo: string | null): { rowIcon: React.ReactNode; btnIcon: React.ReactNode; btnLabel: string } {
   if (tipo === "Video") return {
@@ -329,7 +331,8 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
   const [editarMaterialModal, setEditarMaterialModal] = useState<{ id: string; titulo: string; tipoMaterial: string; enlaceMaterial: string } | null>(null);
   const [participantes, setParticipantes] = useState<ParticipanteCurso[]>([]);
   const [loadingParticipantes, setLoadingParticipantes] = useState(false);
-  const [showParticipantes, setShowParticipantes] = useState(false);
+  const [activeTab, setActiveTab] = useState<"contenido" | "evaluaciones" | "participantes">("contenido");
+  const [participantesCargados, setParticipantesCargados] = useState(false);
   const [constanciaInput, setConstanciaInput] = useState<Record<string, string>>({});
 
   const run = (fn: () => Promise<{ message?: string } | void>, ok: string, after?: () => void) =>
@@ -373,8 +376,10 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
 
   const handleSelectCurso = (id: string) => {
     setSelectedId(id);
-    setShowParticipantes(false);
+    setActiveTab("contenido");
     setParticipantes([]);
+    setLoadingParticipantes(false);
+    setParticipantesCargados(false);
   };
 
   return (
@@ -573,42 +578,78 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
                   </div>
                 </div>
 
-                {/* Contenido */}
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-base font-semibold text-[var(--caritas-text)]">Contenido del curso</h2>
+                {/* Pestañas */}
+                <div className="flex border-b border-[var(--caritas-border)] mb-5">
                   <button
-                    onClick={() => setShowSesion(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-[var(--caritas-green)] border border-[var(--caritas-green)]/30 rounded-lg hover:bg-[var(--caritas-green)]/5 transition-colors"
+                    onClick={() => setActiveTab("contenido")}
+                    className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === "contenido" ? "border-[var(--caritas-green)] text-[var(--caritas-green)]" : "border-transparent text-gray-500 hover:text-[var(--caritas-text)] hover:border-gray-200"}`}
                   >
-                    <Plus className="w-3.5 h-3.5" /> Nueva unidad
+                    <BookOpen className="w-4 h-4" />
+                    Contenido
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${activeTab === "contenido" ? "bg-[var(--caritas-green)]/10 text-[var(--caritas-green)]" : "bg-gray-100 text-gray-500"}`}>{current.sesiones.length}</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("evaluaciones")}
+                    className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === "evaluaciones" ? "border-[var(--caritas-green)] text-[var(--caritas-green)]" : "border-transparent text-gray-500 hover:text-[var(--caritas-text)] hover:border-gray-200"}`}
+                  >
+                    <ClipboardList className="w-4 h-4" />
+                    Evaluaciones
+                  </button>
+                  <button
+                    onClick={async () => {
+                      setActiveTab("participantes");
+                      if (!participantesCargados) {
+                        setLoadingParticipantes(true);
+                        const data = await listarParticipantesCurso(current.id);
+                        setParticipantes(data);
+                        setLoadingParticipantes(false);
+                        setParticipantesCargados(true);
+                      }
+                    }}
+                    className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === "participantes" ? "border-[var(--caritas-green)] text-[var(--caritas-green)]" : "border-transparent text-gray-500 hover:text-[var(--caritas-text)] hover:border-gray-200"}`}
+                  >
+                    <Users className="w-4 h-4" />
+                    Participantes
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${activeTab === "participantes" ? "bg-[var(--caritas-green)]/10 text-[var(--caritas-green)]" : "bg-gray-100 text-gray-500"}`}>{current.totalInscritos}</span>
                   </button>
                 </div>
 
-                {current.sesiones.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12 text-gray-400 gap-3 border border-dashed border-gray-300 rounded-xl">
-                    <BookOpen className="w-8 h-8" />
-                    <p className="text-sm">Aún no hay unidades. Agrega la primera.</p>
-                  </div>
-                ) : (
+                {/* Tab: Contenido */}
+                {activeTab === "contenido" && (
                   <div className="space-y-3">
-                    {current.sesiones.map((s) => (
-                      <SesionCard
-                        key={s.id}
-                        sesion={s}
-                        todasLasSesiones={current.sesiones}
-                        onAgregarMaterial={(idSesion) => setMaterialModal({ idSesion, idCurso: current.id })}
-                        onEditarMaterial={(m) => setEditarMaterialModal(m)}
-                        onRefresh={() => router.refresh()}
-                      />
-                    ))}
+                    <div className="flex justify-end">
+                      <button
+                        onClick={() => setShowSesion(true)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-[var(--caritas-border)] rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Nueva unidad
+                      </button>
+                    </div>
+                    {current.sesiones.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-10 text-gray-400 gap-3 border-2 border-dashed border-gray-200 rounded-xl">
+                        <BookOpen className="w-8 h-8" />
+                        <p className="text-sm">Aún no hay unidades. Agrega la primera.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {current.sesiones.map((s) => (
+                          <SesionCard
+                            key={s.id}
+                            sesion={s}
+                            todasLasSesiones={current.sesiones}
+                            onAgregarMaterial={(idSesion) => setMaterialModal({ idSesion, idCurso: current.id })}
+                            onEditarMaterial={(m) => setEditarMaterialModal(m)}
+                            onRefresh={() => router.refresh()}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 
-                {/* Evaluaciones */}
-                <div className="mt-5">
-                  <h2 className="text-base font-semibold text-[var(--caritas-text)] mb-3">Evaluaciones del Curso</h2>
+                {/* Tab: Evaluaciones */}
+                {activeTab === "evaluaciones" && (
                   <div className="space-y-3">
-                    {/* Examen Inicial */}
                     {current.cuestionarioInicial ? (
                       <div className="flex items-center justify-between gap-3 border border-amber-200 rounded-xl p-4 bg-amber-50">
                         <div className="flex items-center gap-3">
@@ -620,7 +661,7 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
                               <p className="text-sm font-semibold text-[var(--caritas-text)]">{current.cuestionarioInicial.titulo}</p>
                               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200 font-medium">INICIAL</span>
                             </div>
-                            <p className="text-xs text-gray-400">{current.cuestionarioInicial.totalPreguntas} preguntas · Nota mín: {current.cuestionarioInicial.notaAprobatoria}/20</p>
+                            <p className="text-xs text-gray-400">{current.cuestionarioInicial.totalPreguntas} preguntas · Puntaje: {current.cuestionarioInicial.notaAprobatoria}/20</p>
                           </div>
                         </div>
                         <button
@@ -642,8 +683,6 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
                         <p className="text-sm">Crear examen inicial</p>
                       </div>
                     )}
-
-                    {/* Examen Final */}
                     {current.cuestionarioFinal ? (
                       <div className="flex items-center justify-between gap-3 border border-[var(--caritas-border)] rounded-xl p-4 bg-gray-50">
                         <div className="flex items-center gap-3">
@@ -655,7 +694,7 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
                               <p className="text-sm font-semibold text-[var(--caritas-text)]">{current.cuestionarioFinal.titulo}</p>
                               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 border border-green-200 font-medium">FINAL</span>
                             </div>
-                            <p className="text-xs text-gray-400">{current.cuestionarioFinal.totalPreguntas} preguntas · Nota mín: {current.cuestionarioFinal.notaAprobatoria}/20</p>
+                            <p className="text-xs text-gray-400">{current.cuestionarioFinal.totalPreguntas} preguntas · Puntaje: {current.cuestionarioFinal.notaAprobatoria}/20</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
@@ -668,9 +707,7 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
                           >
                             <BookOpen className="w-3 h-3" /> Editar
                           </button>
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200 font-medium">
-                            ACTIVO
-                          </span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200 font-medium">ACTIVO</span>
                         </div>
                       </div>
                     ) : (
@@ -683,122 +720,19 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
                       </div>
                     )}
                   </div>
-                </div>
+                )}
 
-                {/* Participantes */}
-                <div className="mt-6">
-                  <button
-                    onClick={async () => {
-                      if (!showParticipantes) {
-                        setLoadingParticipantes(true);
-                        const data = await listarParticipantesCurso(current.id);
-                        setParticipantes(data);
-                        setLoadingParticipantes(false);
-                      }
-                      setShowParticipantes((s) => !s);
+                {/* Tab: Participantes */}
+                {activeTab === "participantes" && (
+                  <ParticipantesTable
+                    participantes={participantes}
+                    onRefresh={async () => {
+                      const data = await listarParticipantesCurso(current.id);
+                      setParticipantes(data);
                     }}
-                    className="flex items-center gap-2 w-full px-4 py-3 bg-gray-50 hover:bg-gray-100 border border-[var(--caritas-border)] rounded-xl transition-colors text-left"
-                  >
-                    <Users className="w-4 h-4 text-gray-400" />
-                    <span className="text-sm font-semibold text-[var(--caritas-text)] flex-1">
-                      Participantes inscritos
-                      <span className="ml-2 text-xs font-normal text-gray-400">({current.totalInscritos})</span>
-                    </span>
-                    <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showParticipantes ? "" : "-rotate-90"}`} />
-                  </button>
-
-                  {showParticipantes && (
-                    <div className="mt-2 border border-[var(--caritas-border)] rounded-xl overflow-hidden">
-                      {loadingParticipantes ? (
-                        <p className="text-sm text-gray-400 p-4 text-center">Cargando...</p>
-                      ) : participantes.length === 0 ? (
-                        <p className="text-sm text-gray-400 p-4 text-center">Sin participantes inscritos.</p>
-                      ) : (
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="bg-gray-50 border-b border-[var(--caritas-border)]">
-                              <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500">Participante</th>
-                              <th className="text-center px-3 py-2.5 text-xs font-semibold text-gray-500">Nota</th>
-                              <th className="text-center px-3 py-2.5 text-xs font-semibold text-gray-500">Estado</th>
-                              <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500">Constancia</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-100">
-                            {participantes.map((p) => (
-                              <tr key={p.idInscripcion} className="hover:bg-gray-50 transition-colors">
-                                <td className="px-4 py-3">
-                                  <p className="font-medium text-[var(--caritas-text)]">{p.nombre}</p>
-                                  {p.documento && <p className="text-xs text-gray-400">{p.documento}</p>}
-                                </td>
-                                <td className="px-3 py-3 text-center">
-                                  <span className={`text-sm font-bold ${p.resultado === "APROBADO" ? "text-green-700" : p.nota != null ? "text-red-500" : "text-gray-400"}`}>
-                                    {p.nota != null ? `${p.nota.toFixed(1)}/20` : "—"}
-                                  </span>
-                                </td>
-                                <td className="px-3 py-3 text-center">
-                                  {p.certificado ? (
-                                    <span className="inline-flex items-center gap-1 text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-full font-medium">
-                                      <CheckCircle2 className="w-3 h-3" /> Certificado
-                                    </span>
-                                  ) : p.resultado === "APROBADO" ? (
-                                    <span className="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full">
-                                      Aprobado
-                                    </span>
-                                  ) : p.nota != null ? (
-                                    <span className="inline-flex items-center gap-1 text-xs bg-red-50 text-red-600 border border-red-200 px-2 py-0.5 rounded-full">
-                                      Desaprobado
-                                    </span>
-                                  ) : (
-                                    <span className="text-xs text-gray-400">Sin evaluar</span>
-                                  )}
-                                </td>
-                                <td className="px-4 py-3">
-                                  {p.certificado ? (
-                                    <div className="flex items-center gap-2">
-                                      {p.constanciaUrl ? (
-                                        <a href={p.constanciaUrl} target="_blank" rel="noopener noreferrer"
-                                          className="text-xs text-[var(--caritas-green)] hover:underline flex items-center gap-1">
-                                          <LinkIcon className="w-3 h-3" /> Ver constancia
-                                        </a>
-                                      ) : (
-                                        <div className="flex items-center gap-1.5">
-                                          <input
-                                            value={constanciaInput[p.idInscripcion] ?? ""}
-                                            onChange={(e) => setConstanciaInput((s) => ({ ...s, [p.idInscripcion]: e.target.value }))}
-                                            placeholder="URL del PDF..."
-                                            className="text-xs px-2 py-1 border border-[var(--caritas-border)] rounded w-40 focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]"
-                                          />
-                                          <button
-                                            disabled={!constanciaInput[p.idInscripcion]?.trim() || pending}
-                                            onClick={() => startTransition(async () => {
-                                              const res = await actualizarConstancia(p.idInscripcion, constanciaInput[p.idInscripcion] ?? "");
-                                              if (res?.message) toast.error(res.message);
-                                              else {
-                                                toast.success("Constancia guardada.");
-                                                const data = await listarParticipantesCurso(current.id);
-                                                setParticipantes(data);
-                                                setConstanciaInput((s) => { const n = { ...s }; delete n[p.idInscripcion]; return n; });
-                                              }
-                                            })}
-                                            className="text-xs px-2 py-1 bg-[var(--caritas-green)] text-white rounded disabled:opacity-40"
-                                          >
-                                            Guardar
-                                          </button>
-                                        </div>
-                                      )}
-                                    </div>
-                                  ) : (
-                                    <span className="text-xs text-gray-300">—</span>
-                                  )}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      )}
-                    </div>
-                  )}
-                </div>
+                    loading={loadingParticipantes}
+                  />
+                )}
 
                 {/* Modal: Crear / Editar cuestionario */}
                 {showCuestionario && (

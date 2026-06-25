@@ -74,6 +74,7 @@ const fetchBaseData = unstable_cache(
           nombre: true,
           latitud: true,
           longitud: true,
+          createdAt: true,
           planesTrabajo: { where: { estadoAprobacion: "APROBADO" }, select: { idPlanTrabajoGRD: true } },
         },
         orderBy: { nombre: "asc" },
@@ -99,6 +100,7 @@ const fetchBaseData = unstable_cache(
         tienePlan: p.planesTrabajo.length > 0,
         latitud: p.latitud ? Number(p.latitud) : null,
         longitud: p.longitud ? Number(p.longitud) : null,
+        createdAt: p.createdAt,
       })),
       parroquiasList: parroquiasList.map(p => ({ id: p.idParroquia, nombre: p.nombre })),
     };
@@ -368,6 +370,8 @@ export default async function ReportesPage({
   };
 
   // ── Parroquias riesgo ──────────────────────────────────────────────────────
+  const GRACE_MS = 30 * 24 * 60 * 60 * 1000; // 30 días
+
   const parroquiasRiesgo: ParroquiaRiesgoData[] = base.parroquiasData.map(p => {
     const brigadistasTotal = brigadistasTotalMap.get(p.idParroquia) ?? 0;
     const brigadistasCapacitados = brigadistasCapMap.get(p.idParroquia) ?? 0;
@@ -376,16 +380,24 @@ export default async function ReportesPage({
     const actividadesTotal = actividadesTotalMap.get(p.idParroquia) ?? 0;
     const actividadesEjecutadas = actividadesEjecMap.get(p.idParroquia) ?? 0;
 
-    let score = 0;
-    if (incidencias >= 5) score += 3; else if (incidencias >= 2) score += 2; else if (incidencias >= 1) score += 1;
-    if (brigadistasTotal < 2) score += 3; else if (brigadistasTotal < 5) score += 2; else if (brigadistasTotal < 10) score += 1;
-    if (pctCapacitados < 30) score += 2; else if (pctCapacitados < 60) score += 1;
-    if (!p.tienePlan) score += 2;
-    if (actividadesTotal === 0 || (actividadesTotal > 0 && actividadesEjecutadas / actividadesTotal < 0.4)) score += 2;
+    const esNueva = p.createdAt ? (Date.now() - p.createdAt.getTime()) < GRACE_MS : false;
 
-    const riesgoNivel: RiesgoNivel = score >= 8 ? "CRÍTICO" : score >= 5 ? "ALTO" : score >= 3 ? "MEDIO" : "BAJO";
+    // Componentes normalizados (0–1 cada uno)
+    const pInc = incidencias >= 5 ? 3 : incidencias >= 2 ? 2 : incidencias >= 1 ? 1 : 0;
+    const pBrig = esNueva ? 0 : (brigadistasTotal < 2 ? 3 : brigadistasTotal < 5 ? 2 : brigadistasTotal < 10 ? 1 : 0);
+    const pCert = esNueva ? 0 : (pctCapacitados < 30 ? 2 : pctCapacitados < 60 ? 1 : 0);
+    const pPlan = esNueva ? 0 : (!p.tienePlan ? 2 : 0);
+    const pAct  = esNueva ? 0 : (actividadesTotal === 0 || (actividadesTotal > 0 && actividadesEjecutadas / actividadesTotal < 0.4) ? 2 : 0);
 
-    return { nombre: p.nombre, latitud: p.latitud, longitud: p.longitud, incidencias, brigadistas: brigadistasTotal, pctCapacitados, tienePlan: p.tienePlan, actividadesEjecutadas, actividadesTotal, riesgoNivel, riesgoScore: score };
+    // Fórmula ponderada — escala 0–10
+    // Score = (P_inc/3×0.30 + P_brig/3×0.25 + P_cert/2×0.20 + P_plan/2×0.15 + P_act/2×0.10) × 10
+    const score = Math.round(
+      (pInc / 3 * 0.30 + pBrig / 3 * 0.25 + pCert / 2 * 0.20 + pPlan / 2 * 0.15 + pAct / 2 * 0.10) * 100
+    ) / 10;
+
+    const riesgoNivel: RiesgoNivel = score > 7 ? "CRÍTICO" : score > 4.5 ? "ALTO" : score > 2.5 ? "MEDIO" : "BAJO";
+
+    return { nombre: p.nombre, latitud: p.latitud, longitud: p.longitud, incidencias, brigadistas: brigadistasTotal, pctCapacitados, tienePlan: p.tienePlan, actividadesEjecutadas, actividadesTotal, riesgoNivel, riesgoScore: score, esNueva };
   }).sort((a, b) => b.riesgoScore - a.riesgoScore);
 
   // ── Totales ────────────────────────────────────────────────────────────────

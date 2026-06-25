@@ -33,6 +33,7 @@ import { permisosDeDetalle } from "@/app/lib/permisos-incidencia";
 import { InfoField } from "@/app/ui/grd/incidente/components/InfoField";
 import { Seccion, ReadSeccion, ReadCampo } from "@/app/ui/grd/incidente/components/Seccion";
 import { ListaEditable } from "@/app/ui/grd/incidente/components/ListaEditable";
+import { DestinatariosPreview } from "@/app/ui/grd/incidente/components/DestinatariosPreview";
 import {
   EvidenciasRegistro,
   EvidenciaChip,
@@ -1171,6 +1172,9 @@ export function RevisionStep({
                     </span>
                   </div>
                 )}
+                {!informeYaEnviado && (
+                  <DestinatariosPreview step="informe" incidenciaId={data.idIncidencia} />
+                )}
                 <div className="flex flex-col sm:flex-row gap-2 sticky bottom-0 z-10 bg-white/95 backdrop-blur pt-3 pb-2 border-t border-gray-100">
                   <button
                     type="button"
@@ -1589,36 +1593,39 @@ export function RevisionStep({
                 />
               </label>
             )}
-            <div className="flex gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowDocStep(false)}
-                className="cursor-pointer shrink-0 px-5 py-2.5 border border-gray-200 rounded-xl text-sm font-medium hover:bg-gray-50"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleEvaluar}
-                disabled={
-                  isPending ||
-                  subiendoDoc ||
-                  (docTipo === "link" ? !docLink.trim() : !docFile)
-                }
-                title={
-                  (docTipo === "link" ? !docLink.trim() : !docFile)
-                    ? "Adjunta un enlace o un archivo para poder enviar"
-                    : undefined
-                }
-                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                style={{ background: "#7c3aed" }}
-              >
-                {isPending || subiendoDoc ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" /> Enviando…</>
-                ) : (
-                  <><Send className="w-4 h-4" /> Confirmar y enviar al Comité</>
-                )}
-              </button>
+            <div className="space-y-2 pt-2">
+              <DestinatariosPreview step="informe" incidenciaId={data.idIncidencia} />
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowDocStep(false)}
+                  className="cursor-pointer shrink-0 px-5 py-2.5 border border-gray-200 rounded-xl text-sm font-medium hover:bg-gray-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleEvaluar}
+                  disabled={
+                    isPending ||
+                    subiendoDoc ||
+                    (docTipo === "link" ? !docLink.trim() : !docFile)
+                  }
+                  title={
+                    (docTipo === "link" ? !docLink.trim() : !docFile)
+                      ? "Adjunta un enlace o un archivo para poder enviar"
+                      : undefined
+                  }
+                  className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  style={{ background: "#7c3aed" }}
+                >
+                  {isPending || subiendoDoc ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Enviando…</>
+                  ) : (
+                    <><Send className="w-4 h-4" /> Confirmar y enviar al Comité</>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
