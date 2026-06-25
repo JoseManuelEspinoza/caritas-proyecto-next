@@ -289,8 +289,8 @@ model Parroquia {
   referencia      String?
   latitud         Decimal? @db.Decimal(10, 7)
   longitud        Decimal? @db.Decimal(10, 7)
-  telefono        String?
-  correo          String?
+  telefono        String?  @unique
+  correo          String?  @unique
   estado          String   @default("ACTIVO")
 
   lugarCatalogo CatalogoLugar? @relation(fields: [idLugarCatalogo], references: [idLugar])

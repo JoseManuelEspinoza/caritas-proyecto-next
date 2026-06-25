@@ -42,6 +42,15 @@ export async function createParroquia(data: ParroquiaFormData) {
     if (correoDup) return { message: `Ese correo ya está registrado en "${correoDup.nombre}".` };
   }
 
+  const telefono = data.telefono.trim();
+  if (telefono) {
+    const telDup = await prisma.parroquia.findFirst({
+      where: { telefono },
+      select: { nombre: true },
+    });
+    if (telDup) return { message: `Ese teléfono ya está registrado en "${telDup.nombre}".` };
+  }
+
   await prisma.parroquia.create({
     data: {
       nombre,
@@ -77,6 +86,15 @@ export async function updateParroquia(id: string, data: ParroquiaFormData) {
       select: { nombre: true },
     });
     if (correoDup) return { message: `Ese correo ya está registrado en "${correoDup.nombre}".` };
+  }
+
+  const telefono = data.telefono.trim();
+  if (telefono) {
+    const telDup = await prisma.parroquia.findFirst({
+      where: { telefono, NOT: { idParroquia: id } },
+      select: { nombre: true },
+    });
+    if (telDup) return { message: `Ese teléfono ya está registrado en "${telDup.nombre}".` };
   }
 
   await prisma.parroquia.update({

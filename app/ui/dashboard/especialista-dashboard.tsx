@@ -16,7 +16,6 @@ import {
   TrendingDown,
   CircleDot,
   Package,
-  FileText,
 } from "lucide-react";
 import type { IncidenteResumen } from "./admin-dashboard";
 
@@ -206,7 +205,7 @@ export function EspecialistaDashboard({
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard
           label="Incidentes activos"
           value={incidentesActivos}
@@ -234,13 +233,6 @@ export function EspecialistaDashboard({
           icon={ShieldCheck}
           color="bg-[#00C8B4]"
           to="/brigadistas"
-        />
-        <StatCard
-          label="Reportes GRD"
-          value="Ver"
-          icon={FileText}
-          color="bg-[#3B82F6]"
-          to="/reportes"
         />
       </div>
 
