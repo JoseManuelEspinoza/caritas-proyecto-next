@@ -582,7 +582,7 @@ export function AdminCapacitaciones({
         </button>
         <button onClick={() => { setBusqueda(""); setFiltroEstado("BORRADOR"); }}
           className={`px-3 py-1.5 rounded-lg text-xs font-medium border-2 transition-colors ${filtroEstado === "BORRADOR" ? "border-amber-400 text-amber-700 bg-amber-50" : "border-transparent bg-amber-50 text-amber-600 hover:bg-amber-100"}`}>
-          Borradores ({cursos.filter(c => c.estadoCurso === "BORRADOR").length})
+          No publicados ({cursos.filter(c => c.estadoCurso === "BORRADOR").length})
         </button>
         <button onClick={() => { setBusqueda(""); setFiltroEstado("CERRADO"); }}
           className={`px-3 py-1.5 rounded-lg text-xs font-medium border-2 transition-colors ${filtroEstado === "CERRADO" ? "border-gray-400 text-gray-600 bg-gray-100" : "border-transparent bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
