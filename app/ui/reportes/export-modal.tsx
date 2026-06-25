@@ -496,7 +496,9 @@ interface ExportModalProps {
     kitsEntregados: number;
     tiempoPromedio: number;
     totalBrigadistas: number;
+    brigadistasCapacitados: number;
     totalParroquias: number;
+    parroquiasConPlan: number;
   };
   porEstado?: Conteo[];
   porTipo?: Conteo[];
@@ -542,20 +544,80 @@ export function ExportModal({
 
     if (format === "excel") {
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filteredData), "Incidencias");
-      const byEstado = [...new Set(filteredData.map((r) => String(r.Estado)))].map((e) => ({
-        Estado: e, Cantidad: filteredData.filter((r) => r.Estado === e).length,
-      }));
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(byEstado), "Por Estado");
-      const byTipo = [...new Set(filteredData.map((r) => String(r.Tipo)))].map((t) => ({
-        Tipo: t, Cantidad: filteredData.filter((r) => r.Tipo === t).length,
-      }));
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(byTipo), "Por Tipo");
-      const byParr = [...new Set(filteredData.map((r) => String(r.Parroquia)))].map((p) => ({
-        Parroquia: p, Cantidad: filteredData.filter((r) => r.Parroquia === p).length,
-      }));
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(byParr), "Por Parroquia");
-      XLSX.writeFile(wb, `${nombre}.xlsx`);
+      // Excel limita los nombres de hoja a 31 chars; una hoja vacía usa [{}] como placeholder.
+      const addSheet = (rows: Record<string, string | number>[], name: string) =>
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows.length ? rows : [{}]), name.slice(0, 31));
+
+      // Cada pestaña exporta los MISMOS datos que muestra en pantalla (espejo del PDF).
+      if (activeTab === "brigadistas" && brigadistasData) {
+        addSheet([
+          { Indicador: "Total brigadistas", Valor: brigadistasData.total },
+          { Indicador: "Certificados", Valor: brigadistasData.capacitados },
+          { Indicador: "Sin certificación", Valor: brigadistasData.total - brigadistasData.capacitados },
+          { Indicador: "% certificación", Valor: `${totales?.pctBrigadistasCapacitados ?? 0}%` },
+        ], "Resumen");
+        addSheet(brigadistasData.porParroquia.map((p) => ({
+          Parroquia: p.parroquia, Total: p.total, Certificados: p.capacitados,
+          "% Certificación": p.pct, Brecha: p.total - p.capacitados,
+        })), "Brigadistas por Parroquia");
+      } else if (activeTab === "prevencion" && actividadesData) {
+        const pctEjec = actividadesData.total > 0 ? Math.round((actividadesData.ejecutadas / actividadesData.total) * 100) : 0;
+        addSheet([
+          { Indicador: "Total actividades", Valor: actividadesData.total },
+          { Indicador: "Ejecutadas", Valor: actividadesData.ejecutadas },
+          { Indicador: "% ejecución", Valor: `${pctEjec}%` },
+          { Indicador: "Participantes", Valor: actividadesData.totalParticipantes },
+        ], "Resumen");
+        addSheet(actividadesData.porEstado.map((e) => ({ Estado: e.label, Cantidad: e.value })), "Por Estado");
+        addSheet(actividadesData.porTipo.map((t) => ({ Tipo: t.label, Cantidad: t.value })), "Por Tipo");
+        addSheet(actividadesData.porParroquia.map((p) => ({ Parroquia: p.label, Cantidad: p.value })), "Por Parroquia");
+      } else if (activeTab === "kits" && kitsData) {
+        addSheet([
+          { Indicador: "Unidades distribuidas", Valor: kitsData.totalEntregados },
+          { Indicador: "Parroquias beneficiadas", Valor: kitsData.porParroquia.filter((p) => p.value > 0).length },
+          { Indicador: "Tipos de kit", Valor: kitsData.porTipo.length },
+          { Indicador: "Stock registrado", Valor: kitsData.stockActual.reduce((s, k) => s + k.stockActual, 0) },
+        ], "Resumen");
+        addSheet(kitsData.porParroquia.map((p) => ({ Parroquia: p.label, Unidades: p.value })), "Por Parroquia");
+        addSheet(kitsData.porTipo.map((t) => ({ Tipo: t.label, Unidades: t.value })), "Por Tipo");
+        addSheet(kitsData.stockActual.map((k) => ({
+          "Tipo de Kit": k.tipoKit, "Stock Actual": k.stockActual, "Nro. Registros": k.total,
+        })), "Stock Actual");
+      } else if (activeTab === "riesgo" && parroquiasRiesgo) {
+        addSheet(parroquiasRiesgo.map((p, i) => ({
+          "#": i + 1, Parroquia: p.nombre, Nivel: p.riesgoNivel, Score: p.riesgoScore,
+          Incidencias: p.incidencias, Brigadistas: p.brigadistas, "% Certif.": p.pctCapacitados,
+          Plan: p.tienePlan ? "Sí" : "No",
+          "Act. Ejecutadas": p.actividadesEjecutadas, "Act. Total": p.actividadesTotal,
+        })), "Afectación Parroquial");
+      } else if (activeTab === "resumen" && totales) {
+        addSheet([
+          { Indicador: "Incidencias", Valor: totales.incidencias },
+          { Indicador: "Brigadistas certificados", Valor: `${totales.brigadistasCapacitados}/${totales.totalBrigadistas} (${totales.pctBrigadistasCapacitados}%)` },
+          { Indicador: "Parroquias con plan GRD", Valor: `${totales.parroquiasConPlan}/${totales.totalParroquias} (${totales.pctParroquiasPlan}%)` },
+          { Indicador: "Actividades ejecutadas", Valor: `${totales.pctActividadesEjecutadas}%` },
+          { Indicador: "Kits entregados", Valor: totales.kitsEntregados },
+          { Indicador: "Días promedio de atención", Valor: totales.tiempoPromedio },
+        ], "Resumen del Sistema");
+        if (porEstado) addSheet(porEstado.map((e) => ({ Estado: e.label, Cantidad: e.value })), "Incidencias por Estado");
+        if (incidenciasData) addSheet(incidenciasData.porGravedad.map((g) => ({ Gravedad: g.label, Cantidad: g.value })), "Incidencias por Gravedad");
+      } else {
+        // Casos (y fallback): detalle de incidencias del período + distribuciones.
+        addSheet(filteredData, "Incidencias");
+        const byEstado = [...new Set(filteredData.map((r) => String(r.Estado)))].map((e) => ({
+          Estado: e, Cantidad: filteredData.filter((r) => r.Estado === e).length,
+        }));
+        addSheet(byEstado, "Por Estado");
+        const byTipo = [...new Set(filteredData.map((r) => String(r.Tipo)))].map((t) => ({
+          Tipo: t, Cantidad: filteredData.filter((r) => r.Tipo === t).length,
+        }));
+        addSheet(byTipo, "Por Tipo");
+        const byParr = [...new Set(filteredData.map((r) => String(r.Parroquia)))].map((p) => ({
+          Parroquia: p, Cantidad: filteredData.filter((r) => r.Parroquia === p).length,
+        }));
+        addSheet(byParr, "Por Parroquia");
+      }
+      XLSX.writeFile(wb, `${nombre}_${activeTab}.xlsx`);
     } else {
       const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
       // ── Constantes y utilidades ──────────────────────────────────────────

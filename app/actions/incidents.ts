@@ -10,6 +10,7 @@ import { DomainError } from "@/core/domain/errors/DomainError";
 import { logGRDAction } from "@/app/lib/audit";
 import { sendAsignacionEmergenciaEmail, sendDecisionComiteEmail } from "@/app/lib/email";
 import { notificarUsuario, notificarRoles, notificarBrigadistas } from "@/app/lib/notificaciones";
+import type { Role } from "@prisma/client";
 import type {
   CreateIncidenteData,
   InfoCampoData,
@@ -65,7 +66,8 @@ function notificarEquipoAsignado(
         "RESPONSABLE_ASIGNADO",
         "Eres el responsable del equipo de respuesta",
         detalle,
-        `/grd/${incidenciaId}`
+        `/grd/${incidenciaId}`,
+        incidenciaId
       );
 
       if (equipoIds.length > 0) {
@@ -74,7 +76,8 @@ function notificarEquipoAsignado(
           "BRIGADISTA_ASIGNADO",
           "Has sido asignado a un caso de emergencia",
           detalle,
-          `/grd/${incidenciaId}`
+          `/grd/${incidenciaId}`,
+          incidenciaId
         );
       }
     })
@@ -147,7 +150,8 @@ export async function createIncidente(data: CreateIncidenteData) {
     "INCIDENCIA_NUEVA",
     "Nueva incidencia registrada",
     `Se registró: ${data.categoria} en ${data.distrito}`,
-    `/grd/${id}`
+    `/grd/${id}`,
+    id
   );
   // ?registrado=1 → el detalle muestra la confirmación tras el redirect.
   redirect(`/grd/${id}?registrado=1`);
@@ -219,7 +223,8 @@ export async function assignBrigadista(
     instrucciones?.trim()
       ? `Instrucciones: ${instrucciones.trim()}`
       : "Revisa el sistema para ver los detalles.",
-    `/grd/${incidenciaId}`
+    `/grd/${incidenciaId}`,
+    incidenciaId
   );
   revalidar(incidenciaId);
 }
@@ -281,6 +286,19 @@ export async function saveInfoCampo(incidenciaId: string, data: InfoCampoData) {
   } catch (err) {
     return asMessage(err);
   }
+  // Notifica al Especialista GRD que el brigadista envió el levantamiento.
+  const inc = await prisma.incidencia.findUnique({
+    where: { idIncidencia: incidenciaId },
+    select: { tituloIncidencia: true, tipoEvento: true },
+  });
+  const titulo = inc?.tituloIncidencia ?? inc?.tipoEvento ?? "Incidencia GRD";
+  notificarRoles(
+    ["ESPECIALISTAGRD", "ADMINISTRADOR"],
+    "LEVANTAMIENTO_ENVIADO",
+    "Levantamiento de campo recibido",
+    `${responsable} envió el levantamiento de campo del caso "${titulo}". Listo para elaborar el informe.`,
+    `/grd/${incidenciaId}`
+  );
   revalidar(incidenciaId);
 }
 
@@ -356,7 +374,8 @@ export async function saveInformeEvaluacion(incidenciaId: string, data: InformeE
     "INFORME_ENVIADO_COMITE",
     "Informe enviado al Comité",
     `El especialista GRD envió el informe del caso "${titulo}" para su evaluación.`,
-    `/grd/${incidenciaId}`
+    `/grd/${incidenciaId}`,
+    incidenciaId
   );
   revalidar(incidenciaId);
 }
@@ -461,7 +480,8 @@ export async function notificarDecisionComite(
           observaciones?.trim()
             ? `"${incTitulo}" — ${observaciones.trim()}`
             : `"${incTitulo}"`,
-          `/grd/${incidenciaId}`
+          `/grd/${incidenciaId}`,
+          incidenciaId
         );
       }
     })
@@ -542,6 +562,7 @@ export async function agregarPersonaAFamiliaCampo(
     parentesco?: string | null;
     condicionEspecial?: string | null;
     telefono?: string | null;
+    observaciones?: string | null;
   }
 ) {
   await verifySession();
@@ -562,8 +583,92 @@ export async function agregarPersonaAFamiliaCampo(
         parentesco: persona.parentesco || null,
         condicionEspecial: persona.condicionEspecial || null,
         telefono: persona.telefono || null,
+        observaciones: persona.observaciones || null,
       },
     });
+  } catch (err) {
+    return asMessage(err);
+  }
+  revalidar(incidenciaId);
+}
+
+/**
+ * Agrega una persona INDIVIDUAL (sin familia). Reutiliza —o crea si no existe—
+ * el grupo "Personas individuales" de la incidencia (mismo criterio que el
+ * registro inicial), y agrega ahí la persona.
+ */
+export async function agregarPersonaIndividualCampo(
+  incidenciaId: string,
+  persona: {
+    nombres: string;
+    apellidos?: string | null;
+    edad?: number | null;
+    sexo?: string | null;
+    tipoDocumento?: string | null;
+    numeroDocumento?: string | null;
+    parentesco?: string | null;
+    condicionEspecial?: string | null;
+    telefono?: string | null;
+    observaciones?: string | null;
+  }
+) {
+  await verifySession();
+  const fechaNacimiento =
+    persona.edad != null && persona.edad > 0
+      ? new Date(new Date().getFullYear() - persona.edad, 0, 1)
+      : null;
+  try {
+    let grupo = await prisma.grupoFamiliarAfectado.findFirst({
+      where: { idIncidencia: incidenciaId, nombreReferencia: "Personas individuales" },
+      select: { idGrupoFamiliar: true },
+    });
+    if (!grupo) {
+      grupo = await prisma.grupoFamiliarAfectado.create({
+        data: {
+          idIncidencia: incidenciaId,
+          nombreReferencia: "Personas individuales",
+          codigoGrupo: "SIN_FAMILIA",
+        },
+        select: { idGrupoFamiliar: true },
+      });
+    }
+    await prisma.personaAfectada.create({
+      data: {
+        idGrupoFamiliar: grupo.idGrupoFamiliar,
+        nombres: persona.nombres.trim(),
+        apellidos: persona.apellidos?.trim() || null,
+        fechaNacimiento,
+        sexo: persona.sexo || null,
+        tipoDocumento: persona.tipoDocumento || null,
+        numeroDocumento: persona.numeroDocumento || null,
+        parentesco: persona.parentesco || null,
+        condicionEspecial: persona.condicionEspecial || null,
+        telefono: persona.telefono || null,
+        observaciones: persona.observaciones || null,
+      },
+    });
+  } catch (err) {
+    return asMessage(err);
+  }
+  revalidar(incidenciaId);
+}
+
+/**
+ * Guarda las anotaciones por familia en `GrupoFamiliar.observaciones` (fuente
+ * única de la anotación: la crea el registro y la edita el brigadista aquí).
+ */
+export async function guardarNotasFamiliasCampo(
+  incidenciaId: string,
+  notas: { grupoId: string; nota: string }[]
+) {
+  await verifySession();
+  try {
+    for (const { grupoId, nota } of notas) {
+      await prisma.grupoFamiliarAfectado.update({
+        where: { idGrupoFamiliar: grupoId },
+        data: { observaciones: nota.trim() || null },
+      });
+    }
   } catch (err) {
     return asMessage(err);
   }
@@ -584,6 +689,7 @@ export async function updatePersonaCampo(
     parentesco?: string | null;
     condicionEspecial?: string | null;
     telefono?: string | null;
+    observaciones?: string | null;
   }
 ) {
   await verifySession();
@@ -604,6 +710,7 @@ export async function updatePersonaCampo(
         parentesco: persona.parentesco || null,
         condicionEspecial: persona.condicionEspecial || null,
         telefono: persona.telefono || null,
+        observaciones: persona.observaciones || null,
       },
     });
   } catch (err) {
@@ -648,4 +755,49 @@ export async function deleteGrupoFamiliarCampo(grupoId: string, incidenciaId: st
     return asMessage(err);
   }
   revalidar(incidenciaId);
+}
+
+// ─── Preview de destinatarios ────────────────────────────────────────────────
+
+export type DestinatarioNotif = { nombre: string; email: string; rol: string };
+
+export async function getDestinatariosNotificacion(
+  step: "informe" | "decision",
+  incidenciaId: string
+): Promise<DestinatarioNotif[]> {
+  await verifySession();
+
+  if (step === "informe") {
+    const roles = ["COMITEDONACIONES", "JEFAOGP"] as Role[];
+    const usuarios = await prisma.user.findMany({
+      where: { role: { in: roles }, estado: "ACTIVO" },
+      select: { name: true, email: true, role: true },
+      orderBy: [{ role: "asc" }, { name: "asc" }],
+    });
+    return usuarios.map((u) => ({ nombre: u.name ?? u.email, email: u.email, rol: u.role }));
+  }
+
+  // step === "decision": notify the GRD responsible for this incidencia
+  const inc = await prisma.incidencia.findUnique({
+    where: { idIncidencia: incidenciaId },
+    select: {
+      usuarioResponsable: {
+        select: {
+          nombres: true,
+          apellidos: true,
+          correoReferencia: true,
+          credencial: { select: { email: true, role: true } },
+        },
+      },
+    },
+  });
+
+  const resp = inc?.usuarioResponsable;
+  if (!resp) return [];
+
+  const nombre = [resp.nombres, resp.apellidos].filter(Boolean).join(" ");
+  const email = resp.correoReferencia ?? resp.credencial?.email ?? "";
+  // credencial can be null for UsuarioGRD rows not linked to a User account; rol is display-only
+  const rol = resp.credencial?.role ?? "ESPECIALISTAGRD";
+  return [{ nombre, email, rol }];
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
+import { logger } from "@/app/lib/logger";
 import { isS3Configured } from "@/app/lib/s3";
 import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
 
@@ -95,6 +96,12 @@ export async function POST(request: Request) {
       where: { idEvidenciaGRD: evidencia.idEvidenciaGRD },
       data: { estado: "INACTIVO", deletedAt: new Date() },
     });
+
+    // H7 — Trazabilidad: dejar constancia del borrado para auditoría.
+    logger.warn(
+      { idEvidenciaGRD: evidencia.idEvidenciaGRD, uuidMovil, source: "mobile-sync" },
+      "[Mobile Sync][Evidencias Eliminar] Evidencia eliminada"
+    );
 
     return NextResponse.json({ ok: true, idEvidenciaGRD: evidencia.idEvidenciaGRD });
   } catch (err) {

@@ -8,7 +8,6 @@ import { PaginationControls } from "@/app/ui/shared/pagination-controls";
 const SOURCE_LABELS: Record<string, string> = {
   grd: "GRD",
   estado: "Incidencia",
-  auth: "Auth",
 };
 
 const ACTION_COLORS: Record<string, string> = {
@@ -19,9 +18,6 @@ const ACTION_COLORS: Record<string, string> = {
   aprobacion: "bg-emerald-100 text-emerald-700",
   rechazo: "bg-red-100 text-red-700",
   cierre: "bg-gray-200 text-gray-700",
-  login: "bg-sky-100 text-sky-700",
-  "login failed": "bg-red-100 text-red-700",
-  logout: "bg-slate-100 text-slate-600",
 };
 
 function ActionBadge({ action }: { action: string }) {
@@ -103,7 +99,6 @@ export function AuditoriaTable({ entries }: { entries: AuditEntry[] }) {
           <option value="">Todos los módulos</option>
           <option value="estado">Incidencias</option>
           <option value="grd">GRD</option>
-          <option value="auth">Autenticación</option>
         </select>
         <span className="text-xs text-gray-400">
           {filtered.length} registro{filtered.length !== 1 ? "s" : ""}

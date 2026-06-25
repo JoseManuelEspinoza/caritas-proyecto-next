@@ -13,11 +13,12 @@ import { prisma } from "@/app/lib/prisma";
 const KC_ISSUER = "http://keycloak.test/realms/test";
 const KC_ID = "my-client";
 const KC_SECRET = "my-secret";
+const API_KEY = "test-sync-key-123";
 
 function makeRequest(body: unknown) {
   return new Request("http://localhost/api/mobile/auth/login", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-mobile-sync-key": API_KEY },
     body: JSON.stringify(body),
   });
 }
@@ -35,6 +36,7 @@ function mockKeycloakOk(accessToken = "tok-abc") {
 describe("POST /api/mobile/auth/login", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    process.env.MOBILE_SYNC_API_KEY = API_KEY;
     process.env.AUTH_KEYCLOAK_INTERNAL_URL = KC_ISSUER;
     process.env.AUTH_KEYCLOAK_ID = KC_ID;
     process.env.AUTH_KEYCLOAK_SECRET = KC_SECRET;
@@ -47,11 +49,29 @@ describe("POST /api/mobile/auth/login", () => {
 
   // ── Validación de entrada ───────────────────────────────────────────────────
 
+  // ── H8: API key de sincronización ────────────────────────────────────────────
+
+  it("[negativo][H8] sin API key → 401", async () => {
+    const req = new Request("http://localhost/api/mobile/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "user@test.com", password: "pass" }),
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(401);
+  });
+
+  it("[negativo][H8] API key no configurada → 503", async () => {
+    vi.stubEnv("MOBILE_SYNC_API_KEY", "");
+    const res = await POST(makeRequest({ email: "user@test.com", password: "pass" }));
+    expect(res.status).toBe(503);
+  });
+
   it("[negativo] body JSON inválido → 400", async () => {
     const req = new Request("http://localhost/api/mobile/auth/login", {
       method: "POST",
       body: "not-json",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-mobile-sync-key": API_KEY },
     });
     const res = await POST(req);
     expect(res.status).toBe(400);
@@ -120,19 +140,24 @@ describe("POST /api/mobile/auth/login", () => {
 
   // ── Errores de BD ───────────────────────────────────────────────────────────
 
-  it("[negativo] usuario no existe en el sistema → 403", async () => {
+  // H9 — Anti-enumeración: credenciales válidas en Keycloak pero usuario no
+  // aprovisionado → mismo 401 genérico que credencial incorrecta (no se revela
+  // si la cuenta existe).
+  it("[negativo][H9] usuario no existe en el sistema → 401 genérico", async () => {
     mockKeycloakOk();
     vi.mocked(prisma.user.findUnique).mockResolvedValue(null);
     const res = await POST(makeRequest({ email: "nuevo@test.com", password: "pass" }));
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
+    expect((await res.json()).message).toContain("incorrectos");
   });
 
-  it("[negativo] perfil GRD no encontrado → 403", async () => {
+  it("[negativo][H9] perfil GRD no encontrado → 401 genérico", async () => {
     mockKeycloakOk();
     vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: "user-1", role: "GRD" } as any);
     vi.mocked(prisma.usuarioGRD.findUnique).mockResolvedValue(null);
     const res = await POST(makeRequest({ email: "user@test.com", password: "pass" }));
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
+    expect((await res.json()).message).toContain("incorrectos");
   });
 
   // ── Caso exitoso ────────────────────────────────────────────────────────────

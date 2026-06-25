@@ -116,6 +116,8 @@ export class RegistrarLevantamientoUseCase {
       contenido: JSON.stringify({ ...data, responsable }),
       estado: "APROBADO",
     });
+    // Terminó el trabajo de campo: el equipo queda disponible.
+    await this.repo.marcarBrigadistasDisponibles(idIncidencia);
     await this.repo.guardarTransicion(inc, "Levantamiento de campo completado");
   }
 }

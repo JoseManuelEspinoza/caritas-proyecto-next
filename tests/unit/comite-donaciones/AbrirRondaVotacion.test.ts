@@ -13,6 +13,7 @@ function makeRepo(overrides: Partial<IComiteDonacionesRepository> = {}): IComite
     contarVotos: vi.fn().mockResolvedValue({ aFavor: 0, enContra: 0 }),
     cerrarRonda: vi.fn().mockResolvedValue(undefined),
     tally: vi.fn().mockResolvedValue(null),
+    descontarInventarioAprobacion: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }

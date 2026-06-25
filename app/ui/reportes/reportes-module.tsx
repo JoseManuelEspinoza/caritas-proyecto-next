@@ -277,7 +277,7 @@ function TabResumen({ totales, parroquiasRiesgo, actividadesData, kitsData, brig
 
 // ── Tab: Casos Atendidos ──────────────────────────────────────────────────────
 
-function TabCasos({ totales, porEstado, porTipo, porParroquia, timeline, byWeek, incidenciasData }: ReportesProps) {
+function TabCasos({ totales, porEstado, porTipo, porParroquia, timeline, byWeek, incidenciasData, topIncidencias }: ReportesProps) {
   const timelineLabeled = timeline.map(t => ({ ...t, label: fmtLabel(t.label) }));
   const resolRate = totales.incidencias > 0 ? Math.round((incidenciasData.cerradas / totales.incidencias) * 100) : 0;
   const enGestion = incidenciasData.activas + incidenciasData.enSeguimiento;
@@ -349,6 +349,43 @@ function TabCasos({ totales, porEstado, porTipo, porParroquia, timeline, byWeek,
           )}
         </ChartCard>
       </div>
+
+      {/* Tabla últimos casos */}
+      {topIncidencias.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100">
+            <h3 className="text-sm font-bold text-gray-900">Últimos Casos Registrados</h3>
+            <p className="text-xs text-gray-400">Hasta 10 incidencias más recientes del período</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  {["Código","Fecha","Tipo","Gravedad","Estado","Parroquia","Ubicación","Responsable"].map(h => (
+                    <th key={h} className="px-3 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {topIncidencias.map((row, i) => (
+                  <tr key={i} className="hover:bg-gray-50">
+                    <td className="px-3 py-2.5 font-mono text-gray-700">{row.Codigo}</td>
+                    <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{row.Fecha}</td>
+                    <td className="px-3 py-2.5 text-gray-700">{row.Tipo}</td>
+                    <td className="px-3 py-2.5 text-gray-700">{row.Gravedad}</td>
+                    <td className="px-3 py-2.5">
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-gray-100 text-gray-700">{row.Estado}</span>
+                    </td>
+                    <td className="px-3 py-2.5 text-gray-700 max-w-[130px] truncate">{row.Parroquia}</td>
+                    <td className="px-3 py-2.5 text-gray-600 max-w-[150px] truncate" title={String(row.Ubicacion)}>{row.Ubicacion}</td>
+                    <td className="px-3 py-2.5 text-gray-700 max-w-[130px] truncate">{row.Responsable}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Gravedad + Parroquia — 2 columnas */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -943,7 +980,14 @@ function TabRiesgo({ parroquiasRiesgo }: ReportesProps) {
                 return (
                   <tr key={i} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-gray-400 font-mono">{i + 1}</td>
-                    <td className="px-4 py-3 font-semibold text-gray-800">{p.nombre}</td>
+                    <td className="px-4 py-3 font-semibold text-gray-800">
+                      <div className="flex items-center gap-2">
+                        {p.nombre}
+                        {p.esNueva && (
+                          <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-bold rounded-full whitespace-nowrap">Nueva</span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-4 py-3"><RiesgoNivelBadge nivel={p.riesgoNivel} /></td>
                     <td className="px-4 py-3"><span className={`font-bold ${p.incidencias > 0 ? "text-red-600" : "text-gray-400"}`}>{p.incidencias}</span></td>
                     <td className="px-4 py-3"><span className={`font-bold ${p.brigadistas >= 5 ? "text-[#009850]" : p.brigadistas > 0 ? "text-amber-600" : "text-red-600"}`}>{p.brigadistas}</span></td>
@@ -977,21 +1021,79 @@ function TabRiesgo({ parroquiasRiesgo }: ReportesProps) {
       </div>
 
       {/* Metodología */}
-      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-xs text-gray-500">
-        <p className="font-semibold text-gray-700 mb-2">Metodología de puntaje de afectación estimada</p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          <span>Incidencias: ≥5 (+3) / ≥2 (+2) / 1 (+1)</span>
-          <span>Brigadistas: &lt;2 (+3) / &lt;5 (+2) / &lt;10 (+1)</span>
-          <span>Certificación: &lt;30% (+2) / &lt;60% (+1)</span>
-          <span>Sin plan (+2) / Actividades &lt;40% (+2)</span>
+      <div className="bg-gray-50 border border-gray-200 rounded-xl p-5 space-y-4 text-xs text-gray-600">
+        <p className="font-bold text-sm text-gray-800">Metodología de cálculo del nivel de afectación</p>
+
+        {/* Fórmula general */}
+        <div>
+          <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Fórmula (marco UNDRR)</p>
+          <div className="bg-gray-900 text-green-300 font-mono text-[11px] rounded-lg px-4 py-3 overflow-x-auto whitespace-nowrap">
+            Score = ( P_inc/3 × 0.30 + P_brig/3 × 0.25 + P_cert/2 × 0.20 + P_plan/2 × 0.15 + P_act/2 × 0.10 ) × 10
+          </div>
+          <p className="text-[10px] text-gray-400 mt-1">Resultado en escala 0–10 · Componentes normalizados por su máximo · Pesos basados en relevancia operacional</p>
         </div>
-        <div className="flex gap-4 mt-2 flex-wrap">
-          {(["BAJO","MEDIO","ALTO","CRÍTICO"] as RiesgoNivel[]).map(n => (
-            <span key={n} className={`${RIESGO_CONFIG[n].textClass} font-semibold`}>
-              {n}: {n === "BAJO" ? "0-2" : n === "MEDIO" ? "3-4" : n === "ALTO" ? "5-7" : "8+"} pts
-            </span>
-          ))}
+
+        {/* Tabla de criterios */}
+        <div>
+          <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Criterios de puntaje (P)</p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[11px]">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-1.5 pr-4 font-semibold text-gray-600 whitespace-nowrap">Componente</th>
+                  <th className="text-left py-1.5 pr-4 font-semibold text-gray-600 whitespace-nowrap">Variable</th>
+                  <th className="text-left py-1.5 pr-4 font-semibold text-gray-600">Condición</th>
+                  <th className="text-center py-1.5 font-semibold text-gray-600">P</th>
+                  <th className="text-center py-1.5 pl-4 font-semibold text-gray-600">Peso</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {[
+                  { comp: "Amenaza", var: "P_inc", cond: "≥ 5 incidencias", p: 3, peso: "30%", rowSpan: true },
+                  { comp: "", var: "", cond: "2–4 incidencias", p: 2, peso: "" },
+                  { comp: "", var: "", cond: "1 incidencia", p: 1, peso: "" },
+                  { comp: "", var: "", cond: "0 incidencias", p: 0, peso: "" },
+                  { comp: "Vulnerabilidad", var: "P_brig", cond: "< 2 brigadistas activos", p: 3, peso: "25%" },
+                  { comp: "", var: "", cond: "2–4 brigadistas activos", p: 2, peso: "" },
+                  { comp: "", var: "", cond: "5–9 brigadistas activos", p: 1, peso: "" },
+                  { comp: "", var: "P_cert", cond: "< 30% certificados", p: 2, peso: "20%" },
+                  { comp: "", var: "", cond: "30–59% certificados", p: 1, peso: "" },
+                  { comp: "Resiliencia", var: "P_plan", cond: "Sin plan GRD aprobado", p: 2, peso: "15%" },
+                  { comp: "", var: "P_act", cond: "Sin actividades o < 40% ejecutadas", p: 2, peso: "10%" },
+                ].map((row, i) => (
+                  <tr key={i} className="hover:bg-gray-50">
+                    <td className="py-1.5 pr-4 font-medium text-gray-700">{row.comp}</td>
+                    <td className="py-1.5 pr-4 font-mono text-blue-700">{row.var}</td>
+                    <td className="py-1.5 pr-4 text-gray-600">{row.cond}</td>
+                    <td className="py-1.5 text-center font-bold text-gray-800">{row.p}</td>
+                    <td className="py-1.5 pl-4 text-center font-semibold text-gray-500">{row.peso}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
+
+        {/* Niveles */}
+        <div>
+          <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Umbrales de nivel (escala 0–10)</p>
+          <div className="flex flex-wrap gap-3">
+            {(["BAJO","MEDIO","ALTO","CRÍTICO"] as RiesgoNivel[]).map(n => (
+              <div key={n} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${RIESGO_CONFIG[n].bgClass} ${RIESGO_CONFIG[n].borderClass}`}>
+                <span className={`font-bold text-xs ${RIESGO_CONFIG[n].textClass}`}>{n}</span>
+                <span className="text-[11px] text-gray-500">
+                  {n === "BAJO" ? "0 – 2.5" : n === "MEDIO" ? "2.5 – 4.5" : n === "ALTO" ? "4.5 – 7.0" : "> 7.0"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Nota grace period */}
+        <p className="text-[10px] text-blue-600 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+          ★ Parroquias con menos de 30 días desde su registro no reciben penalización por criterios de capacidad
+          (brigadistas, certificación, plan GRD, actividades) — solo se evalúa la amenaza (incidencias).
+        </p>
       </div>
     </div>
   );

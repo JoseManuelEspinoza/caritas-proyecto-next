@@ -27,6 +27,7 @@ function makeComite(overrides: Partial<IComiteDonacionesRepository> = {}): IComi
     contarVotos: vi.fn().mockResolvedValue({ aFavor: 0, enContra: 0 }),
     cerrarRonda: vi.fn().mockResolvedValue(undefined),
     tally: vi.fn().mockResolvedValue(null),
+    descontarInventarioAprobacion: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
@@ -47,6 +48,8 @@ function makeIncidencias(overrides: Partial<IIncidenciaRepository> = {}): IIncid
     registrarEntrega: vi.fn().mockResolvedValue(undefined),
     agregarSeguimiento: vi.fn().mockResolvedValue(undefined),
     liberarBrigadistas: vi.fn().mockResolvedValue(undefined),
+    marcarBrigadistasEnCampo: vi.fn().mockResolvedValue(undefined),
+    marcarBrigadistasDisponibles: vi.fn().mockResolvedValue(undefined),
     agregarPersona: vi.fn().mockResolvedValue(undefined),
     guardarEvidencias: vi.fn().mockResolvedValue(undefined),
     ...overrides,

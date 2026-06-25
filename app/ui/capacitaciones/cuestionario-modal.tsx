@@ -173,7 +173,7 @@ export function CuestionarioModal({
         Cancelar
       </button>
       <button
-        disabled={pending || !titulo.trim() || totalExcedido}
+        disabled={pending || !titulo.trim() || totalExcedido || puntajeTotal !== notaAprobatoria}
         onClick={guardar}
         className="flex items-center gap-2 px-4 py-2 text-sm bg-[var(--caritas-green)] text-white rounded-lg disabled:opacity-50 hover:opacity-90 transition-opacity"
       >
@@ -233,9 +233,16 @@ export function CuestionarioModal({
         {/* Preguntas */}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <span className={`text-sm font-semibold ${totalExcedido ? "text-red-600" : "text-[var(--caritas-text)]"}`}>
+            <span className={`text-sm font-semibold ${
+              totalExcedido
+                ? "text-red-600"
+                : puntajeTotal < notaAprobatoria
+                ? "text-amber-600"
+                : "text-[var(--caritas-text)]"
+            }`}>
               Preguntas ({preguntas.length}) · Total: {puntajeTotal} / {notaAprobatoria} pts
               {totalExcedido && " — excede el máximo"}
+              {!totalExcedido && puntajeTotal < notaAprobatoria && ` — faltan ${notaAprobatoria - puntajeTotal} pts para llegar a 20`}
             </span>
           </div>
 

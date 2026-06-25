@@ -18,7 +18,7 @@ export type AuditEntry = {
   prevValue?: string;
   newValue?: string;
   notes?: string;
-  source: "grd" | "estado" | "auth";
+  source: "grd" | "estado";
 };
 
 export async function getAuditEntries(): Promise<AuditEntry[]> {
@@ -34,6 +34,7 @@ export async function getAuditEntries(): Promise<AuditEntry[]> {
       take: 500,
     }),
     prisma.auditLog.findMany({
+      where: { action: { in: [...GRD_ACTIONS] } },
       include: { user: true },
       orderBy: { createdAt: "desc" },
       take: 200,
@@ -88,23 +89,7 @@ export async function getAuditEntries(): Promise<AuditEntry[]> {
     ASIGNAR: "asignación",
   };
 
-  const entriesAuth: AuditEntry[] = authLogs
-    .filter((h) => !GRD_ACTIONS.has(h.action))
-    .map((h) => ({
-      id: h.id,
-      timestamp: h.createdAt.toISOString(),
-      user: h.user?.name ?? h.user?.email ?? "Desconocido",
-      userRole: h.user?.role ?? undefined,
-      action: h.action.toLowerCase().replace(/_/g, " "),
-      entity: "Autenticación",
-      entityId: h.userId ?? "",
-      entityName: "Sistema",
-      notes: h.detail ? JSON.stringify(h.detail) : undefined,
-      source: "auth",
-    }));
-
   const entriesCRUD: AuditEntry[] = authLogs
-    .filter((h) => GRD_ACTIONS.has(h.action))
     .map((h) => {
       const d = (h.detail ?? {}) as Record<string, string>;
       return {
@@ -124,7 +109,7 @@ export async function getAuditEntries(): Promise<AuditEntry[]> {
       };
     });
 
-  const all = [...entriesGRD, ...entriesEstado, ...entriesAuth, ...entriesCRUD];
+  const all = [...entriesGRD, ...entriesEstado, ...entriesCRUD];
   all.sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1));
   return all;
 }

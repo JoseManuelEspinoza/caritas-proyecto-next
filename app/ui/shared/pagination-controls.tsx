@@ -20,6 +20,7 @@ export function PageSizeSelector({
       <select
         value={pageSize}
         onChange={(e) => onPageSizeChange(Number(e.target.value))}
+        suppressHydrationWarning
         className="text-xs border border-[var(--caritas-border)] rounded-lg px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#009850]/20 focus:border-[#009850]"
       >
         {PAGE_SIZE_OPTIONS.map((n) => (
@@ -76,6 +77,7 @@ export function PaginationControls({
           type="button"
           onClick={onPrevious}
           disabled={page === 1}
+          suppressHydrationWarning
           className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium border border-[var(--caritas-border)] rounded-lg bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <ChevronLeft className="w-3.5 h-3.5" /> Anterior
@@ -87,6 +89,7 @@ export function PaginationControls({
           type="button"
           onClick={onNext}
           disabled={page === totalPages}
+          suppressHydrationWarning
           className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium border border-[var(--caritas-border)] rounded-lg bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Siguiente <ChevronRight className="w-3.5 h-3.5" />

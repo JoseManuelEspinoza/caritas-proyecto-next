@@ -289,9 +289,10 @@ model Parroquia {
   referencia      String?
   latitud         Decimal? @db.Decimal(10, 7)
   longitud        Decimal? @db.Decimal(10, 7)
-  telefono        String?
-  correo          String?
+  telefono        String?  @unique
+  correo          String?  @unique
   estado          String   @default("ACTIVO")
+  createdAt       DateTime @default(now())
 
   lugarCatalogo CatalogoLugar? @relation(fields: [idLugarCatalogo], references: [idLugar])
 
@@ -393,6 +394,7 @@ model Incidencia {
   solicitudesAyuda     SolicitudAyudaHumanitaria[]
   entregasAyuda        EntregaAyudaHumanitaria[]
   rondasVotacionComite RondaVotacionComite[]
+  notificaciones       Notificacion[]
   seguimientos     SeguimientoIncidencia[]
   informes         Informe[]
   historialEstados HistorialEstadoIncidencia[]
@@ -546,6 +548,7 @@ model AsignacionBrigadistaIncidencia {
   updatedAt           DateTime  @updatedAt
   deletedAt           DateTime?
 
+  @@unique([idIncidencia, idBrigadistaParroquial])
   @@index([idIncidencia, estadoAsignacion], map: "idx_asig_incidencia_estado")
   @@index([idBrigadistaParroquial, estadoAsignacion], map: "idx_asig_brigadista_estado")
   @@index([idUsuarioAsignadorGRD, fechaAsignacion], map: "idx_asig_usuario_fecha")
@@ -939,6 +942,7 @@ model SimulacroBrigadista {
   brigadista BrigadistaParroquial @relation(fields: [idBrigadistaParroquial], references: [idBrigadistaParroquial])
   asignador  UsuarioGRD?          @relation("AsignadorSimulacro", fields: [idUsuarioAsignadorGRD], references: [idUsuarioGRD])
 
+  @@unique([idActividadPreventiva, idBrigadistaParroquial])
   @@map("simulacro_brigadista")
 }
 
@@ -1013,6 +1017,8 @@ model KitArticulo {
   codigo          String?
   descripcion     String
   cantidad        Int     @default(1)
+  /// Stock disponible de ESTE elemento (el kit es solo una agrupación de elementos).
+  stock           Int     @default(0)
   orden           Int     @default(0)
 
   kitEmergencia KitEmergencia @relation(fields: [idKitEmergencia], references: [idKitEmergencia], onDelete: Cascade)
@@ -1323,8 +1329,12 @@ model Notificacion {
   leida          Boolean  @default(false)
   createdAt      DateTime @default(now())
 
+  idIncidencia String?
+  incidencia   Incidencia? @relation(fields: [idIncidencia], references: [idIncidencia], onDelete: SetNull)
+
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, leida, createdAt])
+  @@index([idIncidencia, tipo, createdAt])
   @@map("notificaciones")
 }

@@ -104,6 +104,22 @@ async function assignRealmRole(token: string, kcUserId: string, roleName: string
   if (!assignRes.ok) throw new Error("No se pudo asignar el rol al usuario.");
 }
 
+export async function findAndDeleteKeycloakUserByEmail(email: string): Promise<void> {
+  try {
+    const token = await getAdminToken();
+    const res = await fetch(
+      `${BASE()}/admin/realms/${REALM()}/users?email=${encodeURIComponent(email)}&exact=true`,
+      { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
+    );
+    if (!res.ok) return;
+    const users: Array<{ id: string }> = await res.json();
+    const kcUserId = users[0]?.id;
+    if (kcUserId) await deleteKeycloakUser(kcUserId);
+  } catch {
+    console.error("[KeycloakAdmin] Error eliminando usuario por email:", email);
+  }
+}
+
 export async function deleteKeycloakUser(kcUserId: string): Promise<void> {
   try {
     const token = await getAdminToken();

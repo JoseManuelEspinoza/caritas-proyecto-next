@@ -588,6 +588,30 @@ export class PrismaIncidenciaRepository implements IIncidenciaRepository {
     }
   }
 
+  /** Cambia la disponibilidad del equipo ASIGNADA del caso, sin cerrar la asignación. */
+  private async cambiarDisponibilidadEquipo(
+    idIncidencia: string,
+    disponibilidad: "EN CAMPO" | "DISPONIBLE"
+  ): Promise<void> {
+    const asignaciones = await prisma.asignacionBrigadistaIncidencia.findMany({
+      where: { idIncidencia, estadoAsignacion: "ASIGNADA" },
+      select: { idBrigadistaParroquial: true },
+    });
+    if (!asignaciones.length) return;
+    await prisma.brigadistaParroquial.updateMany({
+      where: { idBrigadistaParroquial: { in: asignaciones.map((a) => a.idBrigadistaParroquial) } },
+      data: { disponibilidad },
+    });
+  }
+
+  async marcarBrigadistasEnCampo(idIncidencia: string): Promise<void> {
+    await this.cambiarDisponibilidadEquipo(idIncidencia, "EN CAMPO");
+  }
+
+  async marcarBrigadistasDisponibles(idIncidencia: string): Promise<void> {
+    await this.cambiarDisponibilidadEquipo(idIncidencia, "DISPONIBLE");
+  }
+
   // ── Helpers de orquestación ────────────────────────────────────────────────
 
   private async buscarParroquia(nombre: string): Promise<string | null> {
@@ -725,6 +749,7 @@ export class PrismaIncidenciaRepository implements IIncidenciaRepository {
           condicionEspecial: persona.situacionActual || null,
           esVulnerable: Boolean(persona.situacionActual),
           telefono: persona.celular || null,
+          observaciones: persona.comentario?.trim() || null,
           fechaNacimiento: persona.edad
             ? new Date(new Date().getFullYear() - parseInt(persona.edad), 0, 1)
             : null,

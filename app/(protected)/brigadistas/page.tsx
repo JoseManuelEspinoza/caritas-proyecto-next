@@ -35,15 +35,6 @@ export default async function BrigadistasPage() {
     }),
   ]);
 
-  const stats = {
-    total: brigadistas.length,
-    activos: brigadistas.filter((b) => b.estado === "ACTIVO").length,
-    disponibles: brigadistas.filter(
-      (b) => b.disponibilidad === "DISPONIBLE" && b.estado === "ACTIVO"
-    ).length,
-    enCampo: brigadistas.filter((b) => b.disponibilidad === "EN CAMPO").length,
-  };
-
   return (
     <BrigadistasList
       canEdit={role === "admin" || role === "especialistaGRD"}
@@ -60,7 +51,6 @@ export default async function BrigadistasPage() {
         parroquia: b.parroquia ? { id: b.parroquia.idParroquia, nombre: b.parroquia.nombre } : null,
       }))}
       parroquias={parroquias.map((p) => ({ id: p.idParroquia, nombre: p.nombre }))}
-      stats={stats}
     />
   );
 }

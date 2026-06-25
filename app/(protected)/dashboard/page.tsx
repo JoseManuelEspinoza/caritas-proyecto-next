@@ -268,8 +268,8 @@ export default async function DashboardPage() {
   // Brigadista → va directo a GRD
   if (role === "brigadista") redirect("/grd");
 
-  // Comité → va a GRD
-  if (role === "comite") redirect("/grd");
+  // Comité → va a su módulo de donaciones
+  if (role === "comite") redirect("/donaciones");
 
   if (role === "admin") {
     const data = await getAdminData();
