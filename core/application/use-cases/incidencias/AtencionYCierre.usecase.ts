@@ -16,6 +16,8 @@ export class RegistrarAtencionUseCase {
     const inc = await cargar(this.repo, idIncidencia);
     inc.atender();
     await this.repo.registrarEntrega(idIncidencia, data);
+    // Se envió la atención (entrega realizada): el equipo queda disponible.
+    await this.repo.marcarBrigadistasDisponibles(idIncidencia);
     await this.repo.guardarTransicion(inc, "Ayuda humanitaria entregada");
   }
 }
@@ -26,6 +28,8 @@ export class IniciarSeguimientoUseCase {
   async execute(idIncidencia: string): Promise<void> {
     const inc = await cargar(this.repo, idIncidencia);
     inc.iniciarSeguimiento();
+    // Se asigna/abre el seguimiento: el equipo vuelve a campo.
+    await this.repo.marcarBrigadistasEnCampo(idIncidencia);
     await this.repo.guardarTransicion(inc, "Inicio de seguimiento post-atención");
   }
 }
@@ -40,6 +44,8 @@ export class AgregarSeguimientoUseCase {
       inc.iniciarSeguimiento();
       await this.repo.guardarTransicion(inc, "Inicio de seguimiento post-atención");
     }
+    // Se envió el seguimiento: el equipo queda disponible.
+    await this.repo.marcarBrigadistasDisponibles(idIncidencia);
   }
 }
 

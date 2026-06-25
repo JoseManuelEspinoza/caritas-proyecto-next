@@ -63,15 +63,22 @@ type ScoreSugerido = { rank: number; score: number | null; dist: number | null; 
 export function AsignacionStep({
   data,
   onDone,
+  iniciarEditando = false,
 }: {
   data: IncidenciaDetalleOutput;
   onDone: () => void;
+  /** Abre directamente el editor de asignación (se usa al reasignar para seguimiento). */
+  iniciarEditando?: boolean;
 }) {
   const { puedeAsignar: canAct } = permisosDeDetalle(data);
   const puedeEditar =
     canAct &&
     (data.estadoActual === "ABIERTO" ||
-      (data.estadoActual === "ASIGNADO" && !data.informes.some((i) => i.tipo === "CAMPO")));
+      (data.estadoActual === "ASIGNADO" && !data.informes.some((i) => i.tipo === "CAMPO")) ||
+      // El Especialista GRD puede reasignar el equipo para la entrega cuando el
+      // caso ya fue aprobado o está siendo atendido.
+      data.estadoActual === "APROBADO" ||
+      data.estadoActual === "ATENDIDO");
   const tieneEquipo = data.asignaciones.length > 0 || Boolean(data.responsableGRD);
   const puedeAutoasignarse = data.role === "especialistaGRD";
 
@@ -80,7 +87,7 @@ export function AsignacionStep({
     .filter((a) => !a.esResponsable)
     .map((a) => a.brigadistaId);
 
-  const [editing, setEditing] = useState(!tieneEquipo && puedeEditar);
+  const [editing, setEditing] = useState(((!tieneEquipo || iniciarEditando) && puedeEditar));
   const [tab, setTab] = useState<"equipo" | "auto">("equipo");
   const [responsable, setResponsable] = useState(respInicial);
   const [equipo, setEquipo] = useState<string[]>(equipoInicial);

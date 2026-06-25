@@ -1017,6 +1017,8 @@ model KitArticulo {
   codigo          String?
   descripcion     String
   cantidad        Int     @default(1)
+  /// Stock disponible de ESTE elemento (el kit es solo una agrupación de elementos).
+  stock           Int     @default(0)
   orden           Int     @default(0)
 
   kitEmergencia KitEmergencia @relation(fields: [idKitEmergencia], references: [idKitEmergencia], onDelete: Cascade)

@@ -8,6 +8,7 @@ import {
   MessageSquareWarning,
   Loader2,
   Hand,
+  Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import { votarComite, observarCasoComite } from "@/app/actions/comite-donaciones";
@@ -32,6 +33,8 @@ export function ModalVotacionComite({
 }: Props) {
   const [modo, setModo] = useState<"observar" | null>(null);
   const [observacion, setObservacion] = useState("");
+  // Cuando ya votó, las opciones quedan ocultas hasta pulsar "Editar voto".
+  const [editando, setEditando] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const miVoto =
@@ -175,15 +178,47 @@ export function ModalVotacionComite({
                         </button>
                       </div>
                     </div>
+                  ) : miVoto && !editando ? (
+                    // Ya votó: muestra su voto y permite editarlo.
+                    <div className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
+                      <div className="flex items-center gap-2">
+                        {miVoto === "A_FAVOR" ? (
+                          <CheckCircle className="w-5 h-5 text-green-600" />
+                        ) : (
+                          <XCircle className="w-5 h-5 text-red-600" />
+                        )}
+                        <div>
+                          <p className="text-[11px] text-gray-500 uppercase tracking-wide">Tu voto</p>
+                          <p
+                            className={`text-sm font-semibold ${miVoto === "A_FAVOR" ? "text-green-700" : "text-red-600"}`}
+                          >
+                            {miVoto === "A_FAVOR" ? "A favor (Aprobar)" : "En contra (Rechazar)"}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setEditando(true)}
+                        className="flex items-center gap-1 text-xs font-medium text-[var(--caritas-green)] hover:underline flex-shrink-0"
+                      >
+                        <Pencil className="w-3.5 h-3.5" /> Editar voto
+                      </button>
+                    </div>
                   ) : (
                     <>
-                      <p className="text-xs text-gray-500">Emite tu decisión sobre este caso:</p>
+                      <p className="text-xs text-gray-500">
+                        {miVoto ? "Cambia tu decisión:" : "Emite tu decisión sobre este caso:"}
+                      </p>
                       <div className="grid grid-cols-3 gap-2">
                         <button
                           type="button"
                           onClick={() => ejecutarVoto("A_FAVOR")}
-                          disabled={isPending || miVoto === "A_FAVOR"}
-                          className="flex flex-col items-center gap-1 rounded-lg border border-green-200 bg-green-50 px-3 py-3 text-sm text-green-700 font-medium disabled:opacity-50 hover:bg-green-100 transition-colors"
+                          disabled={isPending}
+                          className={`flex flex-col items-center gap-1 rounded-lg border px-3 py-3 text-sm font-medium disabled:opacity-50 transition-colors ${
+                            miVoto === "A_FAVOR"
+                              ? "border-green-500 bg-green-100 text-green-800 ring-1 ring-green-400"
+                              : "border-green-200 bg-green-50 text-green-700 hover:bg-green-100"
+                          }`}
                         >
                           <CheckCircle className="w-5 h-5" />
                           Aprobar
@@ -200,17 +235,25 @@ export function ModalVotacionComite({
                         <button
                           type="button"
                           onClick={() => ejecutarVoto("EN_CONTRA")}
-                          disabled={isPending || miVoto === "EN_CONTRA"}
-                          className="flex flex-col items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-600 font-medium disabled:opacity-50 hover:bg-red-100 transition-colors"
+                          disabled={isPending}
+                          className={`flex flex-col items-center gap-1 rounded-lg border px-3 py-3 text-sm font-medium disabled:opacity-50 transition-colors ${
+                            miVoto === "EN_CONTRA"
+                              ? "border-red-500 bg-red-100 text-red-800 ring-1 ring-red-400"
+                              : "border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+                          }`}
                         >
                           <XCircle className="w-5 h-5" />
                           Rechazar
                         </button>
                       </div>
-                      {miVoto && (
-                        <p className="text-[11px] text-gray-400 text-center">
-                          Ya registraste tu voto: {miVoto === "A_FAVOR" ? "A favor (Aprobar)" : "En contra (Rechazar)"}.
-                        </p>
+                      {miVoto && editando && (
+                        <button
+                          type="button"
+                          onClick={() => setEditando(false)}
+                          className="block mx-auto text-xs text-gray-500 hover:text-gray-700"
+                        >
+                          Cancelar edición
+                        </button>
                       )}
                     </>
                   )}

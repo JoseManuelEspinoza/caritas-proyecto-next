@@ -17,6 +17,8 @@ export type PersonaDetalle = {
   parentesco: string | null;
   condicionEspecial: string | null;
   telefono: string | null;
+  /** Comentario/observación individual de la persona. */
+  observaciones: string | null;
 };
 
 export type AvisoDetalle = {
@@ -39,6 +41,8 @@ export type AsignacionDetalle = {
 export type GrupoFamiliarDetalle = {
   id: string;
   nombreReferencia: string | null;
+  /** Anotación/observación de la familia (fuente única, editable en empadronamiento). */
+  observaciones: string | null;
   totalPersonas: number;
   personas: PersonaDetalle[];
 };

@@ -25,4 +25,12 @@ export interface IComiteDonacionesRepository {
 
   /** Devuelve el tally completo de la ronda abierta (null si no hay ninguna). */
   tally(idIncidencia: string): Promise<TallyRonda | null>;
+
+  /**
+   * Al APROBAR: valida y descuenta el stock de los elementos de los kits del
+   * sistema asignados en el informe, y registra las salidas (MovimientoKit).
+   * Lanza BusinessRuleError listando los elementos faltantes (y su stock
+   * disponible) si no hay stock suficiente; en ese caso no descuenta nada.
+   */
+  descontarInventarioAprobacion(idIncidencia: string, idUsuarioGRD: string): Promise<void>;
 }

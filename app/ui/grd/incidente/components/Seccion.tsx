@@ -53,6 +53,8 @@ export function Seccion({
   color = "green",
   children,
   defaultOpen = true,
+  hidden = false,
+  className = "",
 }: {
   num: string;
   titulo: string;
@@ -61,11 +63,17 @@ export function Seccion({
   color?: SeccionColor;
   children: React.ReactNode;
   defaultOpen?: boolean;
+  /** Oculta la sección sin desmontarla (preserva el estado de los campos). */
+  hidden?: boolean;
+  /** Clases extra para el contenedor (p. ej. ancho completo en grid). */
+  className?: string;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const c = COLORS[color];
   return (
-    <div className={`border ${c.border} rounded-xl overflow-hidden`}>
+    <div
+      className={`border ${c.border} rounded-xl overflow-hidden${hidden ? " hidden" : ""}${className ? ` ${className}` : ""}`}
+    >
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

@@ -27,17 +27,33 @@ export type ArticuloKit = {
   codigo: string | null;
   descripcion: string;
   cantidad: number;
+  /** Stock disponible de ESTE elemento (el kit solo lo agrupa). */
+  stock: number;
 };
 
-export async function listarArticulosKit(idKit: string): Promise<ArticuloKit[]> {
+export type ArticuloKitDetalle = ArticuloKit & { idKitArticulo: string };
+
+export async function listarArticulosKit(idKit: string): Promise<ArticuloKitDetalle[]> {
   await verifySession();
   const { prisma } = await import("@/app/lib/prisma");
   const rows = await prisma.kitArticulo.findMany({
     where: { idKitEmergencia: idKit },
     orderBy: { orden: "asc" },
-    select: { codigo: true, descripcion: true, cantidad: true },
+    select: { idKitArticulo: true, codigo: true, descripcion: true, cantidad: true, stock: true },
   });
   return rows;
+}
+
+/** Actualiza (repone) el stock de un elemento del kit. */
+export async function reponerStockArticulo(idKitArticulo: string, stock: number) {
+  const session = await verifySession();
+  if (!["ESPECIALISTAGRD", "ADMINISTRADOR"].includes(session.role)) {
+    return { message: "No tienes permisos para esta acción." };
+  }
+  const s = Math.max(0, Math.floor(Number(stock) || 0));
+  const { prisma } = await import("@/app/lib/prisma");
+  await prisma.kitArticulo.update({ where: { idKitArticulo }, data: { stock: s } });
+  revalidatePath(REVALIDATE);
 }
 
 /** Prefijo de código a partir del nombre del kit: "Kit de Alimentos Prueba" → "AP". */
@@ -62,6 +78,7 @@ function limpiarArticulos(articulos: ArticuloKit[]): ArticuloKit[] {
       codigo: a.codigo?.trim() || null,
       descripcion: a.descripcion.trim(),
       cantidad: Math.max(1, Math.floor(Number(a.cantidad) || 1)),
+      stock: Math.max(0, Math.floor(Number(a.stock) || 0)),
     }))
     .filter((a) => a.descripcion);
 }
