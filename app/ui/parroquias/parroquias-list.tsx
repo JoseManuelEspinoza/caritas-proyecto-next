@@ -522,8 +522,11 @@ export function ParroquiasList({ parroquias, canEdit = false }: Props) {
   const [editing, setEditing] = useState<ParroquiaDetalle | undefined>();
   const [search, setSearch] = useState("");
   const [filterEstado, setFilterEstado] = useState("all");
+  const [filterTelefono, setFilterTelefono] = useState("all");
+  const [filterCorreo, setFilterCorreo] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(5);
+  const [exportando, setExportando] = useState(false);
 
   // Estado para el flujo de eliminación de parroquia
   const [deleteTarget, setDeleteTarget] = useState<ParroquiaDetalle | null>(null);
@@ -534,13 +537,47 @@ export function ParroquiasList({ parroquias, canEdit = false }: Props) {
 
   const filtered = parroquias.filter((p) => {
     if (filterEstado !== "all" && p.estado !== filterEstado) return false;
+    if (filterTelefono === "con" && !p.telefono) return false;
+    if (filterTelefono === "sin" && p.telefono) return false;
+    if (filterCorreo === "con" && !p.correo) return false;
+    if (filterCorreo === "sin" && p.correo) return false;
     if (search) {
       const q = search.toLowerCase();
-      if (!p.nombre.toLowerCase().includes(q) && !(p.direccion ?? "").toLowerCase().includes(q))
+      if (
+        !p.nombre.toLowerCase().includes(q) &&
+        !(p.direccion ?? "").toLowerCase().includes(q) &&
+        !(p.telefono ?? "").includes(q) &&
+        !(p.correo ?? "").toLowerCase().includes(q)
+      )
         return false;
     }
     return true;
   });
+
+  async function handleExport() {
+    setExportando(true);
+    try {
+      const XLSX = await import("xlsx");
+      const headers = ["Nombre", "Estado", "Teléfono", "Correo", "Dirección", "Referencia", "Brigadistas", "Incidencias", "Planes GRD"];
+      const rows = filtered.map((p) => [
+        p.nombre,
+        p.estado,
+        p.telefono ?? "",
+        p.correo ?? "",
+        p.direccion ?? "",
+        p.referencia ?? "",
+        p._count.brigadistas,
+        p._count.incidencias,
+        p._count.planesTrabajo,
+      ]);
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Parroquias");
+      XLSX.writeFile(wb, `parroquias_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    } finally {
+      setExportando(false);
+    }
+  }
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(currentPage, totalPages);
@@ -657,26 +694,37 @@ export function ParroquiasList({ parroquias, canEdit = false }: Props) {
           <h1 className="text-xl font-semibold text-gray-900">Parroquias</h1>
           <p className="text-sm text-gray-500 mt-0.5">Directorio de parroquias — Cáritas Lima</p>
         </div>
-        {canEdit && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={() => setShowImportModal(true)}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-[#DDDDDD] rounded-lg hover:bg-gray-50 transition-all"
-            >
-              <Upload className="w-4 h-4" />
-              Importar Excel
-            </button>
-            <button
-              onClick={openCreate}
-              className="flex items-center gap-2 px-4 py-2 text-white text-sm font-medium rounded-lg hover:opacity-90 transition-all"
-              style={{ background: "#009850" }}
-              suppressHydrationWarning
-            >
-              <Plus className="w-4 h-4" />
-              Registrar parroquia
-            </button>
-          </div>
-        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={handleExport}
+            disabled={exportando || filtered.length === 0}
+            suppressHydrationWarning
+            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-[#DDDDDD] rounded-lg hover:bg-gray-50 transition-all disabled:opacity-50"
+          >
+            {exportando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            {exportando ? "Exportando..." : "Exportar Excel"}
+          </button>
+          {canEdit && (
+            <>
+              <button
+                onClick={() => setShowImportModal(true)}
+                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-[#DDDDDD] rounded-lg hover:bg-gray-50 transition-all"
+              >
+                <Upload className="w-4 h-4" />
+                Importar Excel
+              </button>
+              <button
+                onClick={openCreate}
+                className="flex items-center gap-2 px-4 py-2 text-white text-sm font-medium rounded-lg hover:opacity-90 transition-all"
+                style={{ background: "#009850" }}
+                suppressHydrationWarning
+              >
+                <Plus className="w-4 h-4" />
+                Registrar parroquia
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Stats dinámicos */}
@@ -700,12 +748,12 @@ export function ParroquiasList({ parroquias, canEdit = false }: Props) {
       </div>
 
       {/* Filtros */}
-      <div className="bg-white border border-[#DDDDDD] rounded-xl p-3 flex flex-col md:flex-row gap-3">
-        <div className="relative flex-1 md:max-w-xs">
+      <div className="bg-white border border-[#DDDDDD] rounded-xl p-3 flex flex-col md:flex-row flex-wrap gap-3">
+        <div className="relative flex-1 min-w-[180px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             type="text"
-            placeholder="Buscar por nombre o dirección..."
+            placeholder="Buscar por nombre, dirección, correo..."
             value={search}
             onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
             className="w-full pl-9 pr-3 py-2 text-sm bg-[#F5F5F5] border border-[#DDDDDD] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#009850]/20 focus:border-[#009850]"
@@ -717,7 +765,7 @@ export function ParroquiasList({ parroquias, canEdit = false }: Props) {
           <select
             value={filterEstado}
             onChange={(e) => { setFilterEstado(e.target.value); setCurrentPage(1); }}
-            className="flex-1 px-3 py-2 text-sm bg-[#F5F5F5] border border-[#DDDDDD] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#009850]/20 focus:border-[#009850]"
+            className="px-3 py-2 text-sm bg-[#F5F5F5] border border-[#DDDDDD] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#009850]/20 focus:border-[#009850]"
             suppressHydrationWarning
           >
             <option value="all">Todos los estados</option>
@@ -725,6 +773,41 @@ export function ParroquiasList({ parroquias, canEdit = false }: Props) {
             <option value="INACTIVO">Inactivas</option>
           </select>
         </div>
+        <div className="flex items-center gap-2">
+          <Phone className="w-4 h-4 text-gray-400 shrink-0" />
+          <select
+            value={filterTelefono}
+            onChange={(e) => { setFilterTelefono(e.target.value); setCurrentPage(1); }}
+            className="px-3 py-2 text-sm bg-[#F5F5F5] border border-[#DDDDDD] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#009850]/20 focus:border-[#009850]"
+            suppressHydrationWarning
+          >
+            <option value="all">Todos (teléfono)</option>
+            <option value="con">Con teléfono</option>
+            <option value="sin">Sin teléfono</option>
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <Mail className="w-4 h-4 text-gray-400 shrink-0" />
+          <select
+            value={filterCorreo}
+            onChange={(e) => { setFilterCorreo(e.target.value); setCurrentPage(1); }}
+            className="px-3 py-2 text-sm bg-[#F5F5F5] border border-[#DDDDDD] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#009850]/20 focus:border-[#009850]"
+            suppressHydrationWarning
+          >
+            <option value="all">Todos (correo)</option>
+            <option value="con">Con correo</option>
+            <option value="sin">Sin correo</option>
+          </select>
+        </div>
+        {(search || filterEstado !== "all" || filterTelefono !== "all" || filterCorreo !== "all") && (
+          <button
+            onClick={() => { setSearch(""); setFilterEstado("all"); setFilterTelefono("all"); setFilterCorreo("all"); setCurrentPage(1); }}
+            className="flex items-center gap-1 px-2 py-1 text-xs text-gray-500 hover:text-[#009850] hover:bg-gray-50 rounded-lg transition-colors"
+            suppressHydrationWarning
+          >
+            <X className="w-3.5 h-3.5" /> Limpiar
+          </button>
+        )}
       </div>
 
       {/* Tabla desktop */}

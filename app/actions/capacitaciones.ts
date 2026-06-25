@@ -1248,8 +1248,13 @@ export async function crearCuestionario(
   for (const p of data.preguntas) {
     if (!p.enunciado.trim()) return { message: "Todas las preguntas deben tener enunciado." };
     if (p.opciones.length < 2) return { message: "Cada pregunta debe tener al menos 2 opciones." };
+    for (const o of p.opciones) {
+      if (!o.textoOpcion.trim()) return { message: "Todas las opciones de respuesta deben tener texto." };
+    }
     if (!p.opciones.some((o) => o.esCorrecta)) return { message: "Cada pregunta debe tener una opción correcta." };
   }
+  const sumaPuntajes = data.preguntas.reduce((s, p) => s + (p.puntaje ?? 0), 0);
+  if (sumaPuntajes !== 20) return { message: `La suma de puntajes debe ser exactamente 20 (actual: ${sumaPuntajes}).` };
   try {
     const existing = await prisma.cuestionarioCurso.findFirst({
       where: { idCursoCapacitacion: idCurso, tipoCuestionario: data.tipoCuestionario, estado: "ACTIVO" },
@@ -1430,8 +1435,13 @@ export async function editarCuestionario(
   for (const p of data.preguntas) {
     if (!p.enunciado.trim()) return { message: "Todas las preguntas deben tener enunciado." };
     if (p.opciones.length < 2) return { message: "Cada pregunta debe tener al menos 2 opciones." };
+    for (const o of p.opciones) {
+      if (!o.textoOpcion.trim()) return { message: "Todas las opciones de respuesta deben tener texto." };
+    }
     if (!p.opciones.some((o) => o.esCorrecta)) return { message: "Cada pregunta debe tener una opción correcta." };
   }
+  const sumaPuntajes = data.preguntas.reduce((s, p) => s + (p.puntaje ?? 0), 0);
+  if (sumaPuntajes !== 20) return { message: `La suma de puntajes debe ser exactamente 20 (actual: ${sumaPuntajes}).` };
   try {
     await prisma.$transaction(async (tx) => {
       const preguntasExistentes = await tx.preguntaCuestionario.findMany({

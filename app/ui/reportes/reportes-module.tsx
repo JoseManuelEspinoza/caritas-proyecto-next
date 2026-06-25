@@ -277,7 +277,7 @@ function TabResumen({ totales, parroquiasRiesgo, actividadesData, kitsData, brig
 
 // ── Tab: Casos Atendidos ──────────────────────────────────────────────────────
 
-function TabCasos({ totales, porEstado, porTipo, porParroquia, timeline, byWeek, incidenciasData }: ReportesProps) {
+function TabCasos({ totales, porEstado, porTipo, porParroquia, timeline, byWeek, incidenciasData, topIncidencias }: ReportesProps) {
   const timelineLabeled = timeline.map(t => ({ ...t, label: fmtLabel(t.label) }));
   const resolRate = totales.incidencias > 0 ? Math.round((incidenciasData.cerradas / totales.incidencias) * 100) : 0;
   const enGestion = incidenciasData.activas + incidenciasData.enSeguimiento;
@@ -349,6 +349,43 @@ function TabCasos({ totales, porEstado, porTipo, porParroquia, timeline, byWeek,
           )}
         </ChartCard>
       </div>
+
+      {/* Tabla últimos casos */}
+      {topIncidencias.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100">
+            <h3 className="text-sm font-bold text-gray-900">Últimos Casos Registrados</h3>
+            <p className="text-xs text-gray-400">Hasta 10 incidencias más recientes del período</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  {["Código","Fecha","Tipo","Gravedad","Estado","Parroquia","Ubicación","Responsable"].map(h => (
+                    <th key={h} className="px-3 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {topIncidencias.map((row, i) => (
+                  <tr key={i} className="hover:bg-gray-50">
+                    <td className="px-3 py-2.5 font-mono text-gray-700">{row.Codigo}</td>
+                    <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{row.Fecha}</td>
+                    <td className="px-3 py-2.5 text-gray-700">{row.Tipo}</td>
+                    <td className="px-3 py-2.5 text-gray-700">{row.Gravedad}</td>
+                    <td className="px-3 py-2.5">
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-gray-100 text-gray-700">{row.Estado}</span>
+                    </td>
+                    <td className="px-3 py-2.5 text-gray-700 max-w-[130px] truncate">{row.Parroquia}</td>
+                    <td className="px-3 py-2.5 text-gray-600 max-w-[150px] truncate" title={String(row.Ubicacion)}>{row.Ubicacion}</td>
+                    <td className="px-3 py-2.5 text-gray-700 max-w-[130px] truncate">{row.Responsable}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Gravedad + Parroquia — 2 columnas */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">

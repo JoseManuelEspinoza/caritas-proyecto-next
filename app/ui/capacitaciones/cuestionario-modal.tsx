@@ -173,7 +173,7 @@ export function CuestionarioModal({
         Cancelar
       </button>
       <button
-        disabled={pending || !titulo.trim() || totalExcedido}
+        disabled={pending || !titulo.trim() || totalExcedido || puntajeTotal !== notaAprobatoria}
         onClick={guardar}
         className="flex items-center gap-2 px-4 py-2 text-sm bg-[var(--caritas-green)] text-white rounded-lg disabled:opacity-50 hover:opacity-90 transition-opacity"
       >

@@ -9,14 +9,14 @@ const { auth } = NextAuth(authConfig);
 /** Control de acceso por rol: prefijo de ruta → roles permitidos. */
 const ROUTE_ROLES: { prefix: string; roles: FrontendRole[] }[] = [
   { prefix: "/usuarios", roles: ["admin"] },
-  { prefix: "/brigadistas", roles: ["admin"] },
+  { prefix: "/brigadistas", roles: ["admin", "especialistaGRD"] },
   { prefix: "/planes", roles: ["admin"] },
   { prefix: "/kits", roles: ["admin", "comite"] },
   { prefix: "/catalogos", roles: ["admin"] },
   { prefix: "/auditoria", roles: ["admin"] },
   { prefix: "/donaciones", roles: ["admin", "comite", "jefaOGP"] },
   { prefix: "/dashboard/donaciones", roles: ["admin", "comite", "jefaOGP"] },
-  { prefix: "/reportes", roles: ["admin", "comite", "jefaOGP"] },
+  { prefix: "/reportes", roles: ["admin", "especialistaGRD", "comite", "jefaOGP"] },
   { prefix: "/capacitaciones", roles: ["admin", "especialistaGRD", "brigadista"] },
   { prefix: "/simulacros", roles: ["admin", "especialistaGRD", "brigadista"] },
   // /grd y /dashboard: cualquier usuario autenticado
