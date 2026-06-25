@@ -18,10 +18,18 @@ async function crearNotificacion(
   tipo: TipoNotificacion,
   titulo: string,
   mensaje: string,
-  enlace?: string
+  enlace?: string,
+  incidenciaId?: string
 ) {
   await prisma.notificacion.create({
-    data: { userId, tipo, titulo, mensaje, enlace: enlace ?? null },
+    data: {
+      userId,
+      tipo,
+      titulo,
+      mensaje,
+      enlace: enlace ?? null,
+      idIncidencia: incidenciaId ?? null,
+    },
   });
 }
 
@@ -30,7 +38,8 @@ async function crearNotificacionParaRoles(
   tipo: TipoNotificacion,
   titulo: string,
   mensaje: string,
-  enlace?: string
+  enlace?: string,
+  incidenciaId?: string
 ) {
   const usuarios = await prisma.user.findMany({
     where: { role: { in: roles }, estado: "ACTIVO" },
@@ -44,6 +53,7 @@ async function crearNotificacionParaRoles(
       titulo,
       mensaje,
       enlace: enlace ?? null,
+      idIncidencia: incidenciaId ?? null,
     })),
   });
 }
@@ -53,7 +63,8 @@ async function crearNotificacionParaBrigadistas(
   tipo: TipoNotificacion,
   titulo: string,
   mensaje: string,
-  enlace?: string
+  enlace?: string,
+  incidenciaId?: string
 ) {
   const brigadistas = await prisma.brigadistaParroquial.findMany({
     where: { idBrigadistaParroquial: { in: brigadistaIds } },
@@ -62,7 +73,6 @@ async function crearNotificacionParaBrigadistas(
 
   const userIds = new Set<string>();
 
-  // Path 1: via idUsuarioGRD link
   const usuarioGRDIds = brigadistas.filter((b) => b.idUsuarioGRD).map((b) => b.idUsuarioGRD!);
   if (usuarioGRDIds.length > 0) {
     const usuarios = await prisma.usuarioGRD.findMany({
@@ -72,7 +82,6 @@ async function crearNotificacionParaBrigadistas(
     usuarios.forEach((u) => userIds.add(u.idCredencial));
   }
 
-  // Path 2: fallback via email match for brigadistas without idUsuarioGRD
   const correosSinLink = brigadistas
     .filter((b) => !b.idUsuarioGRD && b.correo)
     .map((b) => b.correo!);
@@ -93,62 +102,68 @@ async function crearNotificacionParaBrigadistas(
       titulo,
       mensaje,
       enlace: enlace ?? null,
+      idIncidencia: incidenciaId ?? null,
     })),
   });
 }
 
-/** Fire-and-forget: notifica a un usuario específico por su userId. */
 export function notificarUsuario(
   userId: string,
   tipo: TipoNotificacion,
   titulo: string,
   mensaje: string,
-  enlace?: string
+  enlace?: string,
+  incidenciaId?: string
 ) {
-  crearNotificacion(userId, tipo, titulo, mensaje, enlace).catch((e) =>
+  crearNotificacion(userId, tipo, titulo, mensaje, enlace, incidenciaId).catch((e) =>
     console.error("[Notif] Error creando notificación:", e)
   );
 }
 
-/** Fire-and-forget: notifica a todos los usuarios activos de los roles indicados. */
 export function notificarRoles(
   roles: Role[],
   tipo: TipoNotificacion,
   titulo: string,
   mensaje: string,
-  enlace?: string
+  enlace?: string,
+  incidenciaId?: string
 ) {
-  crearNotificacionParaRoles(roles, tipo, titulo, mensaje, enlace).catch((e) =>
+  crearNotificacionParaRoles(roles, tipo, titulo, mensaje, enlace, incidenciaId).catch((e) =>
     console.error("[Notif] Error creando notificaciones por rol:", e)
   );
 }
 
-/** Fire-and-forget: notifica a un usuario buscándolo por su email. */
 export function notificarPorEmail(
   email: string,
   tipo: TipoNotificacion,
   titulo: string,
   mensaje: string,
-  enlace?: string
+  enlace?: string,
+  incidenciaId?: string
 ) {
   prisma.user
     .findUnique({ where: { email }, select: { id: true } })
     .then((u) => {
       if (!u) return;
-      return crearNotificacion(u.id, tipo, titulo, mensaje, enlace);
+      return crearNotificacion(u.id, tipo, titulo, mensaje, enlace, incidenciaId);
     })
     .catch((e) => console.error("[Notif] Error notificando por email:", e));
 }
 
-/** Fire-and-forget: notifica a brigadistas que tienen cuenta en el sistema. */
 export function notificarBrigadistas(
   brigadistaIds: string[],
   tipo: TipoNotificacion,
   titulo: string,
   mensaje: string,
-  enlace?: string
+  enlace?: string,
+  incidenciaId?: string
 ) {
-  crearNotificacionParaBrigadistas(brigadistaIds, tipo, titulo, mensaje, enlace).catch((e) =>
-    console.error("[Notif] Error creando notificaciones a brigadistas:", e)
-  );
+  crearNotificacionParaBrigadistas(
+    brigadistaIds,
+    tipo,
+    titulo,
+    mensaje,
+    enlace,
+    incidenciaId
+  ).catch((e) => console.error("[Notif] Error creando notificaciones a brigadistas:", e));
 }

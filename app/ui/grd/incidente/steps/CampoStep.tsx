@@ -69,7 +69,7 @@ export function CampoStep({
   const done = data.estadoActual !== "ASIGNADO";
   const informeCampo = data.informes.find((i) => i.tipo === "CAMPO");
 
-  const parsedCampo = parseInforme<{ descripcionEvento?: string; observaciones?: string; notasFamilias?: { id: string; nota: string }[] }>(informeCampo?.contenido);
+  const parsedCampo = parseInforme<{ descripcionEvento?: string; observaciones?: string; notasFamilias?: { id: string; nota: string }[]; responsable?: string }>(informeCampo?.contenido);
   const [obsCampo, setObsCampo] = useState(parsedCampo?.descripcionEvento ?? "");
   const [obsBrig, setObsBrig] = useState(parsedCampo?.observaciones ?? "");
   const [familyNotes, setFamilyNotes] = useState<Record<string, string>>({});

@@ -393,6 +393,7 @@ model Incidencia {
   solicitudesAyuda     SolicitudAyudaHumanitaria[]
   entregasAyuda        EntregaAyudaHumanitaria[]
   rondasVotacionComite RondaVotacionComite[]
+  notificaciones       Notificacion[]
   seguimientos     SeguimientoIncidencia[]
   informes         Informe[]
   historialEstados HistorialEstadoIncidencia[]
@@ -1323,8 +1324,12 @@ model Notificacion {
   leida          Boolean  @default(false)
   createdAt      DateTime @default(now())
 
+  idIncidencia String?
+  incidencia   Incidencia? @relation(fields: [idIncidencia], references: [idIncidencia], onDelete: SetNull)
+
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, leida, createdAt])
+  @@index([idIncidencia, tipo, createdAt])
   @@map("notificaciones")
 }
