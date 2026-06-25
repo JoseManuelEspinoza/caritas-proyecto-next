@@ -570,7 +570,7 @@ export function BrigadistasList({ brigadistas, parroquias, canEdit = true }: Pro
   const [filterParroquia, setFilterParroquia] = useState("all");
   const [filterEstado, setFilterEstado] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(5);
+  const [pageSize, setPageSize] = useState(7);
 
   const { showConfirm, ConfirmModalJSX } = useConfirm();
 
