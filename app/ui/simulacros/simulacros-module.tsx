@@ -7,7 +7,7 @@ import {
   Search, ChevronLeft, ChevronRight, Users, MoreVertical, ChevronDown,
   ChevronUp, Activity, Check, Pencil, AlertTriangle, X, FileText,
   Send, Eye, User, MessageSquare, Upload, ExternalLink, Timer, Camera, Loader2,
-  UserCheck, UserPlus,
+  UserCheck, UserPlus, PanelLeftClose, PanelLeftOpen,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -1200,16 +1200,17 @@ function HiloObservaciones({ comentarios, simId, currentNombre, rolTipo, canWrit
 // ─── ActividadCard ────────────────────────────────────────────────────────────
 function ActividadCard({
   sim, parroquias, brigadistas, tiposActividad, canManage, role,
-  currentUsuarioGRDId, currentBrigadistaId, currentNombre,
+  currentUsuarioGRDId, currentBrigadistaId, currentNombre, detalleMode,
 }: {
   sim: Actividad; parroquias: Parroquia[]; brigadistas: Brigadista[];
   tiposActividad: string[];
   canManage: boolean; role: FrontendRole;
   currentUsuarioGRDId: string | null; currentBrigadistaId: string | null; currentNombre: string;
+  detalleMode?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(detalleMode ?? false);
   const [showEdit, setShowEdit] = useState(false);
   const [showCancel, setShowCancel] = useState(false);
 
@@ -1273,7 +1274,7 @@ function ActividadCard({
 
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
         {/* Header */}
-        <div className="p-5 cursor-pointer select-none" onClick={() => setExpanded(v => !v)}>
+        <div className={`p-5 ${detalleMode ? "" : "cursor-pointer select-none"}`} onClick={() => !detalleMode && setExpanded(v => !v)}>
           {/* Row 1: tipo + código / estado + menú + chevron */}
           <div className="flex items-center justify-between gap-2 mb-2.5">
             <div className="flex items-center gap-2 flex-wrap min-w-0">
@@ -1289,10 +1290,12 @@ function ActividadCard({
                 {estado.icon} {estado.label}
               </span>
               {puedeCancelar && <CardMenu onEdit={() => setShowEdit(true)} onCancel={() => setShowCancel(true)} />}
-              <button type="button" onClick={e => { e.stopPropagation(); setExpanded(v => !v); }}
-                className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600">
-                {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-              </button>
+              {!detalleMode && (
+                <button type="button" onClick={e => { e.stopPropagation(); setExpanded(v => !v); }}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+                  {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </button>
+              )}
             </div>
           </div>
 
@@ -1619,7 +1622,9 @@ export function SimulacrosModule({
   const [fechaDesde, setFechaDesde] = useState("");
   const [fechaHasta, setFechaHasta] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(5);
+  const [pageSize, setPageSize] = useState(6);
+  const [selectedId, setSelectedId] = useState<string | null>(actividades[0]?.id ?? null);
+  const [panelAbierto, setPanelAbierto] = useState(true);
 
   useEffect(() => setCurrentPage(1), [search, estadoFilter, parroquiaFilter, tipoFilter, fechaDesde, fechaHasta]);
 
@@ -1651,22 +1656,39 @@ export function SimulacrosModule({
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-[var(--caritas-green)]/10 rounded-lg flex items-center justify-center">
-            <ShieldCheck className="w-5 h-5 text-[var(--caritas-green)]" />
+      {/* Header + stats en una línea */}
+      <div className="flex flex-wrap items-center gap-3 mb-6">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="w-9 h-9 bg-[var(--caritas-green)]/10 rounded-lg flex items-center justify-center shrink-0">
+            <ShieldCheck className="w-4 h-4 text-[var(--caritas-green)]" />
           </div>
-          <div>
-            <h1 className="font-semibold text-[var(--caritas-text)]">Simulacros y Acciones Preventivas</h1>
-            <p className="text-xs text-gray-500 max-w-sm">
-              Registre simulacros de prevención y respuesta en misas, parroquias o espacios comunitarios.
-            </p>
+          <div className="min-w-0">
+            <h1 className="font-semibold text-[var(--caritas-text)] truncate">Simulacros y Acciones Preventivas</h1>
+            <p className="text-xs text-gray-500 hidden sm:block">Simulacros de prevención y respuesta en parroquias.</p>
           </div>
         </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-3 px-6 py-4 bg-white border border-gray-200 rounded-xl">
+            <ShieldCheck className="w-4 h-4 text-gray-500" />
+            <span className="text-lg font-bold text-gray-900">{actividades.length}</span>
+            <span className="text-sm text-gray-500">Total</span>
+          </div>
+          <div className="flex items-center gap-3 px-6 py-4 bg-white border border-gray-200 rounded-xl">
+            <Calendar className="w-4 h-4 text-blue-500" />
+            <span className="text-lg font-bold text-blue-700">{actividades.filter(a => a.estadoActividad === "PROGRAMADA").length}</span>
+            <span className="text-sm text-gray-500">Programadas</span>
+          </div>
+          <div className="flex items-center gap-3 px-6 py-4 bg-white border border-gray-200 rounded-xl">
+            <Activity className="w-4 h-4 text-[var(--caritas-green)]" />
+            <span className="text-lg font-bold text-[var(--caritas-green)]">{actividades.filter(a => a.estadoActividad === "EJECUTADA").length}</span>
+            <span className="text-sm text-gray-500">Ejecutadas</span>
+          </div>
+        </div>
+
         {canManage && (
           <button onClick={() => setShowForm(s => !s)}
-            className="flex items-center gap-2 px-4 py-2 bg-[var(--caritas-green)] text-white text-sm font-medium rounded-lg hover:opacity-90">
+            className="flex items-center gap-2 px-4 py-2 bg-[var(--caritas-green)] text-white text-sm font-medium rounded-lg hover:opacity-90 shrink-0">
             <Plus className="w-4 h-4" /> Programar
           </button>
         )}
@@ -1677,131 +1699,147 @@ export function SimulacrosModule({
           onCancel={() => setShowForm(false)} onSaved={() => setShowForm(false)} />
       )}
 
-      {/* Cards de indicadores */}
-      {!showForm && (
-        <div className="grid grid-cols-3 gap-4 mb-6">
-          <div className="bg-white border border-gray-200 rounded-xl p-4 flex items-center gap-4">
-            <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-              <ShieldCheck className="w-5 h-5 text-gray-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">{actividades.length}</p>
-              <p className="text-xs text-gray-500">Total</p>
-            </div>
-          </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-4 flex items-center gap-4">
-            <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center flex-shrink-0">
-              <Calendar className="w-5 h-5 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-blue-700">
-                {actividades.filter(a => a.estadoActividad === "PROGRAMADA").length}
-              </p>
-              <p className="text-xs text-gray-500">Programadas</p>
-            </div>
-          </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-4 flex items-center gap-4">
-            <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center flex-shrink-0">
-              <Activity className="w-5 h-5 text-[var(--caritas-green)]" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-[var(--caritas-green)]">
-                {actividades.filter(a => a.estadoActividad === "EJECUTADA").length}
-              </p>
-              <p className="text-xs text-gray-500">Ejecutadas</p>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Filtros */}
-      <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6 space-y-3">
-        <div className="flex flex-col lg:flex-row lg:items-center gap-3">
-          <div className="relative lg:w-52 flex-shrink-0">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-            <input type="text" value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="Buscar..." className={`${fieldBase} border-gray-200 pl-9 pr-4 py-2.5`} />
-          </div>
-          <div className="flex flex-1 flex-col sm:flex-row gap-3">
+      <div className="bg-white border border-gray-200 rounded-xl p-3 mb-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex-shrink-0 w-36">
             <MultiSelect options={ESTADOS.map(e => ({ value: e, label: e }))} value={estadoFilter} onChange={setEstadoFilter} placeholder="Estado" icon={Activity} />
+          </div>
+          <div className="flex-shrink-0 w-44">
             <MultiSelect options={parroquias.map(p => ({ value: p.id, label: p.nombre }))} value={parroquiaFilter} onChange={setParroquiaFilter} placeholder="Parroquia" icon={MapPin} />
+          </div>
+          <div className="flex-shrink-0 w-36">
             <MultiSelect options={tiposActividad.map(t => ({ value: t, label: t }))} value={tipoFilter} onChange={setTipoFilter} placeholder="Tipo" icon={ShieldCheck} />
           </div>
-        </div>
-        <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
-          <div className="flex items-center gap-2 flex-1">
-            <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0" />
-            <span className="text-xs text-gray-500 flex-shrink-0">Desde</span>
-            <input
-              type="date"
-              value={fechaDesde}
-              max={fechaHasta || undefined}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <Calendar className="w-3.5 h-3.5 text-gray-400" />
+            <span className="text-xs text-gray-500">Desde</span>
+            <input type="date" value={fechaDesde} max={fechaHasta || undefined}
               onChange={e => { setFechaDesde(e.target.value); if (fechaHasta && e.target.value > fechaHasta) setFechaHasta(e.target.value); }}
-              className={`flex-1 ${fieldBase} border-gray-200 px-3 py-2`}
-            />
+              className={`${fieldBase} border-gray-200 px-2 py-2 w-36`} />
           </div>
-          <div className="flex items-center gap-2 flex-1">
-            <span className="text-xs text-gray-500 flex-shrink-0">Hasta</span>
-            <input
-              type="date"
-              value={fechaHasta}
-              min={fechaDesde || undefined}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <span className="text-xs text-gray-500">Hasta</span>
+            <input type="date" value={fechaHasta} min={fechaDesde || undefined}
               onChange={e => { setFechaHasta(e.target.value); if (fechaDesde && e.target.value < fechaDesde) setFechaDesde(e.target.value); }}
-              className={`flex-1 ${fieldBase} border-gray-200 px-3 py-2`}
-            />
+              className={`${fieldBase} border-gray-200 px-2 py-2 w-36`} />
           </div>
-          {(fechaDesde || fechaHasta) && (
-            <button type="button" onClick={() => { setFechaDesde(""); setFechaHasta(""); }}
-              className="text-xs text-gray-400 hover:text-[var(--caritas-green)] flex items-center gap-1">
-              <X className="w-3 h-3" /> Limpiar fecha
+          {hasFilters && (
+            <button onClick={() => { setSearch(""); setEstadoFilter([]); setParroquiaFilter([]); setTipoFilter([]); setFechaDesde(""); setFechaHasta(""); }}
+              className="text-xs font-medium text-[var(--caritas-green)] hover:underline ml-auto">
+              Limpiar filtros
             </button>
           )}
         </div>
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-gray-600">
-            <span className="font-semibold text-base text-[var(--caritas-text)]">{filtered.length}</span> actividades encontradas
-          </p>
-          <div className="flex items-center gap-3">
-            {hasFilters && (
-              <button onClick={() => { setSearch(""); setEstadoFilter([]); setParroquiaFilter([]); setTipoFilter([]); setFechaDesde(""); setFechaHasta(""); }}
-                className="text-xs font-medium text-[var(--caritas-green)] hover:underline">
-                Limpiar filtros
-              </button>
-            )}
+      </div>
+
+      {/* Layout master-detail */}
+      <div className={`grid gap-4 ${panelAbierto && selectedId ? "lg:grid-cols-[340px_1fr]" : ""}`}>
+        {/* Panel izquierdo: lista */}
+        <div className="flex flex-col gap-3">
+          {/* Buscador + colapsar */}
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="Buscar simulacro..."
+                className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]" />
+            </div>
           </div>
+
+          <p className="text-xs text-gray-500">{filtered.length} actividades encontradas</p>
+
+          {filtered.length === 0 && (
+            <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
+              <Clock className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+              <p className="text-sm text-gray-500">No hay actividades para mostrar.</p>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            {paginated.map(a => {
+              const estado = ESTADO_CFG[a.estadoActividad] ?? ESTADO_CFG.PROGRAMADA;
+              const tipoCls = TIPO_BADGE[a.idTipoActividadPreventiva] ?? "bg-gray-50 text-gray-600 border border-gray-200";
+              const isSelected = selectedId === a.id;
+              return (
+                <button
+                  key={a.id}
+                  onClick={() => { setSelectedId(a.id); setPanelAbierto(true); }}
+                  className={`w-full text-left p-5 rounded-xl border transition-all ${
+                    isSelected
+                      ? "border-[var(--caritas-green)]/50 bg-[var(--caritas-green)]/5 ring-1 ring-[var(--caritas-green)]/30"
+                      : "border-gray-200 bg-white hover:bg-gray-50"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2 mb-2.5">
+                    <div className="flex items-center gap-2 flex-wrap min-w-0">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold flex-shrink-0 ${tipoCls}`}>
+                        {a.idTipoActividadPreventiva}
+                      </span>
+                      {a.codigoActividad && (
+                        <span className="text-[11px] font-mono text-gray-400">{a.codigoActividad}</span>
+                      )}
+                    </div>
+                    <span className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full flex-shrink-0 ${estado.cls}`}>
+                      {estado.icon} {estado.label}
+                    </span>
+                  </div>
+                  <h2 className="text-sm font-semibold text-[var(--caritas-text)] leading-snug mb-1.5">{a.nombreActividad}</h2>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+                    <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {a.parroquiaNombre}</span>
+                    {a.fechaProgramada && (
+                      <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{fmtFecha(a.fechaProgramada, a.horarioInicio)}</span>
+                    )}
+                    {a.lugarActividad && (
+                      <span className="flex items-center gap-1 text-gray-400"><MapPin className="w-3 h-3" /> {a.lugarActividad}</span>
+                    )}
+                    {(a.numeroParticipantesEstimado ?? 0) > 0 && (
+                      <span className="flex items-center gap-1"><Users className="w-3 h-3" /> {a.numeroParticipantesEstimado} est.</span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <PaginationControls
+            total={filtered.length}
+            start={visibleFrom}
+            end={visibleTo}
+            page={safePage}
+            totalPages={totalPages}
+            onPrevious={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            onNext={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            pageSize={pageSize}
+            onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
+            pageSizeOptions={[6, 10, 25, 50]}
+            className="mt-2"
+          />
         </div>
-      </div>
 
-      {/* Lista */}
-      <div className="space-y-4">
-        {filtered.length === 0 && (
-          <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
-            <Clock className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-            <p className="text-sm text-gray-500">No hay actividades para mostrar.</p>
-          </div>
-        )}
-        {paginated.map(a => (
-          <ActividadCard key={a.id} sim={a} parroquias={parroquias} brigadistas={brigadistas}
-            tiposActividad={tiposActividad}
-            canManage={canManage} role={role}
-            currentUsuarioGRDId={currentUsuarioGRDId}
-            currentBrigadistaId={currentBrigadistaId}
-            currentNombre={currentNombre} />
-        ))}
+        {/* Panel derecho: detalle */}
+        {panelAbierto && selectedId && (() => {
+          const sim = actividades.find(a => a.id === selectedId);
+          if (!sim) return null;
+          return (
+            <div className="min-w-0">
+              <ActividadCard
+                key={sim.id}
+                sim={sim}
+                parroquias={parroquias}
+                brigadistas={brigadistas}
+                tiposActividad={tiposActividad}
+                canManage={canManage}
+                role={role}
+                currentUsuarioGRDId={currentUsuarioGRDId}
+                currentBrigadistaId={currentBrigadistaId}
+                currentNombre={currentNombre}
+                detalleMode
+              />
+            </div>
+          );
+        })()}
       </div>
-
-      <PaginationControls
-        total={filtered.length}
-        start={visibleFrom}
-        end={visibleTo}
-        page={safePage}
-        totalPages={totalPages}
-        onPrevious={() => setCurrentPage((p) => Math.max(1, p - 1))}
-        onNext={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-        pageSize={pageSize}
-        onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
-        className="mt-4"
-      />
     </div>
   );
 }

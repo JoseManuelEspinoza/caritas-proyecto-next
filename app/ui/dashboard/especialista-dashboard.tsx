@@ -19,37 +19,41 @@ import {
 } from "lucide-react";
 import type { IncidenteResumen } from "./admin-dashboard";
 
-const STATUS_CFG: Record<string, { label: string; color: string; bg: string; dot: string }> = {
-  ABIERTO: { label: "Abierto", color: "text-yellow-700", bg: "bg-yellow-50", dot: "bg-yellow-500" },
-  ASIGNADO: { label: "Asignado", color: "text-blue-700", bg: "bg-blue-50", dot: "bg-blue-500" },
+const STATUS_CFG: Record<string, { label: string; color: string; bg: string; dot: string; border: string }> = {
+  ABIERTO: { label: "Abierto", color: "text-yellow-700", bg: "bg-yellow-50", dot: "bg-yellow-500", border: "border-yellow-200" },
+  ASIGNADO: { label: "Asignado", color: "text-blue-700", bg: "bg-blue-50", dot: "bg-blue-500", border: "border-blue-200" },
   "DATA RECOPILADA": {
     label: "Data Recopilada",
     color: "text-orange-700",
     bg: "bg-orange-50",
     dot: "bg-orange-500",
+    border: "border-orange-200",
   },
   "EN EVALUACION": {
     label: "En Evaluación",
     color: "text-purple-700",
     bg: "bg-purple-50",
     dot: "bg-purple-500",
+    border: "border-purple-200",
   },
   OBSERVADO: {
     label: "Observado",
     color: "text-amber-700",
     bg: "bg-amber-50",
     dot: "bg-amber-500",
+    border: "border-amber-200",
   },
-  APROBADO: { label: "Aprobado", color: "text-[#009850]", bg: "bg-green-50", dot: "bg-[#009850]" },
-  ATENDIDO: { label: "Atendido", color: "text-[#00C8B4]", bg: "bg-cyan-50", dot: "bg-[#00C8B4]" },
+  APROBADO: { label: "Aprobado", color: "text-[#009850]", bg: "bg-green-50", dot: "bg-[#009850]", border: "border-green-200" },
+  ATENDIDO: { label: "Atendido", color: "text-[#00C8B4]", bg: "bg-cyan-50", dot: "bg-[#00C8B4]", border: "border-cyan-200" },
   "SEGUIMIENTO ABIERTO": {
     label: "Seguimiento",
     color: "text-[#91D723]",
     bg: "bg-lime-50",
     dot: "bg-[#91D723]",
+    border: "border-lime-200",
   },
-  CERRADO: { label: "Cerrado", color: "text-gray-600", bg: "bg-gray-50", dot: "bg-gray-400" },
-  RECHAZADO: { label: "Rechazado", color: "text-red-700", bg: "bg-red-50", dot: "bg-red-500" },
+  CERRADO: { label: "Cerrado", color: "text-gray-600", bg: "bg-gray-50", dot: "bg-gray-400", border: "border-gray-200" },
+  RECHAZADO: { label: "Rechazado", color: "text-red-700", bg: "bg-red-50", dot: "bg-red-500", border: "border-red-200" },
 };
 
 const CAT_ICONS: Record<string, any> = {
@@ -153,7 +157,7 @@ function IncidentRow({ inc }: { inc: IncidenteResumen }) {
         </p>
       </div>
       <span
-        className={`flex-shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${cfg.color} ${cfg.bg}`}
+        className={`flex-shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${cfg.border} ${cfg.color} ${cfg.bg}`}
       >
         <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
         {cfg.label}
@@ -190,7 +194,7 @@ export function EspecialistaDashboard({
   const primerNombre = userName.split(" ")[0];
 
   return (
-    <div className="p-4 md:p-6 space-y-5 max-w-5xl mx-auto">
+    <div className="p-4 md:p-6 space-y-5 max-w-7xl mx-auto">
       <div>
         <h1 className="text-xl font-semibold text-gray-900">Hola, {primerNombre} 👋</h1>
         <p className="text-sm text-gray-500 mt-0.5">
@@ -263,89 +267,46 @@ export function EspecialistaDashboard({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Acciones urgentes */}
-        <div className="bg-white border border-[#DDDDDD] rounded-xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-[#DDDDDD] flex items-center gap-2">
-            <CircleDot className="w-4 h-4 text-[#FF823C]" />
-            <h2 className="text-sm font-semibold text-gray-700">Acciones urgentes</h2>
-            {urgentes.length > 0 && (
-              <span className="ml-auto px-2 py-0.5 bg-[#FF823C]/10 text-[#FF823C] text-[10px] font-bold rounded-full">
-                {urgentes.length}
-              </span>
-            )}
-          </div>
-          <div className="p-3 space-y-2 max-h-64 overflow-y-auto">
-            {urgentes.length === 0 ? (
-              <div className="text-center py-6">
-                <CheckCircle className="w-8 h-8 text-[#009850] mx-auto mb-2" />
-                <p className="text-xs text-gray-500">Sin acciones pendientes</p>
-              </div>
-            ) : (
-              urgentes.slice(0, 6).map(({ inc, label, color }) => (
-                <Link
-                  key={inc.id}
-                  href={`/grd/${inc.id}`}
-                  className={`flex items-center gap-3 p-3 rounded-xl border ${color} hover:opacity-90 transition-opacity`}
-                >
-                  <div className="w-8 h-8 rounded-lg bg-white/60 flex items-center justify-center flex-shrink-0">
-                    <AlertTriangle className="w-4 h-4" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold truncate">
-                      {inc.tituloIncidencia ?? "Sin título"}
-                    </p>
-                    <p className="text-[10px] opacity-70">{inc.codigoCaso ?? "—"}</p>
-                  </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 bg-white/40 rounded-full flex-shrink-0">
-                    {label}
-                  </span>
-                </Link>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* Brigadistas disponibles */}
-        <div className="bg-white border border-[#DDDDDD] rounded-xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-[#DDDDDD] flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-[#009850]" />
-            <h2 className="text-sm font-semibold text-gray-700">Brigadistas disponibles</h2>
-            <span className="ml-auto text-xs text-gray-500">
-              {brigDisp}/{totalBrigActivos} activos
+      {/* Acciones urgentes - ancho completo */}
+      <div className="bg-white border border-[#DDDDDD] rounded-xl overflow-hidden">
+        <div className="px-4 py-3 border-b border-[#DDDDDD] flex items-center gap-2">
+          <CircleDot className="w-4 h-4 text-[#FF823C]" />
+          <h2 className="text-sm font-semibold text-gray-700">Acciones urgentes</h2>
+          {urgentes.length > 0 && (
+            <span className="ml-auto px-2 py-0.5 bg-[#FF823C]/10 text-[#FF823C] text-[10px] font-bold rounded-full">
+              {urgentes.length}
             </span>
-          </div>
-          <div className="divide-y divide-[#DDDDDD] max-h-64 overflow-y-auto">
-            {brigadistasDisponibles.length === 0 ? (
-              <p className="text-xs text-gray-500 p-4 text-center">Sin brigadistas disponibles</p>
-            ) : (
-              brigadistasDisponibles.slice(0, 5).map((b) => (
-                <div key={b.id} className="flex items-center gap-3 px-4 py-2.5">
-                  <div className="w-7 h-7 rounded-full bg-[#009850]/10 flex items-center justify-center text-[10px] font-bold text-[#009850] flex-shrink-0">
-                    {b.nombres[0]}
-                    {b.apellidos?.[0] ?? ""}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-gray-800 truncate">
-                      {b.nombres} {b.apellidos ?? ""}
-                    </p>
-                    <p className="text-[10px] text-gray-500 truncate">{b.parroquia ?? "—"}</p>
-                  </div>
-                  <span className="w-2 h-2 rounded-full bg-[#009850] flex-shrink-0" />
-                </div>
-              ))
-            )}
-            {brigadistasDisponibles.length > 5 && (
-              <Link
-                href="/brigadistas"
-                className="flex items-center justify-center gap-1 py-2 text-xs text-[#009850] hover:underline"
-              >
-                Ver los {brigadistasDisponibles.length} disponibles{" "}
-                <ArrowRight className="w-3 h-3" />
-              </Link>
-            )}
-          </div>
+          )}
         </div>
+        {urgentes.length === 0 ? (
+          <div className="flex items-center gap-3 px-4 py-5 text-center justify-center">
+            <CheckCircle className="w-5 h-5 text-[#009850]" />
+            <p className="text-sm text-gray-500">Sin acciones pendientes</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 p-3">
+            {urgentes.slice(0, 6).map(({ inc, label, color }) => (
+              <Link
+                key={inc.id}
+                href={`/grd/${inc.id}`}
+                className={`flex items-center gap-3 p-3 rounded-xl border ${color} hover:opacity-90 transition-opacity`}
+              >
+                <div className="w-8 h-8 rounded-lg bg-white/60 flex items-center justify-center flex-shrink-0">
+                  <AlertTriangle className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold truncate">
+                    {inc.tituloIncidencia ?? "Sin título"}
+                  </p>
+                  <p className="text-[10px] opacity-70">{inc.codigoCaso ?? "—"}</p>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 bg-white/40 rounded-full flex-shrink-0">
+                  {label}
+                </span>
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Incidentes + Simulacros */}
@@ -360,11 +321,37 @@ export function EspecialistaDashboard({
               Ver todos <ArrowRight className="w-3 h-3" />
             </Link>
           </div>
-          <div className="divide-y divide-[#DDDDDD]">
+          <div className="p-3">
             {incidentesRecientes.length === 0 ? (
-              <p className="text-xs text-gray-500 p-4 text-center">Sin incidentes activos</p>
+              <p className="text-xs text-gray-500 text-center py-4">Sin incidentes activos</p>
             ) : (
-              incidentesRecientes.map((i) => <IncidentRow key={i.id} inc={i} />)
+              <div className="grid grid-cols-2 gap-2">
+                {incidentesRecientes.map((inc) => {
+                  const cfg = STATUS_CFG[inc.estadoActual] ?? STATUS_CFG["ABIERTO"];
+                  const Icon = inc.tipoEvento && CAT_ICONS[inc.tipoEvento] ? CAT_ICONS[inc.tipoEvento] : MapPin;
+                  return (
+                    <Link
+                      key={inc.id}
+                      href={`/grd/${inc.id}`}
+                      className="flex items-center gap-3 p-3 rounded-xl bg-white border border-gray-200 hover:shadow-sm hover:border-gray-300 transition-all"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center border border-gray-200 shrink-0">
+                        <Icon className="w-4 h-4 text-gray-500" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] font-semibold text-gray-800 truncate">
+                          {inc.tituloIncidencia ?? "Sin título"}
+                        </p>
+                        <p className="text-[10px] text-gray-500 truncate">{inc.codigoCaso ?? "—"}</p>
+                      </div>
+                      <span className={`shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${cfg.border} ${cfg.color} ${cfg.bg}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+                        {cfg.label}
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
             )}
           </div>
         </div>
@@ -376,22 +363,24 @@ export function EspecialistaDashboard({
               Ver todos
             </Link>
           </div>
-          <div className="p-3 space-y-2">
+          <div className="p-3">
             {simulacrosActivos.length === 0 ? (
               <p className="text-xs text-gray-500 text-center py-4">Sin simulacros activos</p>
             ) : (
-              simulacrosActivos.slice(0, 4).map((s) => (
-                <div key={s.id} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-gray-50">
-                  <div className="w-7 h-7 rounded-lg bg-[#009850]/10 flex items-center justify-center flex-shrink-0">
-                    <ShieldCheck className="w-3.5 h-3.5 text-[#009850]" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[11px] font-semibold text-gray-800 truncate">
-                      {s.nombreActividad}
-                    </p>
-                    <p className="text-[10px] text-gray-500 truncate">{s.parroquia ?? "—"}</p>
+              <div className="grid grid-cols-2 gap-2">
+                {simulacrosActivos.slice(0, 4).map((s) => (
+                  <div key={s.id} className="flex flex-col gap-2 p-3 rounded-xl bg-gray-50 border border-gray-100">
+                    <div className="w-8 h-8 rounded-lg bg-[#009850]/10 flex items-center justify-center">
+                      <ShieldCheck className="w-4 h-4 text-[#009850]" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-semibold text-gray-800 leading-tight line-clamp-2">
+                        {s.nombreActividad}
+                      </p>
+                      <p className="text-[10px] text-gray-500 truncate mt-0.5">{s.parroquia ?? "—"}</p>
+                    </div>
                     <span
-                      className={`inline-block mt-0.5 text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${
+                      className={`self-start text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${
                         s.estadoActividad === "PROGRAMADA"
                           ? "bg-blue-50 text-blue-700"
                           : s.estadoActividad === "EN_EJECUCION"
@@ -402,12 +391,12 @@ export function EspecialistaDashboard({
                       {s.estadoActividad}
                     </span>
                   </div>
-                </div>
-              ))
+                ))}
+              </div>
             )}
             <Link
               href="/simulacros"
-              className="flex items-center justify-center gap-1 py-1.5 text-xs text-[#009850] hover:underline w-full"
+              className="flex items-center justify-center gap-1 py-2 mt-2 text-xs text-[#009850] hover:underline w-full"
             >
               <Package className="w-3 h-3" /> Ir a Simulacros
             </Link>

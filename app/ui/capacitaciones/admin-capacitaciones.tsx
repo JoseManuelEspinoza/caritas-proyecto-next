@@ -53,10 +53,25 @@ import { ParticipantesTable } from "@/app/ui/capacitaciones/participantes-table"
 type Especialista = { id: string; nombre: string };
 
 const ESTADO_BADGE: Record<string, string> = {
-  BORRADOR: "bg-gray-100 text-gray-600",
+  BORRADOR: "bg-amber-50 text-amber-700 border border-amber-200",
   PUBLICADO: "bg-green-50 text-green-700 border border-green-200",
-  CERRADO: "bg-gray-200 text-gray-500",
+  CERRADO: "bg-gray-100 text-gray-500 border border-gray-200",
 };
+
+const CURSO_COLORS = [
+  "from-[#009850] to-emerald-400",
+  "from-blue-500 to-cyan-400",
+  "from-purple-500 to-violet-400",
+  "from-orange-500 to-amber-400",
+  "from-rose-500 to-pink-400",
+  "from-teal-500 to-green-400",
+];
+
+function getCursoColor(id: string) {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) hash = id.charCodeAt(i) + ((hash << 5) - hash);
+  return CURSO_COLORS[Math.abs(hash) % CURSO_COLORS.length];
+}
 
 function fmtDate(iso: string | null) {
   if (!iso) return "—";
@@ -69,7 +84,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
       <div className="bg-white rounded-xl w-full max-w-lg shadow-xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--caritas-border)]">
           <h2 className="text-base font-semibold text-[var(--caritas-text)]">{title}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -92,37 +107,27 @@ function CursoCard({
   const esBorrador  = c.estadoCurso === "BORRADOR";
   const isSelected  = selectedId === c.id;
 
-  const baseStyle = isSelected
-    ? "border-[var(--caritas-green)] bg-[var(--caritas-green)]/5 shadow-sm"
-    : esPublicado
-    ? "border-[var(--caritas-border)] bg-white hover:border-[var(--caritas-green)]/40 hover:shadow-sm"
-    : esBorrador
-    ? "border-amber-200 border-dashed bg-amber-50/60 opacity-80 hover:opacity-100"
-    : "border-gray-200 bg-gray-50 opacity-50 hover:opacity-70";
-
   return (
     <button
       onClick={() => onSelect(c.id)}
-      className={`w-full text-left p-4 border rounded-xl transition-all ${baseStyle}`}
+      className={`w-full text-left p-4 rounded-xl border transition-all ${
+        isSelected
+          ? "border-[var(--caritas-green)]/50 bg-[var(--caritas-green)]/5 ring-1 ring-[var(--caritas-green)]/30"
+          : "border-gray-200 bg-white hover:bg-gray-50"
+      } ${!esPublicado && !isSelected ? "opacity-70" : ""}`}
     >
-      <div className="flex items-center justify-between gap-2 mb-1">
-        <span className="text-xs text-gray-400">{c.codigoCurso ?? "—"}</span>
-        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${ESTADO_BADGE[c.estadoCurso] ?? "bg-gray-100"}`}>
+      <div className="flex items-start justify-between gap-2 mb-1">
+        <h2 className="text-sm font-semibold text-[var(--caritas-text)] leading-snug line-clamp-2">{c.nombreCurso}</h2>
+        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0 ${ESTADO_BADGE[c.estadoCurso] ?? "bg-gray-100 text-gray-600"}`}>
           {c.estadoCurso}
         </span>
       </div>
-      <div className={`flex items-center gap-1.5 text-sm font-medium ${esPublicado ? "text-[var(--caritas-text)]" : "text-gray-500"}`}>
-        <BookOpen className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-        <span className="line-clamp-2">{c.nombreCurso}</span>
-      </div>
-      <div className="flex items-center justify-between mt-2">
-        <div className="flex gap-3 text-xs text-gray-400">
-          <span className="flex items-center gap-1"><Users className="w-3 h-3" />{c.totalInscritos}</span>
-          <span>{c.sesiones.length} unidades</span>
-        </div>
-        {esBorrador && !isSelected && (
-          <span className="text-[10px] text-amber-600 font-medium">No visible</span>
-        )}
+      {c.codigoCurso && (
+        <p className="text-[11px] font-mono text-gray-400 mb-2">{c.codigoCurso}</p>
+      )}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500">
+        <span className="flex items-center gap-1"><Users className="w-3 h-3" />{c.totalInscritos} inscritos</span>
+        <span className="flex items-center gap-1"><BookOpen className="w-3 h-3" />{c.sesiones.length} unidades</span>
       </div>
     </button>
   );
@@ -216,9 +221,9 @@ function UnidadRow({
   const otrasUnidades = todasLasSesiones.filter((s) => s.id !== sesion.id);
 
   return (
-    <div className="border border-[var(--caritas-border)] rounded-lg">
+    <div className="border border-[var(--caritas-border)] rounded-xl overflow-hidden">
       {/* Header de la unidad */}
-      <div className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 border-l-4 border-[var(--caritas-green)]">
+      <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-l-4 border-[var(--caritas-green)]">
         <button
           onClick={() => setExpandida(!expandida)}
           className="flex items-center gap-2 flex-1 text-left min-w-0"
@@ -237,26 +242,26 @@ function UnidadRow({
               className="flex-1 text-sm font-semibold text-[var(--caritas-text)] bg-white border border-[var(--caritas-green)] rounded px-2 py-0.5 focus:outline-none"
             />
           ) : (
-            <span className="text-sm font-semibold text-[var(--caritas-text)] flex-1 truncate">{sesion.tituloUnidad}</span>
+            <span className="text-sm font-semibold text-gray-800 flex-1 truncate">{sesion.tituloUnidad}</span>
           )}
         </button>
-        <span className="text-xs text-gray-400 bg-white border border-[var(--caritas-border)] px-2 py-0.5 rounded-full shrink-0">
+        <span className="text-[11px] text-gray-500 bg-white border border-gray-200 px-2 py-0.5 rounded-full shrink-0 font-medium">
           {sesion.materiales.length} material{sesion.materiales.length !== 1 ? "es" : ""}
         </span>
         {editandoUnidad ? (
           <>
-            <button onClick={guardarTituloUnidad} disabled={pending} className="text-xs text-[var(--caritas-green)] hover:underline px-1 shrink-0">Guardar</button>
+            <button onClick={guardarTituloUnidad} disabled={pending} className="text-xs text-[var(--caritas-green)] hover:underline px-1 shrink-0 font-medium">Guardar</button>
             <button onClick={() => { setEditandoUnidad(false); setTituloUnidad(sesion.tituloUnidad); }} className="text-xs text-gray-400 hover:text-gray-600 px-1 shrink-0">Cancelar</button>
           </>
         ) : (
           <>
-            <button onClick={() => setShowMaterialForm((s) => !s)} title="Agregar material" className="p-1 text-gray-400 hover:text-[var(--caritas-green)] transition-colors shrink-0">
+            <button onClick={() => setShowMaterialForm((s) => !s)} title="Agregar material" className="p-1.5 text-gray-400 hover:text-[var(--caritas-green)] hover:bg-white rounded-lg transition-colors shrink-0">
               <Plus className="w-4 h-4" />
             </button>
-            <button onClick={() => setEditandoUnidad(true)} title="Editar nombre" className="p-1 text-gray-400 hover:text-[var(--caritas-green)] transition-colors shrink-0">
+            <button onClick={() => setEditandoUnidad(true)} title="Editar nombre" className="p-1.5 text-gray-400 hover:text-[var(--caritas-green)] hover:bg-white rounded-lg transition-colors shrink-0">
               <Pencil className="w-3.5 h-3.5" />
             </button>
-            <button onClick={borrarUnidad} disabled={pending} title="Eliminar unidad" className="p-1 text-gray-400 hover:text-red-500 transition-colors shrink-0">
+            <button onClick={borrarUnidad} disabled={pending} title="Eliminar unidad" className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors shrink-0">
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           </>
@@ -280,54 +285,54 @@ function UnidadRow({
 
       {/* Materiales */}
       {expandida && (
-        <div className="divide-y divide-gray-100">
+        <div className="divide-y divide-gray-100 bg-white">
           {sesion.materiales.length === 0 && !showMaterialForm ? (
-            <p className="text-xs text-gray-400 px-4 py-3 pl-11">Sin materiales en esta unidad.</p>
+            <p className="text-xs text-gray-400 px-4 py-4 pl-10 italic">Sin materiales en esta unidad.</p>
           ) : (
             sesion.materiales.map((m) => (
-              <div key={m.id} className="border-l-4 border-[var(--caritas-green)]/20">
-                <div className="flex items-center gap-3 px-4 py-2.5 pl-11 bg-white hover:bg-gray-50 transition-colors">
+              <div key={m.id} className="flex items-center gap-3 px-4 py-3 pl-10 hover:bg-gray-50 transition-colors group">
+                <div className="w-8 h-8 rounded-lg bg-[var(--caritas-green)]/8 flex items-center justify-center shrink-0">
                   {getMaterialMeta(m.tipoMaterial).rowIcon}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-[var(--caritas-text)] truncate">{m.titulo}</p>
-                    {m.tipoMaterial && <p className="text-[11px] text-gray-400">{m.tipoMaterial}</p>}
-                  </div>
-                  {m.enlaceMaterial && (() => {
-                    const { btnIcon, btnLabel } = getMaterialMeta(m.tipoMaterial);
-                    return (
-                      <a href={m.enlaceMaterial} target="_blank" rel="noopener noreferrer"
-                        className="text-xs text-[var(--caritas-green)] hover:underline shrink-0 flex items-center gap-1">
-                        {btnIcon} {btnLabel}
-                      </a>
-                    );
-                  })()}
-                  {/* Menú ⋮ */}
-                  <div className="relative shrink-0">
-                    <button
-                      onClick={() => setMenuMaterial(menuMaterial === m.id ? null : m.id)}
-                      className="p-1 text-gray-400 hover:text-gray-600 transition-colors rounded"
-                    >
-                      <MoreVertical className="w-4 h-4" />
-                    </button>
-                    {menuMaterial === m.id && (
-                      <div className="absolute right-0 bottom-full mb-1 z-30 bg-white border border-[var(--caritas-border)] rounded-lg shadow-lg py-1 w-36">
-                        <button
-                          onClick={() => abrirEditarMaterial(m)}
-                          className="flex items-center gap-2 w-full px-3 py-2 text-xs text-[var(--caritas-text)] hover:bg-gray-50 transition-colors"
-                        >
-                          <Pencil className="w-3.5 h-3.5 text-gray-400" /> Editar
-                        </button>
-                        <div className="border-t border-gray-100 my-1" />
-                        <button
-                          onClick={() => borrarMaterial(m.id, m.titulo)}
-                          disabled={pending}
-                          className="flex items-center gap-2 w-full px-3 py-2 text-xs text-red-600 hover:bg-red-50 transition-colors"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" /> Eliminar
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-800 truncate">{m.titulo}</p>
+                  {m.tipoMaterial && <p className="text-[11px] text-gray-400 mt-0.5">{m.tipoMaterial}</p>}
+                </div>
+                {m.enlaceMaterial && (() => {
+                  const { btnIcon, btnLabel } = getMaterialMeta(m.tipoMaterial);
+                  return (
+                    <a href={m.enlaceMaterial} target="_blank" rel="noopener noreferrer"
+                      className="text-xs text-[var(--caritas-green)] border border-[var(--caritas-green)]/30 hover:bg-[var(--caritas-green)]/5 px-2.5 py-1 rounded-lg shrink-0 flex items-center gap-1 transition-colors">
+                      {btnIcon} {btnLabel}
+                    </a>
+                  );
+                })()}
+                {/* Menú ⋮ */}
+                <div className="relative shrink-0">
+                  <button
+                    onClick={() => setMenuMaterial(menuMaterial === m.id ? null : m.id)}
+                    className="p-1.5 text-gray-300 hover:text-gray-500 transition-colors rounded-lg hover:bg-gray-100"
+                  >
+                    <MoreVertical className="w-4 h-4" />
+                  </button>
+                  {menuMaterial === m.id && (
+                    <div className="absolute right-0 bottom-full mb-1 z-30 bg-white border border-[var(--caritas-border)] rounded-xl shadow-lg py-1 w-36">
+                      <button
+                        onClick={() => abrirEditarMaterial(m)}
+                        className="flex items-center gap-2 w-full px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
+                      >
+                        <Pencil className="w-3.5 h-3.5 text-gray-400" /> Editar
+                      </button>
+                      <div className="border-t border-gray-100 my-1" />
+                      <button
+                        onClick={() => borrarMaterial(m.id, m.titulo)}
+                        disabled={pending}
+                        className="flex items-center gap-2 w-full px-3 py-2 text-xs text-red-600 hover:bg-red-50 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" /> Eliminar
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             ))
@@ -389,6 +394,7 @@ export function AdminCapacitaciones({
   });
   const [sesionTitulo, setSesionTitulo] = useState("");
   const [busqueda, setBusqueda] = useState("");
+  const [filtroEstado, setFiltroEstado] = useState<"todos" | "PUBLICADO" | "BORRADOR" | "CERRADO">("todos");
   const [showBorradores, setShowBorradores] = useState(false);
   const [showCerrados, setShowCerrados] = useState(false);
   const [panelAbierto, setPanelAbierto] = useState(true);
@@ -410,9 +416,10 @@ export function AdminCapacitaciones({
     return resultado;
   }, [cursos, busqueda]);
 
-  const publicados = cursosFiltrados.filter((c) => c.estadoCurso === "PUBLICADO");
-  const borradores = cursosFiltrados.filter((c) => c.estadoCurso === "BORRADOR");
-  const cerrados  = cursosFiltrados.filter((c) => c.estadoCurso === "CERRADO");
+  const cursosVista = filtroEstado === "todos" ? cursosFiltrados : cursosFiltrados.filter((c) => c.estadoCurso === filtroEstado);
+  const publicados = cursosVista.filter((c) => c.estadoCurso === "PUBLICADO");
+  const borradores = cursosVista.filter((c) => c.estadoCurso === "BORRADOR");
+  const cerrados  = cursosVista.filter((c) => c.estadoCurso === "CERRADO");
 
   const current = cursos.find((c) => c.id === selectedId) ?? null;
 
@@ -563,29 +570,48 @@ export function AdminCapacitaciones({
         </button>
       </div>
 
+      {/* Filtro de estado */}
+      <div className="bg-white border border-gray-200 rounded-xl p-3 mb-4 flex flex-wrap items-center gap-2">
+        <button onClick={() => { setBusqueda(""); setFiltroEstado("todos"); setShowBorradores(true); setShowCerrados(true); }}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium border-2 transition-colors ${filtroEstado === "todos" ? "border-gray-500 text-gray-700 bg-gray-50" : "border-transparent bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700"}`}>
+          Todos ({cursos.length})
+        </button>
+        <button onClick={() => { setBusqueda(""); setFiltroEstado("PUBLICADO"); }}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium border-2 transition-colors ${filtroEstado === "PUBLICADO" ? "border-green-500 text-green-700 bg-green-50" : "border-transparent bg-green-50 text-green-600 hover:bg-green-100"}`}>
+          Publicados ({cursos.filter(c => c.estadoCurso === "PUBLICADO").length})
+        </button>
+        <button onClick={() => { setBusqueda(""); setFiltroEstado("BORRADOR"); }}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium border-2 transition-colors ${filtroEstado === "BORRADOR" ? "border-amber-400 text-amber-700 bg-amber-50" : "border-transparent bg-amber-50 text-amber-600 hover:bg-amber-100"}`}>
+          Borradores ({cursos.filter(c => c.estadoCurso === "BORRADOR").length})
+        </button>
+        <button onClick={() => { setBusqueda(""); setFiltroEstado("CERRADO"); }}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium border-2 transition-colors ${filtroEstado === "CERRADO" ? "border-gray-400 text-gray-600 bg-gray-100" : "border-transparent bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
+          Cerrados ({cursos.filter(c => c.estadoCurso === "CERRADO").length})
+        </button>
+      </div>
+
       <div className={`grid grid-cols-1 gap-5 ${panelAbierto ? "lg:grid-cols-[300px_1fr]" : ""}`}>
         {/* Course list */}
         {panelAbierto && (
           <div className="flex flex-col gap-3 h-[calc(100vh-180px)]">
-            {/* Header del panel con botón toggle */}
-            <div className="flex items-center justify-between shrink-0">
+            {/* Buscador + botón colapsar */}
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  value={busqueda}
+                  onChange={(e) => setBusqueda(e.target.value)}
+                  placeholder="Buscar curso..."
+                  className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)] focus:border-[var(--caritas-green)]"
+                />
+              </div>
               <button
                 onClick={() => setPanelAbierto(false)}
-                className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors ml-auto"
+                className="shrink-0 w-9 h-9 flex items-center justify-center rounded-lg text-[var(--caritas-green)] border border-[var(--caritas-green)]/30 bg-[var(--caritas-green)]/8 hover:bg-[var(--caritas-green)]/15 transition-colors"
                 title="Colapsar panel"
               >
-                <PanelLeftClose className="w-4 h-4" />
+                <PanelLeftClose className="w-5 h-5" />
               </button>
-            </div>
-            {/* Buscador — fijo arriba */}
-            <div className="relative shrink-0">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-                placeholder="Buscar curso..."
-                className="w-full pl-9 pr-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]"
-              />
             </div>
             {/* Lista con scroll propio */}
             <div className="overflow-y-auto flex-1 space-y-3 pr-1">
@@ -669,64 +695,64 @@ export function AdminCapacitaciones({
             </div>
           ) : (
             <>
-              {/* Course header — card estilo especialista */}
-              <div className="border border-[var(--caritas-border)] rounded-xl p-4 mb-5 bg-white">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                      <span className="text-xs text-gray-400 font-mono">{current.codigoCurso}</span>
-                      <span className="text-xs bg-purple-50 text-purple-700 border border-purple-100 px-2 py-0.5 rounded-full">Asincrónica</span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ESTADO_BADGE[current.estadoCurso]}`}>
-                        {current.estadoCurso}
-                      </span>
+              {/* Course header */}
+              <div className="border border-[var(--caritas-border)] rounded-xl overflow-hidden mb-5 bg-white">
+                <div className="px-5 pt-5 pb-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-xs text-gray-400 font-mono">{current.codigoCurso}</span>
+                        <span className="text-[10px] bg-purple-50 text-purple-700 border border-purple-100 px-2 py-0.5 rounded-full font-medium">Asincrónica</span>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${ESTADO_BADGE[current.estadoCurso]}`}>{current.estadoCurso}</span>
+                      </div>
+                      <h2 className="text-xl font-bold text-gray-900 leading-tight mb-1">{current.nombreCurso}</h2>
+                      <p className="text-sm text-gray-500">por <span className="font-medium text-gray-700">{current.responsable}</span></p>
+                      {current.descripcion && <p className="text-sm text-gray-400 mt-1.5 leading-relaxed">{current.descripcion}</p>}
                     </div>
-                    <h2 className="text-lg font-semibold text-[var(--caritas-text)]">{current.nombreCurso}</h2>
-                    <p className="text-sm text-gray-500 mt-0.5">Responsable: {current.responsable}</p>
-                    {current.descripcion && (
-                      <p className="text-sm text-gray-500 mt-1">{current.descripcion}</p>
-                    )}
-                    {/* Stats */}
-                    <div className="flex items-center gap-4 mt-2.5 text-sm text-gray-500">
-                      <span className="flex items-center gap-1.5">
-                        <Users className="w-4 h-4 text-gray-400" />
-                        {current.totalInscritos} inscritos
-                      </span>
-                      <span className="flex items-center gap-1.5">
-                        <BookOpen className="w-4 h-4 text-gray-400" />
-                        {current.sesiones.length} unidades
-                      </span>
-                      {current.fechaPublicacion && (
-                        <span className="text-xs text-gray-400">
-                          Publicado: {fmtDate(current.fechaPublicacion)}
-                          {current.fechaCierre && <> · Cerrado: {fmtDate(current.fechaCierre)}</>}
-                        </span>
+                    <div className="flex gap-2 shrink-0">
+                      <button
+                        onClick={abrirEditar}
+                        className="flex items-center gap-1.5 px-3 py-2 text-sm border border-[var(--caritas-border)] rounded-lg hover:bg-gray-50 transition-colors text-gray-700"
+                      >
+                        <Pencil className="w-3.5 h-3.5" /> Editar
+                      </button>
+                      {current.estadoCurso === "BORRADOR" && (
+                        <button
+                          onClick={() => run(() => cambiarEstadoCurso(current.id, "PUBLICAR"), "Curso publicado.")}
+                          disabled={pending}
+                          className="flex items-center gap-1.5 px-3 py-2 text-sm bg-[var(--caritas-green)] text-white rounded-lg disabled:opacity-50 hover:opacity-90 transition-opacity font-medium"
+                        >
+                          <Send className="w-3.5 h-3.5" /> Publicar
+                        </button>
+                      )}
+                      {current.estadoCurso === "PUBLICADO" && (
+                        <button
+                          onClick={() => setShowConfirmCerrar(true)}
+                          disabled={pending}
+                          className="flex items-center gap-1.5 px-3 py-2 text-sm border border-[var(--caritas-border)] rounded-lg hover:bg-gray-50 transition-colors text-gray-700"
+                        >
+                          <Lock className="w-3.5 h-3.5" /> Cerrar inscripciones
+                        </button>
                       )}
                     </div>
                   </div>
-                  <div className="flex gap-2 shrink-0">
-                    <button
-                      onClick={abrirEditar}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-[var(--caritas-border)] rounded-lg hover:bg-gray-50 transition-colors"
-                    >
-                      <Pencil className="w-3.5 h-3.5" /> Editar
-                    </button>
-                    {current.estadoCurso === "BORRADOR" && (
-                      <button
-                        onClick={() => run(() => cambiarEstadoCurso(current.id, "PUBLICAR"), "Curso publicado.")}
-                        disabled={pending}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-[var(--caritas-green)] text-white rounded-lg disabled:opacity-50 hover:opacity-90 transition-opacity"
-                      >
-                        <Send className="w-3.5 h-3.5" /> Publicar
-                      </button>
+                  {/* Stats chips */}
+                  <div className="flex items-center gap-2 mt-3 flex-wrap">
+                    <span className="inline-flex items-center gap-1.5 text-xs bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full">
+                      <Users className="w-3.5 h-3.5" />{current.totalInscritos} inscritos
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 text-xs bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full">
+                      <BookOpen className="w-3.5 h-3.5" />{current.sesiones.length} unidades
+                    </span>
+                    {current.fechaPublicacion && (
+                      <span className="inline-flex items-center gap-1.5 text-xs bg-green-50 text-green-700 px-2.5 py-1 rounded-full">
+                        Publicado: {fmtDate(current.fechaPublicacion)}
+                      </span>
                     )}
-                    {current.estadoCurso === "PUBLICADO" && (
-                      <button
-                        onClick={() => setShowConfirmCerrar(true)}
-                        disabled={pending}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-[var(--caritas-border)] rounded-lg disabled:opacity-50 hover:bg-gray-50"
-                      >
-                        <Lock className="w-3.5 h-3.5" /> Cerrar inscripciones
-                      </button>
+                    {current.fechaCierre && (
+                      <span className="inline-flex items-center gap-1.5 text-xs bg-gray-100 text-gray-500 px-2.5 py-1 rounded-full">
+                        Cerrado: {fmtDate(current.fechaCierre)}
+                      </span>
                     )}
                   </div>
                 </div>
@@ -774,9 +800,9 @@ export function AdminCapacitaciones({
                   <div className="flex justify-end">
                     <button
                       onClick={() => { setSesionTitulo(""); setShowSesion(true); }}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-[var(--caritas-border)] rounded-lg hover:bg-gray-50 transition-colors"
+                      className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium border border-[var(--caritas-green)]/40 text-[var(--caritas-green)] bg-[var(--caritas-green)]/5 hover:bg-[var(--caritas-green)]/10 rounded-lg transition-colors"
                     >
-                      <Plus className="w-3.5 h-3.5" /> Nueva unidad
+                      <Plus className="w-4 h-4" /> Nueva unidad
                     </button>
                   </div>
                   {current.sesiones.length === 0 ? (
@@ -1080,7 +1106,7 @@ export function AdminCapacitaciones({
                 </p>
               </div>
             </div>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-gray-700">
               ¿Confirmas que deseas cerrar el curso <strong>"{current.nombreCurso}"</strong>?
             </p>
             <div className="flex justify-end gap-2 pt-1">

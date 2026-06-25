@@ -3,6 +3,7 @@ import { IComiteDonacionesRepository } from "../../domain/repositories/IComiteDo
 import { RondaVotacion, CierreRonda } from "../../domain/entities/comite-donaciones/RondaVotacion";
 import { DecisionVoto, TallyRonda } from "../../domain/entities/comite-donaciones/VotoComite";
 import { BusinessRuleError } from "../../domain/errors/DomainError";
+import { recomputarStockKit } from "./kit-stock";
 
 const ROL_COMITE = "COMITEDONACIONES";
 
@@ -198,6 +199,8 @@ export class PrismaComiteDonacionesRepository implements IComiteDonacionesReposi
             motivoMovimiento: "Aprobación del Comité de Donaciones",
           },
         });
+        // Tras descontar elementos, recalcula los kits completos disponibles.
+        await recomputarStockKit(tx, idKit);
       }
     });
   }
