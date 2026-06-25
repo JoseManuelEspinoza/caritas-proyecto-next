@@ -20,7 +20,6 @@ import {
   ChevronRight,
 } from "lucide-react";
 import type { Incident, IncidentStatus, HistoryEntry } from "@/app/lib/incident-types";
-import { initialIncidents } from "@/app/lib/incident-data";
 import { PaginationControls } from "@/app/ui/shared/pagination-controls";
 import { PanelVotacionComite } from "./PanelVotacionComite";
 import type { TallyRondaConNombres } from "@/app/lib/comite-donaciones-tally";
@@ -67,10 +66,11 @@ interface Props {
   soyMiembroDelComite: boolean;
   miIdUsuarioGRD: string | null;
   tallyPorCaso: Record<string, TallyRondaConNombres | null>;
+  incidents: Incident[];
 }
 
-export function DonacionesModule({ canEvaluate, currentUser, soyMiembroDelComite, miIdUsuarioGRD, tallyPorCaso }: Props) {
-  const [incidents, setIncidents] = useState<Incident[]>(initialIncidents);
+export function DonacionesModule({ canEvaluate, currentUser, soyMiembroDelComite, miIdUsuarioGRD, tallyPorCaso, incidents: initialData }: Props) {
+  const [incidents, setIncidents] = useState<Incident[]>(initialData);
   const [selected, setSelected] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
@@ -83,7 +83,7 @@ export function DonacionesModule({ canEvaluate, currentUser, soyMiembroDelComite
   const [historyPageSize, setHistoryPageSize] = useState(5);
 
   const queueAll = useMemo(
-    () => incidents.filter((i) => ["EN EVALUACION", "OBSERVADO"].includes(i.status)),
+    () => incidents.filter((i) => i.status === "EN EVALUACION"),
     [incidents]
   );
 
@@ -116,11 +116,11 @@ export function DonacionesModule({ canEvaluate, currentUser, soyMiembroDelComite
   }, [incidents, search, statusFilter, categoryFilter, parroquiaFilter]);
 
   const queue = useMemo(
-    () => filteredIncidents.filter((i) => ["EN EVALUACION", "OBSERVADO"].includes(i.status)),
+    () => filteredIncidents.filter((i) => i.status === "EN EVALUACION"),
     [filteredIncidents]
   );
   const closed = useMemo(
-    () => filteredIncidents.filter((i) => !["EN EVALUACION", "OBSERVADO"].includes(i.status)),
+    () => filteredIncidents.filter((i) => i.status !== "EN EVALUACION"),
     [filteredIncidents]
   );
 
@@ -282,7 +282,7 @@ export function DonacionesModule({ canEvaluate, currentUser, soyMiembroDelComite
         >
           <div className="bg-purple-700 px-4 py-3 flex items-center gap-2">
             <Clock className="w-4 h-4 text-white" />
-            <p className="text-white font-bold text-sm">Cola de Evaluación ({queue.length})</p>
+            <p className="text-white font-bold text-sm">Pendientes de Evaluación ({queue.length})</p>
           </div>
           {queue.length === 0 ? (
             <div className="p-8 text-center">
@@ -782,6 +782,54 @@ export function DonacionesModule({ canEvaluate, currentUser, soyMiembroDelComite
                     tally={tallyPorCaso[current.id] ?? null}
                   />
                 )}
+
+                {/* Historial de votación (solo lectura) para casos ya procesados */}
+                {(["APROBADO", "RECHAZADO", "OBSERVADO"] as const).includes(current.status as "APROBADO" | "RECHAZADO" | "OBSERVADO") &&
+                  tallyPorCaso[current.id] && (() => {
+                    const t = tallyPorCaso[current.id]!;
+                    return (
+                      <section className="rounded-lg border border-gray-200 p-4 space-y-3">
+                        <header className="flex items-baseline justify-between">
+                          <h3 className="text-sm font-semibold text-gray-700">Resultado de la Votación</h3>
+                          <span className="text-xs text-gray-400">Umbral: {t.umbral} de {t.n}</span>
+                        </header>
+                        <div className="grid grid-cols-3 gap-2 text-sm">
+                          <div className="rounded-md bg-emerald-50 p-2.5 text-emerald-900 text-center">
+                            <div className="font-bold text-lg">{t.aFavor}</div>
+                            <div className="text-xs">A favor</div>
+                          </div>
+                          <div className="rounded-md bg-rose-50 p-2.5 text-rose-900 text-center">
+                            <div className="font-bold text-lg">{t.enContra}</div>
+                            <div className="text-xs">En contra</div>
+                          </div>
+                          <div className="rounded-md bg-slate-50 p-2.5 text-slate-900 text-center">
+                            <div className="font-bold text-lg">{t.pendientes}</div>
+                            <div className="text-xs">No votaron</div>
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-gray-600 mb-1.5">Detalle de votos</p>
+                          <ul className="text-xs space-y-1">
+                            {t.votos.map((v) => (
+                              <li key={v.idUsuarioGRD} className="flex justify-between">
+                                <span className="text-gray-700">{v.nombre}</span>
+                                <span className={v.decision === "A_FAVOR" ? "text-emerald-700 font-medium" : "text-rose-700 font-medium"}>
+                                  {v.decision === "A_FAVOR" ? "A favor" : "En contra"}
+                                </span>
+                              </li>
+                            ))}
+                            {t.pendientesNombres.map((nombre) => (
+                              <li key={nombre} className="flex justify-between text-gray-400">
+                                <span>{nombre}</span>
+                                <span>No votó</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </section>
+                    );
+                  })()
+                }
 
                 {/* Vista de solo lectura para casos procesados */}
                 {!["EN EVALUACION", "OBSERVADO"].includes(current.status) &&
