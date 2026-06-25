@@ -697,6 +697,7 @@ export async function getDestinatariosNotificacion(
 
   const nombre = [resp.nombres, resp.apellidos].filter(Boolean).join(" ");
   const email = resp.correoReferencia ?? resp.credencial?.email ?? "";
+  // credencial can be null for UsuarioGRD rows not linked to a User account; rol is display-only
   const rol = resp.credencial?.role ?? "ESPECIALISTAGRD";
   return [{ nombre, email, rol }];
 }

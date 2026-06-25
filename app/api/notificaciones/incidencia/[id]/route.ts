@@ -41,18 +41,19 @@ export async function GET(
     },
   });
 
-  // Group by tipo in insertion order; enviadoAt is the first record's timestamp
+  // Group by tipo+minute so repeat events (e.g. observe→resubmit) appear as separate entries
   const groupMap = new Map<string, NotifHistorialGroup>();
   for (const row of rows) {
-    if (!groupMap.has(row.tipo)) {
-      groupMap.set(row.tipo, {
+    const bucket = `${row.tipo}__${row.createdAt.toISOString().slice(0, 16)}`;
+    if (!groupMap.has(bucket)) {
+      groupMap.set(bucket, {
         tipo: row.tipo,
         titulo: row.titulo,
         enviadoAt: row.createdAt.toISOString(),
         destinatarios: [],
       });
     }
-    groupMap.get(row.tipo)!.destinatarios.push({
+    groupMap.get(bucket)!.destinatarios.push({
       nombre: row.user.name ?? row.user.email,
       email: row.user.email,
       rol: row.user.role,
