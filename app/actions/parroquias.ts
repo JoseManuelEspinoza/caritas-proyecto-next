@@ -16,6 +16,14 @@ export type ParroquiaFormData = {
   longitud?: string;
 };
 
+function parseLatLng(latStr?: string, lngStr?: string): { message: string } | { lat: number | null; lng: number | null } {
+  const lat = latStr?.trim() ? parseFloat(latStr) : null;
+  const lng = lngStr?.trim() ? parseFloat(lngStr) : null;
+  if (lat !== null && (isNaN(lat) || lat < -90 || lat > 90)) return { message: "Latitud inválida (debe estar entre -90 y 90)." };
+  if (lng !== null && (isNaN(lng) || lng < -180 || lng > 180)) return { message: "Longitud inválida (debe estar entre -180 y 180)." };
+  return { lat, lng };
+}
+
 async function requireAdmin() {
   const session = await verifySession();
   const role = toFrontendRole(session.role);
@@ -51,6 +59,9 @@ export async function createParroquia(data: ParroquiaFormData) {
     if (telDup) return { message: `Ese teléfono ya está registrado en "${telDup.nombre}".` };
   }
 
+  const coords = parseLatLng(data.latitud, data.longitud);
+  if ("message" in coords) return coords;
+
   await prisma.parroquia.create({
     data: {
       nombre,
@@ -58,8 +69,8 @@ export async function createParroquia(data: ParroquiaFormData) {
       referencia: data.referencia.trim() || null,
       telefono: data.telefono.trim() || null,
       correo: data.correo.trim() || null,
-      latitud: data.latitud && data.latitud.trim() ? parseFloat(data.latitud) : null,
-      longitud: data.longitud && data.longitud.trim() ? parseFloat(data.longitud) : null,
+      latitud: coords.lat,
+      longitud: coords.lng,
       estado: "ACTIVO",
     },
   });
@@ -97,6 +108,9 @@ export async function updateParroquia(id: string, data: ParroquiaFormData) {
     if (telDup) return { message: `Ese teléfono ya está registrado en "${telDup.nombre}".` };
   }
 
+  const coords = parseLatLng(data.latitud, data.longitud);
+  if ("message" in coords) return coords;
+
   await prisma.parroquia.update({
     where: { idParroquia: id },
     data: {
@@ -105,8 +119,8 @@ export async function updateParroquia(id: string, data: ParroquiaFormData) {
       referencia: data.referencia.trim() || null,
       telefono: data.telefono.trim() || null,
       correo: data.correo.trim() || null,
-      latitud: data.latitud && data.latitud.trim() ? parseFloat(data.latitud) : null,
-      longitud: data.longitud && data.longitud.trim() ? parseFloat(data.longitud) : null,
+      latitud: coords.lat,
+      longitud: coords.lng,
     },
   });
 

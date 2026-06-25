@@ -31,6 +31,7 @@ export interface ParroquiaRiesgoData {
   actividadesTotal: number;
   riesgoNivel: RiesgoNivel;
   riesgoScore: number;
+  esNueva?: boolean;
 }
 
 export interface ActividadesData {

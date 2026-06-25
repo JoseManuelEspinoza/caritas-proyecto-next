@@ -909,6 +909,8 @@ export async function editarMaterial(
 ): Promise<void | { message: string }> {
   await verifySession();
   if (!data.titulo.trim()) return { message: "El título del material es obligatorio." };
+  const urlErr = validarUrlOpcional(data.enlaceMaterial);
+  if (urlErr) return urlErr;
   try {
     await prisma.materialCapacitacion.update({
       where: { idMaterialCapacitacion: idMaterial },

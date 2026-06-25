@@ -694,37 +694,26 @@ export function ParroquiasList({ parroquias, canEdit = false }: Props) {
           <h1 className="text-xl font-semibold text-gray-900">Parroquias</h1>
           <p className="text-sm text-gray-500 mt-0.5">Directorio de parroquias — Cáritas Lima</p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            onClick={handleExport}
-            disabled={exportando || filtered.length === 0}
-            suppressHydrationWarning
-            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-[#DDDDDD] rounded-lg hover:bg-gray-50 transition-all disabled:opacity-50"
-          >
-            {exportando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-            {exportando ? "Exportando..." : "Exportar Excel"}
-          </button>
-          {canEdit && (
-            <>
-              <button
-                onClick={() => setShowImportModal(true)}
-                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-[#DDDDDD] rounded-lg hover:bg-gray-50 transition-all"
-              >
-                <Upload className="w-4 h-4" />
-                Importar Excel
-              </button>
-              <button
-                onClick={openCreate}
-                className="flex items-center gap-2 px-4 py-2 text-white text-sm font-medium rounded-lg hover:opacity-90 transition-all"
-                style={{ background: "#009850" }}
-                suppressHydrationWarning
-              >
-                <Plus className="w-4 h-4" />
-                Registrar parroquia
-              </button>
-            </>
-          )}
-        </div>
+        {canEdit && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => setShowImportModal(true)}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-[#DDDDDD] rounded-lg hover:bg-gray-50 transition-all"
+            >
+              <Upload className="w-4 h-4" />
+              Importar Excel
+            </button>
+            <button
+              onClick={openCreate}
+              className="flex items-center gap-2 px-4 py-2 text-white text-sm font-medium rounded-lg hover:opacity-90 transition-all"
+              style={{ background: "#009850" }}
+              suppressHydrationWarning
+            >
+              <Plus className="w-4 h-4" />
+              Registrar parroquia
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Stats dinámicos */}
@@ -808,6 +797,15 @@ export function ParroquiasList({ parroquias, canEdit = false }: Props) {
             <X className="w-3.5 h-3.5" /> Limpiar
           </button>
         )}
+        <button
+          onClick={handleExport}
+          disabled={exportando || filtered.length === 0}
+          suppressHydrationWarning
+          className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 bg-[#F5F5F5] border border-[#DDDDDD] rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+        >
+          {exportando ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+          Excel
+        </button>
       </div>
 
       {/* Tabla desktop */}
