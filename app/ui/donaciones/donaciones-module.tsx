@@ -200,6 +200,9 @@ export function DonacionesModule({
 
   const current = casos.find((c) => c.id === selectedId) ?? null;
   const puedeVotar = canEvaluate && current?.estado === "EN EVALUACION";
+  const miVoto = current && miIdUsuarioGRD
+    ? (tallyPorCaso[current.id]?.votos.find((v) => v.idUsuarioGRD === miIdUsuarioGRD)?.decision ?? null)
+    : null;
 
   // En móvil navega automáticamente al detalle al seleccionar un caso
   const handleSelectCase = (id: string) => {
@@ -468,13 +471,20 @@ export function DonacionesModule({
                     </button>
                   )}
                   {puedeVotar && (
-                    <button
-                      onClick={() => setShowVotacion(true)}
-                      className="flex items-center gap-1.5 text-[var(--caritas-green)] text-sm font-medium px-2.5 py-1.5 rounded-lg border border-transparent hover:border-[var(--caritas-green)]/40 hover:bg-[var(--caritas-green)]/5 transition-all cursor-pointer"
-                    >
-                      <Hand className="w-4 h-4" />
-                      <span>Votar</span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {miVoto && (
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${miVoto === "A_FAVOR" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-600 border-red-200"}`}>
+                          {miVoto === "A_FAVOR" ? "✓ A favor" : "✗ En contra"}
+                        </span>
+                      )}
+                      <button
+                        onClick={() => setShowVotacion(true)}
+                        className="flex items-center gap-1.5 text-[var(--caritas-green)] text-sm font-semibold px-3 py-1.5 rounded-lg border border-[var(--caritas-green)]/40 bg-[var(--caritas-green)]/8 hover:bg-[var(--caritas-green)]/15 hover:border-[var(--caritas-green)]/60 transition-all cursor-pointer"
+                      >
+                        <Hand className="w-4 h-4" />
+                        <span>Votar</span>
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -525,15 +535,22 @@ export function DonacionesModule({
                       </button>
                     )}
                     {puedeVotar && (
-                      <div className="flex flex-col items-end gap-1">
+                      <div className="flex flex-col items-end gap-1.5">
                         <DestinatariosPreview step="decision" incidenciaId={current.id} />
-                        <button
-                          onClick={() => setShowVotacion(true)}
-                          className="flex items-center gap-1.5 text-[var(--caritas-green)] text-sm font-medium px-2.5 py-1.5 rounded-lg border border-transparent hover:border-[var(--caritas-green)]/40 hover:bg-[var(--caritas-green)]/5 transition-all cursor-pointer"
-                        >
-                          <Hand className="w-4 h-4" />
-                          <span>Votar</span>
-                        </button>
+                        <div className="flex items-center gap-2">
+                          {miVoto && (
+                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${miVoto === "A_FAVOR" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-600 border-red-200"}`}>
+                              {miVoto === "A_FAVOR" ? "✓ A favor" : "✗ En contra"}
+                            </span>
+                          )}
+                          <button
+                            onClick={() => setShowVotacion(true)}
+                            className="flex items-center gap-1.5 text-[var(--caritas-green)] text-sm font-semibold px-3 py-1.5 rounded-lg border border-[var(--caritas-green)]/40 bg-[var(--caritas-green)]/8 hover:bg-[var(--caritas-green)]/15 hover:border-[var(--caritas-green)]/60 transition-all cursor-pointer"
+                          >
+                            <Hand className="w-4 h-4" />
+                            <span>Votar</span>
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
