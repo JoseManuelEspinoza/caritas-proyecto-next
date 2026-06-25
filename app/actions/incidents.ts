@@ -10,6 +10,7 @@ import { DomainError } from "@/core/domain/errors/DomainError";
 import { logGRDAction } from "@/app/lib/audit";
 import { sendAsignacionEmergenciaEmail, sendDecisionComiteEmail } from "@/app/lib/email";
 import { notificarUsuario, notificarRoles, notificarBrigadistas } from "@/app/lib/notificaciones";
+import type { Role } from "@prisma/client";
 import type {
   CreateIncidenteData,
   InfoCampoData,
@@ -65,7 +66,8 @@ function notificarEquipoAsignado(
         "RESPONSABLE_ASIGNADO",
         "Eres el responsable del equipo de respuesta",
         detalle,
-        `/grd/${incidenciaId}`
+        `/grd/${incidenciaId}`,
+        incidenciaId
       );
 
       if (equipoIds.length > 0) {
@@ -74,7 +76,8 @@ function notificarEquipoAsignado(
           "BRIGADISTA_ASIGNADO",
           "Has sido asignado a un caso de emergencia",
           detalle,
-          `/grd/${incidenciaId}`
+          `/grd/${incidenciaId}`,
+          incidenciaId
         );
       }
     })
@@ -147,7 +150,8 @@ export async function createIncidente(data: CreateIncidenteData) {
     "INCIDENCIA_NUEVA",
     "Nueva incidencia registrada",
     `Se registró: ${data.categoria} en ${data.distrito}`,
-    `/grd/${id}`
+    `/grd/${id}`,
+    id
   );
   // ?registrado=1 → el detalle muestra la confirmación tras el redirect.
   redirect(`/grd/${id}?registrado=1`);
@@ -219,7 +223,8 @@ export async function assignBrigadista(
     instrucciones?.trim()
       ? `Instrucciones: ${instrucciones.trim()}`
       : "Revisa el sistema para ver los detalles.",
-    `/grd/${incidenciaId}`
+    `/grd/${incidenciaId}`,
+    incidenciaId
   );
   revalidar(incidenciaId);
 }
@@ -356,7 +361,8 @@ export async function saveInformeEvaluacion(incidenciaId: string, data: InformeE
     "INFORME_ENVIADO_COMITE",
     "Informe enviado al Comité",
     `El especialista GRD envió el informe del caso "${titulo}" para su evaluación.`,
-    `/grd/${incidenciaId}`
+    `/grd/${incidenciaId}`,
+    incidenciaId
   );
   revalidar(incidenciaId);
 }
@@ -461,7 +467,8 @@ export async function notificarDecisionComite(
           observaciones?.trim()
             ? `"${incTitulo}" — ${observaciones.trim()}`
             : `"${incTitulo}"`,
-          `/grd/${incidenciaId}`
+          `/grd/${incidenciaId}`,
+          incidenciaId
         );
       }
     })
@@ -648,4 +655,48 @@ export async function deleteGrupoFamiliarCampo(grupoId: string, incidenciaId: st
     return asMessage(err);
   }
   revalidar(incidenciaId);
+}
+
+// ─── Preview de destinatarios ────────────────────────────────────────────────
+
+export type DestinatarioNotif = { nombre: string; email: string; rol: string };
+
+export async function getDestinatariosNotificacion(
+  step: "informe" | "decision",
+  incidenciaId: string
+): Promise<DestinatarioNotif[]> {
+  await verifySession();
+
+  if (step === "informe") {
+    const roles = ["COMITEDONACIONES", "JEFAOGP"] as Role[];
+    const usuarios = await prisma.user.findMany({
+      where: { role: { in: roles }, estado: "ACTIVO" },
+      select: { name: true, email: true, role: true },
+      orderBy: [{ role: "asc" }, { name: "asc" }],
+    });
+    return usuarios.map((u) => ({ nombre: u.name ?? u.email, email: u.email, rol: u.role }));
+  }
+
+  // step === "decision": notify the GRD responsible for this incidencia
+  const inc = await prisma.incidencia.findUnique({
+    where: { idIncidencia: incidenciaId },
+    select: {
+      usuarioResponsable: {
+        select: {
+          nombres: true,
+          apellidos: true,
+          correoReferencia: true,
+          credencial: { select: { email: true, role: true } },
+        },
+      },
+    },
+  });
+
+  const resp = inc?.usuarioResponsable;
+  if (!resp) return [];
+
+  const nombre = [resp.nombres, resp.apellidos].filter(Boolean).join(" ");
+  const email = resp.correoReferencia ?? resp.credencial?.email ?? "";
+  const rol = resp.credencial?.role ?? "ESPECIALISTAGRD";
+  return [{ nombre, email, rol }];
 }
