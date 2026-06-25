@@ -10,6 +10,7 @@ import {
   RefreshCw,
   X,
   ListChecks,
+  Pencil,
   Upload,
   Trash2,
   Archive,
@@ -27,7 +28,8 @@ import {
   registrarMovimientoKit,
   listarMovimientosKit,
   listarArticulosKit,
-  reponerStockArticulo,
+  ingresarProductosKit,
+  actualizarComposicionKit,
   type ArticuloKit,
   type ArticuloKitDetalle,
 } from "@/app/actions/kits";
@@ -59,7 +61,9 @@ type Movimiento = {
   observaciones: string | null;
 };
 
-const TIPOS = ["INGRESO", "ENTREGA"] as const;
+// Las entradas al inventario se hacen por elemento (flujo "Ingreso de productos").
+// El formulario de movimientos manual solo cubre la ENTREGA de kits.
+const TIPOS = ["ENTREGA"] as const;
 
 // ─── Sección colapsable del detalle ──────────────────────────────────────────
 
@@ -115,13 +119,23 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
   const [evidenciaFile, setEvidenciaFile] = useState<File | null>(null);
   const [showKitForm, setShowKitForm] = useState(false);
   const [showMovForm, setShowMovForm] = useState(false);
+  // Ingreso de productos: cantidades a sumar por elemento + elementos nuevos.
+  const [showIngreso, setShowIngreso] = useState(false);
+  const [ingresoQty, setIngresoQty] = useState<Record<string, number>>({});
+  const [ingresoNuevos, setIngresoNuevos] = useState<ArticuloKit[]>([]);
+  const [ingresoMotivo, setIngresoMotivo] = useState("");
+  // Edición de la composición (renombrar/ajustar cantidad/quitar/agregar elementos).
+  const [editandoComp, setEditandoComp] = useState(false);
+  const [compItems, setCompItems] = useState<
+    { idKitArticulo?: string; descripcion: string; cantidad: number; stock: number }[]
+  >([]);
   const [kitPage, setKitPage] = useState(1);
   const [movementPage, setMovementPage] = useState(1);
   const [kitPageSize, setKitPageSize] = useState(10);
   const [movPageSize, setMovPageSize] = useState(5);
   const [sortBy, setSortBy] = useState<SortKey>("nombre");
 
-  const [kitForm, setKitForm] = useState({ tipoKit: "", descripcion: "", stockInicial: 0, codigoAlmacen: "", ubicacionAlmacen: "" });
+  const [kitForm, setKitForm] = useState({ tipoKit: "", descripcion: "", codigoAlmacen: "", ubicacionAlmacen: "" });
   // Composición del kit nuevo: un kit no puede crearse sin contenido (≥1 artículo).
   const [kitFormArt, setKitFormArt] = useState<ArticuloKit[]>([{ codigo: "", descripcion: "", cantidad: 1, stock: 0 }]);
   const [movForm, setMovForm] = useState({
@@ -172,6 +186,9 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
 
   useEffect(() => {
     let active = true;
+    // Al cambiar de kit, cierra cualquier edición/ingreso en curso.
+    setEditandoComp(false);
+    setShowIngreso(false);
     if (!selected) { setMovimientos([]); setEvidencias([]); setArticulos([]); return; }
     listarMovimientosKit(selected).then((i) => { if (active) setMovimientos(i); }).catch(() => { if (active) setMovimientos([]); });
     listarEvidenciasKit(selected).then((i) => { if (active) setEvidencias(i); }).catch(() => { if (active) setEvidencias([]); });
@@ -181,11 +198,8 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
 
   function validarKitForm(): string | null {
     const tipoKit = kitForm.tipoKit.trim();
-    const stock = Number(kitForm.stockInicial);
     if (!tipoKit) return "Indica el tipo de kit.";
     if (tipoKit.length < 3) return "El tipo de kit debe tener al menos 3 caracteres.";
-    if (!Number.isFinite(stock) || !Number.isInteger(stock)) return "El stock inicial debe ser un número entero válido.";
-    if (stock < 0) return "El stock inicial no puede ser negativo.";
     if (kitFormArt.filter((a) => a.descripcion.trim()).length === 0) return "Define al menos un artículo en el contenido del kit.";
     return null;
   }
@@ -230,7 +244,6 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
       const res = await crearKit({
         tipoKit: kitForm.tipoKit.trim(),
         descripcion: kitForm.descripcion.trim(),
-        stockInicial: Number(kitForm.stockInicial),
         codigoAlmacen: kitForm.codigoAlmacen.trim() || undefined,
         ubicacionAlmacen: kitForm.ubicacionAlmacen.trim() || undefined,
         articulos: kitFormArt,
@@ -239,21 +252,77 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
       else {
         toast.success("Kit creado con su contenido.");
         setShowKitForm(false);
-        setKitForm({ tipoKit: "", descripcion: "", stockInicial: 0, codigoAlmacen: "", ubicacionAlmacen: "" });
+        setKitForm({ tipoKit: "", descripcion: "", codigoAlmacen: "", ubicacionAlmacen: "" });
         setKitFormArt([{ codigo: "", descripcion: "", cantidad: 1, stock: 0 }]);
         router.refresh();
       }
     });
   };
 
-  const guardarStockArticulo = (idKitArticulo: string, stock: number) => {
+  function abrirIngreso() {
+    setIngresoQty({});
+    setIngresoNuevos([]);
+    setIngresoMotivo("");
+    setShowIngreso(true);
+  }
+
+  const submitIngreso = () => {
+    if (!current) return;
+    const ingresos = articulos
+      .map((a) => ({ idKitArticulo: a.idKitArticulo, cantidadIngresar: ingresoQty[a.idKitArticulo] ?? 0 }))
+      .filter((i) => i.cantidadIngresar > 0);
+    const nuevos = ingresoNuevos
+      .map((n) => ({ descripcion: n.descripcion.trim(), cantidad: n.cantidad, cantidadIngresar: n.stock }))
+      .filter((n) => n.descripcion);
+    if (ingresos.length === 0 && nuevos.length === 0) {
+      toast.error("Indica al menos una cantidad a ingresar o un elemento nuevo.");
+      return;
+    }
     startTransition(async () => {
-      const res = await reponerStockArticulo(idKitArticulo, stock);
-      if (res?.message) {
+      const res = await ingresarProductosKit(current.id, { ingresos, nuevos, motivo: ingresoMotivo });
+      if (res?.message && /no tienes|no tiene perfil|indica al menos|no encontrado|archivado|no se pudo/i.test(res.message)) {
         toast.error(res.message);
         return;
       }
-      toast.success("Stock del elemento actualizado.");
+      toast.success(res?.message ?? "Ingreso registrado.");
+      setShowIngreso(false);
+      setArticulos(await listarArticulosKit(current.id));
+      setMovimientos(await listarMovimientosKit(current.id));
+      router.refresh();
+    });
+  };
+
+  function abrirEditarComp() {
+    setCompItems(
+      articulos.map((a) => ({
+        idKitArticulo: a.idKitArticulo,
+        descripcion: a.descripcion,
+        cantidad: a.cantidad,
+        stock: a.stock,
+      }))
+    );
+    setEditandoComp(true);
+  }
+
+  const submitComp = () => {
+    if (!current) return;
+    const items = compItems
+      .map((it) => ({ idKitArticulo: it.idKitArticulo, descripcion: it.descripcion.trim(), cantidad: it.cantidad }))
+      .filter((it) => it.descripcion);
+    if (items.length === 0) {
+      toast.error("El kit debe tener al menos un elemento.");
+      return;
+    }
+    startTransition(async () => {
+      const res = await actualizarComposicionKit(current.id, items);
+      if (res?.message && /no tienes|no encontrado|archivado|al menos|no se pudo/i.test(res.message)) {
+        toast.error(res.message);
+        return;
+      }
+      toast.success("Composición actualizada.");
+      setEditandoComp(false);
+      setArticulos(await listarArticulosKit(current.id));
+      router.refresh();
     });
   };
 
@@ -350,7 +419,6 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
             {/* Cuerpo modal con scroll */}
             <div className="overflow-y-auto p-5 grid grid-cols-1 md:grid-cols-2 gap-3">
               <Input label="Tipo de kit" value={kitForm.tipoKit} onChange={(v) => setKitForm({ ...kitForm, tipoKit: v })} required />
-              <Input label="Stock inicial" type="number" value={String(kitForm.stockInicial)} onChange={(v) => setKitForm({ ...kitForm, stockInicial: Number(v) })} required />
               <Input label="Código de almacén" value={kitForm.codigoAlmacen} onChange={(v) => setKitForm({ ...kitForm, codigoAlmacen: v })} />
               <Input label="Ubicación de almacén" value={kitForm.ubicacionAlmacen} onChange={(v) => setKitForm({ ...kitForm, ubicacionAlmacen: v })} />
               <label className="block md:col-span-2">
@@ -360,11 +428,17 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
               <div className="md:col-span-2">
                 <span className="text-xs text-gray-600">Contenido del kit <span className="text-red-500">*</span></span>
                 <div className="mt-1 border border-[var(--caritas-border)] rounded p-3 space-y-2">
+                  <div className="flex items-center gap-1.5 text-[10px] text-gray-400 uppercase tracking-wide">
+                    <span className="flex-1">Elemento</span>
+                    <span className="w-14 text-center">Cant/kit</span>
+                    <span className="w-16 text-center">Inicial</span>
+                    <span className="w-6" />
+                  </div>
                   {kitFormArt.map((a, i) => (
                     <div key={i} className="flex items-center gap-1.5">
                       <input value={a.descripcion} onChange={(e) => setKitFormArt((p) => p.map((x, j) => j === i ? { ...x, descripcion: e.target.value } : x))} placeholder="Elemento (ej. Arroz 1kg, Frazada...)" className="flex-1 px-2 py-1.5 text-xs border border-[var(--caritas-border)] rounded" />
-                      <input type="number" min={1} value={a.cantidad} onChange={(e) => setKitFormArt((p) => p.map((x, j) => j === i ? { ...x, cantidad: parseInt(e.target.value, 10) || 1 } : x))} title="Cantidad por kit" className="w-14 px-2 py-1.5 text-xs border border-[var(--caritas-border)] rounded" />
-                      <input type="number" min={0} value={a.stock} onChange={(e) => setKitFormArt((p) => p.map((x, j) => j === i ? { ...x, stock: parseInt(e.target.value, 10) || 0 } : x))} title="Stock disponible de este elemento" placeholder="Stock" className="w-16 px-2 py-1.5 text-xs border border-[var(--caritas-border)] rounded" />
+                      <input type="number" min={1} value={a.cantidad} onChange={(e) => setKitFormArt((p) => p.map((x, j) => j === i ? { ...x, cantidad: parseInt(e.target.value, 10) || 1 } : x))} title="Cantidad de este elemento por kit" className="w-14 px-2 py-1.5 text-xs border border-[var(--caritas-border)] rounded" />
+                      <input type="number" min={0} value={a.stock} onChange={(e) => setKitFormArt((p) => p.map((x, j) => j === i ? { ...x, stock: parseInt(e.target.value, 10) || 0 } : x))} title="Cantidad inicial en stock (se registra como movimiento de alta)" placeholder="Inicial" className="w-16 px-2 py-1.5 text-xs border border-[var(--caritas-border)] rounded" />
                       <button type="button" onClick={() => setKitFormArt((p) => p.length > 1 ? p.filter((_, j) => j !== i) : p)} disabled={kitFormArt.length === 1} className="p-1 text-gray-400 hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"><X className="w-4 h-4" /></button>
                     </div>
                   ))}
@@ -378,6 +452,124 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
             <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
               <button onClick={() => setShowKitForm(false)} className="px-4 py-2 border border-[var(--caritas-border)] rounded-lg text-sm cursor-pointer hover:bg-gray-50 transition-colors">Cancelar</button>
               <button onClick={submitKit} disabled={pending} className="px-4 py-2 bg-[var(--caritas-green)] text-white rounded-lg text-sm disabled:opacity-50 cursor-pointer hover:bg-[var(--caritas-green)]/90 transition-colors font-medium">Guardar kit</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: ingreso de productos al inventario del kit */}
+      {showIngreso && current && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowIngreso(false)} />
+          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <ArrowDownCircle className="w-4 h-4 text-[var(--caritas-green)]" />
+                <h2 className="text-sm font-semibold text-gray-900">Ingresar productos · {current.tipoKit}</h2>
+              </div>
+              <button onClick={() => setShowIngreso(false)} className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="overflow-y-auto p-5 space-y-4">
+              <p className="text-[11px] text-gray-500">
+                Indica cuántas unidades ingresan de cada elemento (puedes dejar en 0 los que no corresponda).
+                Se suma al stock y se registra un movimiento de ingreso.
+              </p>
+
+              {articulos.length > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-xs font-semibold text-gray-600">Elementos del kit</p>
+                  {articulos.map((a) => (
+                    <div key={a.idKitArticulo} className="flex items-center gap-2 text-sm">
+                      <span className="flex-1 text-gray-700 truncate">{a.descripcion}</span>
+                      <span className="text-[10px] text-gray-400">stock {a.stock}</span>
+                      <span className="text-gray-400 text-xs">+</span>
+                      <input
+                        type="number"
+                        min={0}
+                        value={ingresoQty[a.idKitArticulo] ?? 0}
+                        onChange={(e) =>
+                          setIngresoQty((p) => ({
+                            ...p,
+                            [a.idKitArticulo]: Math.max(0, parseInt(e.target.value, 10) || 0),
+                          }))
+                        }
+                        className="w-20 px-2 py-1.5 text-xs border border-[var(--caritas-border)] rounded"
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <p className="text-xs font-semibold text-gray-600">Elementos nuevos (opcional)</p>
+                {ingresoNuevos.map((n, i) => (
+                  <div key={i} className="flex items-center gap-1.5">
+                    <input
+                      value={n.descripcion}
+                      onChange={(e) =>
+                        setIngresoNuevos((p) => p.map((x, j) => (j === i ? { ...x, descripcion: e.target.value } : x)))
+                      }
+                      placeholder="Nuevo elemento"
+                      className="flex-1 px-2 py-1.5 text-xs border border-[var(--caritas-border)] rounded"
+                    />
+                    <input
+                      type="number"
+                      min={1}
+                      value={n.cantidad}
+                      onChange={(e) =>
+                        setIngresoNuevos((p) =>
+                          p.map((x, j) => (j === i ? { ...x, cantidad: Math.max(1, parseInt(e.target.value, 10) || 1) } : x))
+                        )
+                      }
+                      title="Cantidad por kit"
+                      className="w-14 px-2 py-1.5 text-xs border border-[var(--caritas-border)] rounded"
+                    />
+                    <input
+                      type="number"
+                      min={0}
+                      value={n.stock}
+                      onChange={(e) =>
+                        setIngresoNuevos((p) =>
+                          p.map((x, j) => (j === i ? { ...x, stock: Math.max(0, parseInt(e.target.value, 10) || 0) } : x))
+                        )
+                      }
+                      title="Cantidad a ingresar"
+                      placeholder="Ingresar"
+                      className="w-16 px-2 py-1.5 text-xs border border-[var(--caritas-border)] rounded"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setIngresoNuevos((p) => p.filter((_, j) => j !== i))}
+                      className="p-1 text-gray-400 hover:text-red-500 cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setIngresoNuevos((p) => [...p, { codigo: "", descripcion: "", cantidad: 1, stock: 0 }])}
+                  className="text-xs text-[var(--caritas-green)] flex items-center gap-1 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Agregar elemento nuevo
+                </button>
+              </div>
+
+              <label className="block">
+                <span className="text-xs text-gray-600">Motivo / nota (opcional)</span>
+                <input
+                  value={ingresoMotivo}
+                  onChange={(e) => setIngresoMotivo(e.target.value)}
+                  placeholder="Ej. Donación recibida, compra..."
+                  className="mt-1 w-full px-3 py-2 border border-[var(--caritas-border)] rounded text-sm"
+                />
+              </label>
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
+              <button onClick={() => setShowIngreso(false)} className="px-4 py-2 border border-[var(--caritas-border)] rounded-lg text-sm cursor-pointer hover:bg-gray-50 transition-colors">Cancelar</button>
+              <button onClick={submitIngreso} disabled={pending} className="px-4 py-2 bg-[var(--caritas-green)] text-white rounded-lg text-sm disabled:opacity-50 cursor-pointer hover:bg-[var(--caritas-green)]/90 transition-colors font-medium">Validar y registrar ingreso</button>
             </div>
           </div>
         </div>
@@ -438,7 +630,7 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
                         )}
                       </div>
                       <p className="text-xs text-gray-500 mt-0.5">
-                        Stock: <span className={`font-semibold ${k.stockActual < 5 ? "text-red-600" : "text-green-700"}`}>{k.stockActual}</span>
+                        Kits completos: <span className={`font-semibold ${k.stockActual < 5 ? "text-red-600" : "text-green-700"}`}>{k.stockActual}</span>
                       </p>
                       {k.fechaRegistro && (
                         <p className="text-[10px] text-gray-400 mt-0.5">
@@ -505,7 +697,7 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
                     {current.descripcion && <p className="text-sm text-gray-600 mt-0.5">{current.descripcion}</p>}
                     <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1">
                       <p className="text-sm text-gray-600">
-                        Stock: <span className={`font-bold ${current.stockActual < 5 ? "text-red-600" : "text-green-700"}`}>{current.stockActual}</span>
+                        Kits completos: <span className={`font-bold ${current.stockActual < 5 ? "text-red-600" : "text-green-700"}`}>{current.stockActual}</span>
                       </p>
                       {current.codigoAlmacen && <p className="text-sm text-gray-600">Cód. almacén: <span className="font-semibold">{current.codigoAlmacen}</span></p>}
                       {current.ubicacionAlmacen && <p className="text-sm text-gray-600">Ubicación: <span className="font-semibold">{current.ubicacionAlmacen}</span></p>}
@@ -580,39 +772,114 @@ export function KitsModule({ kits, parroquias }: { kits: Kit[]; parroquias: Parr
                   icon={<ListChecks className="w-4 h-4 text-[var(--caritas-green)]" />}
                   badge={articulos.length}
                 >
-                  {articulos.length === 0 ? (
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <p className="text-[11px] text-gray-500">
+                      Stock por elemento · Kits completos:{" "}
+                      <span className="font-semibold text-gray-700">{current.stockActual}</span>
+                    </p>
+                    {current.estadoKit !== "ARCHIVADO" && !editandoComp && (
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={abrirEditarComp}
+                          className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg border border-[var(--caritas-border)] text-gray-600 hover:bg-gray-50 cursor-pointer transition-colors"
+                        >
+                          <Pencil className="w-3.5 h-3.5" /> Editar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={abrirIngreso}
+                          className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg bg-[var(--caritas-green)] text-white hover:bg-[var(--caritas-green)]/90 cursor-pointer transition-colors"
+                        >
+                          <Plus className="w-3.5 h-3.5" /> Ingresar productos
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  {editandoComp ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-1.5 text-[10px] text-gray-400 uppercase tracking-wide">
+                        <span className="flex-1">Elemento</span>
+                        <span className="w-14 text-center">Cant/kit</span>
+                        <span className="w-14 text-center">Stock</span>
+                        <span className="w-6" />
+                      </div>
+                      {compItems.map((it, i) => (
+                        <div key={it.idKitArticulo ?? `nuevo-${i}`} className="flex items-center gap-1.5">
+                          <input
+                            value={it.descripcion}
+                            onChange={(e) => setCompItems((p) => p.map((x, j) => (j === i ? { ...x, descripcion: e.target.value } : x)))}
+                            placeholder="Elemento"
+                            className="flex-1 px-2 py-1.5 text-xs border border-[var(--caritas-border)] rounded"
+                          />
+                          <input
+                            type="number"
+                            min={1}
+                            value={it.cantidad}
+                            onChange={(e) => setCompItems((p) => p.map((x, j) => (j === i ? { ...x, cantidad: Math.max(1, parseInt(e.target.value, 10) || 1) } : x)))}
+                            title="Cantidad de este elemento por kit"
+                            className="w-14 px-2 py-1.5 text-xs border border-[var(--caritas-border)] rounded"
+                          />
+                          <span className="w-14 text-center text-[11px] text-gray-400" title="El stock solo se cambia con movimientos">
+                            {it.idKitArticulo ? it.stock : "—"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setCompItems((p) => p.filter((_, j) => j !== i))}
+                            title="Quitar elemento"
+                            className="p-1 text-gray-400 hover:text-red-500 cursor-pointer"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => setCompItems((p) => [...p, { descripcion: "", cantidad: 1, stock: 0 }])}
+                        className="text-xs text-[var(--caritas-green)] flex items-center gap-1 cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Agregar elemento
+                      </button>
+                      <p className="text-[10px] text-gray-400">
+                        Quitar un elemento también elimina su stock. El stock se ajusta con
+                        &quot;Ingresar productos&quot; y las entregas, no aquí.
+                      </p>
+                      <div className="flex items-center gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setEditandoComp(false)}
+                          disabled={pending}
+                          className="px-3 py-1.5 text-xs border border-[var(--caritas-border)] rounded-lg cursor-pointer hover:bg-gray-50 disabled:opacity-50"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={submitComp}
+                          disabled={pending}
+                          className="px-3 py-1.5 text-xs rounded-lg bg-[var(--caritas-green)] text-white disabled:opacity-50 cursor-pointer hover:bg-[var(--caritas-green)]/90"
+                        >
+                          Guardar composición
+                        </button>
+                      </div>
+                    </div>
+                  ) : articulos.length === 0 ? (
                     <p className="text-xs text-gray-400 border border-dashed border-gray-200 rounded p-3">
-                      Este kit no tiene contenido definido. La composición se define al crear el kit.
+                      Este kit aún no tiene elementos. Agrégalos con &quot;Editar&quot; o &quot;Ingresar productos&quot;.
                     </p>
                   ) : (
                     <ul className="border border-[var(--caritas-border)] rounded divide-y divide-gray-100">
-                      {articulos.map((a, i) => (
+                      {articulos.map((a) => (
                         <li key={a.idKitArticulo} className="flex items-center gap-2 px-3 py-1.5 text-sm">
                           {a.codigo && <span className="text-[10px] font-mono bg-gray-100 px-1.5 py-0.5 rounded text-gray-500">{a.codigo}</span>}
                           <span className="flex-1 text-gray-700">{a.descripcion}</span>
                           <span className="text-xs text-gray-400">x{a.cantidad} / kit</span>
-                          <input
-                            type="number"
-                            min={0}
-                            value={a.stock}
-                            onChange={(e) =>
-                              setArticulos((p) =>
-                                p.map((x, j) =>
-                                  j === i ? { ...x, stock: Math.max(0, parseInt(e.target.value, 10) || 0) } : x
-                                )
-                              )
-                            }
+                          <span
+                            className={`text-xs font-semibold ${a.stock < a.cantidad ? "text-red-600" : "text-green-700"}`}
                             title="Stock disponible de este elemento"
-                            className={`w-16 px-2 py-1 text-xs border rounded ${a.stock < a.cantidad ? "border-red-400 text-red-600" : "border-[var(--caritas-border)]"}`}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => guardarStockArticulo(a.idKitArticulo, a.stock)}
-                            disabled={pending}
-                            className="text-xs px-2 py-1 rounded bg-[var(--caritas-green)] text-white disabled:opacity-50"
                           >
-                            Reponer
-                          </button>
+                            stock {a.stock}
+                          </span>
                         </li>
                       ))}
                     </ul>
