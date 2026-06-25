@@ -255,10 +255,15 @@ export type ParticipanteCurso = {
   documento: string | null;
   correo: string | null;
   estadoInscripcion: string;
+  fechaInscripcion: string;
+  ultimaActividad: string | null;
+  notaInicial: number | null;
   nota: number | null;
   resultado: string | null;
   certificado: boolean;
   constanciaUrl: string | null;
+  intentosInicial: number;
+  intentosFinal: number;
 };
 
 export async function listarParticipantesCurso(idCurso: string): Promise<ParticipanteCurso[]> {
@@ -270,23 +275,71 @@ export async function listarParticipantesCurso(idCurso: string): Promise<Partici
       participante: { select: { nombres: true, apellidos: true, tipoDocumento: true, numeroDocumento: true, correo: true } },
       evaluaciones: {
         orderBy: { fechaEvaluacion: "desc" },
-        take: 1,
-        select: { nota: true, resultado: true },
+        select: { nota: true, resultado: true, tipoEvaluacion: true, fechaEvaluacion: true },
       },
       certificacion: { select: { idCertificacionCurso: true, constanciaUrl: true } },
     },
   });
-  return rows.map((r) => ({
-    idInscripcion: r.idInscripcionCurso,
-    nombre: `${r.participante.nombres} ${r.participante.apellidos ?? ""}`.trim(),
-    documento: r.participante.numeroDocumento ?? null,
-    correo: r.participante.correo ?? null,
-    estadoInscripcion: r.estadoInscripcion,
-    nota: r.evaluaciones[0]?.nota != null ? Number(r.evaluaciones[0].nota) : null,
-    resultado: r.evaluaciones[0]?.resultado ?? null,
-    certificado: r.certificacion !== null,
-    constanciaUrl: r.certificacion?.constanciaUrl ?? null,
-  }));
+  return rows.map((r) => {
+    const evalFinal = r.evaluaciones.find((e) => e.tipoEvaluacion === "FINAL" || e.tipoEvaluacion == null);
+    const evalInicial = r.evaluaciones.find((e) => e.tipoEvaluacion === "INICIAL");
+    return {
+      idInscripcion: r.idInscripcionCurso,
+      nombre: `${r.participante.nombres} ${r.participante.apellidos ?? ""}`.trim(),
+      documento: r.participante.numeroDocumento ?? null,
+      correo: r.participante.correo ?? null,
+      estadoInscripcion: r.estadoInscripcion,
+      fechaInscripcion: r.fechaInscripcion.toISOString(),
+      notaInicial: evalInicial?.nota != null ? Number(evalInicial.nota) : null,
+      ultimaActividad: (() => {
+        const fechas = [
+          r.evaluaciones[0]?.fechaEvaluacion,
+          r.fechaFinalizacionContenido,
+        ].filter((f): f is Date => f instanceof Date);
+        if (fechas.length === 0) return null;
+        return new Date(Math.max(...fechas.map((f) => f.getTime()))).toISOString();
+      })(),
+      nota: evalFinal?.nota != null ? Number(evalFinal.nota) : null,
+      resultado: evalFinal?.resultado ?? null,
+      certificado: r.certificacion !== null,
+      constanciaUrl: r.certificacion?.constanciaUrl ?? null,
+      intentosInicial: r.evaluaciones.filter((e) => e.tipoEvaluacion === "INICIAL").length,
+      intentosFinal: r.evaluaciones.filter((e) => e.tipoEvaluacion === "FINAL" || e.tipoEvaluacion == null).length,
+    };
+  });
+}
+
+export async function reiniciarIntentos(
+  idInscripcion: string,
+  tipo: "INICIAL" | "FINAL"
+): Promise<void | { message: string }> {
+  const session = await verifySession();
+  if (!["ADMIN", "ESPECIALISTAGRD"].includes(session.role))
+    return { message: "Sin permiso para reiniciar intentos." };
+  try {
+    const ultimo = await prisma.evaluacionCurso.findFirst({
+      where: tipo === "INICIAL"
+        ? { idInscripcionCurso: idInscripcion, tipoEvaluacion: "INICIAL" }
+        : { idInscripcionCurso: idInscripcion, OR: [{ tipoEvaluacion: "FINAL" }, { tipoEvaluacion: null }] },
+      orderBy: { fechaEvaluacion: "desc" },
+      select: { idEvaluacionCurso: true },
+    });
+    if (!ultimo) return { message: "No hay intentos registrados para este examen." };
+    await prisma.respuestaEvaluacion.deleteMany({ where: { idEvaluacionCurso: ultimo.idEvaluacionCurso } });
+    await prisma.evaluacionCurso.delete({ where: { idEvaluacionCurso: ultimo.idEvaluacionCurso } });
+  } catch (err) {
+    return fail(err, "No se pudo otorgar el intento adicional.");
+  }
+  await logGRDAction({
+    userId: session.userId,
+    action: "EDITAR",
+    entity: "EvaluacionCurso",
+    entityId: idInscripcion,
+    entityName: `Intento adicional ${tipo}`,
+    module: "Capacitaciones",
+    notes: `Se otorgó 1 intento adicional de evaluación ${tipo} para inscripción ${idInscripcion}`,
+  });
+  revalidatePath(REVALIDATE);
 }
 
 export async function actualizarConstancia(
@@ -1330,15 +1383,27 @@ export async function enviarRespuestasExamen(
       },
     });
 
-    // Auto-certificar si aprobó, guardando la URL de la constancia automática
-    if (aprobado) {
+    // Auto-certificar: solo si aprobó el examen final/único
+    // y (si el curso tiene examen inicial) también lo aprobó
+    if (aprobado && cuestionario.tipoCuestionario !== "INICIAL") {
       try {
-        const constanciaUrl = `/capacitaciones/constancia/${idInscripcion}`;
-        await makeCursoUseCases().certificar.execute(idInscripcion, constanciaUrl);
-        notificarCertificado(idInscripcion);
-        revalidatePath("/reportes");
+        const tieneExamenInicial = await prisma.cuestionarioCurso.count({
+          where: { idCursoCapacitacion: cuestionario.idCursoCapacitacion, tipoCuestionario: "INICIAL" },
+        });
+        const inicialAprobado =
+          tieneExamenInicial === 0 ||
+          (await prisma.evaluacionCurso.count({
+            where: { idInscripcionCurso: idInscripcion, tipoEvaluacion: "INICIAL", resultado: "APROBADO" },
+          })) > 0;
+
+        if (inicialAprobado) {
+          const constanciaUrl = `/capacitaciones/constancia/${idInscripcion}`;
+          await makeCursoUseCases().certificar.execute(idInscripcion, constanciaUrl);
+          notificarCertificado(idInscripcion);
+          revalidatePath("/reportes");
+        }
       } catch {
-        // Si ya está certificado o falla, no bloquear el resultado
+        // No bloquear el resultado si falla la certificación
       }
     }
 

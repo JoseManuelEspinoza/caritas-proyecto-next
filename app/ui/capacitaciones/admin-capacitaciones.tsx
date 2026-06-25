@@ -47,6 +47,8 @@ import {
 import type { CuestionarioDetalle, ParticipanteCurso } from "@/app/actions/capacitaciones";
 import type { CursoDetalle } from "@/app/actions/capacitaciones";
 import { MaterialModal } from "@/app/ui/capacitaciones/MaterialModal";
+import { SeccionAcordeon } from "@/app/ui/capacitaciones/seccion-acordeon";
+import { ParticipantesTable } from "@/app/ui/capacitaciones/participantes-table";
 
 type Especialista = { id: string; nombre: string };
 
@@ -390,9 +392,10 @@ export function AdminCapacitaciones({
   const [showBorradores, setShowBorradores] = useState(false);
   const [showCerrados, setShowCerrados] = useState(false);
   const [panelAbierto, setPanelAbierto] = useState(true);
-  const [showParticipantes, setShowParticipantes] = useState(false);
+  const [activeTab, setActiveTab] = useState<"contenido" | "evaluaciones" | "participantes">("contenido");
   const [participantes, setParticipantes] = useState<ParticipanteCurso[]>([]);
   const [loadingParticipantes, setLoadingParticipantes] = useState(false);
+  const [participantesCargados, setParticipantesCargados] = useState(false);
 
   const cursosFiltrados = useMemo(() => {
     if (!busqueda.trim()) return cursos;
@@ -415,8 +418,10 @@ export function AdminCapacitaciones({
 
   const handleSelectCurso = (id: string) => {
     setSelectedId(id);
-    setShowParticipantes(false);
+    setActiveTab("contenido");
     setParticipantes([]);
+    setLoadingParticipantes(false);
+    setParticipantesCargados(false);
   };
 
   const run = (fn: () => Promise<{ message?: string } | void>, ok: string, after?: () => void) =>
@@ -727,36 +732,71 @@ export function AdminCapacitaciones({
                 </div>
               </div>
 
-              {/* Contenido del curso */}
-              <div className="mb-5">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold text-[var(--caritas-text)]">Contenido del curso</h3>
-                  <button
-                    onClick={() => { setSesionTitulo(""); setShowSesion(true); }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-[var(--caritas-border)] rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> Nueva unidad
-                  </button>
-                </div>
-                {current.sesiones.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-gray-200 rounded-xl py-10 text-gray-400">
-                    <BookOpen className="w-8 h-8" />
-                    <p className="text-sm">Aún no hay unidades. Agrega la primera.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {current.sesiones.map((s) => (
-                      <UnidadRow key={s.id} sesion={s} idCurso={current.id} todasLasSesiones={current.sesiones} onRefresh={() => router.refresh()} />
-                    ))}
-                  </div>
-                )}
+              {/* Pestañas */}
+              <div className="flex border-b border-[var(--caritas-border)] mb-5">
+                <button
+                  onClick={() => setActiveTab("contenido")}
+                  className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === "contenido" ? "border-[var(--caritas-green)] text-[var(--caritas-green)]" : "border-transparent text-gray-500 hover:text-[var(--caritas-text)] hover:border-gray-200"}`}
+                >
+                  <BookOpen className="w-4 h-4" />
+                  Contenido
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${activeTab === "contenido" ? "bg-[var(--caritas-green)]/10 text-[var(--caritas-green)]" : "bg-gray-100 text-gray-500"}`}>{current.sesiones.length}</span>
+                </button>
+                <button
+                  onClick={() => setActiveTab("evaluaciones")}
+                  className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === "evaluaciones" ? "border-[var(--caritas-green)] text-[var(--caritas-green)]" : "border-transparent text-gray-500 hover:text-[var(--caritas-text)] hover:border-gray-200"}`}
+                >
+                  <ClipboardList className="w-4 h-4" />
+                  Evaluaciones
+                </button>
+                <button
+                  onClick={async () => {
+                    setActiveTab("participantes");
+                    if (!participantesCargados) {
+                      setLoadingParticipantes(true);
+                      const data = await listarParticipantesCurso(current.id);
+                      setParticipantes(data);
+                      setLoadingParticipantes(false);
+                      setParticipantesCargados(true);
+                    }
+                  }}
+                  className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === "participantes" ? "border-[var(--caritas-green)] text-[var(--caritas-green)]" : "border-transparent text-gray-500 hover:text-[var(--caritas-text)] hover:border-gray-200"}`}
+                >
+                  <Users className="w-4 h-4" />
+                  Participantes
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${activeTab === "participantes" ? "bg-[var(--caritas-green)]/10 text-[var(--caritas-green)]" : "bg-gray-100 text-gray-500"}`}>{current.totalInscritos}</span>
+                </button>
               </div>
 
-              {/* Evaluaciones */}
-              <div className="mt-5 mb-5">
-                <h2 className="text-base font-semibold text-[var(--caritas-text)] mb-3">Evaluaciones del Curso</h2>
+              {/* Tab: Contenido */}
+              {activeTab === "contenido" && (
                 <div className="space-y-3">
-                  {/* Examen Inicial */}
+                  <div className="flex justify-end">
+                    <button
+                      onClick={() => { setSesionTitulo(""); setShowSesion(true); }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-[var(--caritas-border)] rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Nueva unidad
+                    </button>
+                  </div>
+                  {current.sesiones.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-gray-200 rounded-xl py-10 text-gray-400">
+                      <BookOpen className="w-8 h-8" />
+                      <p className="text-sm">Aún no hay unidades. Agrega la primera.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {current.sesiones.map((s) => (
+                        <UnidadRow key={s.id} sesion={s} idCurso={current.id} todasLasSesiones={current.sesiones} onRefresh={() => router.refresh()} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tab: Evaluaciones */}
+              {activeTab === "evaluaciones" && (
+                <div className="space-y-3">
                   {current.cuestionarioInicial ? (
                     <div className="flex items-center justify-between gap-3 border border-amber-200 rounded-xl p-4 bg-amber-50">
                       <div className="flex items-center gap-3">
@@ -768,7 +808,7 @@ export function AdminCapacitaciones({
                             <p className="text-sm font-semibold text-[var(--caritas-text)]">{current.cuestionarioInicial.titulo}</p>
                             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200 font-medium">INICIAL</span>
                           </div>
-                          <p className="text-xs text-gray-400">{current.cuestionarioInicial.totalPreguntas} preguntas · Nota mín: {current.cuestionarioInicial.notaAprobatoria}/20</p>
+                          <p className="text-xs text-gray-400">{current.cuestionarioInicial.totalPreguntas} preguntas · Puntaje: {current.cuestionarioInicial.notaAprobatoria}/20</p>
                         </div>
                       </div>
                       <button
@@ -790,8 +830,6 @@ export function AdminCapacitaciones({
                       <p className="text-sm">Crear examen inicial</p>
                     </div>
                   )}
-
-                  {/* Examen Final */}
                   {current.cuestionarioFinal ? (
                     <div className="flex items-center justify-between gap-3 border border-[var(--caritas-border)] rounded-xl p-4 bg-gray-50">
                       <div className="flex items-center gap-3">
@@ -803,7 +841,7 @@ export function AdminCapacitaciones({
                             <p className="text-sm font-semibold text-[var(--caritas-text)]">{current.cuestionarioFinal.titulo}</p>
                             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 border border-green-200 font-medium">FINAL</span>
                           </div>
-                          <p className="text-xs text-gray-400">{current.cuestionarioFinal.totalPreguntas} preguntas · Nota mín: {current.cuestionarioFinal.notaAprobatoria}/20</p>
+                          <p className="text-xs text-gray-400">{current.cuestionarioFinal.totalPreguntas} preguntas · Puntaje: {current.cuestionarioFinal.notaAprobatoria}/20</p>
                         </div>
                       </div>
                       <button
@@ -826,82 +864,19 @@ export function AdminCapacitaciones({
                     </div>
                   )}
                 </div>
-              </div>
+              )}
 
-              {/* Participantes */}
-              <div className="pt-4 border-t border-[var(--caritas-border)]">
-                <button
-                  onClick={async () => {
-                    if (!showParticipantes) {
-                      setLoadingParticipantes(true);
-                      const data = await listarParticipantesCurso(current.id);
-                      setParticipantes(data);
-                      setLoadingParticipantes(false);
-                    }
-                    setShowParticipantes((s) => !s);
+              {/* Tab: Participantes */}
+              {activeTab === "participantes" && (
+                <ParticipantesTable
+                  participantes={participantes}
+                  onRefresh={async () => {
+                    const data = await listarParticipantesCurso(current.id);
+                    setParticipantes(data);
                   }}
-                  className="flex items-center gap-2 w-full text-left"
-                >
-                  <Users className="w-4 h-4 text-gray-400 shrink-0" />
-                  <span className="text-sm text-gray-600 flex-1">
-                    Participantes — Total inscritos: <strong>{current.totalInscritos}</strong>
-                  </span>
-                  <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showParticipantes ? "" : "-rotate-90"}`} />
-                </button>
-                {showParticipantes && (
-                  <div className="mt-3">
-                    {loadingParticipantes ? (
-                      <p className="text-xs text-gray-400 py-4 text-center">Cargando...</p>
-                    ) : participantes.length === 0 ? (
-                      <div className="flex flex-col items-center gap-2 py-8 text-gray-400 border border-dashed border-gray-200 rounded-xl">
-                        <Users className="w-7 h-7" />
-                        <p className="text-sm">Ningún brigadista inscrito aún.</p>
-                      </div>
-                    ) : (
-                      <div className="border border-[var(--caritas-border)] rounded-xl overflow-hidden">
-                        <table className="w-full text-sm">
-                          <thead className="bg-gray-50 text-xs text-gray-500">
-                            <tr>
-                              <th className="text-left px-4 py-2.5 font-medium">Participante</th>
-                              <th className="text-left px-4 py-2.5 font-medium">Nota</th>
-                              <th className="text-left px-4 py-2.5 font-medium">Estado</th>
-                              <th className="text-left px-4 py-2.5 font-medium">Constancia</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-100">
-                            {participantes.map((p) => (
-                              <tr key={p.idInscripcion} className="hover:bg-gray-50">
-                                <td className="px-4 py-2.5 font-medium text-[var(--caritas-text)]">{p.nombre}</td>
-                                <td className="px-4 py-2.5 text-gray-600">{p.nota != null ? `${p.nota}/20` : "—"}</td>
-                                <td className="px-4 py-2.5">
-                                  {p.certificado ? (
-                                    <span className="text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-full">Certificado</span>
-                                  ) : p.resultado === "APROBADO" ? (
-                                    <span className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full">Aprobado</span>
-                                  ) : p.resultado === "DESAPROBADO" ? (
-                                    <span className="text-xs bg-red-50 text-red-700 border border-red-200 px-2 py-0.5 rounded-full">Desaprobado</span>
-                                  ) : (
-                                    <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">Sin evaluar</span>
-                                  )}
-                                </td>
-                                <td className="px-4 py-2.5">
-                                  {p.constanciaUrl ? (
-                                    <a href={p.constanciaUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-[var(--caritas-green)] hover:underline">
-                                      Ver constancia
-                                    </a>
-                                  ) : (
-                                    <span className="text-xs text-gray-400">—</span>
-                                  )}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+                  loading={loadingParticipantes}
+                />
+              )}
             </>
           )}
         </div>

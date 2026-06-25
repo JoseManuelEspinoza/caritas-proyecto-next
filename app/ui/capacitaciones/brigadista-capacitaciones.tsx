@@ -25,6 +25,7 @@ import { inscribirme } from "@/app/actions/capacitaciones";
 import type { CursoInscrito, CursoDisponible } from "@/app/actions/capacitaciones";
 import { RendirExamenModal } from "@/app/ui/capacitaciones/rendir-examen-modal";
 import { ConstanciaModal } from "@/app/ui/capacitaciones/ConstanciaModal";
+import { SeccionAcordeon } from "@/app/ui/capacitaciones/seccion-acordeon";
 
 function fmtDate(iso: string | null) {
   if (!iso) return null;
@@ -178,8 +179,7 @@ function DetalleInscrito({ curso, onVolver }: { curso: CursoInscrito; onVolver: 
 
         {/* Evaluación inicial */}
         {curso.cuestionarioInicial && (
-          <div className="bg-white border border-[var(--caritas-border)] rounded-xl p-5">
-            <h3 className="text-sm font-semibold text-[var(--caritas-text)] mb-3">Evaluación inicial</h3>
+          <SeccionAcordeon titulo="Evaluación inicial">
             <div className="flex items-center justify-between gap-4 p-4 bg-amber-50 rounded-xl">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
@@ -204,13 +204,12 @@ function DetalleInscrito({ curso, onVolver }: { curso: CursoInscrito; onVolver: 
                 {curso.cuestionarioInicial.intentosUsados > 0 ? "Reintentar" : "Rendir examen"}
               </button>
             </div>
-          </div>
+          </SeccionAcordeon>
         )}
 
         {/* Evaluación final */}
         {curso.cuestionarioFinal && (
-          <div className="bg-white border border-[var(--caritas-border)] rounded-xl p-5">
-            <h3 className="text-sm font-semibold text-[var(--caritas-text)] mb-3">Evaluación final</h3>
+          <SeccionAcordeon titulo="Evaluación final">
             <div className="flex items-center justify-between gap-4 p-4 bg-gray-50 rounded-xl">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-[var(--caritas-green)]/10 flex items-center justify-center shrink-0">
@@ -235,39 +234,40 @@ function DetalleInscrito({ curso, onVolver }: { curso: CursoInscrito; onVolver: 
                 {curso.cuestionarioFinal.intentosUsados > 0 ? "Reintentar" : "Rendir examen"}
               </button>
             </div>
-          </div>
+          </SeccionAcordeon>
         )}
 
         {/* Constancia de certificación */}
         {curso.certificado && (
-          <div className={`flex items-center justify-between gap-4 p-5 rounded-xl border ${curso.constanciaUrl ? "bg-green-50 border-green-200" : "bg-gray-50 border-[var(--caritas-border)]"}`}>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center shrink-0">
-                <Award className="w-5 h-5 text-green-600" />
+          <SeccionAcordeon titulo="Constancia de certificación">
+            <div className={`flex items-center justify-between gap-4 p-4 rounded-xl border ${curso.constanciaUrl ? "bg-green-50 border-green-200" : "bg-gray-50 border-[var(--caritas-border)]"}`}>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center shrink-0">
+                  <Award className="w-5 h-5 text-green-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-green-800">¡Curso completado!</p>
+                  <p className="text-xs text-green-700 mt-0.5">
+                    {curso.constanciaUrl ? "Tu constancia está lista para descargar." : "Tu constancia está siendo procesada por el especialista."}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-semibold text-green-800">¡Curso completado!</p>
-                <p className="text-xs text-green-700 mt-0.5">
-                  {curso.constanciaUrl ? "Tu constancia está lista para descargar." : "Tu constancia está siendo procesada por el especialista."}
-                </p>
-              </div>
+              {curso.constanciaUrl && (
+                <a
+                  href={curso.constanciaUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 px-4 py-2.5 text-sm bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition-colors shrink-0"
+                >
+                  <Download className="w-4 h-4" /> Descargar constancia
+                </a>
+              )}
             </div>
-            {curso.constanciaUrl && (
-              <a
-                href={curso.constanciaUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 px-4 py-2.5 text-sm bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition-colors shrink-0"
-              >
-                <Download className="w-4 h-4" /> Descargar constancia
-              </a>
-            )}
-          </div>
+          </SeccionAcordeon>
         )}
 
         {/* Contenido del curso */}
-        <div className="bg-white border border-[var(--caritas-border)] rounded-xl p-5">
-          <h3 className="text-sm font-semibold text-[var(--caritas-text)] mb-3">Contenido del curso</h3>
+        <SeccionAcordeon titulo="Contenido del curso" badge={curso.sesiones.length}>
           {curso.sesiones.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-gray-200 rounded-xl py-10 text-gray-400">
               <BookOpen className="w-8 h-8" />
@@ -280,7 +280,7 @@ function DetalleInscrito({ curso, onVolver }: { curso: CursoInscrito; onVolver: 
               ))}
             </div>
           )}
-        </div>
+        </SeccionAcordeon>
       </div>
 
       {showExamenInicial && curso.cuestionarioInicial && (
