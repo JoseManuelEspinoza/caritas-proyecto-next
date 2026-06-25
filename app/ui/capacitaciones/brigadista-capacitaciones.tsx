@@ -27,6 +27,10 @@ import { RendirExamenModal } from "@/app/ui/capacitaciones/rendir-examen-modal";
 import { ConstanciaModal } from "@/app/ui/capacitaciones/ConstanciaModal";
 import { SeccionAcordeon } from "@/app/ui/capacitaciones/seccion-acordeon";
 
+function fmtNota(n: number) {
+  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+}
+
 function fmtDate(iso: string | null) {
   if (!iso) return null;
   const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
@@ -188,7 +192,7 @@ function DetalleInscrito({ curso, onVolver }: { curso: CursoInscrito; onVolver: 
                 <div>
                   <p className="text-sm font-semibold text-[var(--caritas-text)]">{curso.cuestionarioInicial.titulo}</p>
                   <p className="text-xs text-gray-400 mt-0.5">
-                    {curso.cuestionarioInicial.totalPreguntas} preguntas · Nota mínima {curso.cuestionarioInicial.notaAprobatoria}/20
+                    {curso.cuestionarioInicial.totalPreguntas} preguntas
                   </p>
                   <p className={`text-xs mt-0.5 font-medium ${curso.cuestionarioInicial.intentosUsados >= curso.cuestionarioInicial.maxIntentos ? "text-red-500" : "text-amber-600"}`}>
                     {curso.cuestionarioInicial.maxIntentos - curso.cuestionarioInicial.intentosUsados} intento(s) restante(s) de {curso.cuestionarioInicial.maxIntentos}
@@ -218,7 +222,7 @@ function DetalleInscrito({ curso, onVolver }: { curso: CursoInscrito; onVolver: 
                 <div>
                   <p className="text-sm font-semibold text-[var(--caritas-text)]">{curso.cuestionarioFinal.titulo}</p>
                   <p className="text-xs text-gray-400 mt-0.5">
-                    {curso.cuestionarioFinal.totalPreguntas} preguntas · Nota mínima {curso.cuestionarioFinal.notaAprobatoria}/20
+                    {curso.cuestionarioFinal.totalPreguntas} preguntas
                   </p>
                   <p className={`text-xs mt-0.5 font-medium ${curso.cuestionarioFinal.intentosUsados >= curso.cuestionarioFinal.maxIntentos ? "text-red-500" : "text-[var(--caritas-green)]"}`}>
                     {curso.cuestionarioFinal.maxIntentos - curso.cuestionarioFinal.intentosUsados} intento(s) restante(s) de {curso.cuestionarioFinal.maxIntentos}
