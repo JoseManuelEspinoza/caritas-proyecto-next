@@ -542,6 +542,28 @@ export function ExportModal({
     const fmtDate = (iso: string) => { const [y, m, d] = iso.split("-"); return `${d}-${m}-${y}`; };
     const nombre = `ReporteGeneral_Caritas_${fmtDate(desde)}_${fmtDate(hasta)}`;
 
+    // ── Distribuciones efectivas de incidencias (compartidas por Excel y PDF) ──
+    // Sin filtros en el modal: se usan los mismos arreglos que pinta la pantalla
+    // (mismo orden, valores y colores → el export es idéntico a lo que se ve).
+    // Con filtros activos: se recalculan desde las filas ya filtradas para que
+    // KPIs, gráficos y tablas del reporte sean coherentes entre sí.
+    const filtrosActivos =
+      selTipo.length > 0 || selEstado.length > 0 || selGravedad.length > 0 || selParroquia.length > 0;
+    const groupCount = (key: string, exclude: string[] = []): Conteo[] => {
+      const m: Record<string, number> = {};
+      filteredData.forEach((r) => {
+        const v = String(r[key] ?? "").trim();
+        if (!v || exclude.includes(v)) return;
+        m[v] = (m[v] || 0) + 1;
+      });
+      return Object.entries(m).map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value);
+    };
+    const effPorEstado: Conteo[] = filtrosActivos ? groupCount("Estado") : (porEstado ?? []);
+    const effPorTipo: Conteo[] = filtrosActivos ? groupCount("Tipo", ["-"]) : (porTipo ?? []);
+    const effPorParroquia: Conteo[] = filtrosActivos ? groupCount("Parroquia") : (porParroquia ?? []);
+    const effGravedad: Conteo[] = filtrosActivos ? groupCount("Gravedad", ["-"]) : (incidenciasData?.porGravedad ?? []);
+    const incCount = filtrosActivos ? filteredData.length : (totales?.incidencias ?? filteredData.length);
+
     if (format === "excel") {
       const wb = XLSX.utils.book_new();
       // Excel limita los nombres de hoja a 31 chars; una hoja vacía usa [{}] como placeholder.
@@ -592,15 +614,15 @@ export function ExportModal({
         })), "Afectación Parroquial");
       } else if (activeTab === "resumen" && totales) {
         addSheet([
-          { Indicador: "Incidencias", Valor: totales.incidencias },
+          { Indicador: "Incidencias", Valor: incCount },
           { Indicador: "Brigadistas certificados", Valor: `${totales.brigadistasCapacitados}/${totales.totalBrigadistas} (${totales.pctBrigadistasCapacitados}%)` },
           { Indicador: "Parroquias con plan GRD", Valor: `${totales.parroquiasConPlan}/${totales.totalParroquias} (${totales.pctParroquiasPlan}%)` },
           { Indicador: "Actividades ejecutadas", Valor: `${totales.pctActividadesEjecutadas}%` },
           { Indicador: "Kits entregados", Valor: totales.kitsEntregados },
           { Indicador: "Días promedio de atención", Valor: totales.tiempoPromedio },
         ], "Resumen del Sistema");
-        if (porEstado) addSheet(porEstado.map((e) => ({ Estado: e.label, Cantidad: e.value })), "Incidencias por Estado");
-        if (incidenciasData) addSheet(incidenciasData.porGravedad.map((g) => ({ Gravedad: g.label, Cantidad: g.value })), "Incidencias por Gravedad");
+        if (effPorEstado.length) addSheet(effPorEstado.map((e) => ({ Estado: e.label, Cantidad: e.value })), "Incidencias por Estado");
+        if (effGravedad.length) addSheet(effGravedad.map((g) => ({ Gravedad: g.label, Cantidad: g.value })), "Incidencias por Gravedad");
       } else {
         // Casos (y fallback): detalle de incidencias del período + distribuciones.
         addSheet(filteredData, "Incidencias");
@@ -709,15 +731,14 @@ export function ExportModal({
           // Fondo de color con opacidad visual
           doc.setFillColor(bg[0], bg[1], bg[2]);
           doc.roundedRect(x + 1, y, w - 2, 26, 3, 3, "F");
-          // Línea separadora oscura
-          doc.setFillColor(0,0,0);
-          doc.setDrawColor(bg[0]-20<0?0:bg[0]-20, bg[1]-20<0?0:bg[1]-20, bg[2]-20<0?0:bg[2]-20);
           // Valor grande
           doc.setFontSize(20); doc.setFont("helvetica", "bold"); doc.setTextColor(255, 255, 255);
           doc.text(k.val, x + w / 2, y + 12, { align: "center" });
-          // Label
+          // Label — bloque centrado verticalmente (1 o 2 líneas) para alinear todas las cajas
           doc.setFontSize(6.5); doc.setFont("helvetica", "bold"); doc.setTextColor(255, 255, 255);
-          k.lbl.split("\n").forEach((ln, li) => doc.text(s(ln), x + w / 2, y + 18 + li * 4, { align: "center" }));
+          const lblLines = k.lbl.split("\n");
+          const lblStartY = y + 20 - (lblLines.length - 1) * 2;
+          lblLines.forEach((ln, li) => doc.text(s(ln), x + w / 2, lblStartY + li * 4, { align: "center" }));
         });
         return y + 31;
       };
@@ -854,10 +875,17 @@ export function ExportModal({
         });
       };
 
-      // Paleta de colores equivalente a PALETTE del UI
+      // Paleta de colores equivalente a PALETTE del UI (barras por tipo)
       const JSPDF_PALETTE: [number,number,number][] = [
         [0,152,80],[59,130,246],[245,158,11],[239,68,68],
         [145,85,168],[249,115,22],[0,200,180],[236,72,153],
+      ];
+      // Paleta equivalente a COLORS del UI (pasteles de estado/gravedad) —
+      // debe ser idéntica a la de la pantalla para que un mismo estado salga
+      // del mismo color en el reporte y en la vista.
+      const JSPDF_COLORS: [number,number,number][] = [
+        [0,152,80],[255,195,0],[255,130,60],[239,68,68],
+        [59,130,246],[145,85,168],[0,200,180],[249,115,22],
       ];
 
       // Barras verticales con color por barra (igual que el UI)
@@ -1449,7 +1477,7 @@ export function ExportModal({
         let y = 44;
 
         y = kpiRow([
-          { val: String(totales?.incidencias ?? totalInc), lbl: "Incidencias\nRegistradas", color:[255,255,255], bg:[239,68,68] },
+          { val: String(incCount), lbl: "Incidencias\nRegistradas", color:[255,255,255], bg:[239,68,68] },
           { val: `${totales?.pctBrigadistasCapacitados ?? 0}%`, lbl: "Brigadistas\nCertificados", color:[255,255,255], bg:[0,152,80] },
           { val: `${totales?.pctParroquiasPlan ?? 0}%`, lbl: "Parroquias\ncon Plan GRD", color:[255,255,255], bg:[59,130,246] },
           { val: `${totales?.pctActividadesEjecutadas ?? 0}%`, lbl: "Actividades\nEjecutadas", color:[255,255,255], bg:[245,158,11] },
@@ -1476,9 +1504,9 @@ export function ExportModal({
         y+=2;
 
         // Chart de barras: tipos de evento — con colores distintos por tipo (igual que pantalla)
-        if (porTipo && porTipo.length > 0) {
+        if (effPorTipo.length > 0) {
           y = sectionTitle("INCIDENCIAS POR TIPO DE EVENTO", y);
-          drawVertBarsColored(porTipo.slice(0,10), mg, y, contentW, 55, JSPDF_PALETTE);
+          drawVertBarsColored(effPorTipo.slice(0,10), mg, y, contentW, 55, JSPDF_PALETTE);
           y += 60;
         }
 
@@ -1508,35 +1536,49 @@ export function ExportModal({
         drawFooter(1,2); doc.addPage(); totalPages=2;
         drawBandHeader(tituloPDF); y=16;
 
-        // Distribución por estado
-        if (porEstado && porEstado.length>0) {
-          y=sectionTitle("DISTRIBUCION DE INCIDENCIAS POR ESTADO",y);
-          // Grafico circular (pastel) + leyenda al costado
-          const estItems=porEstado.map((e,i)=>({label:e.label,value:e.value,color:[[0,152,80],[59,130,246],[245,158,11],[239,68,68],[145,85,168],[249,115,22],[0,200,180],[100,100,100]][i%8] as [number,number,number]}));
-          const estH=Math.max(34, estItems.length*10+6);
-          drawDonut(estItems, mg+22, y+estH/2, 17, 9, mg+52, y+4, 9);
-          y+=estH+4;
-        }
+        // ── Estado + Gravedad: los dos pasteles lado a lado (2 columnas) ──────
+        if (effPorEstado.length>0 || effGravedad.length>0) {
+          const colW = contentW/2;
+          const leftX = mg;
+          const rightX = mg + colW;
+          // Mini-título de columna (con la barrita verde, mitad de ancho)
+          const miniTitle = (t:string, x:number) => {
+            doc.setFillColor(...G); doc.rect(x, y, 3, 5.5, "F");
+            doc.setFontSize(8.5); doc.setFont("helvetica","bold"); doc.setTextColor(31,41,55);
+            doc.text(s(t), x+5, y+4.5);
+          };
+          if (effPorEstado.length>0) miniTitle("DISTRIBUCION POR ESTADO", leftX);
+          if (effGravedad.length>0)  miniTitle("DISTRIBUCION POR GRAVEDAD", rightX);
+          doc.setDrawColor(229,231,235); doc.setLineWidth(0.4);
+          doc.line(mg, y+7, pageW-mg, y+7);
 
-        // Top parroquias
-        if (porParroquia && porParroquia.length>0) {
-          y=sectionTitle(`TOP ${Math.min(porParroquia.length,5)} PARROQUIAS CON MAS INCIDENCIAS`,y);
-          porParroquia.slice(0,5).forEach((p,i)=>{y=distRow(p.label,p.value,totalInc,[249,115,22],y,i%2===0);});
-          y+=4;
-        }
-
-        // Gravedad — grafico circular (pastel) con colores por severidad
-        const gravedad=incidenciasData?.porGravedad??[];
-        if(gravedad.length>0){
-          y=sectionTitle("DISTRIBUCION POR GRAVEDAD",y);
-          const gravItems=gravedad.map(g=>{
+          // Altura común del bloque = la leyenda más larga de las dos
+          const estItems=effPorEstado.map((e,i)=>({label:e.label,value:e.value,color:JSPDF_COLORS[i%JSPDF_COLORS.length]}));
+          const gravItems=effGravedad.map(g=>{
             const c: [number,number,number] = (g.label==="Alto"||g.label==="Critico"||g.label==="Crítico"||g.label==="Severo")
               ? [239,68,68] : g.label==="Moderado" ? [245,158,11] : [0,152,80];
             return {label:g.label,value:g.value,color:c};
           });
-          const gravH=Math.max(34, gravItems.length*10+6);
-          drawDonut(gravItems, mg+22, y+gravH/2, 17, 9, mg+52, y+4, 9);
-          y+=gravH+4;
+          const blockH = Math.max(38, estItems.length*9+6, gravItems.length*9+6);
+          const donutTop = y + 11;
+          const donutCy = donutTop + blockH/2;
+
+          if (estItems.length>0) {
+            const lY = donutCy - ((estItems.length-1)*9)/2 - 1.5;
+            drawDonut(estItems, leftX+16, donutCy, 15, 8, leftX+34, lY, 9);
+          }
+          if (gravItems.length>0) {
+            const lY = donutCy - ((gravItems.length-1)*9)/2 - 1.5;
+            drawDonut(gravItems, rightX+16, donutCy, 15, 8, rightX+34, lY, 9);
+          }
+          y = donutTop + blockH + 6;
+        }
+
+        // Top parroquias — a todo el ancho, debajo de los pasteles
+        if (effPorParroquia.length>0) {
+          y=sectionTitle(`TOP ${Math.min(effPorParroquia.length,5)} PARROQUIAS CON MAS INCIDENCIAS`,y);
+          effPorParroquia.slice(0,5).forEach((p,i)=>{y=distRow(p.label,p.value,incCount,[249,115,22],y,i%2===0);});
+          y+=4;
         }
 
         drawFirmas(y, tituloPDF);
