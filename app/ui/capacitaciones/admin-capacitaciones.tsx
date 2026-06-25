@@ -107,39 +107,27 @@ function CursoCard({
   const esBorrador  = c.estadoCurso === "BORRADOR";
   const isSelected  = selectedId === c.id;
 
-  const color = getCursoColor(c.id);
-  const ringStyle = isSelected ? "ring-1 ring-[var(--caritas-green)]/60 shadow-sm" : "hover:shadow-sm";
-
-  const accentColor = isSelected
-    ? "border-l-[var(--caritas-green)]"
-    : esPublicado
-    ? "border-l-[var(--caritas-green)]/40"
-    : esBorrador
-    ? "border-l-amber-300"
-    : "border-l-gray-200";
-
   return (
     <button
       onClick={() => onSelect(c.id)}
-      className={`w-full text-left border border-[var(--caritas-border)] border-l-4 ${accentColor} rounded-xl overflow-hidden transition-all bg-white ${ringStyle} ${!esPublicado && !isSelected ? "opacity-70" : ""}`}
+      className={`w-full text-left p-4 rounded-xl border transition-all ${
+        isSelected
+          ? "border-[var(--caritas-green)]/50 bg-[var(--caritas-green)]/5 ring-1 ring-[var(--caritas-green)]/30"
+          : "border-gray-200 bg-white hover:bg-gray-50"
+      } ${!esPublicado && !isSelected ? "opacity-70" : ""}`}
     >
-      <div className="px-3 py-3">
-        <div className="flex items-start justify-between gap-2 mb-1.5">
-          <div className="flex items-start gap-2 flex-1 min-w-0">
-            <div className="w-6 h-6 rounded-md bg-[var(--caritas-green)]/10 flex items-center justify-center shrink-0 mt-0.5">
-              <BookOpen className="w-3.5 h-3.5 text-[var(--caritas-green)]" />
-            </div>
-            <p className="text-sm font-semibold text-gray-900 line-clamp-2 leading-snug">{c.nombreCurso}</p>
-          </div>
-          <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold shrink-0 ${ESTADO_BADGE[c.estadoCurso] ?? "bg-gray-100"}`}>
-            {c.estadoCurso}
-          </span>
-        </div>
-        <p className="text-[10px] text-gray-400 font-mono pl-8 mb-1.5">{c.codigoCurso ?? "—"}</p>
-        <div className="flex gap-3 text-xs text-gray-400 pl-8">
-          <span className="flex items-center gap-1"><Users className="w-3 h-3" />{c.totalInscritos}</span>
-          <span className="flex items-center gap-1"><BookOpen className="w-3 h-3" />{c.sesiones.length} unidades</span>
-        </div>
+      <div className="flex items-start justify-between gap-2 mb-1">
+        <h2 className="text-sm font-semibold text-[var(--caritas-text)] leading-snug line-clamp-2">{c.nombreCurso}</h2>
+        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0 ${ESTADO_BADGE[c.estadoCurso] ?? "bg-gray-100 text-gray-600"}`}>
+          {c.estadoCurso}
+        </span>
+      </div>
+      {c.codigoCurso && (
+        <p className="text-[11px] font-mono text-gray-400 mb-2">{c.codigoCurso}</p>
+      )}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500">
+        <span className="flex items-center gap-1"><Users className="w-3 h-3" />{c.totalInscritos} inscritos</span>
+        <span className="flex items-center gap-1"><BookOpen className="w-3 h-3" />{c.sesiones.length} unidades</span>
       </div>
     </button>
   );
@@ -406,6 +394,7 @@ export function AdminCapacitaciones({
   });
   const [sesionTitulo, setSesionTitulo] = useState("");
   const [busqueda, setBusqueda] = useState("");
+  const [filtroEstado, setFiltroEstado] = useState<"todos" | "PUBLICADO" | "BORRADOR" | "CERRADO">("todos");
   const [showBorradores, setShowBorradores] = useState(false);
   const [showCerrados, setShowCerrados] = useState(false);
   const [panelAbierto, setPanelAbierto] = useState(true);
@@ -427,9 +416,10 @@ export function AdminCapacitaciones({
     return resultado;
   }, [cursos, busqueda]);
 
-  const publicados = cursosFiltrados.filter((c) => c.estadoCurso === "PUBLICADO");
-  const borradores = cursosFiltrados.filter((c) => c.estadoCurso === "BORRADOR");
-  const cerrados  = cursosFiltrados.filter((c) => c.estadoCurso === "CERRADO");
+  const cursosVista = filtroEstado === "todos" ? cursosFiltrados : cursosFiltrados.filter((c) => c.estadoCurso === filtroEstado);
+  const publicados = cursosVista.filter((c) => c.estadoCurso === "PUBLICADO");
+  const borradores = cursosVista.filter((c) => c.estadoCurso === "BORRADOR");
+  const cerrados  = cursosVista.filter((c) => c.estadoCurso === "CERRADO");
 
   const current = cursos.find((c) => c.id === selectedId) ?? null;
 
@@ -577,6 +567,26 @@ export function AdminCapacitaciones({
           className="flex items-center gap-2 px-4 py-2 bg-[var(--caritas-green)] text-white text-sm rounded-lg hover:opacity-90 transition-opacity"
         >
           <Plus className="w-4 h-4" /> Nuevo Curso
+        </button>
+      </div>
+
+      {/* Filtro de estado */}
+      <div className="bg-white border border-gray-200 rounded-xl p-3 mb-4 flex flex-wrap items-center gap-2">
+        <button onClick={() => { setBusqueda(""); setFiltroEstado("todos"); setShowBorradores(true); setShowCerrados(true); }}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium border-2 transition-colors ${filtroEstado === "todos" ? "border-gray-500 text-gray-700 bg-gray-50" : "border-transparent bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700"}`}>
+          Todos ({cursos.length})
+        </button>
+        <button onClick={() => { setBusqueda(""); setFiltroEstado("PUBLICADO"); }}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium border-2 transition-colors ${filtroEstado === "PUBLICADO" ? "border-green-500 text-green-700 bg-green-50" : "border-transparent bg-green-50 text-green-600 hover:bg-green-100"}`}>
+          Publicados ({cursos.filter(c => c.estadoCurso === "PUBLICADO").length})
+        </button>
+        <button onClick={() => { setBusqueda(""); setFiltroEstado("BORRADOR"); }}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium border-2 transition-colors ${filtroEstado === "BORRADOR" ? "border-amber-400 text-amber-700 bg-amber-50" : "border-transparent bg-amber-50 text-amber-600 hover:bg-amber-100"}`}>
+          Borradores ({cursos.filter(c => c.estadoCurso === "BORRADOR").length})
+        </button>
+        <button onClick={() => { setBusqueda(""); setFiltroEstado("CERRADO"); }}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium border-2 transition-colors ${filtroEstado === "CERRADO" ? "border-gray-400 text-gray-600 bg-gray-100" : "border-transparent bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
+          Cerrados ({cursos.filter(c => c.estadoCurso === "CERRADO").length})
         </button>
       </div>
 

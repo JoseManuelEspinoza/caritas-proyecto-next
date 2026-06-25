@@ -78,15 +78,17 @@ function UnidadLectura({ sesion }: { sesion: CursoInscrito["sesiones"][number] }
         </span>
       </button>
       {expandida && (
-        <div className="divide-y divide-gray-100">
+        <div className="divide-y divide-gray-100 bg-white">
           {sesion.materiales.length === 0 ? (
-            <p className="text-xs text-gray-400 px-4 py-3 pl-11">Sin materiales en esta unidad.</p>
+            <p className="text-xs text-gray-400 px-4 py-4 pl-10 italic">Sin materiales en esta unidad.</p>
           ) : (
             sesion.materiales.map((m) => (
-              <div key={m.id} className="flex items-center gap-3 px-4 py-3 pl-11 hover:bg-gray-50 transition-colors border-l-4 border-[var(--caritas-green)]/20">
-                <FileText className="w-4 h-4 text-[var(--caritas-green)] shrink-0" />
+              <div key={m.id} className="flex items-center gap-3 px-4 py-3 pl-10 hover:bg-gray-50 transition-colors">
+                <div className="w-8 h-8 rounded-lg bg-[var(--caritas-green)]/8 flex items-center justify-center shrink-0">
+                  <FileText className="w-4 h-4 text-[var(--caritas-green)]" />
+                </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-[var(--caritas-text)] truncate">{m.titulo}</p>
+                  <p className="text-sm font-medium text-gray-800 truncate">{m.titulo}</p>
                   {m.tipoMaterial && <p className="text-[11px] text-gray-400 mt-0.5">{m.tipoMaterial}</p>}
                 </div>
                 {m.enlaceMaterial && (
@@ -94,7 +96,7 @@ function UnidadLectura({ sesion }: { sesion: CursoInscrito["sesiones"][number] }
                     href={m.enlaceMaterial}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-[var(--caritas-green)] border border-[var(--caritas-green)]/30 rounded-lg hover:bg-[var(--caritas-green)]/5 transition-colors shrink-0 font-medium"
+                    className="flex items-center gap-1.5 px-2.5 py-1 text-xs text-[var(--caritas-green)] border border-[var(--caritas-green)]/30 rounded-lg hover:bg-[var(--caritas-green)]/5 transition-colors shrink-0"
                   >
                     <LinkIcon className="w-3 h-3" /> Abrir
                   </a>
@@ -363,7 +365,7 @@ export function BrigadistaCapacitaciones({
 
   if (detalleCurso) {
     return (
-      <div className="p-4 md:p-8 max-w-4xl mx-auto">
+      <div className="p-4 md:p-6 max-w-7xl mx-auto">
         <DetalleInscrito curso={detalleCurso} onVolver={() => setDetalleId(null)} />
       </div>
     );
@@ -371,7 +373,7 @@ export function BrigadistaCapacitaciones({
 
   return (
     <>
-    <div className="p-4 md:p-8 max-w-5xl mx-auto">
+    <div className="p-4 md:p-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-3 mb-7">
         <div className="w-10 h-10 bg-[var(--caritas-green)]/10 rounded-xl flex items-center justify-center">
@@ -486,28 +488,19 @@ export function BrigadistaCapacitaciones({
                   <button
                     key={c.id}
                     onClick={() => setDetalleId(c.id)}
-                    className="text-left bg-white border border-[var(--caritas-border)] rounded-xl overflow-hidden hover:shadow-md hover:border-[var(--caritas-green)]/50 transition-all group"
+                    className="text-left p-4 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-all group"
                   >
-                    {/* Banda de color superior */}
-                    <div className={`h-1.5 w-full ${aprobado ? "bg-green-500" : "bg-amber-400"}`} />
-                    <div className="p-5">
-                      <div className="flex items-start justify-between gap-2 mb-3">
-                        <EstadoBadge resultado={c.resultado} certificado={c.certificado} />
-                        <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-[var(--caritas-green)] transition-colors shrink-0 mt-0.5" />
-                      </div>
-                      <h3 className="text-sm font-bold text-[var(--caritas-text)] leading-snug mb-1">{c.nombreCurso}</h3>
-                      {c.descripcion && (
-                        <p className="text-xs text-gray-500 line-clamp-2 mb-3">{c.descripcion}</p>
-                      )}
-                      <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
-                        <div className="flex items-center gap-3 text-xs text-gray-400">
-                          <span className="flex items-center gap-1"><BookOpen className="w-3 h-3" />{c.sesiones.length} unidades</span>
-                          {c.fechaPublicacion && <span>{fmtDate(c.fechaPublicacion)}</span>}
-                        </div>
-                        <span className="text-xs text-[var(--caritas-green)] font-medium group-hover:underline">
-                          {aprobado ? "Ver curso" : "Continuar →"}
-                        </span>
-                      </div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <EstadoBadge resultado={c.resultado} certificado={c.certificado} />
+                      <ChevronRight className="w-3.5 h-3.5 text-gray-300 group-hover:text-[var(--caritas-green)] transition-colors shrink-0 ml-auto" />
+                    </div>
+                    <h3 className="text-sm font-semibold text-[var(--caritas-text)] leading-snug mb-1.5">{c.nombreCurso}</h3>
+                    {c.descripcion && (
+                      <p className="text-xs text-gray-500 line-clamp-2 mb-2">{c.descripcion}</p>
+                    )}
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500 pt-2 border-t border-gray-100">
+                      <span className="flex items-center gap-1"><BookOpen className="w-3 h-3" />{c.sesiones.length} unidades</span>
+                      {c.fechaPublicacion && <span>{fmtDate(c.fechaPublicacion)}</span>}
                     </div>
                   </button>
                 );
@@ -580,31 +573,31 @@ export function BrigadistaCapacitaciones({
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {disponiblesCursos.map((c) => (
-                <div key={c.id} className="bg-white border border-[var(--caritas-border)] rounded-xl overflow-hidden">
-                  <div className="h-1.5 w-full bg-[var(--caritas-green)]" />
-                  <div className="p-5">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1 min-w-0">
-                        <span className="text-xs text-gray-400 font-mono">{c.codigoCurso}</span>
-                        <h3 className="text-sm font-bold text-[var(--caritas-text)] mt-0.5 mb-1">{c.nombreCurso}</h3>
-                        {c.descripcion && (
-                          <p className="text-xs text-gray-500 line-clamp-2 mb-3">{c.descripcion}</p>
-                        )}
-                        <div className="flex flex-wrap items-center gap-3 text-xs text-gray-400">
-                          <span className="flex items-center gap-1"><Users className="w-3 h-3" />{c.totalInscritos} inscritos</span>
-                          <span className="flex items-center gap-1"><BookOpen className="w-3 h-3" />{c.totalSesiones} unidades</span>
-                          {c.fechaPublicacion && <span>{fmtDate(c.fechaPublicacion)}</span>}
-                        </div>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => handleInscribirse(c.id)}
-                      disabled={pending}
-                      className="mt-4 w-full flex items-center justify-center gap-2 py-2.5 text-sm bg-[var(--caritas-green)] text-white rounded-xl font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
-                    >
-                      <GraduationCap className="w-4 h-4" /> Inscribirme
-                    </button>
+                <div key={c.id} className="p-4 bg-white border border-gray-200 rounded-xl">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-50 text-green-700 border border-green-200">
+                      PUBLICADO
+                    </span>
+                    {c.codigoCurso && (
+                      <span className="text-[11px] font-mono text-gray-400">{c.codigoCurso}</span>
+                    )}
                   </div>
+                  <h3 className="text-sm font-semibold text-[var(--caritas-text)] leading-snug mb-1.5">{c.nombreCurso}</h3>
+                  {c.descripcion && (
+                    <p className="text-xs text-gray-500 line-clamp-2 mb-2">{c.descripcion}</p>
+                  )}
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500 mb-3">
+                    <span className="flex items-center gap-1"><Users className="w-3 h-3" />{c.totalInscritos} inscritos</span>
+                    <span className="flex items-center gap-1"><BookOpen className="w-3 h-3" />{c.totalSesiones} unidades</span>
+                    {c.fechaPublicacion && <span>{fmtDate(c.fechaPublicacion)}</span>}
+                  </div>
+                  <button
+                    onClick={() => handleInscribirse(c.id)}
+                    disabled={pending}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 text-sm bg-[var(--caritas-green)] text-white rounded-xl font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+                  >
+                    <GraduationCap className="w-4 h-4" /> Inscribirme
+                  </button>
                 </div>
               ))}
             </div>
