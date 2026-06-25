@@ -74,6 +74,8 @@ describe("POST /api/mobile/sync/evidencias — sincronización", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     process.env.MOBILE_SYNC_API_KEY = API_KEY;
+    // H4 — bucket configurado: las URLs del bucket propio se aceptan.
+    process.env.AWS_S3_BUCKET = "bucket";
     vi.mocked(isS3Configured).mockReturnValue(false);
     vi.mocked(prisma.evidenciaGRD.findUnique).mockResolvedValue(null);
     vi.mocked(prisma.tipoReferencia.upsert).mockResolvedValue({ idTipoReferencia: "tipo-1" } as any);
@@ -144,6 +146,24 @@ describe("POST /api/mobile/sync/evidencias — sincronización", () => {
     const res = await POST(makeRequest(sinUrl));
     expect(res.status).toBe(400);
     expect((await res.json()).message).toContain("No se recibió archivo");
+  });
+
+  // ── H4: validación de la URL del archivo ─────────────────────────────────────
+
+  it("[negativo][H4] urlArchivo externa (no es del bucket propio) → 400", async () => {
+    const res = await POST(
+      makeRequest({ ...PAYLOAD_BASE, urlArchivo: "https://sitio-malicioso.com/phishing" })
+    );
+    expect(res.status).toBe(400);
+    expect((await res.json()).message).toContain("No se recibió archivo");
+  });
+
+  it("[positivo][H4] key relativo con prefijo conocido (evidencias/...) → 200", async () => {
+    const res = await POST(
+      makeRequest({ ...PAYLOAD_BASE, urlArchivo: "evidencias/incidencias/inc-server-1/foto.jpg" })
+    );
+    expect(res.status).toBe(200);
+    expect((await res.json()).ok).toBe(true);
   });
 
   // ── Duplicado ───────────────────────────────────────────────────────────────

@@ -1,12 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Plus,
-  Filter,
   Search,
-  FileSpreadsheet,
   MapPin,
   Users,
   Calendar,
@@ -23,7 +21,13 @@ import {
   TrendingDown,
   SendHorizonal,
   Loader2,
+  AlertTriangle,
+  Download,
+  X,
+  Check,
+  ChevronDown,
 } from "lucide-react";
+import React from "react";
 import type { FrontendRole } from "@/app/lib/roles";
 import { PaginationControls } from "@/app/ui/shared/pagination-controls";
 
@@ -177,6 +181,64 @@ const SUMMARY_STATES = [
   "CERRADO",
 ];
 
+// ─── MultiSelect ──────────────────────────────────────────────────────────────
+
+function MultiSelect({
+  options, value, onChange, placeholder, icon: Icon,
+}: {
+  options: { value: string; label: string }[];
+  value: string[]; onChange: (v: string[]) => void;
+  placeholder: string; icon: React.ComponentType<{ className?: string }>;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+  const toggle = (v: string) => onChange(value.includes(v) ? value.filter(x => x !== v) : [...value, v]);
+  const label = value.length === 0 ? placeholder
+    : value.length === 1 ? (options.find(o => o.value === value[0])?.label ?? value[0])
+    : `${value.length} seleccionados`;
+  return (
+    <div ref={ref} className="relative flex-1 min-w-0">
+      <Icon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none z-10" />
+      <button type="button" onClick={() => setOpen(v => !v)}
+        className={`w-full flex items-center justify-between pl-9 pr-3 py-2 border rounded-lg text-sm bg-white cursor-pointer transition-colors focus:outline-none
+          ${open ? "border-[var(--caritas-green)] ring-2 ring-[var(--caritas-green)]/20" : "border-[#DDDDDD] hover:border-gray-300 bg-[#F5F5F5]"}`}>
+        <span className={`truncate ${value.length === 0 ? "text-gray-400" : "text-gray-700 font-medium"}`}>{label}</span>
+        <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ml-1 ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 py-1 overflow-hidden min-w-[180px]">
+          {options.map(opt => {
+            const sel = value.includes(opt.value);
+            return (
+              <button key={opt.value} type="button" onClick={() => toggle(opt.value)}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors text-left
+                  ${sel ? "bg-[var(--caritas-green)]/5 text-[var(--caritas-green)] font-medium" : "text-gray-700 hover:bg-[var(--caritas-green)]/5 hover:text-[var(--caritas-green)]"}`}>
+                <span className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-colors
+                  ${sel ? "bg-[var(--caritas-green)] border-[var(--caritas-green)]" : "border-gray-300"}`}>
+                  {sel && <Check className="w-3 h-3 text-white" />}
+                </span>
+                {opt.label}
+              </button>
+            );
+          })}
+          {value.length > 0 && (
+            <><div className="mx-3 my-1 border-t border-gray-100" />
+              <button type="button" onClick={() => onChange([])}
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-400 hover:text-[var(--caritas-green)]">
+                <X className="w-3 h-3" /> Limpiar
+              </button></>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 interface GrdListProps {
@@ -187,11 +249,17 @@ interface GrdListProps {
 
 export function GrdList({ items, role, globalCounts }: GrdListProps) {
   const [statusFilter, setStatusFilter] = useState("all");
-  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
+  const [parroquiaFilter, setParroquiaFilter] = useState<string[]>([]);
+  const [fechaDesde, setFechaDesde] = useState("");
+  const [fechaHasta, setFechaHasta] = useState("");
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(5);
   const [exportando, setExportando] = useState(false);
+
+  // Parroquias únicas derivadas de los items
+  const parroquias = Array.from(new Set(items.map((i) => i.parroquia).filter(Boolean))) as string[];
 
   const canCreate = role === "admin" || role === "especialistaGRD";
 
@@ -242,7 +310,10 @@ export function GrdList({ items, role, globalCounts }: GrdListProps) {
   // Filtros
   const filtered = items.filter((i) => {
     if (statusFilter !== "all" && i.estadoActual !== statusFilter) return false;
-    if (categoryFilter !== "all" && i.tipoEvento !== categoryFilter) return false;
+    if (categoryFilter.length > 0 && !categoryFilter.includes(i.tipoEvento ?? "")) return false;
+    if (parroquiaFilter.length > 0 && !parroquiaFilter.includes(i.parroquia ?? "")) return false;
+    if (fechaDesde && i.fechaRegistro.slice(0, 10) < fechaDesde) return false;
+    if (fechaHasta && i.fechaRegistro.slice(0, 10) > fechaHasta) return false;
     if (search) {
       const q = search.toLowerCase();
       const inTitle = i.tituloIncidencia?.toLowerCase().includes(q) ?? false;
@@ -252,6 +323,8 @@ export function GrdList({ items, role, globalCounts }: GrdListProps) {
     return true;
   });
 
+  const hasFilters = search || categoryFilter.length > 0 || parroquiaFilter.length > 0 || fechaDesde || fechaHasta;
+
   const totalPages = Math.max(1, Math.ceil(filtered.length / rowsPerPage));
   const safePage = Math.min(currentPage, totalPages);
   const startIndex = (safePage - 1) * rowsPerPage;
@@ -259,7 +332,8 @@ export function GrdList({ items, role, globalCounts }: GrdListProps) {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter, categoryFilter, search]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter, search, fechaDesde, fechaHasta, categoryFilter.join(), parroquiaFilter.join()]);
 
   useEffect(() => {
     if (currentPage > totalPages) setCurrentPage(totalPages);
@@ -278,23 +352,37 @@ export function GrdList({ items, role, globalCounts }: GrdListProps) {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl md:text-2xl font-semibold text-gray-900">
-            Gestión de Riesgo de Desastres
-          </h1>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5 text-[var(--caritas-green)] flex-shrink-0" />
+            <h1 className="text-xl md:text-2xl font-semibold text-gray-900">
+              Gestión de Riesgo de Desastres
+            </h1>
+          </div>
+          <p className="text-sm text-gray-500 mt-0.5 ml-7">
             Seguimiento y gestión de incidentes — Cáritas Lima
           </p>
         </div>
-        {canCreate && (
-          <Link
-            href="/grd/nuevo"
-            className="hidden sm:flex items-center gap-2 px-4 py-2 text-white text-sm font-medium hover:opacity-90 transition-all"
-            style={{ background: "var(--caritas-green)", borderRadius: "8px" }}
+        <div className="hidden sm:flex items-center gap-2">
+          <button
+            onClick={handleExportExcel}
+            disabled={exportando}
+            suppressHydrationWarning
+            className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
           >
-            <Plus className="w-4 h-4" />
-            Registrar Incidente
-          </Link>
-        )}
+            {exportando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            {exportando ? "Exportando…" : "Exportar a Excel"}
+          </button>
+          {canCreate && (
+            <Link
+              href="/grd/nuevo"
+              className="flex items-center gap-2 px-4 py-2 text-white text-sm font-medium hover:opacity-90 transition-all"
+              style={{ background: "var(--caritas-green)", borderRadius: "8px" }}
+            >
+              <Plus className="w-4 h-4" />
+              Registrar Incidente
+            </Link>
+          )}
+        </div>
       </div>
 
       {/* Tarjetas de estado */}
@@ -325,57 +413,84 @@ export function GrdList({ items, role, globalCounts }: GrdListProps) {
         })}
       </div>}
 
-      {/* Filtros */}
+      {/* Filtros — una sola línea */}
       <div className="bg-white rounded-xl border border-gray-200 p-3 md:p-4">
-        <div className="flex flex-col md:flex-row md:items-center gap-3">
-          <div className="relative flex-1 md:max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <div className="flex flex-wrap lg:flex-nowrap items-center gap-2">
+          {/* Búsqueda */}
+          <div className="relative w-44 flex-shrink-0">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
             <input
               type="text"
-              placeholder="Buscar por nombre o código..."
+              placeholder="Buscar..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               suppressHydrationWarning
-              className="w-full pl-9 pr-4 py-2 text-sm bg-[#F5F5F5] border border-[#DDDDDD] rounded focus:outline-none focus:ring-2 focus:ring-[#009850]/20 focus:border-[#009850]"
+              className="w-full pl-9 pr-3 py-2 text-sm bg-[#F5F5F5] border border-[#DDDDDD] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#009850]/20 focus:border-[#009850]"
             />
           </div>
 
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-gray-400 flex-shrink-0" />
-            <select
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              suppressHydrationWarning
-              className="flex-1 px-3 py-2 text-sm bg-[#F5F5F5] border border-[#DDDDDD] rounded focus:outline-none focus:ring-2 focus:ring-[#009850]/20 focus:border-[#009850]"
-            >
-              <option value="all">Todas las categorías</option>
-              <option value="Incendio">Incendio</option>
-              <option value="Inundación">Inundación</option>
-              <option value="Derrumbe">Derrumbe</option>
-              <option value="Deslizamiento">Deslizamiento</option>
-              <option value="Sismo">Sismo</option>
-              <option value="Vendaval">Vendaval</option>
-            </select>
+          {/* Tipo de incidente */}
+          <MultiSelect
+            options={[
+              { value: "Incendios", label: "Incendios" },
+              { value: "Inundaciones", label: "Inundaciones" },
+              { value: "Sismos", label: "Sismos" },
+              { value: "Derrumbes", label: "Derrumbes" },
+              { value: "Deslizamientos", label: "Deslizamientos" },
+              { value: "Tsunamis", label: "Tsunamis" },
+            ]}
+            value={categoryFilter}
+            onChange={setCategoryFilter}
+            placeholder="Tipo de incidente"
+            icon={AlertTriangle}
+          />
 
-            <button
-              onClick={handleExportExcel}
-              disabled={exportando}
+          {/* Parroquia */}
+          <MultiSelect
+            options={parroquias.map((p) => ({ value: p, label: p }))}
+            value={parroquiaFilter}
+            onChange={setParroquiaFilter}
+            placeholder="Parroquia"
+            icon={MapPin}
+          />
+
+          {/* Fechas compactas */}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <Calendar className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+            <input
+              type="date"
+              value={fechaDesde}
+              max={fechaHasta || undefined}
               suppressHydrationWarning
-              className="hidden md:flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 bg-[#F5F5F5] border border-[#DDDDDD] rounded hover:bg-gray-200 transition-colors disabled:opacity-50"
-            >
-              {exportando ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <FileSpreadsheet className="w-4 h-4" />
-              )}
-              {exportando ? "Exportando…" : "Excel"}
-            </button>
+              onChange={(e) => setFechaDesde(e.target.value)}
+              className="w-32 px-2 py-2 text-xs bg-[#F5F5F5] border border-[#DDDDDD] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#009850]/20 focus:border-[#009850]"
+            />
+            <span className="text-xs text-gray-400">—</span>
+            <input
+              type="date"
+              value={fechaHasta}
+              min={fechaDesde || undefined}
+              suppressHydrationWarning
+              onChange={(e) => setFechaHasta(e.target.value)}
+              className="w-32 px-2 py-2 text-xs bg-[#F5F5F5] border border-[#DDDDDD] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#009850]/20 focus:border-[#009850]"
+            />
           </div>
+
+          {/* Limpiar filtros */}
+          {hasFilters && (
+            <button
+              type="button"
+              onClick={() => { setSearch(""); setCategoryFilter([]); setParroquiaFilter([]); setFechaDesde(""); setFechaHasta(""); }}
+              className="flex items-center gap-1 text-xs text-gray-400 hover:text-[#009850] transition-colors flex-shrink-0 whitespace-nowrap"
+            >
+              <X className="w-3.5 h-3.5" /> Limpiar
+            </button>
+          )}
 
           {statusFilter !== "all" && (
             <button
               onClick={() => setStatusFilter("all")}
-              className="px-3 py-2 text-xs font-medium text-[#009850] bg-[#009850]/10 hover:bg-[#009850]/20 rounded-lg transition-colors whitespace-nowrap"
+              className="px-3 py-1.5 text-xs font-medium text-[#009850] bg-[#009850]/10 hover:bg-[#009850]/20 rounded-lg transition-colors whitespace-nowrap flex-shrink-0"
             >
               Ver todos ({items.length})
             </button>
@@ -488,8 +603,8 @@ export function GrdList({ items, role, globalCounts }: GrdListProps) {
                       onClick={() => (window.location.href = `/grd/${item.idIncidencia}`)}
                       className="hover:bg-[#009850]/5 cursor-pointer transition-colors"
                     >
-                      <td className="px-5 py-4 whitespace-nowrap">
-                        <span className="font-mono text-sm text-gray-800">
+                      <td className="px-3 py-4 whitespace-nowrap">
+                        <span className="font-mono text-xs text-gray-500">
                           {item.codigoCaso ?? "—"}
                         </span>
                       </td>

@@ -32,7 +32,7 @@ const ALL_NAV = [
     icon: LayoutDashboard,
     label: "Dashboard",
     exact: true,
-    roles: ["admin", "especialistaGRD", "comite", "jefaOGP"],
+    roles: ["admin", "especialistaGRD", "jefaOGP"],
   },
   {
     href: "/grd",
@@ -74,7 +74,7 @@ const ALL_NAV = [
     icon: FileText,
     label: "Reportes",
     exact: false,
-    roles: ["admin", "especialistaGRD", "comite", "jefaOGP"],
+    roles: ["admin", "especialistaGRD", "jefaOGP"],
   },
 ];
 
@@ -272,12 +272,13 @@ export function DashboardShell({
         <div className="h-12 flex items-center justify-between px-4 border-b border-[#DDDDDD]">
           {(isMobile !== true && !collapsed) || (isMobile === true && mobileMenuOpen) ? (
             <Image
-              src="/caritas-logo.png"
+              src="/caritas-logo-horizontal.png"
               alt="Cáritas Lima"
-              width={120}
-              height={28}
-              className="h-7 w-auto"
+              width={150}
+              height={36}
+              className="h-8 w-auto"
               style={{ width: "auto" }}
+              priority
             />
           ) : (
             <div className="mx-auto">

@@ -33,7 +33,7 @@ export function RendirExamenModal({ idInscripcion, cuestionario, onClose }: Prop
   const [pending, startTransition] = useTransition();
   const [detalle, setDetalle] = useState<CuestionarioDetalle | null>(null);
   const [cargando, setCargando] = useState(false);
-  const [respuestas, setRespuestas] = useState<Record<string, string>>({});
+  const [respuestas, setRespuestas] = useState<Record<string, string | string[]>>({});
   const [resultado, setResultado] = useState<Resultado | null>(null);
 
   const intentosRestantes = cuestionario.maxIntentos - cuestionario.intentosUsados;
@@ -45,6 +45,7 @@ export function RendirExamenModal({ idInscripcion, cuestionario, onClose }: Prop
       const d = await obtenerCuestionarioPorId(cuestionario.id);
       if (!d) { toast.error("No se pudo cargar el examen."); return; }
       setDetalle(d);
+      setRespuestas({});
     } catch {
       toast.error("No se pudo cargar el examen.");
     } finally {
@@ -52,9 +53,29 @@ export function RendirExamenModal({ idInscripcion, cuestionario, onClose }: Prop
     }
   };
 
+  const toggleOpcionMultiple = (idPregunta: string, idOpcion: string) => {
+    setRespuestas((prev) => {
+      const actual = Array.isArray(prev[idPregunta]) ? (prev[idPregunta] as string[]) : [];
+      const siguiente = actual.includes(idOpcion)
+        ? actual.filter((id) => id !== idOpcion)
+        : [...actual, idOpcion];
+      return { ...prev, [idPregunta]: siguiente };
+    });
+  };
+
+  const respuestasRespondidas = detalle
+    ? Object.keys(respuestas).filter((pid) => {
+        const r = respuestas[pid];
+        return Array.isArray(r) ? r.length > 0 : Boolean(r);
+      }).length
+    : 0;
+
   const enviar = () => {
     if (!detalle) return;
-    const sinResponder = detalle.preguntas.filter((p) => !respuestas[p.id]);
+    const sinResponder = detalle.preguntas.filter((p) => {
+      const r = respuestas[p.id];
+      return Array.isArray(r) ? r.length === 0 : !r;
+    });
     if (sinResponder.length > 0) {
       toast.error(`Faltan ${sinResponder.length} pregunta(s) por responder.`);
       return;
@@ -122,10 +143,6 @@ export function RendirExamenModal({ idInscripcion, cuestionario, onClose }: Prop
                   <span className="font-semibold">{cuestionario.totalPreguntas}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Nota aprobatoria</span>
-                  <span className="font-semibold">{cuestionario.notaAprobatoria}/20</span>
-                </div>
-                <div className="flex justify-between text-sm">
                   <span className="text-gray-500">Intentos restantes</span>
                   <span className={`font-semibold ${agotado ? "text-red-500" : "text-[var(--caritas-green)]"}`}>
                     {intentosRestantes} de {cuestionario.maxIntentos}
@@ -166,42 +183,86 @@ export function RendirExamenModal({ idInscripcion, cuestionario, onClose }: Prop
           ) : (
             /* ── Preguntas ──────────────────────────────────── */
             <div>
-              <div className="space-y-5 max-h-[420px] overflow-y-auto pr-1 mb-4">
-                {detalle.preguntas.map((p, pi) => (
-                  <div key={p.id}>
-                    <p className="text-sm font-medium text-[var(--caritas-text)] mb-2">
-                      <span className="text-[var(--caritas-green)] font-bold mr-1">{pi + 1}.</span>
-                      {p.enunciado}
-                    </p>
-                    <div className="space-y-2">
-                      {p.opciones.map((o) => (
-                        <label
-                          key={o.id}
-                          className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
-                            respuestas[p.id] === o.id
-                              ? "border-[var(--caritas-green)] bg-[var(--caritas-green)]/5"
-                              : "border-[var(--caritas-border)] hover:bg-gray-50"
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            name={p.id}
-                            value={o.id}
-                            checked={respuestas[p.id] === o.id}
-                            onChange={() => setRespuestas((prev) => ({ ...prev, [p.id]: o.id }))}
-                            className="accent-[var(--caritas-green)]"
-                          />
-                          <span className="text-sm">{o.textoOpcion}</span>
-                        </label>
-                      ))}
+              {/* Info bar */}
+              <div className="flex items-center gap-4 bg-gray-50 border border-[var(--caritas-border)] rounded-lg px-4 py-2 mb-4 text-xs text-gray-500">
+                <span>
+                  {detalle.preguntas.length} pregunta{detalle.preguntas.length !== 1 ? "s" : ""}
+                </span>
+                <span className="text-gray-300">·</span>
+                <span>Debes responder todas correctamente para aprobar</span>
+              </div>
+
+              <div className="space-y-5 max-h-[380px] overflow-y-auto pr-1 mb-4">
+                {detalle.preguntas.map((p, pi) => {
+                  const esMultiple = p.tipoPregunta === "OPCION_MULTIPLE";
+                  const seleccionadas = esMultiple
+                    ? Array.isArray(respuestas[p.id]) ? (respuestas[p.id] as string[]) : []
+                    : null;
+
+                  return (
+                    <div key={p.id}>
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <p className="text-sm font-medium text-[var(--caritas-text)]">
+                          <span className="text-[var(--caritas-green)] font-bold mr-1">{pi + 1}.</span>
+                          {p.enunciado}
+                        </p>
+                        <span className="text-[10px] text-gray-400 bg-gray-100 rounded px-1.5 py-0.5 shrink-0 whitespace-nowrap">
+                          {p.puntaje} pt{p.puntaje !== 1 ? "s" : ""}
+                        </span>
+                      </div>
+                      {esMultiple && (
+                        <p className="text-xs text-blue-500 font-medium mb-2">
+                          Selecciona todas las respuestas correctas
+                        </p>
+                      )}
+                      <div className="space-y-2">
+                        {p.opciones.map((o) => {
+                          const isChecked = esMultiple
+                            ? (seleccionadas ?? []).includes(o.id)
+                            : respuestas[p.id] === o.id;
+
+                          return (
+                            <label
+                              key={o.id}
+                              className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
+                                isChecked
+                                  ? "border-[var(--caritas-green)] bg-[var(--caritas-green)]/5"
+                                  : "border-[var(--caritas-border)] hover:bg-gray-50"
+                              }`}
+                            >
+                              {esMultiple ? (
+                                <input
+                                  type="checkbox"
+                                  value={o.id}
+                                  checked={isChecked}
+                                  onChange={() => toggleOpcionMultiple(p.id, o.id)}
+                                  className="accent-[var(--caritas-green)] w-4 h-4 shrink-0"
+                                />
+                              ) : (
+                                <input
+                                  type="radio"
+                                  name={p.id}
+                                  value={o.id}
+                                  checked={isChecked}
+                                  onChange={() =>
+                                    setRespuestas((prev) => ({ ...prev, [p.id]: o.id }))
+                                  }
+                                  className="accent-[var(--caritas-green)] shrink-0"
+                                />
+                              )}
+                              <span className="text-sm">{o.textoOpcion}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               <div className="flex items-center justify-between pt-3 border-t border-[var(--caritas-border)]">
                 <span className="text-xs text-gray-400">
-                  {Object.keys(respuestas).length}/{detalle.preguntas.length} respondidas
+                  {respuestasRespondidas}/{detalle.preguntas.length} respondidas
                 </span>
                 <button
                   onClick={enviar}

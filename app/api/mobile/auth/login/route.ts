@@ -7,7 +7,28 @@ function jsonError(message: string, status = 400) {
   return NextResponse.json({ ok: false, message }, { status });
 }
 
+// H8 — El login móvil también exige la API key de sincronización (mismo
+// transporte que el resto de endpoints móviles). Evita exponer un proxy de
+// autenticación abierto a fuerza bruta desde cualquier origen.
+function requireMobileSyncKey(request: Request): NextResponse | null {
+  const expected = process.env.MOBILE_SYNC_API_KEY?.trim();
+  if (!expected) {
+    return NextResponse.json(
+      { ok: false, message: "Sincronización móvil no configurada." },
+      { status: 503 }
+    );
+  }
+  const received = request.headers.get("x-mobile-sync-key")?.trim() ?? "";
+  if (received !== expected) {
+    return jsonError("No autorizado.", 401);
+  }
+  return null;
+}
+
 export async function POST(request: Request) {
+  const unauthorized = requireMobileSyncKey(request);
+  if (unauthorized) return unauthorized;
+
   let body: { email?: string; password?: string };
   try {
     body = await request.json();
@@ -70,8 +91,13 @@ export async function POST(request: Request) {
     select: { id: true, role: true },
   });
 
+  // H9 — Anti-enumeración: si las credenciales son válidas en Keycloak pero el
+  // usuario no está aprovisionado en el sistema (sin cuenta o sin perfil GRD),
+  // se responde con el MISMO mensaje genérico que una credencial incorrecta,
+  // para no revelar qué cuentas existen. El detalle queda solo en el log.
   if (!appUser) {
-    return jsonError("Usuario no encontrado en el sistema.", 403);
+    console.warn("[Mobile Auth] Login válido en Keycloak sin usuario en el sistema:", email);
+    return jsonError("Email o contraseña incorrectos.", 401);
   }
 
   const usuarioGRD = await prisma.usuarioGRD.findUnique({
@@ -80,7 +106,8 @@ export async function POST(request: Request) {
   });
 
   if (!usuarioGRD) {
-    return jsonError("Perfil GRD no encontrado para este usuario.", 403);
+    console.warn("[Mobile Auth] Login válido sin perfil GRD asociado:", email);
+    return jsonError("Email o contraseña incorrectos.", 401);
   }
 
   return NextResponse.json({

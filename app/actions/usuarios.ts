@@ -7,15 +7,7 @@ import { verifySession } from "@/app/lib/dal";
 import { toFrontendRole } from "@/app/lib/roles";
 import { logGRDAction } from "@/app/lib/audit";
 import { provisionKeycloakUser, generateTempPassword } from "@/app/lib/keycloak-admin";
-
-/** Roles que un administrador puede dar de alta desde la app. */
-export const ROLES_ALTA: { value: Role; label: string }[] = [
-  { value: "ESPECIALISTAGRD", label: "Especialista GRD" },
-  { value: "COMITEDONACIONES", label: "Comité de Donaciones" },
-  { value: "JEFAOGP", label: "Jefa OGP" },
-  { value: "ADMINISTRADOR", label: "Administrador" },
-];
-// Brigadista NO va aquí: se da de alta desde su propio módulo (con parroquia, DNI…).
+import { ROLES_ALTA } from "@/app/lib/roles-alta";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
