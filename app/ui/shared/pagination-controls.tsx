@@ -2,16 +2,18 @@
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-const PAGE_SIZE_OPTIONS = [5, 10, 25, 50];
+const PAGE_SIZE_OPTIONS = [6, 10, 25, 50];
 
 /** Selector de filas por página — va en la barra de filtros (arriba). */
 export function PageSizeSelector({
   pageSize,
   onPageSizeChange,
+  options = PAGE_SIZE_OPTIONS,
   className = "",
 }: {
   pageSize: number;
   onPageSizeChange: (size: number) => void;
+  options?: number[];
   className?: string;
 }) {
   return (
@@ -23,7 +25,7 @@ export function PageSizeSelector({
         suppressHydrationWarning
         className="text-xs border border-[var(--caritas-border)] rounded-lg px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#009850]/20 focus:border-[#009850]"
       >
-        {PAGE_SIZE_OPTIONS.map((n) => (
+        {options.map((n) => (
           <option key={n} value={n}>
             {n}
           </option>
@@ -44,6 +46,7 @@ export function PaginationControls({
   onNext,
   pageSize,
   onPageSizeChange,
+  pageSizeOptions,
   className = "",
 }: {
   total: number;
@@ -55,6 +58,7 @@ export function PaginationControls({
   onNext: () => void;
   pageSize?: number;
   onPageSizeChange?: (size: number) => void;
+  pageSizeOptions?: number[];
   className?: string;
 }) {
   if (total === 0) return null;
@@ -65,7 +69,7 @@ export function PaginationControls({
     >
       <div className="flex flex-wrap items-center gap-3">
         {pageSize !== undefined && onPageSizeChange && (
-          <PageSizeSelector pageSize={pageSize} onPageSizeChange={onPageSizeChange} />
+          <PageSizeSelector pageSize={pageSize} onPageSizeChange={onPageSizeChange} options={pageSizeOptions} />
         )}
         <p className="text-xs text-gray-500">
           Mostrando {start}–{end} de {total}

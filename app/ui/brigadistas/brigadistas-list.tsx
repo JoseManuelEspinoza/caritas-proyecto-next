@@ -1014,6 +1014,7 @@ export function BrigadistasList({ brigadistas, parroquias, canEdit = true }: Pro
         onNext={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
         pageSize={pageSize}
         onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
+        pageSizeOptions={[7, 10, 25, 50]}
       />
 
       {showModal && (
