@@ -10,6 +10,7 @@ import {
   provisionKeycloakUser,
   deleteKeycloakUser,
   generateTempPassword,
+  findAndDeleteKeycloakUserByEmail,
 } from "@/app/lib/keycloak-admin";
 import { sendBrigadistaWelcomeEmail } from "@/app/lib/email";
 
@@ -145,4 +146,145 @@ export async function toggleDisponibilidadBrigadista(id: string, _dispActual: st
     return fail(err, "No se pudo cambiar la disponibilidad.");
   }
   revalidatePath("/brigadistas");
+}
+
+export async function deleteBrigadista(id: string) {
+  const session = await verifySession();
+
+  const brigadista = await prisma.brigadistaParroquial.findUnique({
+    where: { idBrigadistaParroquial: id },
+    select: {
+      nombres: true,
+      apellidos: true,
+      correo: true,
+      _count: {
+        select: {
+          asignacionesIncidencia: true,
+          asignacionesSimulacro: true,
+          actividadesResponsable: true,
+        },
+      },
+    },
+  });
+
+  if (!brigadista) return { message: "Brigadista no encontrado." };
+
+  const bloques: string[] = [];
+  if (brigadista._count.asignacionesIncidencia > 0)
+    bloques.push(`${brigadista._count.asignacionesIncidencia} incidencia(s)`);
+  if (brigadista._count.asignacionesSimulacro > 0)
+    bloques.push(`${brigadista._count.asignacionesSimulacro} simulacro(s)`);
+  if (brigadista._count.actividadesResponsable > 0)
+    bloques.push(`${brigadista._count.actividadesResponsable} actividad(es)`);
+
+  if (bloques.length > 0) {
+    return {
+      message: `No se puede eliminar: este brigadista tiene ${bloques.join(", ")} relacionada(s).`,
+    };
+  }
+
+  await prisma.brigadistaParroquial.delete({ where: { idBrigadistaParroquial: id } });
+
+  if (brigadista.correo) {
+    findAndDeleteKeycloakUserByEmail(brigadista.correo).catch(() => {});
+  }
+
+  await logGRDAction({
+    userId: session.userId,
+    action: "ELIMINAR",
+    entity: "Brigadista",
+    entityId: id,
+    entityName: `${brigadista.nombres} ${brigadista.apellidos ?? ""}`,
+    module: "Brigadistas",
+  });
+
+  revalidatePath("/brigadistas");
+  revalidatePath("/grd", "layout");
+}
+
+export type ImportBrigadistaRow = {
+  nombres: string;
+  apellidos: string;
+  dni: string;
+  celular: string;
+  correo?: string;
+  parroquia: string;
+  disponibilidad?: string;
+};
+
+export type ImportBrigadistaResult = {
+  created: number;
+  errors: { row: number; reason: string }[];
+};
+
+export async function importBrigadistas(
+  rows: ImportBrigadistaRow[]
+): Promise<ImportBrigadistaResult> {
+  await verifySession();
+
+  const parroquias = await prisma.parroquia.findMany({
+    where: { estado: "ACTIVO" },
+    select: { idParroquia: true, nombre: true },
+  });
+  const parroquiaMap = new Map(
+    parroquias.map((p) => [p.nombre.toLowerCase().trim(), p.idParroquia])
+  );
+
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const result: ImportBrigadistaResult = { created: 0, errors: [] };
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const rowNum = i + 2;
+
+    try {
+      const nombres = (row.nombres ?? "").trim();
+      const apellidos = (row.apellidos ?? "").trim();
+      const dni = (row.dni ?? "").toString().replace(/\D/g, "");
+      const celularRaw = (row.celular ?? "").toString().replace(/\D/g, "");
+      const celular = celularRaw.startsWith("51") ? celularRaw.slice(2) : celularRaw;
+      const correo = (row.correo ?? "").trim() || undefined;
+      const disponibilidad = (row.disponibilidad ?? "DISPONIBLE").trim().toUpperCase();
+
+      if (!nombres || nombres.length < 2) throw new Error("Nombres inválidos o muy cortos.");
+      if (!apellidos || apellidos.length < 2) throw new Error("Apellidos inválidos o muy cortos.");
+      if (dni.length !== 8) throw new Error("DNI debe tener exactamente 8 dígitos.");
+      if (!/^9\d{8}$/.test(celular))
+        throw new Error("Celular inválido (debe empezar con 9, tener 9 dígitos).");
+      if (correo && !EMAIL_RE.test(correo)) throw new Error("Correo no tiene formato válido.");
+      if (!["DISPONIBLE", "EN CAMPO", "NO DISPONIBLE"].includes(disponibilidad))
+        throw new Error("Disponibilidad inválida (use: DISPONIBLE, EN CAMPO, NO DISPONIBLE).");
+
+      const parroquiaNombre = (row.parroquia ?? "").trim();
+      const idParroquia = parroquiaMap.get(parroquiaNombre.toLowerCase());
+      if (!idParroquia) throw new Error(`Parroquia "${parroquiaNombre}" no encontrada.`);
+
+      const existeDni = await prisma.brigadistaParroquial.findUnique({ where: { dni } });
+      if (existeDni) throw new Error(`DNI ${dni} ya está registrado.`);
+
+      await prisma.brigadistaParroquial.create({
+        data: {
+          idParroquia,
+          nombres,
+          apellidos,
+          dni,
+          celular: `+51${celular}`,
+          correo: correo ?? null,
+          disponibilidad,
+          estado: "ACTIVO",
+        },
+      });
+
+      result.created++;
+    } catch (err) {
+      result.errors.push({
+        row: rowNum,
+        reason: err instanceof Error ? err.message : "Error desconocido",
+      });
+    }
+  }
+
+  revalidatePath("/brigadistas");
+  revalidatePath("/grd", "layout");
+  return result;
 }
