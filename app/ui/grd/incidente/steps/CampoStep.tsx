@@ -17,7 +17,9 @@ import {
   X,
   Plus,
   Loader2,
+  FileText,
 } from "lucide-react";
+import { Seccion } from "@/app/ui/grd/incidente/components/Seccion";
 import {
   saveInfoCampo,
   updatePersonaCampo,
@@ -67,8 +69,9 @@ export function CampoStep({
   const done = data.estadoActual !== "ASIGNADO";
   const informeCampo = data.informes.find((i) => i.tipo === "CAMPO");
 
-  const [obsCampo, setObsCampo] = useState("");
-  const [obsBrig, setObsBrig] = useState("");
+  const parsedCampo = parseInforme<{ descripcionEvento?: string; observaciones?: string; notasFamilias?: { id: string; nota: string }[] }>(informeCampo?.contenido);
+  const [obsCampo, setObsCampo] = useState(parsedCampo?.descripcionEvento ?? "");
+  const [obsBrig, setObsBrig] = useState(parsedCampo?.observaciones ?? "");
   const [familyNotes, setFamilyNotes] = useState<Record<string, string>>({});
   const [familyOpen, setFamilyOpen] = useState<Record<string, boolean>>({});
   // Modal de empadronamiento
@@ -264,83 +267,6 @@ export function CampoStep({
     });
   }
 
-  if (informeCampo) {
-    const parsed = parseInforme<{
-      responsable?: string;
-      descripcionEvento?: string;
-      observaciones?: string;
-      notasFamilias?: { id: string; nota: string }[];
-    }>(informeCampo.contenido);
-    const notasFamilias: { id: string; nota: string }[] = parsed?.notasFamilias ?? [];
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
-          <CheckCircle className="w-4 h-4 text-green-600" />
-          <span className="text-sm font-medium text-green-800">
-            Levantamiento completado el {fmtDate(informeCampo.fecha)}
-            {parsed?.responsable ? ` · ${parsed.responsable}` : ""}
-          </span>
-        </div>
-        {parsed && (
-          <div className="space-y-4">
-            {parsed.descripcionEvento &&
-              parsed.descripcionEvento !== "Levantamiento de campo realizado." && (
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
-                    Observaciones desde campo
-                  </p>
-                  <p className="text-sm text-gray-800 bg-gray-50 border border-gray-100 rounded-lg p-3">
-                    {parsed.descripcionEvento}
-                  </p>
-                </div>
-              )}
-            {parsed.observaciones && (
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
-                  Observaciones generales del campo
-                </p>
-                <p className="text-sm text-gray-800 bg-gray-50 border border-gray-100 rounded-lg p-3">
-                  {parsed.observaciones}
-                </p>
-              </div>
-            )}
-            {notasFamilias.length > 0 && (
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                  Notas por familia
-                </p>
-                <div className="space-y-2">
-                  {data.gruposFamiliares
-                    .map((g) => {
-                      const item = notasFamilias.find((n) => n.id === g.id);
-                      if (!item?.nota) return null;
-                      return (
-                        <div key={g.id} className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
-                          <p className="text-[11px] font-semibold text-blue-700 mb-0.5">
-                            {g.nombreReferencia ?? "Familia"}
-                          </p>
-                          <p className="text-xs text-gray-700">{item.nota}</p>
-                        </div>
-                      );
-                    })
-                    .filter(Boolean)}
-                </div>
-              </div>
-            )}
-            <EvidenciasRegistro evidencias={data.evidencias} />
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  if (!canAct || done) {
-    return (
-      <p className="text-sm text-gray-500 text-center py-4">
-        El levantamiento de campo aún no ha sido completado.
-      </p>
-    );
-  }
 
   // ── Datos derivados para las secciones de verificación ──
   const todasPersonas = data.gruposFamiliares.flatMap((g) => g.personas);
@@ -358,32 +284,37 @@ export function CampoStep({
 
   return (
     <div className="space-y-4">
+      {/* Banner de levantamiento completado (solo lectura) */}
+      {done && informeCampo && (
+        <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+          <CheckCircle className="w-4 h-4 text-green-600" />
+          <span className="text-sm font-medium text-green-800">
+            Levantamiento completado el {fmtDate(informeCampo.fecha)}
+            {parsedCampo?.responsable ? ` · ${parsedCampo.responsable}` : ""}
+          </span>
+        </div>
+      )}
+
       {/* Header de etapa */}
-      <div className="rounded-xl bg-orange-500 text-white p-4 flex items-start gap-3">
-        <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
-          <ClipboardList className="w-5 h-5" />
+      <div className="rounded-xl bg-orange-200 border border-orange-500 p-4 flex items-start gap-3">
+        <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center flex-shrink-0">
+          <ClipboardList className="w-5 h-5 text-orange-600" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-semibold">Etapa 3 — Levantamiento de Campo</p>
-          <p className="text-sm text-white/90">
+          <p className="font-semibold text-gray-900">Etapa 3 — Levantamiento de Campo</p>
+          <p className="text-sm text-gray-600">
             Verifica los datos del evento, confirma el empadronamiento y documenta desde campo.
             {data.currentUserName ? ` · ${data.currentUserName}` : ""}
           </p>
         </div>
-        <span className="text-[10px] font-bold bg-white/20 px-2 py-1 rounded-full uppercase flex-shrink-0">
+        <span className="text-[10px] font-bold bg-orange-100 text-orange-700 px-2 py-1 rounded-full uppercase flex-shrink-0">
           {data.role === "brigadista" ? "Brigadista" : "GRD"}
         </span>
       </div>
 
       {/* 1. Verificación del Evento */}
-      <details open className="border border-gray-200 rounded-xl overflow-hidden">
-        <summary className="cursor-pointer px-4 py-3 flex items-center gap-2 bg-gray-50 hover:bg-gray-100">
-          <span className="w-6 h-6 rounded-full bg-orange-100 text-orange-700 text-xs font-bold flex items-center justify-center">
-            1
-          </span>
-          <span className="text-sm font-semibold text-gray-800">Verificación del Evento</span>
-        </summary>
-        <div className="p-4 text-sm space-y-3">
+      <Seccion num="1" titulo="Verificación del Evento" icon={FileText} color="orange" defaultOpen>
+        <div className="text-sm space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {/* Columna izquierda */}
             <div className="space-y-3">
@@ -490,34 +421,28 @@ export function CampoStep({
           </div>
 
           {/* Observaciones — ancho completo */}
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Observaciones desde campo (opcional)
-            </label>
-            <textarea
-              rows={2}
-              className={textareaCls}
-              value={obsCampo}
-              onChange={(e) => setObsCampo(e.target.value)}
-              placeholder="Lo observado en campo..."
-            />
-          </div>
+          {(!done || obsCampo) && (
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Observaciones desde campo {done ? "" : "(opcional)"}
+              </label>
+              <textarea
+                rows={2}
+                className={textareaCls}
+                value={obsCampo}
+                onChange={(e) => setObsCampo(e.target.value)}
+                placeholder="Lo observado en campo..."
+                readOnly={done}
+              />
+            </div>
+          )}
         </div>
-      </details>
+      </Seccion>
 
       {/* 2. Verificación de Empadronamiento */}
-      <details className="border border-gray-200 rounded-xl overflow-hidden">
-        <summary className="cursor-pointer px-4 py-3 flex items-center gap-2 bg-gray-50 hover:bg-gray-100">
-          <span className="w-6 h-6 rounded-full bg-orange-100 text-orange-700 text-xs font-bold flex items-center justify-center">
-            2
-          </span>
-          <Users className="w-4 h-4 text-gray-500" />
-          <span className="text-sm font-semibold text-gray-800">Verificación de Empadronamiento</span>
-          <span className="ml-auto text-[11px] text-gray-500">
-            {totalPersonas} persona(s) · {data.gruposFamiliares.length} familia(s)
-          </span>
-        </summary>
-        <div className="p-4 space-y-3">
+      <Seccion num="2" titulo="Verificación de Empadronamiento" icon={Users} color="orange"
+        contador={`${totalPersonas} persona(s) · ${data.gruposFamiliares.length} familia(s)`}>
+        <div className="space-y-3">
           {data.gruposFamiliares.map((g) => (
             <div key={g.id} className="border border-blue-200 rounded-lg bg-blue-50 overflow-hidden">
               {/* Cabecera del grupo */}
@@ -531,36 +456,38 @@ export function CampoStep({
                     ({g.personas.length} integrantes)
                   </span>
                 </div>
-                <div className="flex gap-1">
-                  <button
-                    type="button"
-                    title="Agregar persona a esta familia"
-                    onClick={() => handleAddToFamilia(g.id)}
-                    className="p-1 hover:bg-blue-200 rounded text-blue-600 transition-colors"
-                  >
-                    <UserPlus className="w-4 h-4" />
-                  </button>
-                  <button
-                    type="button"
-                    title={familyOpen[g.id] ? "Ocultar nota" : "Agregar nota"}
-                    onClick={() => setFamilyOpen((prev) => ({ ...prev, [g.id]: !prev[g.id] }))}
-                    className={`p-1 rounded transition-colors ${
-                      familyOpen[g.id] || familyNotes[g.id]?.trim()
-                        ? "text-blue-700 bg-blue-200"
-                        : "text-blue-600 hover:bg-blue-200"
-                    }`}
-                  >
-                    <MessageSquarePlus className="w-4 h-4" />
-                  </button>
-                  <button
-                    type="button"
-                    title="Eliminar grupo familiar"
-                    onClick={() => handleDeleteFamilia(g.id)}
-                    className="p-1 hover:bg-red-100 rounded text-red-500 transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
+                {!done && (
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      title="Agregar persona a esta familia"
+                      onClick={() => handleAddToFamilia(g.id)}
+                      className="p-1 hover:bg-blue-200 rounded text-blue-600 transition-colors"
+                    >
+                      <UserPlus className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      title={familyOpen[g.id] ? "Ocultar nota" : "Agregar nota"}
+                      onClick={() => setFamilyOpen((prev) => ({ ...prev, [g.id]: !prev[g.id] }))}
+                      className={`p-1 rounded transition-colors ${
+                        familyOpen[g.id] || familyNotes[g.id]?.trim()
+                          ? "text-blue-700 bg-blue-200"
+                          : "text-blue-600 hover:bg-blue-200"
+                      }`}
+                    >
+                      <MessageSquarePlus className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      title="Eliminar grupo familiar"
+                      onClick={() => handleDeleteFamilia(g.id)}
+                      className="p-1 hover:bg-red-100 rounded text-red-500 transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Nota de familia */}
@@ -617,24 +544,26 @@ export function CampoStep({
                           )}
                         </div>
                       </div>
-                      <div className="flex gap-1 flex-shrink-0">
-                        <button
-                          type="button"
-                          title="Editar persona"
-                          onClick={() => handleEditPersona(p, g.id)}
-                          className="p-1 hover:bg-gray-100 rounded text-gray-500 transition-colors"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          title="Eliminar persona"
-                          onClick={() => handleDeletePersona(p.id)}
-                          className="p-1 hover:bg-red-100 rounded text-red-500 transition-colors"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                      {!done && (
+                        <div className="flex gap-1 flex-shrink-0">
+                          <button
+                            type="button"
+                            title="Editar persona"
+                            onClick={() => handleEditPersona(p, g.id)}
+                            className="p-1 hover:bg-gray-100 rounded text-gray-500 transition-colors"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            title="Eliminar persona"
+                            onClick={() => handleDeletePersona(p.id)}
+                            className="p-1 hover:bg-red-100 rounded text-red-500 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -650,7 +579,7 @@ export function CampoStep({
           )}
 
           {/* Agregar nuevo grupo familiar */}
-          {showAddFamilia ? (
+          {!done && showAddFamilia ? (
             <div className="flex gap-2 items-center">
               <input
                 type="text"
@@ -681,7 +610,7 @@ export function CampoStep({
                 <X className="w-4 h-4" />
               </button>
             </div>
-          ) : (
+          ) : !done ? (
             <button
               type="button"
               onClick={() => setShowAddFamilia(true)}
@@ -689,21 +618,13 @@ export function CampoStep({
             >
               <Plus className="w-4 h-4" /> Agregar grupo familiar
             </button>
-          )}
+          ) : null}
         </div>
-      </details>
+      </Seccion>
 
       {/* 3. Evidencias de Campo */}
-      <details className="border border-gray-200 rounded-xl overflow-hidden">
-        <summary className="cursor-pointer px-4 py-3 flex items-center gap-2 bg-gray-50 hover:bg-gray-100">
-          <span className="w-6 h-6 rounded-full bg-orange-100 text-orange-700 text-xs font-bold flex items-center justify-center">
-            3
-          </span>
-          <Camera className="w-4 h-4 text-gray-500" />
-          <span className="text-sm font-semibold text-gray-800">Evidencias de Campo</span>
-          <span className="ml-auto text-[11px] text-gray-500">{evidCampo.length} subida(s)</span>
-        </summary>
-        <div className="p-4 space-y-3">
+      <Seccion num="3" titulo="Evidencias de Campo" icon={Camera} color="orange" contador={`${evidCampo.length} subida(s)`}>
+        <div className="space-y-3">
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-xs text-yellow-800">
             <p className="font-semibold flex items-center gap-1">
               <AlertTriangle className="w-3.5 h-3.5" /> Recomendaciones éticas:
@@ -715,14 +636,16 @@ export function CampoStep({
             </ul>
           </div>
 
-          <EvidenciaUploader
-            onFiles={handleUploadCampo}
-            accept="image/*,video/*,.pdf"
-            loading={subiendo.length > 0}
-            loadingCount={subiendo.length}
-            disabled={!canUpload}
-            disabledMessage="Solo el equipo asignado puede cargar evidencias."
-          />
+          {!done && (
+            <EvidenciaUploader
+              onFiles={handleUploadCampo}
+              accept="image/*,video/*,.pdf"
+              loading={subiendo.length > 0}
+              loadingCount={subiendo.length}
+              disabled={!canUpload}
+              disabledMessage="Solo el equipo asignado puede cargar evidencias."
+            />
+          )}
 
           {evidCampo.length === 0 && subiendo.length === 0 ? (
             <p className="text-center text-xs text-gray-400 py-2">
@@ -736,27 +659,25 @@ export function CampoStep({
             </div>
           )}
         </div>
-      </details>
+      </Seccion>
 
       {/* 4. Observaciones generales del campo */}
-      <details className="border border-gray-200 rounded-xl overflow-hidden">
-        <summary className="cursor-pointer px-4 py-3 flex items-center gap-2 bg-gray-50 hover:bg-gray-100">
-          <span className="w-6 h-6 rounded-full bg-orange-100 text-orange-700 text-xs font-bold flex items-center justify-center">
-            4
-          </span>
-          <ClipboardList className="w-4 h-4 text-gray-500" />
-          <span className="text-sm font-semibold text-gray-800">Observaciones Generales del Campo</span>
-        </summary>
-        <div className="p-4">
-          <textarea
-            rows={4}
-            className={textareaCls}
-            value={obsBrig}
-            onChange={(e) => setObsBrig(e.target.value)}
-            placeholder="Describe la situación general observada en campo: condiciones del lugar, acceso, riesgos adicionales, coordinación con otras instituciones…"
-          />
+      <Seccion num="4" titulo="Observaciones Generales del Campo" icon={ClipboardList} color="orange">
+        <div>
+          {done && !obsBrig ? (
+            <p className="text-sm text-gray-400 italic">Sin observaciones registradas.</p>
+          ) : (
+            <textarea
+              rows={4}
+              className={textareaCls}
+              value={obsBrig}
+              onChange={(e) => setObsBrig(e.target.value)}
+              placeholder="Describe la situación general observada en campo: condiciones del lugar, acceso, riesgos adicionales, coordinación con otras instituciones…"
+              readOnly={done}
+            />
+          )}
         </div>
-      </details>
+      </Seccion>
 
       {/* Resumen + enviar */}
       <div className="flex flex-wrap items-center gap-3 text-xs text-gray-600">
@@ -781,22 +702,24 @@ export function CampoStep({
         </span>
       </div>
 
-      <button
-        onClick={handleSubmit}
-        disabled={isPending}
-        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-white font-semibold disabled:opacity-50 transition-opacity"
-        style={{ background: "var(--caritas-green)" }}
-      >
-        {isPending ? (
-          <>
-            <Loader2 className="w-4 h-4 animate-spin" /> Enviando…
-          </>
-        ) : (
-          <>
-            <ClipboardList className="w-4 h-4" /> Enviar Levantamiento al Especialista GRD
-          </>
-        )}
-      </button>
+      {!done && (
+        <button
+          onClick={handleSubmit}
+          disabled={isPending}
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-white font-semibold disabled:opacity-50 transition-opacity"
+          style={{ background: "var(--caritas-green)" }}
+        >
+          {isPending ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" /> Enviando…
+            </>
+          ) : (
+            <>
+              <ClipboardList className="w-4 h-4" /> Enviar Levantamiento al Especialista GRD
+            </>
+          )}
+        </button>
+      )}
 
       {ConfirmModalJSX}
 

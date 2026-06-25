@@ -19,7 +19,7 @@ export function EvidenciasRegistro({ evidencias }: { evidencias: EvidenciaDetall
           Aún no se han cargado evidencias para este caso.
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {evidencias.map((ev) => {
             const esImagen = (ev.formato ?? "").startsWith("image/");
             const Icono = esImagen ? ImageIcon : FileText;
