@@ -136,15 +136,19 @@ GET /api/notificaciones/incidencia/:incidenciaId
     },
   })
   ```
-- Devuelve los registros agrupados por `tipo` en el JSON response:
+- Devuelve los registros agrupados por `tipo` en el JSON response. Dentro de
+  cada grupo, `enviadoAt` es el `createdAt` del primer registro del grupo
+  (todos los de un mismo evento se crean en la misma llamada a `createMany`,
+  por lo que sus timestamps son prácticamente iguales):
   ```json
   [
     {
       "tipo": "INFORME_ENVIADO_COMITE",
       "titulo": "Informe enviado al Comité",
-      "eventos": [
-        { "nombre": "Ana Torres", "email": "...", "rol": "COMITEDONACIONES", "createdAt": "..." },
-        { "nombre": "Luis Ríos",  "email": "...", "rol": "COMITEDONACIONES", "createdAt": "..." }
+      "enviadoAt": "2026-06-23T14:32:00Z",
+      "destinatarios": [
+        { "nombre": "Ana Torres", "email": "...", "rol": "COMITEDONACIONES" },
+        { "nombre": "Luis Ríos",  "email": "...", "rol": "COMITEDONACIONES" }
       ]
     },
     ...
