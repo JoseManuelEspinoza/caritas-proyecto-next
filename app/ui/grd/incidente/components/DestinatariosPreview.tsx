@@ -31,14 +31,7 @@ export function DestinatariosPreview({ step, incidenciaId }: Props) {
 
   if (loading) return null;
 
-  if (destinatarios.length === 0) {
-    return (
-      <p className="text-xs text-amber-600 flex items-center gap-1">
-        <Info className="w-3 h-3 shrink-0" />
-        No hay destinatarios configurados para este paso.
-      </p>
-    );
-  }
+  if (destinatarios.length === 0) return null;
 
   const n = destinatarios.length;
   return (

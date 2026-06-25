@@ -255,7 +255,7 @@ export function GrdList({ items, role, globalCounts }: GrdListProps) {
   const [fechaHasta, setFechaHasta] = useState("");
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(5);
+  const [rowsPerPage, setRowsPerPage] = useState(6);
   const [exportando, setExportando] = useState(false);
 
   // Parroquias y categorías únicas derivadas de los items reales
@@ -264,7 +264,7 @@ export function GrdList({ items, role, globalCounts }: GrdListProps) {
 
   const canCreate = role === "admin" || role === "especialistaGRD";
 
-  // Datos a exportar.
+  // Datos a exportar. Familias/Personas como números reales para filtrar/ordenar.
   const buildExportData = () => {
     const headers = [
       "Código",
@@ -278,43 +278,151 @@ export function GrdList({ items, role, globalCounts }: GrdListProps) {
       "Brigadistas",
       "Fecha",
     ];
-    const rows = filtered.map((i) => [
+    const rows: (string | number)[][] = filtered.map((i) => [
       i.codigoCaso ?? "",
       i.tituloIncidencia ?? "",
       i.tipoEvento ?? "",
       i.estadoActual,
       i.direccionEvento ?? "",
       i.parroquia ?? "",
-      String(i.totalFamilias),
-      String(i.totalPersonas),
+      i.totalFamilias,
+      i.totalPersonas,
       i.brigadistas.join("; "),
       new Date(i.fechaRegistro).toLocaleDateString("es-PE", { timeZone: "America/Lima" }),
     ]);
     return { headers, rows };
   };
 
-  // xlsx se carga de forma dinámica para no aumentar el bundle inicial.
+  // Color por estado para la columna "Estado" (fondo claro + texto oscuro), ARGB.
+  const ESTADO_XLSX: Record<string, { bg: string; fg: string }> = {
+    ABIERTO: { bg: "FFFEF3C7", fg: "FF92400E" },
+    ASIGNADO: { bg: "FFDBEAFE", fg: "FF1E40AF" },
+    "DATA RECOPILADA": { bg: "FFFFEDD5", fg: "FF9A3412" },
+    "EN EVALUACION": { bg: "FFEDE9FE", fg: "FF5B21B6" },
+    APROBADO: { bg: "FFD1FAE5", fg: "FF065F46" },
+    ATENDIDO: { bg: "FFCFFAFE", fg: "FF155E75" },
+    OBSERVADO: { bg: "FFFEF3C7", fg: "FF92400E" },
+    RECHAZADO: { bg: "FFFEE2E2", fg: "FF991B1B" },
+    "SEGUIMIENTO ABIERTO": { bg: "FFCCFBF1", fg: "FF115E59" },
+    CERRADO: { bg: "FFF3F4F6", fg: "FF374151" },
+  };
+
+  // ExcelJS se carga dinámicamente para no inflar el bundle inicial.
   const handleExportExcel = async () => {
     setExportando(true);
     try {
-      const XLSX = await import("xlsx");
+      const ExcelJSmod = await import("exceljs");
+      const ExcelJS = (ExcelJSmod as unknown as { default?: typeof ExcelJSmod }).default ?? ExcelJSmod;
       const { headers, rows } = buildExportData();
-      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Incidencias");
-      XLSX.writeFile(wb, `incidencias_${new Date().toISOString().slice(0, 10)}.xlsx`);
+
+      const wb = new ExcelJS.Workbook();
+      wb.creator = "Cáritas Lima — GRD";
+      wb.created = new Date();
+      const ws = wb.addWorksheet("Incidencias", {
+        views: [{ state: "frozen", ySplit: 3 }],
+      });
+
+      const nCols = headers.length;
+      const colLetter = (n: number) => {
+        let s = "";
+        while (n > 0) {
+          const m = (n - 1) % 26;
+          s = String.fromCharCode(65 + m) + s;
+          n = Math.floor((n - 1) / 26);
+        }
+        return s;
+      };
+      const last = colLetter(nCols);
+      const thin = { style: "thin" as const, color: { argb: "FFE5E7EB" } };
+      const borderAll = { top: thin, bottom: thin, left: thin, right: thin };
+
+      // Fila 1: título de marca.
+      ws.mergeCells(`A1:${last}1`);
+      const t = ws.getCell("A1");
+      t.value = "Gestión de Riesgo de Desastres — Cáritas Lima";
+      t.font = { bold: true, size: 14, color: { argb: "FF009850" } };
+      t.alignment = { vertical: "middle" };
+      ws.getRow(1).height = 26;
+
+      // Fila 2: metadatos del export.
+      ws.mergeCells(`A2:${last}2`);
+      const sub = ws.getCell("A2");
+      sub.value = `Exportado el ${new Date().toLocaleString("es-PE", { timeZone: "America/Lima" })} · ${rows.length} incidencia(s)`;
+      sub.font = { size: 10, italic: true, color: { argb: "FF6B7280" } };
+
+      // Fila 3: encabezados con color de marca.
+      const headerRow = ws.getRow(3);
+      headers.forEach((h, i) => {
+        const c = headerRow.getCell(i + 1);
+        c.value = h;
+        c.font = { bold: true, size: 11, color: { argb: "FFFFFFFF" } };
+        c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF009850" } };
+        c.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+        c.border = borderAll;
+      });
+      headerRow.height = 22;
+
+      // Filas de datos: bordes, filas alternas y la columna Estado coloreada.
+      const estadoIdx = headers.indexOf("Estado");
+      rows.forEach((r, idx) => {
+        const row = ws.getRow(4 + idx);
+        r.forEach((val, ci) => {
+          const c = row.getCell(ci + 1);
+          c.value = val;
+          c.border = borderAll;
+          c.alignment = { vertical: "middle", wrapText: ci === 1 || ci === 4 };
+          if (idx % 2 === 1) {
+            c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF9FAFB" } };
+          }
+        });
+        if (estadoIdx >= 0) {
+          const ec = row.getCell(estadoIdx + 1);
+          const col = ESTADO_XLSX[String(r[estadoIdx]).toUpperCase()];
+          if (col) {
+            ec.fill = { type: "pattern", pattern: "solid", fgColor: { argb: col.bg } };
+            ec.font = { bold: true, color: { argb: col.fg } };
+            ec.alignment = { vertical: "middle", horizontal: "center" };
+          }
+        }
+      });
+
+      // Autofiltro sobre los encabezados (fila 3) → columnas filtrables en Excel.
+      ws.autoFilter = { from: { row: 3, column: 1 }, to: { row: 3, column: nCols } };
+
+      // Anchos de columna acordes al contenido.
+      const widths = [16, 30, 14, 18, 36, 30, 10, 10, 28, 13];
+      widths.forEach((w, i) => {
+        ws.getColumn(i + 1).width = w;
+      });
+
+      // Descarga en el navegador.
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `incidencias_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
     } finally {
       setExportando(false);
     }
   };
+
+  // Convierte un ISO UTC a fecha local Lima (YYYY-MM-DD) para comparar igual que el display.
+  const limaDate = (iso: string) =>
+    new Date(iso).toLocaleDateString("sv", { timeZone: "America/Lima" });
 
   // Filtros
   const filtered = items.filter((i) => {
     if (statusFilter !== "all" && i.estadoActual !== statusFilter) return false;
     if (categoryFilter.length > 0 && !categoryFilter.includes(i.tipoEvento ?? "")) return false;
     if (parroquiaFilter.length > 0 && !parroquiaFilter.includes(i.parroquia ?? "")) return false;
-    if (fechaDesde && i.fechaRegistro.slice(0, 10) < fechaDesde) return false;
-    if (fechaHasta && i.fechaRegistro.slice(0, 10) > fechaHasta) return false;
+    const fechaLocal = limaDate(i.fechaRegistro);
+    if (fechaDesde && fechaLocal < fechaDesde) return false;
+    if (fechaHasta && fechaLocal > fechaHasta) return false;
     if (search) {
       const q = search.toLowerCase();
       const hayMatch = [

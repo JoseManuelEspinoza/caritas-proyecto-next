@@ -354,6 +354,21 @@ export async function addEvidenciasCampo(
 }
 
 export async function saveInformeEvaluacion(incidenciaId: string, data: InformeEvaluacionData) {
+  // Validación de stock ANTES de enviar al Comité: si los kits solicitados no
+  // tienen stock suficiente, se bloquea el envío y se listan los faltantes para
+  // que el especialista reponga o ajuste la asignación.
+  const { faltantesStockAsignacion } = await import(
+    "@/core/infrastructure/database/validar-stock-kits"
+  );
+  const faltantes = await faltantesStockAsignacion(data.asignacionFamilias ?? []);
+  if (faltantes.length > 0) {
+    return {
+      message:
+        `No hay stock suficiente para los kits solicitados:\n${faltantes.join("\n")}\n\n` +
+        `Repón el stock en el módulo de Kits o ajusta la asignación antes de enviar al Comité.`,
+    };
+  }
+
   // Si ya está EN EVALUACION solo actualizamos el informe, sin re-transicionar
   const inc = await prisma.incidencia.findUnique({
     where: { idIncidencia: incidenciaId },

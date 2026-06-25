@@ -74,7 +74,6 @@ const fetchBaseData = unstable_cache(
           nombre: true,
           latitud: true,
           longitud: true,
-          createdAt: true,
           planesTrabajo: { where: { estadoAprobacion: "APROBADO" }, select: { idPlanTrabajoGRD: true } },
         },
         orderBy: { nombre: "asc" },
@@ -100,7 +99,6 @@ const fetchBaseData = unstable_cache(
         tienePlan: p.planesTrabajo.length > 0,
         latitud: p.latitud ? Number(p.latitud) : null,
         longitud: p.longitud ? Number(p.longitud) : null,
-        createdAt: p.createdAt,
       })),
       parroquiasList: parroquiasList.map(p => ({ id: p.idParroquia, nombre: p.nombre })),
     };
@@ -380,7 +378,7 @@ export default async function ReportesPage({
     const actividadesTotal = actividadesTotalMap.get(p.idParroquia) ?? 0;
     const actividadesEjecutadas = actividadesEjecMap.get(p.idParroquia) ?? 0;
 
-    const esNueva = p.createdAt ? (Date.now() - p.createdAt.getTime()) < GRACE_MS : false;
+    const esNueva = false;
 
     // Componentes normalizados (0–1 cada uno)
     const pInc = incidencias >= 5 ? 3 : incidencias >= 2 ? 2 : incidencias >= 1 ? 1 : 0;
