@@ -292,6 +292,7 @@ model Parroquia {
   telefono        String?  @unique
   correo          String?  @unique
   estado          String   @default("ACTIVO")
+  createdAt       DateTime @default(now())
 
   lugarCatalogo CatalogoLugar? @relation(fields: [idLugarCatalogo], references: [idLugar])
 
@@ -547,6 +548,7 @@ model AsignacionBrigadistaIncidencia {
   updatedAt           DateTime  @updatedAt
   deletedAt           DateTime?
 
+  @@unique([idIncidencia, idBrigadistaParroquial])
   @@index([idIncidencia, estadoAsignacion], map: "idx_asig_incidencia_estado")
   @@index([idBrigadistaParroquial, estadoAsignacion], map: "idx_asig_brigadista_estado")
   @@index([idUsuarioAsignadorGRD, fechaAsignacion], map: "idx_asig_usuario_fecha")
@@ -940,6 +942,7 @@ model SimulacroBrigadista {
   brigadista BrigadistaParroquial @relation(fields: [idBrigadistaParroquial], references: [idBrigadistaParroquial])
   asignador  UsuarioGRD?          @relation("AsignadorSimulacro", fields: [idUsuarioAsignadorGRD], references: [idUsuarioGRD])
 
+  @@unique([idActividadPreventiva, idBrigadistaParroquial])
   @@map("simulacro_brigadista")
 }
 

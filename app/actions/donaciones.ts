@@ -28,6 +28,14 @@ export async function registrarEntregaAyuda(input: {
   if (!["ESPECIALISTAGRD", "ADMINISTRADOR"].includes(session.role)) {
     return { message: "No tienes permisos para esta acción." };
   }
+  if (!input.lugarEntrega?.trim()) return { message: "El lugar de entrega es obligatorio." };
+  if (!input.tipoAyuda?.trim()) return { message: "El tipo de ayuda es obligatorio." };
+  if (!input.descripcionAyuda?.trim()) return { message: "La descripción de la ayuda es obligatoria." };
+  if (input.cantidadEntregada !== undefined && input.cantidadEntregada !== null) {
+    if (!Number.isInteger(input.cantidadEntregada) || input.cantidadEntregada < 1)
+      return { message: "La cantidad entregada debe ser un número entero mayor a 0." };
+  }
+
   const idUsuarioResponsableGRD = await getUsuarioGRDId();
   if (!idUsuarioResponsableGRD)
     return { message: "Tu usuario no tiene perfil GRD asociado." };
