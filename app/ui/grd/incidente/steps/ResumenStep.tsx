@@ -18,6 +18,7 @@ import { parseInforme } from "@/core/application/dtos/InformeContenidoDTO";
 import { InfoField } from "@/app/ui/grd/incidente/components/InfoField";
 import { ResumenBloque } from "@/app/ui/grd/incidente/components/ResumenBloque";
 import { EvidenciasRegistro } from "@/app/ui/grd/incidente/components/EvidenciasRegistro";
+import { NotificacionesHistorial } from "@/app/ui/grd/incidente/components/NotificacionesHistorial";
 import { fmtDate, fmtDateTime } from "@/app/ui/grd/incidente/lib/format";
 
 function parseCausa(raw: string | null | undefined): string {
@@ -478,6 +479,9 @@ export function ResumenStep({ data }: { data: IncidenciaDetalleOutput }) {
           </div>
         </ResumenBloque>
       )}
+
+      {/* 11. Notificaciones enviadas */}
+      <NotificacionesHistorial incidenciaId={data.idIncidencia} />
     </div>
   );
 }
