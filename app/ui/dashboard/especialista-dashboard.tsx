@@ -19,37 +19,41 @@ import {
 } from "lucide-react";
 import type { IncidenteResumen } from "./admin-dashboard";
 
-const STATUS_CFG: Record<string, { label: string; color: string; bg: string; dot: string }> = {
-  ABIERTO: { label: "Abierto", color: "text-yellow-700", bg: "bg-yellow-50", dot: "bg-yellow-500" },
-  ASIGNADO: { label: "Asignado", color: "text-blue-700", bg: "bg-blue-50", dot: "bg-blue-500" },
+const STATUS_CFG: Record<string, { label: string; color: string; bg: string; dot: string; border: string }> = {
+  ABIERTO: { label: "Abierto", color: "text-yellow-700", bg: "bg-yellow-50", dot: "bg-yellow-500", border: "border-yellow-200" },
+  ASIGNADO: { label: "Asignado", color: "text-blue-700", bg: "bg-blue-50", dot: "bg-blue-500", border: "border-blue-200" },
   "DATA RECOPILADA": {
     label: "Data Recopilada",
     color: "text-orange-700",
     bg: "bg-orange-50",
     dot: "bg-orange-500",
+    border: "border-orange-200",
   },
   "EN EVALUACION": {
     label: "En Evaluación",
     color: "text-purple-700",
     bg: "bg-purple-50",
     dot: "bg-purple-500",
+    border: "border-purple-200",
   },
   OBSERVADO: {
     label: "Observado",
     color: "text-amber-700",
     bg: "bg-amber-50",
     dot: "bg-amber-500",
+    border: "border-amber-200",
   },
-  APROBADO: { label: "Aprobado", color: "text-[#009850]", bg: "bg-green-50", dot: "bg-[#009850]" },
-  ATENDIDO: { label: "Atendido", color: "text-[#00C8B4]", bg: "bg-cyan-50", dot: "bg-[#00C8B4]" },
+  APROBADO: { label: "Aprobado", color: "text-[#009850]", bg: "bg-green-50", dot: "bg-[#009850]", border: "border-green-200" },
+  ATENDIDO: { label: "Atendido", color: "text-[#00C8B4]", bg: "bg-cyan-50", dot: "bg-[#00C8B4]", border: "border-cyan-200" },
   "SEGUIMIENTO ABIERTO": {
     label: "Seguimiento",
     color: "text-[#91D723]",
     bg: "bg-lime-50",
     dot: "bg-[#91D723]",
+    border: "border-lime-200",
   },
-  CERRADO: { label: "Cerrado", color: "text-gray-600", bg: "bg-gray-50", dot: "bg-gray-400" },
-  RECHAZADO: { label: "Rechazado", color: "text-red-700", bg: "bg-red-50", dot: "bg-red-500" },
+  CERRADO: { label: "Cerrado", color: "text-gray-600", bg: "bg-gray-50", dot: "bg-gray-400", border: "border-gray-200" },
+  RECHAZADO: { label: "Rechazado", color: "text-red-700", bg: "bg-red-50", dot: "bg-red-500", border: "border-red-200" },
 };
 
 const CAT_ICONS: Record<string, any> = {
@@ -153,7 +157,7 @@ function IncidentRow({ inc }: { inc: IncidenteResumen }) {
         </p>
       </div>
       <span
-        className={`flex-shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${cfg.color} ${cfg.bg}`}
+        className={`flex-shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${cfg.border} ${cfg.color} ${cfg.bg}`}
       >
         <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
         {cfg.label}
@@ -340,7 +344,7 @@ export function EspecialistaDashboard({
                         </p>
                         <p className="text-[10px] text-gray-500 truncate">{inc.codigoCaso ?? "—"}</p>
                       </div>
-                      <span className={`shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-semibold border ${cfg.color} ${cfg.bg}`}>
+                      <span className={`shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${cfg.border} ${cfg.color} ${cfg.bg}`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
                         {cfg.label}
                       </span>
