@@ -1,5 +1,9 @@
+"use client";
+
+import { useMemo, useState } from "react";
 import { Users, ExternalLink } from "lucide-react";
 import { NuevoUsuarioModal } from "./nuevo-usuario-modal";
+import { PaginationControls } from "@/app/ui/shared/pagination-controls";
 
 type Usuario = { id: string; email: string; name: string; role: string; estado: string };
 
@@ -19,10 +23,9 @@ const ROLE_BADGE: Record<string, string> = {
 };
 
 /**
- * Gestión de usuarios — SOLO LECTURA.
- * Con Keycloak como proveedor único, los usuarios (altas, contraseñas, roles) se
- * administran en la consola de Keycloak. Esta tabla espeja los usuarios que ya
- * han iniciado sesión en la app.
+ * Gestión de usuarios. La creación se hace con "Nuevo usuario" (Keycloak Admin API);
+ * la gestión avanzada (contraseñas, desactivar) en el "Panel avanzado" de Keycloak.
+ * La tabla espeja los usuarios de la app y permite filtrar por rol y paginar.
  */
 export function UsuariosModule({
   usuarios,
@@ -31,6 +34,22 @@ export function UsuariosModule({
   usuarios: Usuario[];
   keycloakAdminUrl?: string;
 }) {
+  const [roleFilter, setRoleFilter] = useState<string>("all");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  const filtered = useMemo(
+    () => (roleFilter === "all" ? usuarios : usuarios.filter((u) => u.role === roleFilter)),
+    [usuarios, roleFilter]
+  );
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const start = (safePage - 1) * pageSize;
+  const visible = filtered.slice(start, start + pageSize);
+  const from = filtered.length === 0 ? 0 : start + 1;
+  const to = Math.min(start + pageSize, filtered.length);
+
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between gap-3 mb-6">
@@ -70,6 +89,29 @@ export function UsuariosModule({
         </p>
       </div>
 
+      {/* Filtro por rol */}
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <span className="text-xs text-gray-500 whitespace-nowrap">Filtrar por rol:</span>
+        <select
+          value={roleFilter}
+          onChange={(e) => {
+            setRoleFilter(e.target.value);
+            setPage(1);
+          }}
+          className="text-xs border border-[var(--caritas-border)] rounded-lg px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#009850]/20 focus:border-[#009850]"
+        >
+          <option value="all">Todos los roles</option>
+          {Object.entries(ROLE_LABEL).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+        <span className="text-xs text-gray-400">
+          {filtered.length} usuario{filtered.length === 1 ? "" : "s"}
+        </span>
+      </div>
+
       <div className="bg-white border border-[var(--caritas-border)] rounded-xl overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-gray-600">
@@ -81,7 +123,7 @@ export function UsuariosModule({
             </tr>
           </thead>
           <tbody>
-            {usuarios.map((u) => (
+            {visible.map((u) => (
               <tr key={u.id} className="border-t border-[var(--caritas-border)]">
                 <td className="px-4 py-2 font-medium text-[var(--caritas-text)]">{u.name}</td>
                 <td className="px-4 py-2 text-gray-600">{u.email}</td>
@@ -101,16 +143,34 @@ export function UsuariosModule({
                 </td>
               </tr>
             ))}
-            {usuarios.length === 0 && (
+            {filtered.length === 0 && (
               <tr>
                 <td colSpan={4} className="text-center py-8 text-gray-500">
-                  Aún no hay usuarios que hayan iniciado sesión.
+                  {roleFilter === "all"
+                    ? "Aún no hay usuarios que hayan iniciado sesión."
+                    : "No hay usuarios con ese rol."}
                 </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
+
+      <PaginationControls
+        total={filtered.length}
+        start={from}
+        end={to}
+        page={safePage}
+        totalPages={totalPages}
+        onPrevious={() => setPage((p) => Math.max(1, p - 1))}
+        onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
+        pageSize={pageSize}
+        onPageSizeChange={(s) => {
+          setPageSize(s);
+          setPage(1);
+        }}
+        className="mt-4"
+      />
     </div>
   );
 }
