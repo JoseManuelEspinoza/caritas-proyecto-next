@@ -526,7 +526,10 @@ export async function listarMisCursos(): Promise<CursoInscrito[]> {
   // Migración lazy: certificar aprobados sin certificación, y completar URL faltante
   for (const i of inscripciones) {
     const evals = i.evaluaciones;
-    const aprobado = evals.some((e) => e.resultado === "APROBADO");
+    const finalAprobado = evals.some((e) => e.resultado === "APROBADO" && e.tipoEvaluacion !== "INICIAL");
+    const inicialAprobado = evals.some((e) => e.resultado === "APROBADO" && e.tipoEvaluacion === "INICIAL");
+    const tieneEvalInicial = evals.some((e) => e.tipoEvaluacion === "INICIAL");
+    const aprobado = finalAprobado && (!tieneEvalInicial || inicialAprobado);
     const constanciaUrl = `/capacitaciones/constancia/${i.idInscripcionCurso}`;
     if (aprobado && i.certificacion === null) {
       try {
@@ -564,7 +567,9 @@ export async function listarMisCursos(): Promise<CursoInscrito[]> {
       responsable: `${i.curso.usuarioResponsable.nombres} ${i.curso.usuarioResponsable.apellidos}`.trim(),
       idInscripcion: i.idInscripcionCurso,
       estadoInscripcion: i.estadoInscripcion,
-      evalInicial: evalsInicial[0]?.nota != null ? Number(evalsInicial[0].nota) : null,
+      evalInicial: evalsInicial.length > 0 && evalsInicial[evalsInicial.length - 1].nota != null
+        ? Number(evalsInicial[evalsInicial.length - 1].nota)
+        : null,
       evalFinal: evalsFinal.length > 0 && evalsFinal[evalsFinal.length - 1].nota != null
         ? Number(evalsFinal[evalsFinal.length - 1].nota)
         : null,
@@ -1106,7 +1111,7 @@ export async function registrarEvaluacion(
       field: "Nota",
       newValue: nota.toString(),
     });
-    if (r.resultado === "APROBADO") {
+    if (r.resultado === "APROBADO" && opts?.tipoEvaluacion !== "INICIAL") {
       try {
         const constanciaUrl = `/capacitaciones/constancia/${idInscripcion}`;
         await makeCursoUseCases().certificar.execute(idInscripcion, constanciaUrl);

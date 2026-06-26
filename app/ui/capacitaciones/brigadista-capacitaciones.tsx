@@ -183,6 +183,21 @@ function DetalleInscrito({ curso, onVolver }: { curso: CursoInscrito; onVolver: 
           </div>
         </div>
 
+        {/* Nota de certificación */}
+        {(curso.cuestionarioInicial || curso.cuestionarioFinal) && !curso.certificado && (
+          <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg">
+            <ClipboardList className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+            <p className="text-xs text-blue-600">
+              Para certificarte debes aprobar{" "}
+              {curso.cuestionarioInicial && curso.cuestionarioFinal
+                ? "el examen inicial y el examen final"
+                : curso.cuestionarioInicial
+                ? "el examen inicial"
+                : "el examen final"}.
+            </p>
+          </div>
+        )}
+
         {/* Evaluación inicial */}
         {curso.cuestionarioInicial && (
           <SeccionAcordeon titulo="Evaluación inicial">
@@ -483,7 +498,6 @@ export function BrigadistaCapacitaciones({
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {cursosFiltrados.map((c) => {
-                const aprobado = c.certificado || c.resultado === "APROBADO";
                 return (
                   <button
                     key={c.id}
