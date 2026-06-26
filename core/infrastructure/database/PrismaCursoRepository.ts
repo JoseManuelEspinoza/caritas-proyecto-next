@@ -133,7 +133,7 @@ export class PrismaCursoRepository implements ICursoRepository {
       where: {
         idInscripcionCurso: idInscripcion,
         resultado: "APROBADO",
-        tipoEvaluacion: { not: "INICIAL" },
+        tipoEvaluacion: { in: ["FINAL", "UNICO"] },
       },
     });
     if (finalAprobado === 0) return false;

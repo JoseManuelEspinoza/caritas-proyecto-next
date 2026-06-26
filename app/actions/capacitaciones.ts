@@ -526,10 +526,15 @@ export async function listarMisCursos(): Promise<CursoInscrito[]> {
   // Migración lazy: certificar aprobados sin certificación, y completar URL faltante
   for (const i of inscripciones) {
     const evals = i.evaluaciones;
-    const finalAprobado = evals.some((e) => e.resultado === "APROBADO" && e.tipoEvaluacion !== "INICIAL");
+    // Usar tipos explícitos para evitar que evaluaciones con tipoEvaluacion=null cuenten como final
+    const finalAprobado = evals.some((e) =>
+      e.resultado === "APROBADO" &&
+      (e.tipoEvaluacion === "FINAL" || e.tipoEvaluacion === "UNICO")
+    );
     const inicialAprobado = evals.some((e) => e.resultado === "APROBADO" && e.tipoEvaluacion === "INICIAL");
-    const tieneEvalInicial = evals.some((e) => e.tipoEvaluacion === "INICIAL");
-    const aprobado = finalAprobado && (!tieneEvalInicial || inicialAprobado);
+    // Verificar si el CURSO tiene examen inicial, no si el alumno lo rindió
+    const tieneExamenInicial = !!inicialesPorCurso[i.curso.idCursoCapacitacion];
+    const aprobado = finalAprobado && (!tieneExamenInicial || inicialAprobado);
     const constanciaUrl = `/capacitaciones/constancia/${i.idInscripcionCurso}`;
     if (aprobado && i.certificacion === null) {
       try {
