@@ -81,7 +81,7 @@ export function CuestionarioModal({
     inicial?.titulo ?? (tipoDefault === "INICIAL" ? "Evaluación Inicial" : "Evaluación Final")
   );
   const [descripcion, setDescripcion] = useState(inicial?.descripcion ?? "");
-  const notaAprobatoria = 20;
+  const [notaAprobatoria, setNotaAprobatoria] = useState(inicial?.notaAprobatoria ?? 20);
   const [maxIntentos, setMaxIntentos] = useState(inicial?.maxIntentos ?? 3);
   const [preguntas, setPreguntas] = useState<PreguntaInput[]>(
     inicial ? fromDetalle(inicial) : [PREGUNTA_VACIA()]
@@ -129,11 +129,12 @@ export function CuestionarioModal({
   const eliminarPregunta = (pi: number) => setPreguntas((prev) => prev.filter((_, i) => i !== pi));
 
   const puntajeTotal = preguntas.reduce((s, p) => s + p.puntaje, 0);
-  const totalExcedido = puntajeTotal > notaAprobatoria;
+  const ESCALA = 20;
+  const totalExcedido = puntajeTotal > ESCALA;
 
   const clampPuntaje = (pi: number, raw: number) => {
     const puntajeOtras = preguntas.reduce((s, p, i) => (i !== pi ? s + p.puntaje : s), 0);
-    const maxPermitido = Math.max(1, notaAprobatoria - puntajeOtras);
+    const maxPermitido = Math.max(1, ESCALA - puntajeOtras);
     const v = Math.floor(raw);
     return isNaN(v) ? 1 : Math.min(maxPermitido, Math.max(1, v));
   };
@@ -149,7 +150,7 @@ export function CuestionarioModal({
     }
     startTransition(async () => {
       const preguntasNormalizadas = preguntas.map((p) => ({ ...p, puntaje: Math.floor(p.puntaje) }));
-      const payload = { tipoCuestionario: tipo, titulo, descripcion: descripcion || undefined, notaAprobatoria: 20, maxIntentos, preguntas: preguntasNormalizadas };
+      const payload = { tipoCuestionario: tipo, titulo, descripcion: descripcion || undefined, notaAprobatoria, maxIntentos, preguntas: preguntasNormalizadas };
       const res = esEdicion
         ? await editarCuestionario(idCuestionario!, payload)
         : await crearCuestionario(idCurso, payload);
@@ -173,7 +174,7 @@ export function CuestionarioModal({
         Cancelar
       </button>
       <button
-        disabled={pending || !titulo.trim() || totalExcedido || puntajeTotal !== notaAprobatoria}
+        disabled={pending || !titulo.trim() || totalExcedido || puntajeTotal !== ESCALA || notaAprobatoria < 1 || notaAprobatoria > ESCALA}
         onClick={guardar}
         className="flex items-center gap-2 px-4 py-2 text-sm bg-[var(--caritas-green)] text-white rounded-lg disabled:opacity-50 hover:opacity-90 transition-opacity"
       >
@@ -202,12 +203,17 @@ export function CuestionarioModal({
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Nota aprobatoria (sobre 20)</label>
+            <label className="block text-xs text-gray-500 mb-1">Nota aprobatoria (sobre {notaAprobatoria})</label>
             <input
               type="number"
-              value={20}
-              readOnly
-              className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm bg-gray-100 text-gray-500 cursor-not-allowed"
+              min={1}
+              max={20}
+              value={notaAprobatoria}
+              onChange={(e) => {
+                const v = Math.floor(Number(e.target.value));
+                setNotaAprobatoria(isNaN(v) ? 20 : Math.min(20, Math.max(1, v)));
+              }}
+              className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]"
             />
           </div>
           <div>
@@ -236,13 +242,13 @@ export function CuestionarioModal({
             <span className={`text-sm font-semibold ${
               totalExcedido
                 ? "text-red-600"
-                : puntajeTotal < notaAprobatoria
+                : puntajeTotal < ESCALA
                 ? "text-amber-600"
                 : "text-[var(--caritas-text)]"
             }`}>
-              Preguntas ({preguntas.length}) · Total: {puntajeTotal} / {notaAprobatoria} pts
+              Preguntas ({preguntas.length}) · Total: {puntajeTotal} / {ESCALA} pts
               {totalExcedido && " — excede el máximo"}
-              {!totalExcedido && puntajeTotal < notaAprobatoria && ` — faltan ${notaAprobatoria - puntajeTotal} pts para llegar a 20`}
+              {!totalExcedido && puntajeTotal < ESCALA && ` — faltan ${ESCALA - puntajeTotal} pts`}
             </span>
           </div>
 

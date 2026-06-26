@@ -128,10 +128,36 @@ export class PrismaCursoRepository implements ICursoRepository {
   }
 
   async tieneEvaluacionAprobada(idInscripcion: string): Promise<boolean> {
-    const count = await prisma.evaluacionCurso.count({
-      where: { idInscripcionCurso: idInscripcion, resultado: "APROBADO" },
+    // Verificar que el examen final/único esté aprobado
+    const finalAprobado = await prisma.evaluacionCurso.count({
+      where: {
+        idInscripcionCurso: idInscripcion,
+        resultado: "APROBADO",
+        tipoEvaluacion: { not: "INICIAL" },
+      },
     });
-    return count > 0;
+    if (finalAprobado === 0) return false;
+
+    // Si el curso tiene examen inicial, también debe estar aprobado
+    const inscripcion = await prisma.inscripcionCurso.findUnique({
+      where: { idInscripcionCurso: idInscripcion },
+      select: { idCursoCapacitacion: true },
+    });
+    if (!inscripcion) return false;
+
+    const tieneInicial = await prisma.cuestionarioCurso.count({
+      where: { idCursoCapacitacion: inscripcion.idCursoCapacitacion, tipoCuestionario: "INICIAL", estado: "ACTIVO" },
+    });
+    if (tieneInicial === 0) return true;
+
+    const inicialAprobado = await prisma.evaluacionCurso.count({
+      where: {
+        idInscripcionCurso: idInscripcion,
+        resultado: "APROBADO",
+        tipoEvaluacion: "INICIAL",
+      },
+    });
+    return inicialAprobado > 0;
   }
 
   async upsertCertificacion(
