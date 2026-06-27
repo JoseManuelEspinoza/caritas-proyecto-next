@@ -173,6 +173,7 @@ function SesionCard({
   const [expandida, setExpandida] = useState(true);
   const [editandoUnidad, setEditandoUnidad] = useState(false);
   const [tituloUnidad, setTituloUnidad] = useState(sesion.tituloUnidad);
+  const [descripcionUnidad, setDescripcionUnidad] = useState(sesion.descripcion ?? "");
   const [menuAbierto, setMenuAbierto] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const { showConfirm, ConfirmModalJSX } = useConfirm();
@@ -180,7 +181,7 @@ function SesionCard({
   const guardarTituloUnidad = () => {
     if (!tituloUnidad.trim()) return;
     startTransition(async () => {
-      await editarSesion(sesion.id, { tituloUnidad });
+      await editarSesion(sesion.id, { tituloUnidad, descripcion: descripcionUnidad });
       setEditandoUnidad(false);
       onRefresh();
     });
@@ -218,35 +219,51 @@ function SesionCard({
 
   return (
     <div className="border border-[var(--caritas-border)] rounded-xl overflow-hidden">
-      <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-l-4 border-[var(--caritas-green)]">
-        <button onClick={() => setExpandida(!expandida)} className="shrink-0">
+      <div className="flex items-start gap-2 px-4 py-3 bg-gray-50 border-l-4 border-[var(--caritas-green)]">
+        <button onClick={() => setExpandida(!expandida)} className="shrink-0 mt-0.5 cursor-pointer">
           <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${expandida ? "" : "-rotate-90"}`} />
         </button>
-        {editandoUnidad ? (
-          <input
-            value={tituloUnidad}
-            onChange={(e) => setTituloUnidad(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") guardarTituloUnidad(); if (e.key === "Escape") { setEditandoUnidad(false); setTituloUnidad(sesion.tituloUnidad); } }}
-            className="flex-1 text-sm font-semibold px-2 py-0.5 border border-[var(--caritas-green)] rounded focus:outline-none"
-            autoFocus
-          />
-        ) : (
-          <span className="text-sm font-semibold text-gray-800 flex-1 truncate">{sesion.tituloUnidad}</span>
-        )}
-        <span className="text-[11px] text-gray-500 bg-white border border-gray-200 px-2 py-0.5 rounded-full shrink-0 font-medium">
+        <div className="flex-1 min-w-0">
+          {editandoUnidad ? (
+            <div className="space-y-2">
+              <input
+                value={tituloUnidad}
+                onChange={(e) => setTituloUnidad(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") guardarTituloUnidad(); if (e.key === "Escape") { setEditandoUnidad(false); setTituloUnidad(sesion.tituloUnidad); setDescripcionUnidad(sesion.descripcion ?? ""); } }}
+                className="w-full text-sm font-semibold px-2 py-0.5 border border-[var(--caritas-green)] rounded focus:outline-none"
+                autoFocus
+              />
+              <textarea
+                value={descripcionUnidad}
+                onChange={(e) => setDescripcionUnidad(e.target.value)}
+                placeholder="Descripción de la unidad (opcional)"
+                rows={2}
+                className="w-full text-xs text-gray-600 bg-white border border-gray-200 rounded px-2 py-1 focus:outline-none focus:border-[var(--caritas-green)] resize-none"
+              />
+            </div>
+          ) : (
+            <>
+              <span className="text-sm font-semibold text-gray-800 block truncate">{sesion.tituloUnidad}</span>
+              {sesion.descripcion && (
+                <span className="text-xs text-gray-400 mt-0.5 block line-clamp-2">{sesion.descripcion}</span>
+              )}
+            </>
+          )}
+        </div>
+        <span className="text-[11px] text-gray-500 bg-white border border-gray-200 px-2 py-0.5 rounded-full shrink-0 font-medium mt-0.5">
           {sesion.materiales.length} material{sesion.materiales.length !== 1 ? "es" : ""}
         </span>
         {editandoUnidad ? (
           <>
-            <button onClick={guardarTituloUnidad} disabled={pending} className="text-xs text-[var(--caritas-green)] font-medium hover:underline shrink-0">Guardar</button>
-            <button onClick={() => { setEditandoUnidad(false); setTituloUnidad(sesion.tituloUnidad); }} className="text-xs text-gray-400 hover:text-gray-600 shrink-0">Cancelar</button>
+            <button onClick={guardarTituloUnidad} disabled={pending} className="text-xs text-[var(--caritas-green)] font-medium hover:underline shrink-0 cursor-pointer">Guardar</button>
+            <button onClick={() => { setEditandoUnidad(false); setTituloUnidad(sesion.tituloUnidad); setDescripcionUnidad(sesion.descripcion ?? ""); }} className="text-xs text-gray-400 hover:text-gray-600 shrink-0 cursor-pointer">Cancelar</button>
           </>
         ) : (
           <div className="flex items-center gap-1 shrink-0">
-            <button onClick={() => setEditandoUnidad(true)} className="p-1.5 text-gray-400 hover:text-[var(--caritas-green)] hover:bg-white rounded-lg transition-colors">
+            <button onClick={() => setEditandoUnidad(true)} className="p-1.5 text-gray-400 hover:text-[var(--caritas-green)] hover:bg-white rounded-lg transition-colors cursor-pointer">
               <Pencil className="w-3.5 h-3.5" />
             </button>
-            <button onClick={handleEliminarUnidad} disabled={pending} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+            <button onClick={handleEliminarUnidad} disabled={pending} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer disabled:opacity-40">
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -332,6 +349,7 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
   const [panelAbierto, setPanelAbierto] = useState(true);
   const [showSesion, setShowSesion] = useState(false);
   const [sesionTitulo, setSesionTitulo] = useState("");
+  const [sesionCantidad, setSesionCantidad] = useState(1);
   const [showCuestionario, setShowCuestionario] = useState(false);
   const [cuestionarioEditar, setCuestionarioEditar] = useState<CuestionarioDetalle | null>(null);
   const [tipoCuestionarioActivo, setTipoCuestionarioActivo] = useState<"INICIAL" | "FINAL">("FINAL");
@@ -592,19 +610,26 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
 
                     <div className="flex flex-col gap-2 shrink-0">
                       {current.estadoCurso === "BORRADOR" && (
-                        <button
-                          onClick={() => run(() => cambiarEstadoCurso(current.id, "PUBLICAR"), "Curso publicado.")}
-                          disabled={pending}
-                          className="flex items-center gap-1.5 px-4 py-2 text-sm bg-[var(--caritas-green)] text-white rounded-lg disabled:opacity-50 hover:opacity-90 transition-opacity"
-                        >
-                          <Send className="w-3.5 h-3.5" /> Publicar
-                        </button>
+                        !current.cuestionarioFinal && !current.cuestionarioInicial ? (
+                          <div className="flex items-center gap-1.5 px-3 py-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg">
+                            <Send className="w-3.5 h-3.5 opacity-50" />
+                            <span>Agrega una evaluación para publicar</span>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => run(() => cambiarEstadoCurso(current.id, "PUBLICAR"), "Curso publicado.")}
+                            disabled={pending}
+                            className="flex items-center gap-1.5 px-4 py-2 text-sm bg-[var(--caritas-green)] text-white rounded-lg disabled:opacity-50 hover:opacity-90 transition-opacity cursor-pointer"
+                          >
+                            <Send className="w-3.5 h-3.5" /> Publicar
+                          </button>
+                        )
                       )}
                       {current.estadoCurso === "PUBLICADO" && (
                         <button
                           onClick={() => run(() => cambiarEstadoCurso(current.id, "CERRAR"), "Curso cerrado.")}
                           disabled={pending}
-                          className="flex items-center gap-1.5 px-4 py-2 text-sm border border-[var(--caritas-border)] rounded-lg disabled:opacity-50 hover:bg-gray-50 transition-colors"
+                          className="flex items-center gap-1.5 px-4 py-2 text-sm border border-[var(--caritas-border)] rounded-lg disabled:opacity-50 hover:bg-gray-50 transition-colors cursor-pointer"
                         >
                           <Lock className="w-3.5 h-3.5" /> Cerrar inscripciones
                         </button>
@@ -617,7 +642,7 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
                 <div className="flex border-b border-[var(--caritas-border)] mb-5">
                   <button
                     onClick={() => setActiveTab("contenido")}
-                    className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === "contenido" ? "border-[var(--caritas-green)] text-[var(--caritas-green)]" : "border-transparent text-gray-500 hover:text-[var(--caritas-text)] hover:border-gray-200"}`}
+                    className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors cursor-pointer ${activeTab === "contenido" ? "border-[var(--caritas-green)] text-[var(--caritas-green)]" : "border-transparent text-gray-500 hover:text-[var(--caritas-text)] hover:border-gray-200"}`}
                   >
                     <BookOpen className="w-4 h-4" />
                     Contenido
@@ -625,7 +650,7 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
                   </button>
                   <button
                     onClick={() => setActiveTab("evaluaciones")}
-                    className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === "evaluaciones" ? "border-[var(--caritas-green)] text-[var(--caritas-green)]" : "border-transparent text-gray-500 hover:text-[var(--caritas-text)] hover:border-gray-200"}`}
+                    className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors cursor-pointer ${activeTab === "evaluaciones" ? "border-[var(--caritas-green)] text-[var(--caritas-green)]" : "border-transparent text-gray-500 hover:text-[var(--caritas-text)] hover:border-gray-200"}`}
                   >
                     <ClipboardList className="w-4 h-4" />
                     Evaluaciones
@@ -641,7 +666,7 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
                         setParticipantesCargados(true);
                       }
                     }}
-                    className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === "participantes" ? "border-[var(--caritas-green)] text-[var(--caritas-green)]" : "border-transparent text-gray-500 hover:text-[var(--caritas-text)] hover:border-gray-200"}`}
+                    className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors cursor-pointer ${activeTab === "participantes" ? "border-[var(--caritas-green)] text-[var(--caritas-green)]" : "border-transparent text-gray-500 hover:text-[var(--caritas-text)] hover:border-gray-200"}`}
                   >
                     <Users className="w-4 h-4" />
                     Participantes
@@ -654,8 +679,8 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
                   <div className="space-y-3">
                     <div className="flex justify-end">
                       <button
-                        onClick={() => setShowSesion(true)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-[var(--caritas-border)] rounded-lg hover:bg-gray-50 transition-colors"
+                        onClick={() => { setSesionTitulo(""); setSesionCantidad(1); setShowSesion(true); }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-[var(--caritas-border)] rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
                       >
                         <Plus className="w-3.5 h-3.5" /> Nueva unidad
                       </button>
@@ -766,6 +791,8 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
                       setParticipantes(data);
                     }}
                     loading={loadingParticipantes}
+                    maxIntentosInicial={current.cuestionarioInicial?.maxIntentos}
+                    maxIntentosFinal={current.cuestionarioFinal?.maxIntentos}
                   />
                 )}
 
@@ -782,40 +809,64 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
 
                 {/* Modal: Nueva sesión */}
                 {showSesion && (
-                  <Modal title="Nueva Unidad" onClose={() => { setShowSesion(false); setSesionTitulo(""); }}>
+                  <Modal title="Nueva Unidad" onClose={() => { setShowSesion(false); setSesionTitulo(""); setSesionCantidad(1); }}>
                     <div className="space-y-4">
                       <div>
-                        <label className="block text-xs text-gray-500 mb-1">Título de la unidad *</label>
+                        <label className="block text-xs text-gray-500 mb-1">Cantidad de unidades a crear</label>
                         <input
-                          value={sesionTitulo}
-                          onChange={(e) => setSesionTitulo(e.target.value)}
-                          placeholder="Ej. Introducción al GRD"
+                          type="number"
+                          min={1}
+                          max={10}
+                          value={sesionCantidad}
+                          onChange={(e) => setSesionCantidad(Math.max(1, Math.min(10, parseInt(e.target.value) || 1)))}
                           className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]"
-                          autoFocus
                         />
                       </div>
-                      <p className="text-xs text-gray-400">
-                        Unidad {current.sesiones.length + 1} · {current.nombreCurso}
-                      </p>
+                      {sesionCantidad === 1 && (
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Título de la unidad *</label>
+                          <input
+                            value={sesionTitulo}
+                            onChange={(e) => setSesionTitulo(e.target.value)}
+                            placeholder="Ej. Introducción al GRD"
+                            className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]"
+                            autoFocus
+                          />
+                        </div>
+                      )}
+                      {sesionCantidad > 1 && (
+                        <div className="text-xs text-gray-500 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+                          Se crearán {sesionCantidad} unidades: <strong>Unidad {current.sesiones.length + 1}</strong> — <strong>Unidad {current.sesiones.length + sesionCantidad}</strong>.
+                        </div>
+                      )}
                       <div className="flex justify-end gap-2">
                         <button
-                          onClick={() => { setShowSesion(false); setSesionTitulo(""); }}
-                          className="px-4 py-2 text-sm border border-[var(--caritas-border)] rounded-lg hover:bg-gray-50"
+                          onClick={() => { setShowSesion(false); setSesionTitulo(""); setSesionCantidad(1); }}
+                          className="px-4 py-2 text-sm border border-[var(--caritas-border)] rounded-lg hover:bg-gray-50 cursor-pointer"
                         >
                           Cancelar
                         </button>
                         <button
-                          disabled={pending || !sesionTitulo.trim()}
-                          onClick={() =>
-                            run(
-                              () => crearSesion(current.id, { tituloUnidad: sesionTitulo }),
-                              "Unidad creada.",
-                              () => { setShowSesion(false); setSesionTitulo(""); }
-                            )
-                          }
-                          className="px-4 py-2 text-sm bg-[var(--caritas-green)] text-white rounded-lg disabled:opacity-50"
+                          disabled={pending || (sesionCantidad === 1 && !sesionTitulo.trim())}
+                          onClick={() => {
+                            const cantidad = Math.max(1, Math.min(10, sesionCantidad));
+                            startTransition(async () => {
+                              const baseOrden = current.sesiones.length;
+                              for (let i = 0; i < cantidad; i++) {
+                                const titulo = cantidad === 1 ? sesionTitulo.trim() : `Unidad ${baseOrden + i + 1}`;
+                                const res = await crearSesion(current.id, { tituloUnidad: titulo });
+                                if (res?.message) { toast.error(res.message); return; }
+                              }
+                              toast.success(cantidad === 1 ? "Unidad creada." : `${cantidad} unidades creadas.`);
+                              setShowSesion(false);
+                              setSesionTitulo("");
+                              setSesionCantidad(1);
+                              router.refresh();
+                            });
+                          }}
+                          className="px-4 py-2 text-sm bg-[var(--caritas-green)] text-white rounded-lg disabled:opacity-50 cursor-pointer"
                         >
-                          Crear Unidad
+                          {sesionCantidad > 1 ? `Crear ${sesionCantidad} unidades` : "Crear Unidad"}
                         </button>
                       </div>
                     </div>

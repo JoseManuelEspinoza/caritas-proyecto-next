@@ -19,6 +19,7 @@ import {
   Download,
   ScrollText,
   Eye,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import { inscribirme } from "@/app/actions/capacitaciones";
@@ -63,17 +64,34 @@ function EstadoBadge({ resultado, certificado }: { resultado: string | null; cer
   );
 }
 
+function getMaterialIcon(tipo: string | null) {
+  if (tipo === "Video") return <PlayCircle className="w-4 h-4 text-[var(--caritas-green)]" />;
+  if (tipo === "Enlace web") return <ExternalLink className="w-4 h-4 text-[var(--caritas-green)]" />;
+  return <FileText className="w-4 h-4 text-[var(--caritas-green)]" />;
+}
+
+function getMaterialBtn(tipo: string | null): { icon: React.ReactNode; label: string } {
+  if (tipo === "Video") return { icon: <PlayCircle className="w-3 h-3" />, label: "Ver video" };
+  if (tipo === "Enlace web") return { icon: <ExternalLink className="w-3 h-3" />, label: "Abrir enlace" };
+  return { icon: <FileText className="w-3 h-3" />, label: "Abrir" };
+}
+
 function UnidadLectura({ sesion }: { sesion: CursoInscrito["sesiones"][number] }) {
   const [expandida, setExpandida] = useState(true);
   return (
     <div className="border border-[var(--caritas-border)] rounded-lg">
       <button
         onClick={() => setExpandida(!expandida)}
-        className="w-full flex items-center gap-3 px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left border-l-4 border-[var(--caritas-green)] rounded-t-lg"
+        className="w-full flex items-start gap-3 px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left border-l-4 border-[var(--caritas-green)] rounded-t-lg cursor-pointer"
       >
-        <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform shrink-0 ${expandida ? "" : "-rotate-90"}`} />
-        <span className="text-sm font-semibold text-[var(--caritas-text)] flex-1">{sesion.tituloUnidad}</span>
-        <span className="text-xs text-gray-400 bg-white border border-[var(--caritas-border)] px-2 py-0.5 rounded-full shrink-0">
+        <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform shrink-0 mt-0.5 ${expandida ? "" : "-rotate-90"}`} />
+        <div className="flex-1 min-w-0">
+          <span className="text-sm font-semibold text-[var(--caritas-text)] block">{sesion.tituloUnidad}</span>
+          {sesion.descripcion && (
+            <span className="text-xs text-gray-500 mt-0.5 block line-clamp-2">{sesion.descripcion}</span>
+          )}
+        </div>
+        <span className="text-xs text-gray-400 bg-white border border-[var(--caritas-border)] px-2 py-0.5 rounded-full shrink-0 mt-0.5">
           {sesion.materiales.length} material{sesion.materiales.length !== 1 ? "es" : ""}
         </span>
       </button>
@@ -82,27 +100,30 @@ function UnidadLectura({ sesion }: { sesion: CursoInscrito["sesiones"][number] }
           {sesion.materiales.length === 0 ? (
             <p className="text-xs text-gray-400 px-4 py-4 pl-10 italic">Sin materiales en esta unidad.</p>
           ) : (
-            sesion.materiales.map((m) => (
-              <div key={m.id} className="flex items-center gap-3 px-4 py-3 pl-10 hover:bg-gray-50 transition-colors">
-                <div className="w-8 h-8 rounded-lg bg-[var(--caritas-green)]/8 flex items-center justify-center shrink-0">
-                  <FileText className="w-4 h-4 text-[var(--caritas-green)]" />
+            sesion.materiales.map((m) => {
+              const { icon, label } = getMaterialBtn(m.tipoMaterial);
+              return (
+                <div key={m.id} className="flex items-center gap-3 px-4 py-3 pl-10 hover:bg-gray-50 transition-colors">
+                  <div className="w-8 h-8 rounded-lg bg-[var(--caritas-green)]/8 flex items-center justify-center shrink-0">
+                    {getMaterialIcon(m.tipoMaterial)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800 truncate">{m.titulo}</p>
+                    {m.tipoMaterial && <p className="text-[11px] text-gray-400 mt-0.5">{m.tipoMaterial}</p>}
+                  </div>
+                  {m.enlaceMaterial && (
+                    <a
+                      href={m.enlaceMaterial}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 px-2.5 py-1 text-xs text-[var(--caritas-green)] border border-[var(--caritas-green)]/30 rounded-lg hover:bg-[var(--caritas-green)]/5 transition-colors shrink-0"
+                    >
+                      {icon} {label}
+                    </a>
+                  )}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-800 truncate">{m.titulo}</p>
-                  {m.tipoMaterial && <p className="text-[11px] text-gray-400 mt-0.5">{m.tipoMaterial}</p>}
-                </div>
-                {m.enlaceMaterial && (
-                  <a
-                    href={m.enlaceMaterial}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 px-2.5 py-1 text-xs text-[var(--caritas-green)] border border-[var(--caritas-green)]/30 rounded-lg hover:bg-[var(--caritas-green)]/5 transition-colors shrink-0"
-                  >
-                    <LinkIcon className="w-3 h-3" /> Abrir
-                  </a>
-                )}
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       )}
@@ -603,12 +624,15 @@ export function BrigadistaCapacitaciones({
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500 mb-3">
                     <span className="flex items-center gap-1"><Users className="w-3 h-3" />{c.totalInscritos} inscritos</span>
                     <span className="flex items-center gap-1"><BookOpen className="w-3 h-3" />{c.totalSesiones} unidades</span>
+                    {c.duracionEstimadaHoras && (
+                      <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{c.duracionEstimadaHoras}h estimadas</span>
+                    )}
                     {c.fechaPublicacion && <span>{fmtDate(c.fechaPublicacion)}</span>}
                   </div>
                   <button
                     onClick={() => handleInscribirse(c.id)}
                     disabled={pending}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 text-sm bg-[var(--caritas-green)] text-white rounded-xl font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+                    className="w-full flex items-center justify-center gap-2 py-2.5 text-sm bg-[var(--caritas-green)] text-white rounded-xl font-medium hover:opacity-90 disabled:opacity-50 transition-opacity cursor-pointer"
                   >
                     <GraduationCap className="w-4 h-4" /> Inscribirme
                   </button>

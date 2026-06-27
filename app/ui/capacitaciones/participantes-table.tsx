@@ -11,10 +11,14 @@ export function ParticipantesTable({
   participantes,
   onRefresh,
   loading,
+  maxIntentosInicial,
+  maxIntentosFinal,
 }: {
   participantes: ParticipanteCurso[];
   onRefresh: () => Promise<void>;
   loading?: boolean;
+  maxIntentosInicial?: number;
+  maxIntentosFinal?: number;
 }) {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -118,11 +122,20 @@ export function ParticipantesTable({
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
                   Último acceso
                 </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  Acciones
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {paginated.map((p) => (
-                <ParticipanteRow key={p.idInscripcion} p={p} onRefresh={onRefresh} />
+                <ParticipanteRow
+                  key={p.idInscripcion}
+                  p={p}
+                  maxIntentosInicial={maxIntentosInicial}
+                  maxIntentosFinal={maxIntentosFinal}
+                  onRefresh={onRefresh}
+                />
               ))}
             </tbody>
           </table>
@@ -140,7 +153,7 @@ export function ParticipantesTable({
             <button
               disabled={page === 1}
               onClick={() => setPage((p) => p - 1)}
-              className="px-2.5 py-1 border border-[var(--caritas-border)] rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="px-2.5 py-1 border border-[var(--caritas-border)] rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
             >
               ←
             </button>
@@ -151,7 +164,7 @@ export function ParticipantesTable({
                 )}
                 <button
                   onClick={() => setPage(n)}
-                  className={`px-2.5 py-1 border rounded-lg transition-colors ${
+                  className={`px-2.5 py-1 border rounded-lg transition-colors cursor-pointer ${
                     n === page
                       ? "bg-[var(--caritas-green)] text-white border-[var(--caritas-green)]"
                       : "border-[var(--caritas-border)] hover:bg-gray-50"
@@ -164,7 +177,7 @@ export function ParticipantesTable({
             <button
               disabled={page === totalPages}
               onClick={() => setPage((p) => p + 1)}
-              className="px-2.5 py-1 border border-[var(--caritas-border)] rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="px-2.5 py-1 border border-[var(--caritas-border)] rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
             >
               →
             </button>

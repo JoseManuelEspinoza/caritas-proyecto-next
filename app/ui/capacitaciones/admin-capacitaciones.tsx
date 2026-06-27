@@ -167,6 +167,7 @@ function UnidadRow({
   const [expandida, setExpandida] = useState(true);
   const [editandoUnidad, setEditandoUnidad] = useState(false);
   const [tituloUnidad, setTituloUnidad] = useState(sesion.tituloUnidad);
+  const [descripcionUnidad, setDescripcionUnidad] = useState(sesion.descripcion ?? "");
   const [showMaterialForm, setShowMaterialForm] = useState(false);
   const [menuMaterial, setMenuMaterial] = useState<string | null>(null);
   const [editandoMaterial, setEditandoMaterial] = useState<{ id: string; titulo: string; tipoMaterial: string; enlaceMaterial: string } | null>(null);
@@ -176,7 +177,7 @@ function UnidadRow({
   const guardarTituloUnidad = () => {
     if (!tituloUnidad.trim()) return;
     startTransition(async () => {
-      const res = await editarSesion(sesion.id, { tituloUnidad: tituloUnidad });
+      const res = await editarSesion(sesion.id, { tituloUnidad, descripcion: descripcionUnidad });
       if (res?.message) toast.error(res.message);
       else { toast.success("Unidad actualizada."); setEditandoUnidad(false); onRefresh(); }
     });
@@ -223,45 +224,60 @@ function UnidadRow({
   return (
     <div className="border border-[var(--caritas-border)] rounded-xl overflow-hidden">
       {/* Header de la unidad */}
-      <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-l-4 border-[var(--caritas-green)]">
+      <div className="flex items-start gap-2 px-4 py-3 bg-gray-50 border-l-4 border-[var(--caritas-green)]">
         <button
           onClick={() => setExpandida(!expandida)}
-          className="flex items-center gap-2 flex-1 text-left min-w-0"
+          className="flex items-start gap-2 flex-1 text-left min-w-0 cursor-pointer"
         >
-          <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform shrink-0 ${expandida ? "" : "-rotate-90"}`} />
-          {editandoUnidad ? (
-            <input
-              value={tituloUnidad}
-              onChange={(e) => setTituloUnidad(e.target.value)}
-              onClick={(e) => e.stopPropagation()}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") guardarTituloUnidad();
-                if (e.key === "Escape") { setEditandoUnidad(false); setTituloUnidad(sesion.tituloUnidad); }
-              }}
-              autoFocus
-              className="flex-1 text-sm font-semibold text-[var(--caritas-text)] bg-white border border-[var(--caritas-green)] rounded px-2 py-0.5 focus:outline-none"
-            />
-          ) : (
-            <span className="text-sm font-semibold text-gray-800 flex-1 truncate">{sesion.tituloUnidad}</span>
-          )}
+          <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform shrink-0 mt-0.5 ${expandida ? "" : "-rotate-90"}`} />
+          <div className="flex-1 min-w-0">
+            {editandoUnidad ? (
+              <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
+                <input
+                  value={tituloUnidad}
+                  onChange={(e) => setTituloUnidad(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") guardarTituloUnidad();
+                    if (e.key === "Escape") { setEditandoUnidad(false); setTituloUnidad(sesion.tituloUnidad); setDescripcionUnidad(sesion.descripcion ?? ""); }
+                  }}
+                  autoFocus
+                  className="w-full text-sm font-semibold text-[var(--caritas-text)] bg-white border border-[var(--caritas-green)] rounded px-2 py-0.5 focus:outline-none"
+                />
+                <textarea
+                  value={descripcionUnidad}
+                  onChange={(e) => setDescripcionUnidad(e.target.value)}
+                  placeholder="Descripción de la unidad (opcional)"
+                  rows={2}
+                  className="w-full text-xs text-gray-600 bg-white border border-gray-200 rounded px-2 py-1 focus:outline-none focus:border-[var(--caritas-green)] resize-none"
+                />
+              </div>
+            ) : (
+              <>
+                <span className="text-sm font-semibold text-gray-800 block truncate">{sesion.tituloUnidad}</span>
+                {sesion.descripcion && (
+                  <span className="text-xs text-gray-400 mt-0.5 block line-clamp-2">{sesion.descripcion}</span>
+                )}
+              </>
+            )}
+          </div>
         </button>
-        <span className="text-[11px] text-gray-500 bg-white border border-gray-200 px-2 py-0.5 rounded-full shrink-0 font-medium">
+        <span className="text-[11px] text-gray-500 bg-white border border-gray-200 px-2 py-0.5 rounded-full shrink-0 font-medium mt-0.5">
           {sesion.materiales.length} material{sesion.materiales.length !== 1 ? "es" : ""}
         </span>
         {editandoUnidad ? (
           <>
-            <button onClick={guardarTituloUnidad} disabled={pending} className="text-xs text-[var(--caritas-green)] hover:underline px-1 shrink-0 font-medium">Guardar</button>
-            <button onClick={() => { setEditandoUnidad(false); setTituloUnidad(sesion.tituloUnidad); }} className="text-xs text-gray-400 hover:text-gray-600 px-1 shrink-0">Cancelar</button>
+            <button onClick={guardarTituloUnidad} disabled={pending} className="text-xs text-[var(--caritas-green)] hover:underline px-1 shrink-0 font-medium cursor-pointer">Guardar</button>
+            <button onClick={() => { setEditandoUnidad(false); setTituloUnidad(sesion.tituloUnidad); setDescripcionUnidad(sesion.descripcion ?? ""); }} className="text-xs text-gray-400 hover:text-gray-600 px-1 shrink-0 cursor-pointer">Cancelar</button>
           </>
         ) : (
           <>
-            <button onClick={() => setShowMaterialForm((s) => !s)} title="Agregar material" className="p-1.5 text-gray-400 hover:text-[var(--caritas-green)] hover:bg-white rounded-lg transition-colors shrink-0">
+            <button onClick={() => setShowMaterialForm((s) => !s)} title="Agregar material" className="p-1.5 text-gray-400 hover:text-[var(--caritas-green)] hover:bg-white rounded-lg transition-colors shrink-0 cursor-pointer">
               <Plus className="w-4 h-4" />
             </button>
-            <button onClick={() => setEditandoUnidad(true)} title="Editar nombre" className="p-1.5 text-gray-400 hover:text-[var(--caritas-green)] hover:bg-white rounded-lg transition-colors shrink-0">
+            <button onClick={() => setEditandoUnidad(true)} title="Editar unidad" className="p-1.5 text-gray-400 hover:text-[var(--caritas-green)] hover:bg-white rounded-lg transition-colors shrink-0 cursor-pointer">
               <Pencil className="w-3.5 h-3.5" />
             </button>
-            <button onClick={borrarUnidad} disabled={pending} title="Eliminar unidad" className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors shrink-0">
+            <button onClick={borrarUnidad} disabled={pending} title="Eliminar unidad" className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors shrink-0 cursor-pointer disabled:opacity-40">
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           </>
@@ -311,7 +327,7 @@ function UnidadRow({
                 <div className="relative shrink-0">
                   <button
                     onClick={() => setMenuMaterial(menuMaterial === m.id ? null : m.id)}
-                    className="p-1.5 text-gray-300 hover:text-gray-500 transition-colors rounded-lg hover:bg-gray-100"
+                    className="p-1.5 text-gray-300 hover:text-gray-500 transition-colors rounded-lg hover:bg-gray-100 cursor-pointer"
                   >
                     <MoreVertical className="w-4 h-4" />
                   </button>
@@ -319,7 +335,7 @@ function UnidadRow({
                     <div className="absolute right-0 bottom-full mb-1 z-30 bg-white border border-[var(--caritas-border)] rounded-xl shadow-lg py-1 w-36">
                       <button
                         onClick={() => abrirEditarMaterial(m)}
-                        className="flex items-center gap-2 w-full px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
+                        className="flex items-center gap-2 w-full px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
                       >
                         <Pencil className="w-3.5 h-3.5 text-gray-400" /> Editar
                       </button>
@@ -327,7 +343,7 @@ function UnidadRow({
                       <button
                         onClick={() => borrarMaterial(m.id, m.titulo)}
                         disabled={pending}
-                        className="flex items-center gap-2 w-full px-3 py-2 text-xs text-red-600 hover:bg-red-50 transition-colors"
+                        className="flex items-center gap-2 w-full px-3 py-2 text-xs text-red-600 hover:bg-red-50 transition-colors cursor-pointer disabled:opacity-40"
                       >
                         <Trash2 className="w-3.5 h-3.5" /> Eliminar
                       </button>
@@ -393,6 +409,8 @@ export function AdminCapacitaciones({
     idResponsable: "",
   });
   const [sesionTitulo, setSesionTitulo] = useState("");
+  const [sesionCantidad, setSesionCantidad] = useState(1);
+  const { showConfirm, ConfirmModalJSX } = useConfirm();
   const [busqueda, setBusqueda] = useState("");
   const [filtroEstado, setFiltroEstado] = useState<"todos" | "PUBLICADO" | "BORRADOR" | "CERRADO">("todos");
   const [showBorradores, setShowBorradores] = useState(false);
@@ -471,12 +489,19 @@ export function AdminCapacitaciones({
     return null;
   }
 
-  function handleCrearCurso() {
+  async function handleCrearCurso() {
     const error = validarCursoForm(crearForm);
     if (error) {
       toast.error(error);
       return;
     }
+
+    const ok = await showConfirm({
+      title: "¿Crear curso?",
+      message: `Se creará el curso "${crearForm.nombreCurso.trim()}" en estado borrador. Podrás agregar unidades y publicarlo después.`,
+      confirmLabel: "Sí, crear curso",
+    });
+    if (!ok) return;
 
     run(
       () =>
@@ -523,20 +548,26 @@ export function AdminCapacitaciones({
   function handleCrearSesion() {
     if (!current) return;
 
-    const error = validarSesionTitulo(sesionTitulo);
-    if (error) {
-      toast.error(error);
-      return;
+    const cantidad = Math.max(1, Math.min(10, sesionCantidad));
+
+    if (cantidad === 1) {
+      const error = validarSesionTitulo(sesionTitulo);
+      if (error) { toast.error(error); return; }
     }
 
-    run(
-      () => crearSesion(current.id, { tituloUnidad: sesionTitulo.trim() }),
-      "Sesión creada.",
-      () => {
-        setShowSesion(false);
-        setSesionTitulo("");
+    startTransition(async () => {
+      const baseOrden = current.sesiones.length;
+      for (let i = 0; i < cantidad; i++) {
+        const titulo = cantidad === 1 ? sesionTitulo.trim() : `Unidad ${baseOrden + i + 1}`;
+        const res = await crearSesion(current.id, { tituloUnidad: titulo });
+        if (res?.message) { toast.error(res.message); return; }
       }
-    );
+      toast.success(cantidad === 1 ? "Unidad creada." : `${cantidad} unidades creadas.`);
+      setShowSesion(false);
+      setSesionTitulo("");
+      setSesionCantidad(1);
+      router.refresh();
+    });
   }
   const abrirEditar = () => {
     if (!current) return;
@@ -709,27 +740,35 @@ export function AdminCapacitaciones({
                       <p className="text-sm text-gray-500">por <span className="font-medium text-gray-700">{current.responsable}</span></p>
                       {current.descripcion && <p className="text-sm text-gray-400 mt-1.5 leading-relaxed">{current.descripcion}</p>}
                     </div>
-                    <div className="flex gap-2 shrink-0">
+                    <div className="flex gap-2 shrink-0 items-center">
                       <button
                         onClick={abrirEditar}
-                        className="flex items-center gap-1.5 px-3 py-2 text-sm border border-[var(--caritas-border)] rounded-lg hover:bg-gray-50 transition-colors text-gray-700"
+                        title="Editar curso"
+                        className="p-1.5 text-gray-400 hover:text-[var(--caritas-green)] transition-colors cursor-pointer"
                       >
-                        <Pencil className="w-3.5 h-3.5" /> Editar
+                        <Pencil className="w-4 h-4" />
                       </button>
                       {current.estadoCurso === "BORRADOR" && (
-                        <button
-                          onClick={() => run(() => cambiarEstadoCurso(current.id, "PUBLICAR"), "Curso publicado.")}
-                          disabled={pending}
-                          className="flex items-center gap-1.5 px-3 py-2 text-sm bg-[var(--caritas-green)] text-white rounded-lg disabled:opacity-50 hover:opacity-90 transition-opacity font-medium"
-                        >
-                          <Send className="w-3.5 h-3.5" /> Publicar
-                        </button>
+                        !current.cuestionarioFinal && !current.cuestionarioInicial ? (
+                          <div className="flex items-center gap-1.5 px-3 py-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg">
+                            <Send className="w-3.5 h-3.5 opacity-50" />
+                            <span>Agrega una evaluación para publicar</span>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => run(() => cambiarEstadoCurso(current.id, "PUBLICAR"), "Curso publicado.")}
+                            disabled={pending}
+                            className="flex items-center gap-1.5 px-3 py-2 text-sm bg-[var(--caritas-green)] text-white rounded-lg disabled:opacity-50 hover:opacity-90 transition-opacity font-medium cursor-pointer"
+                          >
+                            <Send className="w-3.5 h-3.5" /> Publicar
+                          </button>
+                        )
                       )}
                       {current.estadoCurso === "PUBLICADO" && (
                         <button
                           onClick={() => setShowConfirmCerrar(true)}
                           disabled={pending}
-                          className="flex items-center gap-1.5 px-3 py-2 text-sm border border-[var(--caritas-border)] rounded-lg hover:bg-gray-50 transition-colors text-gray-700"
+                          className="flex items-center gap-1.5 px-3 py-2 text-sm border border-[var(--caritas-border)] rounded-lg hover:bg-gray-50 transition-colors text-gray-700 cursor-pointer disabled:opacity-50"
                         >
                           <Lock className="w-3.5 h-3.5" /> Cerrar inscripciones
                         </button>
@@ -762,7 +801,7 @@ export function AdminCapacitaciones({
               <div className="flex border-b border-[var(--caritas-border)] mb-5">
                 <button
                   onClick={() => setActiveTab("contenido")}
-                  className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === "contenido" ? "border-[var(--caritas-green)] text-[var(--caritas-green)]" : "border-transparent text-gray-500 hover:text-[var(--caritas-text)] hover:border-gray-200"}`}
+                  className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors cursor-pointer ${activeTab === "contenido" ? "border-[var(--caritas-green)] text-[var(--caritas-green)]" : "border-transparent text-gray-500 hover:text-[var(--caritas-text)] hover:border-gray-200"}`}
                 >
                   <BookOpen className="w-4 h-4" />
                   Contenido
@@ -770,7 +809,7 @@ export function AdminCapacitaciones({
                 </button>
                 <button
                   onClick={() => setActiveTab("evaluaciones")}
-                  className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === "evaluaciones" ? "border-[var(--caritas-green)] text-[var(--caritas-green)]" : "border-transparent text-gray-500 hover:text-[var(--caritas-text)] hover:border-gray-200"}`}
+                  className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors cursor-pointer ${activeTab === "evaluaciones" ? "border-[var(--caritas-green)] text-[var(--caritas-green)]" : "border-transparent text-gray-500 hover:text-[var(--caritas-text)] hover:border-gray-200"}`}
                 >
                   <ClipboardList className="w-4 h-4" />
                   Evaluaciones
@@ -786,7 +825,7 @@ export function AdminCapacitaciones({
                       setParticipantesCargados(true);
                     }
                   }}
-                  className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === "participantes" ? "border-[var(--caritas-green)] text-[var(--caritas-green)]" : "border-transparent text-gray-500 hover:text-[var(--caritas-text)] hover:border-gray-200"}`}
+                  className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors cursor-pointer ${activeTab === "participantes" ? "border-[var(--caritas-green)] text-[var(--caritas-green)]" : "border-transparent text-gray-500 hover:text-[var(--caritas-text)] hover:border-gray-200"}`}
                 >
                   <Users className="w-4 h-4" />
                   Participantes
@@ -799,8 +838,8 @@ export function AdminCapacitaciones({
                 <div className="space-y-3">
                   <div className="flex justify-end">
                     <button
-                      onClick={() => { setSesionTitulo(""); setShowSesion(true); }}
-                      className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium border border-[var(--caritas-green)]/40 text-[var(--caritas-green)] bg-[var(--caritas-green)]/5 hover:bg-[var(--caritas-green)]/10 rounded-lg transition-colors"
+                      onClick={() => { setSesionTitulo(""); setSesionCantidad(1); setShowSesion(true); }}
+                      className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium border border-[var(--caritas-green)]/40 text-[var(--caritas-green)] bg-[var(--caritas-green)]/5 hover:bg-[var(--caritas-green)]/10 rounded-lg transition-colors cursor-pointer"
                     >
                       <Plus className="w-4 h-4" /> Nueva unidad
                     </button>
@@ -842,7 +881,7 @@ export function AdminCapacitaciones({
                           const detalle = await obtenerCuestionarioPorId(current.cuestionarioInicial!.id);
                           if (detalle) { setCuestionarioEditar(detalle); setTipoCuestionarioActivo("INICIAL"); setShowCuestionario(true); }
                         }}
-                        className="flex items-center gap-1 px-2.5 py-1 text-xs border border-[var(--caritas-border)] rounded-lg hover:bg-white transition-colors shrink-0"
+                        className="flex items-center gap-1 px-2.5 py-1 text-xs border border-[var(--caritas-border)] rounded-lg hover:bg-white transition-colors shrink-0 cursor-pointer"
                       >
                         <Pencil className="w-3 h-3" /> Editar
                       </button>
@@ -875,7 +914,7 @@ export function AdminCapacitaciones({
                           const detalle = await obtenerCuestionarioPorId(current.cuestionarioFinal!.id);
                           if (detalle) { setCuestionarioEditar(detalle); setTipoCuestionarioActivo("FINAL"); setShowCuestionario(true); }
                         }}
-                        className="flex items-center gap-1 px-2.5 py-1 text-xs border border-[var(--caritas-border)] rounded-lg hover:bg-white transition-colors shrink-0"
+                        className="flex items-center gap-1 px-2.5 py-1 text-xs border border-[var(--caritas-border)] rounded-lg hover:bg-white transition-colors shrink-0 cursor-pointer"
                       >
                         <Pencil className="w-3 h-3" /> Editar
                       </button>
@@ -901,6 +940,8 @@ export function AdminCapacitaciones({
                     setParticipantes(data);
                   }}
                   loading={loadingParticipantes}
+                  maxIntentosInicial={current.cuestionarioInicial?.maxIntentos}
+                  maxIntentosFinal={current.cuestionarioFinal?.maxIntentos}
                 />
               )}
             </>
@@ -1056,37 +1097,52 @@ export function AdminCapacitaciones({
 
       {/* Modal: Agregar unidad */}
       {showSesion && current && (
-        <Modal title="Nueva Unidad" onClose={() => { setShowSesion(false); setSesionTitulo(""); }}>
+        <Modal title="Nueva Unidad" onClose={() => { setShowSesion(false); setSesionTitulo(""); setSesionCantidad(1); }}>
           <div className="space-y-4">
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Título de la unidad *</label>
-              <input
-                value={sesionTitulo}
-                onChange={(e) => setSesionTitulo(e.target.value)}
-                placeholder="Ej. Introducción al GRD"
-                className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]"
-                autoFocus
-              />
+            <div className="flex items-center gap-3">
+              <div className="flex-1">
+                <label className="block text-xs text-gray-500 mb-1">Cantidad de unidades a crear</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={sesionCantidad}
+                  onChange={(e) => setSesionCantidad(Math.max(1, Math.min(10, parseInt(e.target.value) || 1)))}
+                  className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]"
+                />
+              </div>
             </div>
+            {sesionCantidad === 1 && (
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Título de la unidad *</label>
+                <input
+                  value={sesionTitulo}
+                  onChange={(e) => setSesionTitulo(e.target.value)}
+                  placeholder="Ej. Introducción al GRD"
+                  className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]"
+                  autoFocus
+                  onKeyDown={(e) => { if (e.key === "Enter") handleCrearSesion(); }}
+                />
+              </div>
+            )}
+            {sesionCantidad > 1 && (
+              <div className="text-xs text-gray-500 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+                Se crearán {sesionCantidad} unidades con títulos automáticos: <strong>Unidad {current.sesiones.length + 1}</strong> — <strong>Unidad {current.sesiones.length + sesionCantidad}</strong>.
+              </div>
+            )}
             <div className="flex justify-end gap-2">
               <button
-                onClick={() => { setShowSesion(false); setSesionTitulo(""); }}
-                className="px-4 py-2 text-sm border border-[var(--caritas-border)] rounded-lg hover:bg-gray-50"
+                onClick={() => { setShowSesion(false); setSesionTitulo(""); setSesionCantidad(1); }}
+                className="px-4 py-2 text-sm border border-[var(--caritas-border)] rounded-lg hover:bg-gray-50 cursor-pointer"
               >
                 Cancelar
               </button>
               <button
-                disabled={pending || !sesionTitulo.trim()}
-                onClick={() =>
-                  run(
-                    () => crearSesion(current.id, { tituloUnidad: sesionTitulo }),
-                    "Unidad creada.",
-                    () => { setShowSesion(false); setSesionTitulo(""); }
-                  )
-                }
-                className="px-4 py-2 text-sm bg-[var(--caritas-green)] text-white rounded-lg disabled:opacity-50 hover:opacity-90 transition-opacity"
+                disabled={pending || (sesionCantidad === 1 && !sesionTitulo.trim())}
+                onClick={handleCrearSesion}
+                className="px-4 py-2 text-sm bg-[var(--caritas-green)] text-white rounded-lg disabled:opacity-50 hover:opacity-90 transition-opacity cursor-pointer"
               >
-                Agregar Unidad
+                {sesionCantidad > 1 ? `Crear ${sesionCantidad} unidades` : "Agregar Unidad"}
               </button>
             </div>
           </div>
@@ -1130,6 +1186,8 @@ export function AdminCapacitaciones({
           </div>
         </Modal>
       )}
+
+      {ConfirmModalJSX}
     </div>
   );
 }
