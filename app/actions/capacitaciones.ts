@@ -358,6 +358,30 @@ export type IntentoEvaluacion = {
   fechaEvaluacion: string;
 };
 
+export type DetalleEvaluacion = {
+  idEvaluacion: string;
+  tipoEvaluacion: string | null;
+  numeroIntento: number | null;
+  nota: number | null;
+  puntajeObtenido: number | null;
+  puntajeTotal: number | null;
+  resultado: string | null;
+  fechaEvaluacion: string;
+  preguntas: {
+    idPregunta: string;
+    enunciado: string;
+    puntaje: number;
+    orden: number;
+    opciones: { id: string; texto: string; esCorrecta: boolean }[];
+    respuesta: {
+      idOpcionSeleccionada: string | null;
+      textoOpcionSeleccionada: string | null;
+      esCorrecta: boolean | null;
+      puntajeObtenido: number | null;
+    } | null;
+  }[];
+};
+
 export async function listarIntentosInscripcion(idInscripcion: string): Promise<IntentoEvaluacion[]> {
   await verifySession();
   const rows = await prisma.evaluacionCurso.findMany({
@@ -380,6 +404,54 @@ export async function listarIntentosInscripcion(idInscripcion: string): Promise<
     resultado: r.resultado,
     fechaEvaluacion: r.fechaEvaluacion ? r.fechaEvaluacion.toISOString() : new Date().toISOString(),
   }));
+}
+
+export async function listarDetalleEvaluacion(idEvaluacion: string): Promise<DetalleEvaluacion | null> {
+  await verifySession();
+  const row = await prisma.evaluacionCurso.findUnique({
+    where: { idEvaluacionCurso: idEvaluacion },
+    include: {
+      respuestas: {
+        include: {
+          pregunta: {
+            include: {
+              opciones: { orderBy: { orden: "asc" } },
+            },
+          },
+          opcion: true,
+        },
+        orderBy: { pregunta: { orden: "asc" } },
+      },
+    },
+  });
+  if (!row) return null;
+  return {
+    idEvaluacion: row.idEvaluacionCurso,
+    tipoEvaluacion: row.tipoEvaluacion,
+    numeroIntento: row.numeroIntento,
+    nota: row.nota != null ? Number(row.nota) : null,
+    puntajeObtenido: row.puntajeObtenido != null ? Number(row.puntajeObtenido) : null,
+    puntajeTotal: row.puntajeTotal != null ? Number(row.puntajeTotal) : null,
+    resultado: row.resultado,
+    fechaEvaluacion: row.fechaEvaluacion ? row.fechaEvaluacion.toISOString() : new Date().toISOString(),
+    preguntas: row.respuestas.map((r) => ({
+      idPregunta: r.idPreguntaCuestionario,
+      enunciado: r.pregunta.enunciado,
+      puntaje: Number(r.pregunta.puntaje),
+      orden: r.pregunta.orden,
+      opciones: r.pregunta.opciones.map((o) => ({
+        id: o.idOpcionPregunta,
+        texto: o.textoOpcion,
+        esCorrecta: o.esCorrecta,
+      })),
+      respuesta: {
+        idOpcionSeleccionada: r.idOpcionPregunta,
+        textoOpcionSeleccionada: r.opcion?.textoOpcion ?? null,
+        esCorrecta: r.esCorrecta,
+        puntajeObtenido: r.puntajeObtenido != null ? Number(r.puntajeObtenido) : null,
+      },
+    })),
+  };
 }
 
 export async function actualizarConstancia(

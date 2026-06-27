@@ -244,8 +244,15 @@ function SesionCard({
           ) : (
             <>
               <span className="text-sm font-semibold text-gray-800 block truncate">{sesion.tituloUnidad}</span>
-              {sesion.descripcion && (
+              {sesion.descripcion ? (
                 <span className="text-xs text-gray-400 mt-0.5 block line-clamp-2">{sesion.descripcion}</span>
+              ) : (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setEditandoUnidad(true); }}
+                  className="text-xs text-gray-400 hover:text-[var(--caritas-green)] mt-0.5 cursor-pointer transition-colors"
+                >
+                  + Añadir descripción
+                </button>
               )}
             </>
           )}
