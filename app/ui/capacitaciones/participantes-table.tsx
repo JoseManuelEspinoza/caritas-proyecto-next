@@ -122,9 +122,6 @@ export function ParticipantesTable({
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
                   Último acceso
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                  Acciones
-                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
