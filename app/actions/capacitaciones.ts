@@ -801,14 +801,16 @@ export async function crearCurso(input: {
   const { idResponsable, ...rest } = input;
   const idUsuarioResponsableGRD = idResponsable ?? (await getUsuarioGRDId());
   if (!idUsuarioResponsableGRD) return { message: "Tu usuario no tiene perfil GRD asociado." };
+  let nuevoCursoId: string;
   try {
-    await makeCursoUseCases().crear.execute({
+    const creado = await makeCursoUseCases().crear.execute({
       ...rest,
       nombreCurso: input.nombreCurso.trim(),
       descripcion: texto(input.descripcion) || undefined,
       duracionEstimadaHoras: duracionNormalizada,
       idUsuarioResponsableGRD,
     });
+    nuevoCursoId = creado.id;
   } catch (err) {
     return fail(err, "No se pudo crear el curso.");
   }
@@ -821,6 +823,7 @@ export async function crearCurso(input: {
     module: "Capacitaciones",
   });
   revalidatePath(REVALIDATE);
+  return { id: nuevoCursoId };
 }
 
 export async function editarCurso(

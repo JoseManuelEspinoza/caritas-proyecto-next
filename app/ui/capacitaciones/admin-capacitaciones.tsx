@@ -257,12 +257,15 @@ function UnidadRow({
                 {sesion.descripcion ? (
                   <span className="text-xs text-gray-400 mt-0.5 block line-clamp-2">{sesion.descripcion}</span>
                 ) : (
-                  <button
+                  <span
+                    role="button"
+                    tabIndex={0}
                     onClick={(e) => { e.stopPropagation(); setEditandoUnidad(true); }}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); setEditandoUnidad(true); } }}
                     className="text-xs text-gray-400 hover:text-[var(--caritas-green)] mt-0.5 cursor-pointer transition-colors"
                   >
                     + Añadir descripción
-                  </button>
+                  </span>
                 )}
               </>
             )}
@@ -416,6 +419,7 @@ export function AdminCapacitaciones({
     idResponsable: "",
   });
   const [sesionTitulo, setSesionTitulo] = useState("");
+  const [sesionDescripcion, setSesionDescripcion] = useState("");
   const [sesionCantidad, setSesionCantidad] = useState(1);
   const { showConfirm, ConfirmModalJSX } = useConfirm();
   const [busqueda, setBusqueda] = useState("");
@@ -507,26 +511,30 @@ export function AdminCapacitaciones({
       title: "¿Crear curso?",
       message: `Se creará el curso "${crearForm.nombreCurso.trim()}" en estado borrador. Podrás agregar unidades y publicarlo después.`,
       confirmLabel: "Sí, crear curso",
+      variant: "success",
     });
     if (!ok) return;
 
-    run(
-      () =>
-        crearCurso({
-          nombreCurso: crearForm.nombreCurso.trim(),
-          descripcion: crearForm.descripcion.trim() || undefined,
-          idResponsable: crearForm.idResponsable,
-        }),
-      "Curso creado.",
-      () => {
-        setShowCrear(false);
-        setCrearForm({
-          nombreCurso: "",
-          descripcion: "",
-          idResponsable: especialistas[0]?.id ?? "",
-        });
+    startTransition(async () => {
+      const res = await crearCurso({
+        nombreCurso: crearForm.nombreCurso.trim(),
+        descripcion: crearForm.descripcion.trim() || undefined,
+        idResponsable: crearForm.idResponsable,
+      });
+
+      if (res && "message" in res) {
+        toast.error(res.message);
+        return;
       }
-    );
+
+      toast.success("Curso creado.");
+      setShowCrear(false);
+      setCrearForm({ nombreCurso: "", descripcion: "", idResponsable: especialistas[0]?.id ?? "" });
+      setFiltroEstado("BORRADOR");
+      setShowBorradores(true);
+      if (res?.id) setSelectedId(res.id);
+      router.refresh();
+    });
   }
 
   function handleEditarCurso() {
@@ -566,12 +574,16 @@ export function AdminCapacitaciones({
       const baseOrden = current.sesiones.length;
       for (let i = 0; i < cantidad; i++) {
         const titulo = cantidad === 1 ? sesionTitulo.trim() : `Unidad ${baseOrden + i + 1}`;
-        const res = await crearSesion(current.id, { tituloUnidad: titulo });
+        const res = await crearSesion(current.id, {
+          tituloUnidad: titulo,
+          ...(cantidad === 1 && sesionDescripcion.trim() ? { descripcion: sesionDescripcion.trim() } : {}),
+        });
         if (res?.message) { toast.error(res.message); return; }
       }
       toast.success(cantidad === 1 ? "Unidad creada." : `${cantidad} unidades creadas.`);
       setShowSesion(false);
       setSesionTitulo("");
+      setSesionDescripcion("");
       setSesionCantidad(1);
       router.refresh();
     });
@@ -1104,42 +1116,75 @@ export function AdminCapacitaciones({
 
       {/* Modal: Agregar unidad */}
       {showSesion && current && (
-        <Modal title="Nueva Unidad" onClose={() => { setShowSesion(false); setSesionTitulo(""); setSesionCantidad(1); }}>
+        <Modal title="Nueva Unidad" onClose={() => { setShowSesion(false); setSesionTitulo(""); setSesionDescripcion(""); setSesionCantidad(1); }}>
           <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="flex-1">
-                <label className="block text-xs text-gray-500 mb-1">Cantidad de unidades a crear</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={10}
-                  value={sesionCantidad}
-                  onChange={(e) => setSesionCantidad(Math.max(1, Math.min(10, parseInt(e.target.value) || 1)))}
-                  className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]"
-                />
+            {/* Stepper de cantidad */}
+            <div>
+              <label className="block text-xs text-gray-500 mb-2">¿Cuántas unidades deseas crear?</label>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSesionCantidad((n) => Math.max(1, n - 1))}
+                  className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-600 hover:border-[var(--caritas-green)] hover:text-[var(--caritas-green)] transition-colors cursor-pointer text-lg font-bold"
+                >−</button>
+                <span className="w-10 text-center text-sm font-semibold text-[var(--caritas-text)]">{sesionCantidad}</span>
+                <button
+                  type="button"
+                  onClick={() => setSesionCantidad((n) => Math.min(10, n + 1))}
+                  className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-600 hover:border-[var(--caritas-green)] hover:text-[var(--caritas-green)] transition-colors cursor-pointer text-lg font-bold"
+                >+</button>
+                <div className="flex gap-1 ml-2">
+                  {[1, 3, 5, 10].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setSesionCantidad(n)}
+                      className={`px-2.5 py-1 text-xs rounded-lg border transition-colors cursor-pointer ${sesionCantidad === n ? "bg-[var(--caritas-green)] text-white border-[var(--caritas-green)]" : "border-gray-200 text-gray-500 hover:border-[var(--caritas-green)] hover:text-[var(--caritas-green)]"}`}
+                    >{n}</button>
+                  ))}
+                </div>
               </div>
             </div>
+
+            {/* Campos para unidad individual */}
             {sesionCantidad === 1 && (
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Título de la unidad *</label>
-                <input
-                  value={sesionTitulo}
-                  onChange={(e) => setSesionTitulo(e.target.value)}
-                  placeholder="Ej. Introducción al GRD"
-                  className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]"
-                  autoFocus
-                  onKeyDown={(e) => { if (e.key === "Enter") handleCrearSesion(); }}
-                />
-              </div>
+              <>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Título de la unidad *</label>
+                  <input
+                    value={sesionTitulo}
+                    onChange={(e) => setSesionTitulo(e.target.value)}
+                    placeholder="Ej. Introducción al GRD"
+                    className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]"
+                    autoFocus
+                    onKeyDown={(e) => { if (e.key === "Enter") handleCrearSesion(); }}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Reseña de la unidad <span className="text-gray-400">(opcional)</span></label>
+                  <textarea
+                    value={sesionDescripcion}
+                    onChange={(e) => setSesionDescripcion(e.target.value)}
+                    placeholder="Describe brevemente el contenido o los objetivos de esta unidad..."
+                    rows={3}
+                    className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm resize-none focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]"
+                  />
+                </div>
+              </>
             )}
+
+            {/* Preview para múltiples unidades */}
             {sesionCantidad > 1 && (
-              <div className="text-xs text-gray-500 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
-                Se crearán {sesionCantidad} unidades con títulos automáticos: <strong>Unidad {current.sesiones.length + 1}</strong> — <strong>Unidad {current.sesiones.length + sesionCantidad}</strong>.
+              <div className="text-xs text-gray-500 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2.5">
+                Se crearán <strong>{sesionCantidad} unidades</strong> con títulos automáticos:{" "}
+                <strong>Unidad {current.sesiones.length + 1}</strong> — <strong>Unidad {current.sesiones.length + sesionCantidad}</strong>.
+                <span className="block mt-1 text-gray-400">Podrás editar el título y añadir una reseña a cada una después.</span>
               </div>
             )}
-            <div className="flex justify-end gap-2">
+
+            <div className="flex justify-end gap-2 pt-1">
               <button
-                onClick={() => { setShowSesion(false); setSesionTitulo(""); setSesionCantidad(1); }}
+                onClick={() => { setShowSesion(false); setSesionTitulo(""); setSesionDescripcion(""); setSesionCantidad(1); }}
                 className="px-4 py-2 text-sm border border-[var(--caritas-border)] rounded-lg hover:bg-gray-50 cursor-pointer"
               >
                 Cancelar
