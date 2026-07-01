@@ -150,6 +150,10 @@ export type CursoDetalle = {
   estadoCurso: string;
   fechaPublicacion: string | null;
   fechaCierre: string | null;
+  inscripcion_desde: string | null;
+  inscripcion_hasta: string | null;
+  realizacion_desde: string | null;
+  realizacion_hasta: string | null;
   responsable: string;
   idResponsable: string;
   totalInscritos: number;
@@ -247,6 +251,7 @@ export type CursoDisponible = {
   responsable: string;
   totalInscritos: number;
   totalSesiones: number;
+  unidades: { id: string; numeroOrden: number; tituloUnidad: string; descripcion: string | null }[];
 };
 
 // ── Read actions ──────────────────────────────────────────────────────────────
@@ -536,6 +541,10 @@ export async function listarCursosConSesiones(idResponsable?: string): Promise<C
     estadoCurso: r.estadoCurso,
     fechaPublicacion: r.fechaPublicacion?.toISOString() ?? null,
     fechaCierre: r.fechaCierre?.toISOString() ?? null,
+    inscripcion_desde: r.inscripcion_desde?.toISOString() ?? null,
+    inscripcion_hasta: r.inscripcion_hasta?.toISOString() ?? null,
+    realizacion_desde: r.realizacion_desde?.toISOString() ?? null,
+    realizacion_hasta: r.realizacion_hasta?.toISOString() ?? null,
     responsable: `${r.usuarioResponsable.nombres} ${r.usuarioResponsable.apellidos}`.trim(),
     idResponsable: r.idUsuarioResponsableGRD,
     totalInscritos: r._count.inscripciones,
@@ -753,6 +762,16 @@ export async function listarCursosDisponiblesBrigadista(): Promise<CursoDisponib
     include: {
       usuarioResponsable: { select: { nombres: true, apellidos: true } },
       _count: { select: { inscripciones: true, unidades: true } },
+      unidades: {
+        where: { estado: "ACTIVO" },
+        orderBy: { numeroOrden: "asc" },
+        select: {
+          idUnidadContenido: true,
+          numeroOrden: true,
+          tituloUnidad: true,
+          descripcion: true,
+        },
+      },
     },
   });
 
@@ -768,6 +787,12 @@ export async function listarCursosDisponiblesBrigadista(): Promise<CursoDisponib
     responsable: `${r.usuarioResponsable.nombres} ${r.usuarioResponsable.apellidos}`.trim(),
     totalInscritos: r._count.inscripciones,
     totalSesiones: r._count.unidades,
+    unidades: r.unidades.map((u) => ({
+      id: u.idUnidadContenido,
+      numeroOrden: u.numeroOrden,
+      tituloUnidad: u.tituloUnidad,
+      descripcion: u.descripcion,
+    })),
   }));
 }
 
@@ -779,6 +804,10 @@ export async function crearCurso(input: {
   idInstitucionAliada?: string;
   duracionEstimadaHoras?: number;
   idResponsable?: string;
+  inscripcion_desde?: string;
+  inscripcion_hasta?: string;
+  realizacion_desde?: string;
+  realizacion_hasta?: string;
 }) {
   const session = await verifySession();
   const errorNombre = validarTextoMinimo(input.nombreCurso, "El nombre del curso", 3);
@@ -811,6 +840,17 @@ export async function crearCurso(input: {
       idUsuarioResponsableGRD,
     });
     nuevoCursoId = creado.id;
+    if (input.inscripcion_desde || input.inscripcion_hasta || input.realizacion_desde || input.realizacion_hasta) {
+      await prisma.cursoCapacitacion.update({
+        where: { idCursoCapacitacion: nuevoCursoId },
+        data: {
+          inscripcion_desde: input.inscripcion_desde ? new Date(input.inscripcion_desde) : undefined,
+          inscripcion_hasta: input.inscripcion_hasta ? new Date(input.inscripcion_hasta) : undefined,
+          realizacion_desde: input.realizacion_desde ? new Date(input.realizacion_desde) : undefined,
+          realizacion_hasta: input.realizacion_hasta ? new Date(input.realizacion_hasta) : undefined,
+        },
+      });
+    }
   } catch (err) {
     return fail(err, "No se pudo crear el curso.");
   }
@@ -828,7 +868,15 @@ export async function crearCurso(input: {
 
 export async function editarCurso(
   id: string,
-  data: { nombreCurso: string; descripcion?: string; idResponsable: string }
+  data: {
+    nombreCurso: string;
+    descripcion?: string;
+    idResponsable: string;
+    inscripcion_desde?: string | null;
+    inscripcion_hasta?: string | null;
+    realizacion_desde?: string | null;
+    realizacion_hasta?: string | null;
+  }
 ): Promise<void | { message: string }> {
   const session = await verifySession();
 
@@ -856,6 +904,10 @@ export async function editarCurso(
         nombreCurso: data.nombreCurso.trim(),
         descripcion: texto(data.descripcion) || null,
         idUsuarioResponsableGRD: data.idResponsable,
+        inscripcion_desde: data.inscripcion_desde ? new Date(data.inscripcion_desde) : null,
+        inscripcion_hasta: data.inscripcion_hasta ? new Date(data.inscripcion_hasta) : null,
+        realizacion_desde: data.realizacion_desde ? new Date(data.realizacion_desde) : null,
+        realizacion_hasta: data.realizacion_hasta ? new Date(data.realizacion_hasta) : null,
       },
     });
     await logGRDAction({

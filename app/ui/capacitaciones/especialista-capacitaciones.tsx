@@ -128,7 +128,6 @@ function CursoCard({
   onSelect: (id: string) => void;
 }) {
   const esPublicado = c.estadoCurso === "PUBLICADO";
-  const esBorrador  = c.estadoCurso === "BORRADOR";
   const isSelected  = selectedId === c.id;
 
   return (
@@ -552,16 +551,17 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
 
           {/* Panel derecho — detalle */}
           <div className="bg-white border border-[var(--caritas-border)] rounded-xl p-6 min-h-[400px]">
-            {/* Toggle */}
-            <div className="flex items-center mb-4">
-              <button
-                onClick={() => setPanelAbierto((s) => !s)}
-                className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
-                title={panelAbierto ? "Colapsar panel" : "Expandir panel"}
-              >
-                {panelAbierto ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
-              </button>
-            </div>
+            {!panelAbierto && (
+              <div className="flex items-center mb-4">
+                <button
+                  onClick={() => setPanelAbierto(true)}
+                  className="shrink-0 w-9 h-9 flex items-center justify-center rounded-lg text-[var(--caritas-green)] border border-[var(--caritas-green)]/30 bg-[var(--caritas-green)]/8 hover:bg-[var(--caritas-green)]/15 transition-colors"
+                  title="Expandir panel"
+                >
+                  <PanelLeftOpen className="w-5 h-5" />
+                </button>
+              </div>
+            )}
 
             {!current ? (
               <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-3">

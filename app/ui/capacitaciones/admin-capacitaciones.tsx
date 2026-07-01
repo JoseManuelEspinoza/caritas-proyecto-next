@@ -104,7 +104,6 @@ function CursoCard({
   onSelect: (id: string) => void;
 }) {
   const esPublicado = c.estadoCurso === "PUBLICADO";
-  const esBorrador  = c.estadoCurso === "BORRADOR";
   const isSelected  = selectedId === c.id;
 
   return (
@@ -412,11 +411,19 @@ export function AdminCapacitaciones({
     nombreCurso: "",
     descripcion: "",
     idResponsable: especialistas[0]?.id ?? "",
+    inscripcion_desde: "",
+    inscripcion_hasta: "",
+    realizacion_desde: "",
+    realizacion_hasta: "",
   });
   const [editarForm, setEditarForm] = useState({
     nombreCurso: "",
     descripcion: "",
     idResponsable: "",
+    inscripcion_desde: "",
+    inscripcion_hasta: "",
+    realizacion_desde: "",
+    realizacion_hasta: "",
   });
   const [sesionTitulo, setSesionTitulo] = useState("");
   const [sesionDescripcion, setSesionDescripcion] = useState("");
@@ -520,6 +527,10 @@ export function AdminCapacitaciones({
         nombreCurso: crearForm.nombreCurso.trim(),
         descripcion: crearForm.descripcion.trim() || undefined,
         idResponsable: crearForm.idResponsable,
+        inscripcion_desde: crearForm.inscripcion_desde || undefined,
+        inscripcion_hasta: crearForm.inscripcion_hasta || undefined,
+        realizacion_desde: crearForm.realizacion_desde || undefined,
+        realizacion_hasta: crearForm.realizacion_hasta || undefined,
       });
 
       if (res && "message" in res) {
@@ -529,11 +540,21 @@ export function AdminCapacitaciones({
 
       toast.success("Curso creado.");
       setShowCrear(false);
-      setCrearForm({ nombreCurso: "", descripcion: "", idResponsable: especialistas[0]?.id ?? "" });
+      setCrearForm({ nombreCurso: "", descripcion: "", idResponsable: especialistas[0]?.id ?? "", inscripcion_desde: "", inscripcion_hasta: "", realizacion_desde: "", realizacion_hasta: "" });
       setFiltroEstado("BORRADOR");
       setShowBorradores(true);
-      if (res?.id) setSelectedId(res.id);
       router.refresh();
+
+      if (res?.id) {
+        const agregar = await showConfirm({
+          title: "Curso creado",
+          message: "¿Deseas agregar contenido al curso ahora?",
+          confirmLabel: "Sí, agregar contenido",
+          cancelLabel: "Ahora no",
+          variant: "success",
+        });
+        if (agregar) setSelectedId(res.id);
+      }
     });
   }
 
@@ -552,6 +573,10 @@ export function AdminCapacitaciones({
           nombreCurso: editarForm.nombreCurso.trim(),
           descripcion: editarForm.descripcion.trim() || undefined,
           idResponsable: editarForm.idResponsable,
+          inscripcion_desde: editarForm.inscripcion_desde || null,
+          inscripcion_hasta: editarForm.inscripcion_hasta || null,
+          realizacion_desde: editarForm.realizacion_desde || null,
+          realizacion_hasta: editarForm.realizacion_hasta || null,
         }),
       "Curso actualizado.",
       () => {
@@ -595,6 +620,10 @@ export function AdminCapacitaciones({
       nombreCurso: current.nombreCurso,
       descripcion: current.descripcion ?? "",
       idResponsable: responsableValido ? current.idResponsable : (especialistas[0]?.id ?? ""),
+      inscripcion_desde: current.inscripcion_desde ? current.inscripcion_desde.slice(0, 10) : "",
+      inscripcion_hasta: current.inscripcion_hasta ? current.inscripcion_hasta.slice(0, 10) : "",
+      realizacion_desde: current.realizacion_desde ? current.realizacion_desde.slice(0, 10) : "",
+      realizacion_hasta: current.realizacion_hasta ? current.realizacion_hasta.slice(0, 10) : "",
     });
     setShowEditar(true);
   };
@@ -728,16 +757,17 @@ export function AdminCapacitaciones({
 
         {/* Course detail */}
         <div className="bg-white border border-[var(--caritas-border)] rounded-xl p-6 min-h-[400px]">
-          {/* Botón toggle — siempre visible arriba del detalle */}
-          <div className="flex items-center mb-4">
-            <button
-              onClick={() => setPanelAbierto((s) => !s)}
-              className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
-              title={panelAbierto ? "Colapsar panel" : "Expandir panel"}
-            >
-              {panelAbierto ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
-            </button>
-          </div>
+          {!panelAbierto && (
+            <div className="flex items-center mb-4">
+              <button
+                onClick={() => setPanelAbierto(true)}
+                className="shrink-0 w-9 h-9 flex items-center justify-center rounded-lg text-[var(--caritas-green)] border border-[var(--caritas-green)]/30 bg-[var(--caritas-green)]/8 hover:bg-[var(--caritas-green)]/15 transition-colors"
+                title="Expandir panel"
+              >
+                <PanelLeftOpen className="w-5 h-5" />
+              </button>
+            </div>
+          )}
           {!current ? (
             <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-3">
               <BookOpen className="w-10 h-10" />
@@ -1014,6 +1044,40 @@ export function AdminCapacitaciones({
                 className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm resize-none focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]"
               />
             </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-2">Rango de inscripciones</label>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Desde</label>
+                  <input type="date" value={crearForm.inscripcion_desde}
+                    onChange={(e) => setCrearForm({ ...crearForm, inscripcion_desde: e.target.value })}
+                    className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Hasta</label>
+                  <input type="date" value={crearForm.inscripcion_hasta}
+                    onChange={(e) => setCrearForm({ ...crearForm, inscripcion_hasta: e.target.value })}
+                    className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]" />
+                </div>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-2">Rango de realización del curso</label>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Desde</label>
+                  <input type="date" value={crearForm.realizacion_desde}
+                    onChange={(e) => setCrearForm({ ...crearForm, realizacion_desde: e.target.value })}
+                    className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Hasta</label>
+                  <input type="date" value={crearForm.realizacion_hasta}
+                    onChange={(e) => setCrearForm({ ...crearForm, realizacion_hasta: e.target.value })}
+                    className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]" />
+                </div>
+              </div>
+            </div>
             <div className="flex justify-end gap-2 pt-1">
               <button
                 onClick={() => setShowCrear(false)}
@@ -1078,6 +1142,40 @@ export function AdminCapacitaciones({
                 rows={3}
                 className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm resize-none focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]"
               />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-2">Rango de inscripciones</label>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Desde</label>
+                  <input type="date" value={editarForm.inscripcion_desde}
+                    onChange={(e) => setEditarForm({ ...editarForm, inscripcion_desde: e.target.value })}
+                    className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Hasta</label>
+                  <input type="date" value={editarForm.inscripcion_hasta}
+                    onChange={(e) => setEditarForm({ ...editarForm, inscripcion_hasta: e.target.value })}
+                    className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]" />
+                </div>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-2">Rango de realización del curso</label>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Desde</label>
+                  <input type="date" value={editarForm.realizacion_desde}
+                    onChange={(e) => setEditarForm({ ...editarForm, realizacion_desde: e.target.value })}
+                    className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Hasta</label>
+                  <input type="date" value={editarForm.realizacion_hasta}
+                    onChange={(e) => setEditarForm({ ...editarForm, realizacion_hasta: e.target.value })}
+                    className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]" />
+                </div>
+              </div>
             </div>
             <div className="flex justify-end gap-2 pt-1">
               <button
