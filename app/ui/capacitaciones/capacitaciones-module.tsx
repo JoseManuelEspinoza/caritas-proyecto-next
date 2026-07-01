@@ -88,7 +88,7 @@ export function CapacitacionesModule({ cursos }: { cursos: Curso[] }) {
       return;
     }
     run(
-      () => crearCurso(cursoForm),
+      () => crearCurso(cursoForm).then((r) => (r && "id" in r ? undefined : r)),
       "Curso creado.",
       () => {
         setShowCursoForm(false);

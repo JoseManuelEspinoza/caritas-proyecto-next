@@ -11,6 +11,8 @@ import {
   Loader2,
   Sparkles,
   Navigation,
+  Sprout,
+  Info,
 } from "lucide-react";
 import { assignEquipo, autoasignarme } from "@/app/actions/incidents";
 import type {
@@ -50,10 +52,10 @@ function mapTipoIncidente(tipoEvento: string | null): string {
 }
 
 const FASE_LABEL: Record<FaseResultado, string> = {
-  F1: "Fase 1 — brigadistas de la misma parroquia, ordenados por confianza",
-  F2: "Fase 2 — parroquias cercanas (grafo), por score combinado",
-  F2B: "Fase 2B — voluntarios/aliados de la zona",
-  F3: "Sin candidatos disponibles",
+  F1: "Mejores candidatos según el algoritmo — por confianza, disponibilidad y cercanía",
+  F2: "Mejores candidatos según el algoritmo — por confianza, disponibilidad y cercanía",
+  F2B: "Mejores candidatos según el algoritmo — por confianza, disponibilidad y cercanía",
+  F3: "Sin candidatos disponibles en ninguna zona",
 };
 
 type SugerenciaInfo = { fase: FaseResultado; mensaje: string | null; total: number };
@@ -92,6 +94,11 @@ export function AsignacionStep({
   const [responsable, setResponsable] = useState(respInicial);
   const [equipo, setEquipo] = useState<string[]>(equipoInicial);
   const [query, setQuery] = useState("");
+  const [soloDisponibles, setSoloDisponibles] = useState(false);
+  const [soloParroquia, setSoloParroquia] = useState(false);
+  const [soloDisponiblesNovatos, setSoloDisponiblesNovatos] = useState(false);
+  const [soloParroquiaNovatos, setSoloParroquiaNovatos] = useState(false);
+  const [queryNovatos, setQueryNovatos] = useState("");
   const [instrucciones, setInstrucciones] = useState(data.instruccionesAsignacion ?? "");
   const [isPending, startTransition] = useTransition();
   const [dragging, setDragging] = useState<{
@@ -104,6 +111,7 @@ export function AsignacionStep({
   const [sugInfo, setSugInfo] = useState<SugerenciaInfo | null>(null);
   const [sugScores, setSugScores] = useState<Map<string, ScoreSugerido>>(new Map());
   const [extraSug, setExtraSug] = useState<BrigadistaDisponible[]>([]);
+  const [novatosSug, setNovatosSug] = useState<(BrigadistaDisponible & { distKm?: number | null })[]>([]);
 
   async function handleSugerir() {
     if (!data.idParroquia) {
@@ -122,14 +130,18 @@ export function AsignacionStep({
           latitud: data.latitud,
           longitud: data.longitud,
           tipoIncidente: mapTipoIncidente(data.tipoEvento),
+          config: { topN: 15, pesoManual: 0.4, pesoAutomatico: 0.6 },
         }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.message ?? "No se pudo generar la sugerencia.");
 
       const lista = (json.listaSugerida ?? []) as CandidatoSugerido[];
+
+      // Top 5 = sugeridos principales
+      const top5 = lista.slice(0, 5);
       const scores = new Map<string, ScoreSugerido>();
-      lista.forEach((c, i) =>
+      top5.forEach((c, i) =>
         scores.set(c.idBrigadistaParroquial, {
           rank: i,
           score: c.scoreFinal ?? c.scoreConfianza ?? null,
@@ -140,10 +152,15 @@ export function AsignacionStep({
       setSugScores(scores);
       setSugInfo({ fase: json.faseResultado, mensaje: json.mensaje ?? null, total: lista.length });
 
-      // Candidatos sugeridos que no estaban en la lista visible (top 100 por nombre)
+      // Último tercio = candidatos con menor score → bloque novatos
+      const corte = Math.floor(lista.length * 2 / 3);
+      const tercioFinal = lista.slice(corte);
+
       const conocidos = new Set(data.brigadistasDisponibles.map((b) => b.id));
+
+      // Extra sugeridos (top 5 que no estaban en el catálogo)
       setExtraSug(
-        lista
+        top5
           .filter((c) => !conocidos.has(c.idBrigadistaParroquial))
           .map((c) => ({
             id: c.idBrigadistaParroquial,
@@ -155,10 +172,26 @@ export function AsignacionStep({
           }))
       );
 
+      // Novatos = último tercio, no están ya en top5
+      const top5Ids = new Set(top5.map((c) => c.idBrigadistaParroquial));
+      setNovatosSug(
+        tercioFinal
+          .filter((c) => !top5Ids.has(c.idBrigadistaParroquial))
+          .map((c) => ({
+            id: c.idBrigadistaParroquial,
+            nombres: c.nombres,
+            apellidos: c.apellidos,
+            celular: c.celular,
+            disponibilidad: c.disponibilidad,
+            parroquia: c.nombreParroquia,
+            distKm: c.distanciaKm,
+          }))
+      );
+
       if (lista.length === 0) {
         toast.info(json.mensaje ?? "El algoritmo no encontró candidatos disponibles.");
       } else {
-        toast.success(`El algoritmo sugirió ${lista.length} candidato(s), ordenados al inicio.`);
+        toast.success(`${top5.length} brigadistas sugeridos`);
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo generar la sugerencia.");
@@ -183,6 +216,8 @@ export function AsignacionStep({
         (b.parroquia ?? "").toLowerCase().includes(q)
       );
     })
+    .filter((b) => !soloDisponibles || b.disponibilidad === "DISPONIBLE")
+    .filter((b) => !soloParroquia || esRecomendado(b.parroquia))
     .sort((a, b) => {
       // Los sugeridos por el algoritmo van primero, en su orden de ranking.
       const ra = sugScores.get(a.id)?.rank ?? Infinity;
@@ -533,49 +568,61 @@ export function AsignacionStep({
               </div>
             )}
 
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Buscar por nombre o parroquia..."
-                  className="w-full pl-9 pr-3 py-2 text-sm border border-[#DDDDDD] rounded-lg focus:outline-none focus:border-[var(--caritas-green)]"
-                />
+            {/* Panel algoritmo + buscador + lista — un solo contenedor */}
+            <div className={`rounded-xl border overflow-hidden transition-all ${sugInfo ? "border-emerald-200" : "border-gray-200"}`}>
+              {/* Header sugerencia */}
+              <div className={`flex items-center justify-between gap-3 p-3 ${sugInfo ? "bg-emerald-50" : "bg-gray-50"}`}>
+                <div className="flex items-start gap-2 min-w-0">
+                  <Sparkles className="w-4 h-4 text-[var(--caritas-green)] shrink-0 mt-0.5" />
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-gray-700">Sugerencia automática</p>
+                    {sugInfo && (
+                      <p className="text-[11px] text-[var(--caritas-green)] font-medium mt-0.5">
+                        {FASE_LABEL[sugInfo.fase]}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSugerir}
+                  disabled={sugiriendo}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-[var(--caritas-green)]/40 bg-white text-[var(--caritas-green)] hover:bg-[var(--caritas-green)]/5 transition-colors disabled:opacity-50 shrink-0"
+                >
+                  {sugiriendo ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                  {sugInfo ? "Regenerar" : "Generar"}
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={handleSugerir}
-                disabled={sugiriendo}
-                title="Ordena la lista con el algoritmo de sugerencia (confianza + disponibilidad + cercanía)"
-                className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border border-[var(--caritas-green)]/40 text-[var(--caritas-green)] hover:bg-[var(--caritas-green)]/5 transition-colors disabled:opacity-50 whitespace-nowrap"
-              >
-                {sugiriendo ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Sparkles className="w-4 h-4" />
+              {/* Filtros + buscador en la misma fila */}
+              <div className="flex items-center gap-2 flex-wrap px-3 py-2 border-t border-gray-100 bg-white">
+                <button
+                  type="button"
+                  onClick={() => setSoloDisponibles((v) => !v)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium border-2 transition-colors shrink-0 ${soloDisponibles ? "border-[var(--caritas-green)] text-[var(--caritas-green)] bg-[var(--caritas-green)]/5" : "border-transparent bg-gray-100 text-gray-500 hover:bg-gray-200"}`}
+                >
+                  Solo disponibles
+                </button>
+                {data.parroquia && (
+                  <button
+                    type="button"
+                    onClick={() => setSoloParroquia((v) => !v)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium border-2 transition-colors shrink-0 ${soloParroquia ? "border-[var(--caritas-green)] text-[var(--caritas-green)] bg-[var(--caritas-green)]/5" : "border-transparent bg-gray-100 text-gray-500 hover:bg-gray-200"}`}
+                  >
+                    Misma parroquia
+                  </button>
                 )}
-                Sugerir con algoritmo
-              </button>
-            </div>
-
-            {sugInfo && (
-              <div
-                className={`px-3 py-2 rounded-lg border text-xs ${
-                  sugInfo.fase === "F3" || sugInfo.total === 0
-                    ? "bg-amber-50 border-amber-200 text-amber-800"
-                    : "bg-[var(--caritas-green)]/5 border-[var(--caritas-green)]/30 text-[#007a40]"
-                }`}
-              >
-                <p className="font-semibold flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5" />
-                  {FASE_LABEL[sugInfo.fase] ?? "Sugerencia del algoritmo"}
-                </p>
-                {sugInfo.mensaje && <p className="mt-0.5">{sugInfo.mensaje}</p>}
+                <div className="relative flex-1 min-w-[140px]">
+                  <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Buscar..."
+                    className="w-full pl-9 pr-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--caritas-green)]"
+                  />
+                </div>
               </div>
-            )}
-
-            <div className="space-y-2 max-h-60 overflow-y-auto pr-1 border border-gray-100 rounded-xl">
+              {/* Lista */}
+              <div className="divide-y divide-gray-50 max-h-72 overflow-y-auto">
               {catalogo.length === 0 ? (
                 <p className="text-center py-6 text-sm text-gray-400">No hay brigadistas para mostrar</p>
               ) : (
@@ -590,7 +637,7 @@ export function AsignacionStep({
                       onDragStart={() => setDragging({ id: b.id, from: "catalogo" })}
                       onDragEnd={() => setDragging(null)}
                       onClick={() => agregarBrigadista(b.id)}
-                      className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 text-left border-b border-gray-50 last:border-0 cursor-grab active:cursor-grabbing"
+                      className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 text-left cursor-grab active:cursor-grabbing"
                     >
                       <div
                         className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${avatarColor(b.id)}`}
@@ -604,24 +651,29 @@ export function AsignacionStep({
                           <p className="text-sm font-medium text-gray-800 truncate">
                             {b.nombres} {b.apellidos ?? ""}
                           </p>
-                          {sug && (
-                            <span
-                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-[var(--caritas-green)]/10 text-[#007a40]"
-                              title={`Sugerido por el algoritmo (puesto ${sug.rank + 1})`}
-                            >
-                              <Sparkles className="w-3 h-3" />
-                              {sug.score != null ? `${Math.round(sug.score * 10)}%` : `#${sug.rank + 1}`}
-                            </span>
-                          )}
-                          {sug?.dist != null && (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700">
+                          {sug?.dist != null ? (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-600">
                               <Navigation className="w-3 h-3" />
                               {sug.dist.toFixed(1)} km
                             </span>
+                          ) : sugInfo ? (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-amber-400 border border-amber-200 bg-amber-50">
+                              sin ubicación
+                            </span>
+                          ) : null}
+                          {!b.parroquia && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] text-amber-400 border border-amber-200 bg-amber-50">
+                              sin parroquia
+                            </span>
+                          )}
+                          {!b.celular && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] text-amber-400 border border-amber-200 bg-amber-50">
+                              sin teléfono
+                            </span>
                           )}
                           {rec && (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700">
-                              <Star className="w-3 h-3 fill-amber-500 text-amber-500" /> RECOMENDADO
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-600 border border-amber-200">
+                              Zona del incidente
                             </span>
                           )}
                           {b.disponibilidad === "EN CAMPO" && (
@@ -645,7 +697,91 @@ export function AsignacionStep({
                   );
                 })
               )}
-            </div>
+            </div>{/* fin lista */}
+            </div>{/* fin contenedor unificado */}
+
+            {/* Bloque novatos */}
+            {novatosSug.length > 0 && (
+              <div className="rounded-xl border border-emerald-200 overflow-hidden">
+                <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 border-b border-emerald-200">
+                  <Sprout className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <p className="text-xs font-semibold text-emerald-700">Brigadistas con menor experiencia</p>
+                  <span className="ml-auto flex items-center gap-1 text-[10px] text-emerald-500">
+                    <Info className="w-3 h-3" /> menor score — considera incluir alguno
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap px-3 py-2 border-b border-emerald-100 bg-white">
+                  <button
+                    type="button"
+                    onClick={() => setSoloDisponiblesNovatos((v) => !v)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium border-2 transition-colors shrink-0 ${soloDisponiblesNovatos ? "border-[var(--caritas-green)] text-[var(--caritas-green)] bg-[var(--caritas-green)]/5" : "border-transparent bg-gray-100 text-gray-500 hover:bg-gray-200"}`}
+                  >
+                    Solo disponibles
+                  </button>
+                  {data.parroquia && (
+                    <button
+                      type="button"
+                      onClick={() => setSoloParroquiaNovatos((v) => !v)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium border-2 transition-colors shrink-0 ${soloParroquiaNovatos ? "border-[var(--caritas-green)] text-[var(--caritas-green)] bg-[var(--caritas-green)]/5" : "border-transparent bg-gray-100 text-gray-500 hover:bg-gray-200"}`}
+                    >
+                      Misma parroquia
+                    </button>
+                  )}
+                  <div className="relative flex-1 min-w-[140px]">
+                    <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      value={queryNovatos}
+                      onChange={(e) => setQueryNovatos(e.target.value)}
+                      placeholder="Buscar..."
+                      className="w-full pl-9 pr-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--caritas-green)]"
+                    />
+                  </div>
+                </div>
+                <div className="divide-y divide-gray-50 max-h-72 overflow-y-auto">
+                  {novatosSug
+                    .filter((b) => !seleccionados.includes(b.id))
+                    .filter((b) => !soloDisponiblesNovatos || b.disponibilidad === "DISPONIBLE")
+                    .filter((b) => !soloParroquiaNovatos || esRecomendado(b.parroquia))
+                    .filter((b) => {
+                      const q = queryNovatos.trim().toLowerCase();
+                      if (!q) return true;
+                      return `${b.nombres} ${b.apellidos ?? ""}`.toLowerCase().includes(q) || (b.parroquia ?? "").toLowerCase().includes(q);
+                    })
+                    .map((b) => (
+                      <button
+                        type="button"
+                        key={b.id}
+                        onClick={() => agregarBrigadista(b.id)}
+                        className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 text-left cursor-pointer"
+                      >
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${avatarColor(b.id)}`}>
+                          <span className="text-white text-xs font-bold">{iniciales(b.nombres, b.apellidos)}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-sm font-medium text-gray-800 truncate">{b.nombres} {b.apellidos ?? ""}</p>
+                            {b.distKm != null && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-600">
+                                <Navigation className="w-3 h-3" />{b.distKm.toFixed(1)} km
+                              </span>
+                            )}
+                            {esRecomendado(b.parroquia) && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-600 border border-amber-200">
+                                Zona del incidente
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            {b.parroquia ?? "—"}
+                            {b.celular ? ` · ${b.celular}` : ""}
+                          </p>
+                        </div>
+                        <Plus className="w-4 h-4 text-gray-400 shrink-0" />
+                      </button>
+                    ))}
+                </div>
+              </div>
+            )}
 
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1">

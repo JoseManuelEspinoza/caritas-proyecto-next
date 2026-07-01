@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
-import { AlertTriangle, Trash2, X } from "lucide-react";
+import { AlertTriangle, Trash2, X, CheckCircle } from "lucide-react";
 
-type Variant = "danger" | "warning";
+type Variant = "danger" | "warning" | "success";
 
 export interface ConfirmOptions {
   title: string;
@@ -23,7 +23,7 @@ export function ConfirmModal({
   open,
   title,
   message,
-  confirmLabel = "Eliminar",
+  confirmLabel = "Confirmar",
   cancelLabel = "Cancelar",
   variant = "danger",
   onConfirm,
@@ -31,13 +31,22 @@ export function ConfirmModal({
 }: ConfirmModalProps) {
   if (!open) return null;
 
-  const isDanger = variant === "danger";
-  const iconBg = isDanger ? "bg-red-100" : "bg-yellow-100";
-  const iconColor = isDanger ? "text-red-600" : "text-yellow-600";
-  const btnCls = isDanger
-    ? "bg-red-600 hover:bg-red-700 focus:ring-red-500"
-    : "bg-yellow-500 hover:bg-yellow-600 focus:ring-yellow-400";
-  const Icon = isDanger ? Trash2 : AlertTriangle;
+  const iconBg =
+    variant === "danger" ? "bg-red-100" :
+    variant === "warning" ? "bg-yellow-100" :
+    "bg-green-100";
+  const iconColor =
+    variant === "danger" ? "text-red-600" :
+    variant === "warning" ? "text-yellow-600" :
+    "text-[var(--caritas-green)]";
+  const btnCls =
+    variant === "danger" ? "bg-red-600 hover:bg-red-700 focus:ring-red-500" :
+    variant === "warning" ? "bg-yellow-500 hover:bg-yellow-600 focus:ring-yellow-400" :
+    "bg-[var(--caritas-green)] hover:opacity-90 focus:ring-[var(--caritas-green)]";
+  const Icon =
+    variant === "danger" ? Trash2 :
+    variant === "warning" ? AlertTriangle :
+    CheckCircle;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

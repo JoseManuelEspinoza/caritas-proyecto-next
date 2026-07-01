@@ -19,6 +19,7 @@ import {
   Download,
   ScrollText,
   Eye,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import { inscribirme } from "@/app/actions/capacitaciones";
@@ -26,6 +27,40 @@ import type { CursoInscrito, CursoDisponible } from "@/app/actions/capacitacione
 import { RendirExamenModal } from "@/app/ui/capacitaciones/rendir-examen-modal";
 import { ConstanciaModal } from "@/app/ui/capacitaciones/ConstanciaModal";
 import { SeccionAcordeon } from "@/app/ui/capacitaciones/seccion-acordeon";
+
+const PORTADA_CONFIGS = [
+  { bg: "from-[#1a6b3c] to-[#2d9e5f]" },
+  { bg: "from-[#1e40af] to-[#3b82f6]" },
+  { bg: "from-[#7c3aed] to-[#a855f7]" },
+  { bg: "from-[#b45309] to-[#f59e0b]" },
+  { bg: "from-[#0f766e] to-[#2dd4bf]" },
+  { bg: "from-[#be185d] to-[#ec4899]" },
+  { bg: "from-[#1d4ed8] to-[#0ea5e9]" },
+  { bg: "from-[#065f46] to-[#34d399]" },
+  { bg: "from-[#92400e] to-[#d97706]" },
+  { bg: "from-[#4338ca] to-[#818cf8]" },
+];
+
+function getPortadaConfig(nombre: string) {
+  let hash = 5381;
+  for (let i = 0; i < nombre.length; i++) {
+    hash = ((hash << 5) + hash) ^ nombre.charCodeAt(i);
+    hash = hash & hash;
+  }
+  return PORTADA_CONFIGS[Math.abs(hash) % PORTADA_CONFIGS.length];
+}
+
+function CursoPortada({ nombre, altura = "h-32" }: { nombre: string; altura?: string }) {
+  const { bg } = getPortadaConfig(nombre);
+  return (
+    <div className={`${altura} w-full bg-gradient-to-br ${bg} relative overflow-hidden rounded-t-xl`}>
+      <div className="absolute -top-6 -right-6 w-24 h-24 rounded-full bg-white/10" />
+      <div className="absolute -bottom-4 -left-4 w-16 h-16 rounded-full bg-white/10" />
+      {/* Fade hacia blanco en el borde inferior */}
+      <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-b from-transparent to-white/30" />
+    </div>
+  );
+}
 
 function fmtNota(n: number) {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
@@ -63,17 +98,34 @@ function EstadoBadge({ resultado, certificado }: { resultado: string | null; cer
   );
 }
 
+function getMaterialIcon(tipo: string | null) {
+  if (tipo === "Video") return <PlayCircle className="w-4 h-4 text-[var(--caritas-green)]" />;
+  if (tipo === "Enlace web") return <ExternalLink className="w-4 h-4 text-[var(--caritas-green)]" />;
+  return <FileText className="w-4 h-4 text-[var(--caritas-green)]" />;
+}
+
+function getMaterialBtn(tipo: string | null): { icon: React.ReactNode; label: string } {
+  if (tipo === "Video") return { icon: <PlayCircle className="w-3 h-3" />, label: "Ver video" };
+  if (tipo === "Enlace web") return { icon: <ExternalLink className="w-3 h-3" />, label: "Abrir enlace" };
+  return { icon: <FileText className="w-3 h-3" />, label: "Abrir" };
+}
+
 function UnidadLectura({ sesion }: { sesion: CursoInscrito["sesiones"][number] }) {
   const [expandida, setExpandida] = useState(true);
   return (
     <div className="border border-[var(--caritas-border)] rounded-lg">
       <button
         onClick={() => setExpandida(!expandida)}
-        className="w-full flex items-center gap-3 px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left border-l-4 border-[var(--caritas-green)] rounded-t-lg"
+        className="w-full flex items-start gap-3 px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left border-l-4 border-[var(--caritas-green)] rounded-t-lg cursor-pointer"
       >
-        <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform shrink-0 ${expandida ? "" : "-rotate-90"}`} />
-        <span className="text-sm font-semibold text-[var(--caritas-text)] flex-1">{sesion.tituloUnidad}</span>
-        <span className="text-xs text-gray-400 bg-white border border-[var(--caritas-border)] px-2 py-0.5 rounded-full shrink-0">
+        <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform shrink-0 mt-0.5 ${expandida ? "" : "-rotate-90"}`} />
+        <div className="flex-1 min-w-0">
+          <span className="text-sm font-semibold text-[var(--caritas-text)] block">{sesion.tituloUnidad}</span>
+          {sesion.descripcion && (
+            <span className="text-xs text-gray-500 mt-0.5 block line-clamp-2">{sesion.descripcion}</span>
+          )}
+        </div>
+        <span className="text-xs text-gray-400 bg-white border border-[var(--caritas-border)] px-2 py-0.5 rounded-full shrink-0 mt-0.5">
           {sesion.materiales.length} material{sesion.materiales.length !== 1 ? "es" : ""}
         </span>
       </button>
@@ -82,27 +134,30 @@ function UnidadLectura({ sesion }: { sesion: CursoInscrito["sesiones"][number] }
           {sesion.materiales.length === 0 ? (
             <p className="text-xs text-gray-400 px-4 py-4 pl-10 italic">Sin materiales en esta unidad.</p>
           ) : (
-            sesion.materiales.map((m) => (
-              <div key={m.id} className="flex items-center gap-3 px-4 py-3 pl-10 hover:bg-gray-50 transition-colors">
-                <div className="w-8 h-8 rounded-lg bg-[var(--caritas-green)]/8 flex items-center justify-center shrink-0">
-                  <FileText className="w-4 h-4 text-[var(--caritas-green)]" />
+            sesion.materiales.map((m) => {
+              const { icon, label } = getMaterialBtn(m.tipoMaterial);
+              return (
+                <div key={m.id} className="flex items-center gap-3 px-4 py-3 pl-10 hover:bg-gray-50 transition-colors">
+                  <div className="w-8 h-8 rounded-lg bg-[var(--caritas-green)]/8 flex items-center justify-center shrink-0">
+                    {getMaterialIcon(m.tipoMaterial)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800 truncate">{m.titulo}</p>
+                    {m.tipoMaterial && <p className="text-[11px] text-gray-400 mt-0.5">{m.tipoMaterial}</p>}
+                  </div>
+                  {m.enlaceMaterial && (
+                    <a
+                      href={m.enlaceMaterial}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 px-2.5 py-1 text-xs text-[var(--caritas-green)] border border-[var(--caritas-green)]/30 rounded-lg hover:bg-[var(--caritas-green)]/5 transition-colors shrink-0"
+                    >
+                      {icon} {label}
+                    </a>
+                  )}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-800 truncate">{m.titulo}</p>
-                  {m.tipoMaterial && <p className="text-[11px] text-gray-400 mt-0.5">{m.tipoMaterial}</p>}
-                </div>
-                {m.enlaceMaterial && (
-                  <a
-                    href={m.enlaceMaterial}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 px-2.5 py-1 text-xs text-[var(--caritas-green)] border border-[var(--caritas-green)]/30 rounded-lg hover:bg-[var(--caritas-green)]/5 transition-colors shrink-0"
-                  >
-                    <LinkIcon className="w-3 h-3" /> Abrir
-                  </a>
-                )}
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       )}
@@ -182,6 +237,21 @@ function DetalleInscrito({ curso, onVolver }: { curso: CursoInscrito; onVolver: 
             </div>
           </div>
         </div>
+
+        {/* Nota de certificación */}
+        {(curso.cuestionarioInicial || curso.cuestionarioFinal) && !curso.certificado && (
+          <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg">
+            <ClipboardList className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+            <p className="text-xs text-blue-600">
+              Para certificarte debes aprobar{" "}
+              {curso.cuestionarioInicial && curso.cuestionarioFinal
+                ? "el examen inicial y el examen final"
+                : curso.cuestionarioInicial
+                ? "el examen inicial"
+                : "el examen final"}.
+            </p>
+          </div>
+        )}
 
         {/* Evaluación inicial */}
         {curso.cuestionarioInicial && (
@@ -319,6 +389,114 @@ function DetalleInscrito({ curso, onVolver }: { curso: CursoInscrito; onVolver: 
         />
       )}
     </>
+  );
+}
+
+function CursoDisponibleCard({
+  curso,
+  onInscribirse,
+  pending,
+}: {
+  curso: CursoDisponible;
+  onInscribirse: () => void;
+  pending: boolean;
+}) {
+  const [unidadesAbiertas, setUnidadesAbiertas] = useState(false);
+  const [descExpandida, setDescExpandida] = useState(false);
+  const descripcionLarga = (curso.descripcion?.length ?? 0) > 120;
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden flex flex-col">
+      <CursoPortada nombre={curso.nombreCurso} altura="h-20" />
+
+      <div className="p-5 flex flex-col flex-1 gap-3">
+        {/* Badges */}
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-50 text-green-700 border border-green-200">
+            Disponible
+          </span>
+          {curso.codigoCurso && (
+            <span className="text-[11px] font-mono text-gray-400">{curso.codigoCurso}</span>
+          )}
+        </div>
+
+        {/* Título */}
+        <h3 className="text-sm font-bold text-[var(--caritas-text)] leading-snug">{curso.nombreCurso}</h3>
+
+        {/* Instructor */}
+        <div className="flex items-center gap-1.5 text-xs text-gray-500">
+          <Users className="w-3.5 h-3.5 shrink-0" />
+          <span>Instructor: <span className="font-medium text-gray-700">{curso.responsable}</span></span>
+        </div>
+
+        {/* Descripción con "Leer más" */}
+        {curso.descripcion && (
+          <div>
+            <p className={`text-xs text-gray-500 leading-relaxed ${!descExpandida && descripcionLarga ? "line-clamp-2" : ""}`}>
+              {curso.descripcion}
+            </p>
+            {descripcionLarga && (
+              <button
+                onClick={() => setDescExpandida(!descExpandida)}
+                className="text-xs text-[var(--caritas-green)] font-medium mt-0.5 hover:underline cursor-pointer"
+              >
+                {descExpandida ? "Leer menos" : "Leer más"}
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Stats */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-400 pt-1 border-t border-gray-100">
+          <span className="flex items-center gap-1"><Users className="w-3 h-3" />{curso.totalInscritos} inscritos</span>
+          <span className="flex items-center gap-1"><BookOpen className="w-3 h-3" />{curso.totalSesiones} unidades</span>
+          {curso.duracionEstimadaHoras && (
+            <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{curso.duracionEstimadaHoras}h estimadas</span>
+          )}
+        </div>
+
+        {/* Lista de unidades expandible */}
+        {curso.unidades.length > 0 && (
+          <div className="border border-gray-100 rounded-lg overflow-hidden">
+            <button
+              onClick={() => setUnidadesAbiertas(!unidadesAbiertas)}
+              className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 transition-colors text-left cursor-pointer"
+            >
+              <span className="text-xs font-semibold text-gray-600">
+                Contenido del curso
+              </span>
+              <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${unidadesAbiertas ? "rotate-180" : ""}`} />
+            </button>
+            {unidadesAbiertas && (
+              <div className="divide-y divide-gray-100">
+                {curso.unidades.map((u) => (
+                  <div key={u.id} className="flex items-start gap-3 px-3 py-2.5 bg-white">
+                    <span className="text-[11px] font-bold text-gray-300 mt-0.5 w-5 shrink-0 text-right">
+                      {u.numeroOrden}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-gray-700 leading-snug">{u.tituloUnidad}</p>
+                      {u.descripcion && (
+                        <p className="text-[11px] text-gray-400 mt-0.5 line-clamp-2 leading-relaxed">{u.descripcion}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Botón */}
+        <button
+          onClick={onInscribirse}
+          disabled={pending}
+          className="mt-auto w-full flex items-center justify-center gap-2 py-2.5 text-sm bg-[var(--caritas-green)] text-white rounded-xl font-medium hover:opacity-90 disabled:opacity-50 transition-opacity cursor-pointer"
+        >
+          <GraduationCap className="w-4 h-4" /> Inscribirme
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -483,24 +661,26 @@ export function BrigadistaCapacitaciones({
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {cursosFiltrados.map((c) => {
-                const aprobado = c.certificado || c.resultado === "APROBADO";
                 return (
                   <button
                     key={c.id}
                     onClick={() => setDetalleId(c.id)}
-                    className="text-left p-4 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-all group"
+                    className="p-0 flex flex-col text-left bg-white border border-gray-200 rounded-xl hover:shadow-md transition-all group overflow-hidden w-full"
                   >
-                    <div className="flex items-center gap-2 mb-2">
-                      <EstadoBadge resultado={c.resultado} certificado={c.certificado} />
-                      <ChevronRight className="w-3.5 h-3.5 text-gray-300 group-hover:text-[var(--caritas-green)] transition-colors shrink-0 ml-auto" />
-                    </div>
-                    <h3 className="text-sm font-semibold text-[var(--caritas-text)] leading-snug mb-1.5">{c.nombreCurso}</h3>
-                    {c.descripcion && (
-                      <p className="text-xs text-gray-500 line-clamp-2 mb-2">{c.descripcion}</p>
-                    )}
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500 pt-2 border-t border-gray-100">
-                      <span className="flex items-center gap-1"><BookOpen className="w-3 h-3" />{c.sesiones.length} unidades</span>
-                      {c.fechaPublicacion && <span>{fmtDate(c.fechaPublicacion)}</span>}
+                    <CursoPortada nombre={c.nombreCurso} altura="h-28" />
+                    <div className="p-4 w-full">
+                      <div className="flex items-center gap-2 mb-2">
+                        <EstadoBadge resultado={c.resultado} certificado={c.certificado} />
+                        <ChevronRight className="w-3.5 h-3.5 text-gray-300 group-hover:text-[var(--caritas-green)] transition-colors shrink-0 ml-auto" />
+                      </div>
+                      <h3 className="text-sm font-semibold text-[var(--caritas-text)] leading-snug mb-1.5">{c.nombreCurso}</h3>
+                      {c.descripcion && (
+                        <p className="text-xs text-gray-500 line-clamp-2 mb-2">{c.descripcion}</p>
+                      )}
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500 pt-2 border-t border-gray-100">
+                        <span className="flex items-center gap-1"><BookOpen className="w-3 h-3" />{c.sesiones.length} unidades</span>
+                        {c.fechaPublicacion && <span>{fmtDate(c.fechaPublicacion)}</span>}
+                      </div>
                     </div>
                   </button>
                 );
@@ -573,32 +753,12 @@ export function BrigadistaCapacitaciones({
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {disponiblesCursos.map((c) => (
-                <div key={c.id} className="p-4 bg-white border border-gray-200 rounded-xl">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-50 text-green-700 border border-green-200">
-                      PUBLICADO
-                    </span>
-                    {c.codigoCurso && (
-                      <span className="text-[11px] font-mono text-gray-400">{c.codigoCurso}</span>
-                    )}
-                  </div>
-                  <h3 className="text-sm font-semibold text-[var(--caritas-text)] leading-snug mb-1.5">{c.nombreCurso}</h3>
-                  {c.descripcion && (
-                    <p className="text-xs text-gray-500 line-clamp-2 mb-2">{c.descripcion}</p>
-                  )}
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500 mb-3">
-                    <span className="flex items-center gap-1"><Users className="w-3 h-3" />{c.totalInscritos} inscritos</span>
-                    <span className="flex items-center gap-1"><BookOpen className="w-3 h-3" />{c.totalSesiones} unidades</span>
-                    {c.fechaPublicacion && <span>{fmtDate(c.fechaPublicacion)}</span>}
-                  </div>
-                  <button
-                    onClick={() => handleInscribirse(c.id)}
-                    disabled={pending}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 text-sm bg-[var(--caritas-green)] text-white rounded-xl font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
-                  >
-                    <GraduationCap className="w-4 h-4" /> Inscribirme
-                  </button>
-                </div>
+                <CursoDisponibleCard
+                  key={c.id}
+                  curso={c}
+                  onInscribirse={() => handleInscribirse(c.id)}
+                  pending={pending}
+                />
               ))}
             </div>
           )}

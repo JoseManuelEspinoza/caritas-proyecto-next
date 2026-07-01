@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { X, ClipboardList, CheckCircle, AlertCircle, Send } from "lucide-react";
+import { X, ClipboardList, CheckCircle, AlertCircle, Send, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { obtenerCuestionarioPorId, enviarRespuestasExamen } from "@/app/actions/capacitaciones";
@@ -35,6 +35,7 @@ export function RendirExamenModal({ idInscripcion, cuestionario, onClose }: Prop
   const [cargando, setCargando] = useState(false);
   const [respuestas, setRespuestas] = useState<Record<string, string | string[]>>({});
   const [resultado, setResultado] = useState<Resultado | null>(null);
+  const [comprometido, setComprometido] = useState(false);
 
   const intentosRestantes = cuestionario.maxIntentos - cuestionario.intentosUsados;
   const agotado = intentosRestantes <= 0;
@@ -156,9 +157,35 @@ export function RendirExamenModal({ idInscripcion, cuestionario, onClose }: Prop
                   Has agotado todos tus intentos para este examen.
                 </div>
               ) : (
-                <p className="text-sm text-gray-500 mb-5">
-                  Lee cada pregunta con cuidado. Una vez que envíes no podrás cambiar tus respuestas.
-                </p>
+                <>
+                  <p className="text-sm text-gray-500 mb-4">
+                    Lee cada pregunta con cuidado. Una vez que envíes no podrás cambiar tus respuestas.
+                  </p>
+                  {/* Compromiso de honor */}
+                  <label className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer mb-5 transition-colors ${
+                    comprometido
+                      ? "bg-[var(--caritas-green)]/5 border-[var(--caritas-green)]/40"
+                      : "bg-gray-50 border-gray-200 hover:border-gray-300"
+                  }`}>
+                    <input
+                      type="checkbox"
+                      checked={comprometido}
+                      onChange={(e) => setComprometido(e.target.checked)}
+                      className="mt-0.5 w-4 h-4 accent-[var(--caritas-green)] shrink-0 cursor-pointer"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <ShieldCheck className={`w-3.5 h-3.5 shrink-0 ${comprometido ? "text-[var(--caritas-green)]" : "text-gray-400"}`} />
+                        <span className={`text-xs font-semibold ${comprometido ? "text-[var(--caritas-green)]" : "text-gray-600"}`}>
+                          Compromiso de honestidad
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500 leading-relaxed">
+                        Me comprometo a responder este examen con mis propios conocimientos, sin copiar respuestas ni compartir el contenido de las preguntas con otras personas.
+                      </p>
+                    </div>
+                  </label>
+                </>
               )}
 
               <div className="flex gap-2 justify-center">
@@ -171,8 +198,8 @@ export function RendirExamenModal({ idInscripcion, cuestionario, onClose }: Prop
                 {!agotado && (
                   <button
                     onClick={iniciar}
-                    disabled={cargando}
-                    className="px-5 py-2 text-sm bg-[var(--caritas-green)] text-white rounded-lg hover:opacity-90 disabled:opacity-50"
+                    disabled={cargando || !comprometido}
+                    className="px-5 py-2 text-sm bg-[var(--caritas-green)] text-white rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
                   >
                     {cargando ? "Cargando..." : "Comenzar examen"}
                   </button>

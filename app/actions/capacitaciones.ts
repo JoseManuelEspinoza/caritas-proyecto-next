@@ -136,6 +136,7 @@ export type Sesion = {
   id: string;
   numeroOrden: number;
   tituloUnidad: string;
+  descripcion: string | null;
   materiales: Material[];
 };
 
@@ -144,10 +145,15 @@ export type CursoDetalle = {
   codigoCurso: string | null;
   nombreCurso: string;
   descripcion: string | null;
+  duracionEstimadaHoras: number | null;
   modalidadGeneral: string;
   estadoCurso: string;
   fechaPublicacion: string | null;
   fechaCierre: string | null;
+  inscripcion_desde: string | null;
+  inscripcion_hasta: string | null;
+  realizacion_desde: string | null;
+  realizacion_hasta: string | null;
   responsable: string;
   idResponsable: string;
   totalInscritos: number;
@@ -159,6 +165,7 @@ export type CursoDetalle = {
     titulo: string;
     totalPreguntas: number;
     notaAprobatoria: number;
+    maxIntentos: number;
     estado: string;
   } | null;
 
@@ -168,6 +175,7 @@ export type CursoDetalle = {
     titulo: string;
     totalPreguntas: number;
     notaAprobatoria: number;
+    maxIntentos: number;
     estado: string;
   } | null;
 
@@ -176,6 +184,7 @@ export type CursoDetalle = {
     titulo: string;
     totalPreguntas: number;
     notaAprobatoria: number;
+    maxIntentos: number;
     estado: string;
   } | null;
 };
@@ -185,6 +194,7 @@ export type CursoInscrito = {
   codigoCurso: string | null;
   nombreCurso: string;
   descripcion: string | null;
+  duracionEstimadaHoras: number | null;
   modalidadGeneral: string;
   estadoCurso: string;
   fechaPublicacion: string | null;
@@ -234,12 +244,14 @@ export type CursoDisponible = {
   codigoCurso: string | null;
   nombreCurso: string;
   descripcion: string | null;
+  duracionEstimadaHoras: number | null;
   modalidadGeneral: string;
   fechaPublicacion: string | null;
   fechaCierre: string | null;
   responsable: string;
   totalInscritos: number;
   totalSesiones: number;
+  unidades: { id: string; numeroOrden: number; tituloUnidad: string; descripcion: string | null }[];
 };
 
 // ── Read actions ──────────────────────────────────────────────────────────────
@@ -342,6 +354,111 @@ export async function reiniciarIntentos(
   revalidatePath(REVALIDATE);
 }
 
+export type IntentoEvaluacion = {
+  idEvaluacion: string;
+  tipoEvaluacion: string | null;
+  numeroIntento: number | null;
+  nota: number | null;
+  resultado: string | null;
+  fechaEvaluacion: string;
+};
+
+export type DetalleEvaluacion = {
+  idEvaluacion: string;
+  tipoEvaluacion: string | null;
+  numeroIntento: number | null;
+  nota: number | null;
+  puntajeObtenido: number | null;
+  puntajeTotal: number | null;
+  resultado: string | null;
+  fechaEvaluacion: string;
+  preguntas: {
+    idPregunta: string;
+    enunciado: string;
+    puntaje: number;
+    orden: number;
+    opciones: { id: string; texto: string; esCorrecta: boolean }[];
+    respuesta: {
+      idOpcionSeleccionada: string | null;
+      textoOpcionSeleccionada: string | null;
+      esCorrecta: boolean | null;
+      puntajeObtenido: number | null;
+    } | null;
+  }[];
+};
+
+export async function listarIntentosInscripcion(idInscripcion: string): Promise<IntentoEvaluacion[]> {
+  await verifySession();
+  const rows = await prisma.evaluacionCurso.findMany({
+    where: { idInscripcionCurso: idInscripcion },
+    orderBy: [{ tipoEvaluacion: "asc" }, { fechaEvaluacion: "asc" }],
+    select: {
+      idEvaluacionCurso: true,
+      tipoEvaluacion: true,
+      numeroIntento: true,
+      nota: true,
+      resultado: true,
+      fechaEvaluacion: true,
+    },
+  });
+  return rows.map((r) => ({
+    idEvaluacion: r.idEvaluacionCurso,
+    tipoEvaluacion: r.tipoEvaluacion,
+    numeroIntento: r.numeroIntento,
+    nota: r.nota != null ? Number(r.nota) : null,
+    resultado: r.resultado,
+    fechaEvaluacion: r.fechaEvaluacion ? r.fechaEvaluacion.toISOString() : new Date().toISOString(),
+  }));
+}
+
+export async function listarDetalleEvaluacion(idEvaluacion: string): Promise<DetalleEvaluacion | null> {
+  await verifySession();
+  const row = await prisma.evaluacionCurso.findUnique({
+    where: { idEvaluacionCurso: idEvaluacion },
+    include: {
+      respuestas: {
+        include: {
+          pregunta: {
+            include: {
+              opciones: { orderBy: { orden: "asc" } },
+            },
+          },
+          opcion: true,
+        },
+        orderBy: { pregunta: { orden: "asc" } },
+      },
+    },
+  });
+  if (!row) return null;
+  return {
+    idEvaluacion: row.idEvaluacionCurso,
+    tipoEvaluacion: row.tipoEvaluacion,
+    numeroIntento: row.numeroIntento,
+    nota: row.nota != null ? Number(row.nota) : null,
+    puntajeObtenido: row.puntajeObtenido != null ? Number(row.puntajeObtenido) : null,
+    puntajeTotal: row.puntajeTotal != null ? Number(row.puntajeTotal) : null,
+    resultado: row.resultado,
+    fechaEvaluacion: row.fechaEvaluacion ? row.fechaEvaluacion.toISOString() : new Date().toISOString(),
+    preguntas: row.respuestas.map((r) => ({
+      idPregunta: r.idPreguntaCuestionario,
+      enunciado: r.pregunta.enunciado,
+      puntaje: Number(r.pregunta.puntaje),
+      orden: r.pregunta.orden,
+      opciones: r.pregunta.opciones.map((o) => ({
+        id: o.idOpcionPregunta,
+        texto: o.textoOpcion,
+        esCorrecta: o.esCorrecta,
+      })),
+      respuesta: {
+        idOpcionSeleccionada: r.idOpcionPregunta,
+        textoOpcionSeleccionada: r.opcion?.textoOpcion ?? null,
+        esCorrecta: r.esCorrecta,
+        puntajeObtenido: r.puntajeObtenido != null ? Number(r.puntajeObtenido) : null,
+      },
+    })),
+  };
+}
+
 export async function actualizarConstancia(
   idInscripcion: string,
   constanciaUrl: string
@@ -386,7 +503,7 @@ export async function listarCursosConSesiones(idResponsable?: string): Promise<C
   });
 
   // Intentar obtener cuestionarios; si la tabla aún no existe en la BD, continuar sin ellos.
-  type CuestionarioRow = { idCursoCapacitacion: string; idCuestionarioCurso: string; titulo: string; notaAprobatoria: unknown; tipoCuestionario: string; estado: string; _count: { preguntas: number } };
+  type CuestionarioRow = { idCursoCapacitacion: string; idCuestionarioCurso: string; titulo: string; notaAprobatoria: unknown; tipoCuestionario: string; estado: string; maxIntentos: number; _count: { preguntas: number } };
   let inicialesPorCurso: Record<string, CuestionarioRow> = {};
   let finalesPorCurso: Record<string, CuestionarioRow> = {};
   try {
@@ -411,6 +528,7 @@ export async function listarCursosConSesiones(idResponsable?: string): Promise<C
     titulo: c.titulo,
     totalPreguntas: c._count.preguntas,
     notaAprobatoria: Number(c.notaAprobatoria),
+    maxIntentos: c.maxIntentos ?? 1,
     estado: c.estado,
   } : null;
 
@@ -423,13 +541,19 @@ export async function listarCursosConSesiones(idResponsable?: string): Promise<C
     estadoCurso: r.estadoCurso,
     fechaPublicacion: r.fechaPublicacion?.toISOString() ?? null,
     fechaCierre: r.fechaCierre?.toISOString() ?? null,
+    inscripcion_desde: r.inscripcion_desde?.toISOString() ?? null,
+    inscripcion_hasta: r.inscripcion_hasta?.toISOString() ?? null,
+    realizacion_desde: r.realizacion_desde?.toISOString() ?? null,
+    realizacion_hasta: r.realizacion_hasta?.toISOString() ?? null,
     responsable: `${r.usuarioResponsable.nombres} ${r.usuarioResponsable.apellidos}`.trim(),
     idResponsable: r.idUsuarioResponsableGRD,
     totalInscritos: r._count.inscripciones,
+    duracionEstimadaHoras: r.duracionEstimadaHoras ?? null,
     sesiones: r.unidades.map((u) => ({
       id: u.idUnidadContenido,
       numeroOrden: u.numeroOrden,
       tituloUnidad: u.tituloUnidad,
+      descripcion: u.descripcion,
       materiales: u.materiales.map((m) => ({
         id: m.idMaterialCapacitacion,
         titulo: m.titulo,
@@ -526,7 +650,15 @@ export async function listarMisCursos(): Promise<CursoInscrito[]> {
   // Migración lazy: certificar aprobados sin certificación, y completar URL faltante
   for (const i of inscripciones) {
     const evals = i.evaluaciones;
-    const aprobado = evals.some((e) => e.resultado === "APROBADO");
+    // Usar tipos explícitos para evitar que evaluaciones con tipoEvaluacion=null cuenten como final
+    const finalAprobado = evals.some((e) =>
+      e.resultado === "APROBADO" &&
+      (e.tipoEvaluacion === "FINAL" || e.tipoEvaluacion === "UNICO")
+    );
+    const inicialAprobado = evals.some((e) => e.resultado === "APROBADO" && e.tipoEvaluacion === "INICIAL");
+    // Verificar si el CURSO tiene examen inicial, no si el alumno lo rindió
+    const tieneExamenInicial = !!inicialesPorCurso[i.curso.idCursoCapacitacion];
+    const aprobado = finalAprobado && (!tieneExamenInicial || inicialAprobado);
     const constanciaUrl = `/capacitaciones/constancia/${i.idInscripcionCurso}`;
     if (aprobado && i.certificacion === null) {
       try {
@@ -557,6 +689,7 @@ export async function listarMisCursos(): Promise<CursoInscrito[]> {
       codigoCurso: i.curso.codigoCurso,
       nombreCurso: i.curso.nombreCurso,
       descripcion: i.curso.descripcion,
+      duracionEstimadaHoras: i.curso.duracionEstimadaHoras ?? null,
       modalidadGeneral: i.curso.modalidadGeneral,
       estadoCurso: i.curso.estadoCurso,
       fechaPublicacion: i.curso.fechaPublicacion?.toISOString() ?? null,
@@ -564,7 +697,9 @@ export async function listarMisCursos(): Promise<CursoInscrito[]> {
       responsable: `${i.curso.usuarioResponsable.nombres} ${i.curso.usuarioResponsable.apellidos}`.trim(),
       idInscripcion: i.idInscripcionCurso,
       estadoInscripcion: i.estadoInscripcion,
-      evalInicial: evalsInicial[0]?.nota != null ? Number(evalsInicial[0].nota) : null,
+      evalInicial: evalsInicial.length > 0 && evalsInicial[evalsInicial.length - 1].nota != null
+        ? Number(evalsInicial[evalsInicial.length - 1].nota)
+        : null,
       evalFinal: evalsFinal.length > 0 && evalsFinal[evalsFinal.length - 1].nota != null
         ? Number(evalsFinal[evalsFinal.length - 1].nota)
         : null,
@@ -591,6 +726,7 @@ export async function listarMisCursos(): Promise<CursoInscrito[]> {
         id: u.idUnidadContenido,
         numeroOrden: u.numeroOrden,
         tituloUnidad: u.tituloUnidad,
+        descripcion: u.descripcion,
         materiales: u.materiales.map((m) => ({
           id: m.idMaterialCapacitacion,
           titulo: m.titulo,
@@ -626,6 +762,16 @@ export async function listarCursosDisponiblesBrigadista(): Promise<CursoDisponib
     include: {
       usuarioResponsable: { select: { nombres: true, apellidos: true } },
       _count: { select: { inscripciones: true, unidades: true } },
+      unidades: {
+        where: { estado: "ACTIVO" },
+        orderBy: { numeroOrden: "asc" },
+        select: {
+          idUnidadContenido: true,
+          numeroOrden: true,
+          tituloUnidad: true,
+          descripcion: true,
+        },
+      },
     },
   });
 
@@ -634,12 +780,19 @@ export async function listarCursosDisponiblesBrigadista(): Promise<CursoDisponib
     codigoCurso: r.codigoCurso,
     nombreCurso: r.nombreCurso,
     descripcion: r.descripcion,
+    duracionEstimadaHoras: r.duracionEstimadaHoras ?? null,
     modalidadGeneral: r.modalidadGeneral,
     fechaPublicacion: r.fechaPublicacion?.toISOString() ?? null,
     fechaCierre: r.fechaCierre?.toISOString() ?? null,
     responsable: `${r.usuarioResponsable.nombres} ${r.usuarioResponsable.apellidos}`.trim(),
     totalInscritos: r._count.inscripciones,
     totalSesiones: r._count.unidades,
+    unidades: r.unidades.map((u) => ({
+      id: u.idUnidadContenido,
+      numeroOrden: u.numeroOrden,
+      tituloUnidad: u.tituloUnidad,
+      descripcion: u.descripcion,
+    })),
   }));
 }
 
@@ -651,6 +804,10 @@ export async function crearCurso(input: {
   idInstitucionAliada?: string;
   duracionEstimadaHoras?: number;
   idResponsable?: string;
+  inscripcion_desde?: string;
+  inscripcion_hasta?: string;
+  realizacion_desde?: string;
+  realizacion_hasta?: string;
 }) {
   const session = await verifySession();
   const errorNombre = validarTextoMinimo(input.nombreCurso, "El nombre del curso", 3);
@@ -673,14 +830,27 @@ export async function crearCurso(input: {
   const { idResponsable, ...rest } = input;
   const idUsuarioResponsableGRD = idResponsable ?? (await getUsuarioGRDId());
   if (!idUsuarioResponsableGRD) return { message: "Tu usuario no tiene perfil GRD asociado." };
+  let nuevoCursoId: string;
   try {
-    await makeCursoUseCases().crear.execute({
+    const creado = await makeCursoUseCases().crear.execute({
       ...rest,
       nombreCurso: input.nombreCurso.trim(),
       descripcion: texto(input.descripcion) || undefined,
       duracionEstimadaHoras: duracionNormalizada,
       idUsuarioResponsableGRD,
     });
+    nuevoCursoId = creado.id;
+    if (input.inscripcion_desde || input.inscripcion_hasta || input.realizacion_desde || input.realizacion_hasta) {
+      await prisma.cursoCapacitacion.update({
+        where: { idCursoCapacitacion: nuevoCursoId },
+        data: {
+          inscripcion_desde: input.inscripcion_desde ? new Date(input.inscripcion_desde) : undefined,
+          inscripcion_hasta: input.inscripcion_hasta ? new Date(input.inscripcion_hasta) : undefined,
+          realizacion_desde: input.realizacion_desde ? new Date(input.realizacion_desde) : undefined,
+          realizacion_hasta: input.realizacion_hasta ? new Date(input.realizacion_hasta) : undefined,
+        },
+      });
+    }
   } catch (err) {
     return fail(err, "No se pudo crear el curso.");
   }
@@ -693,11 +863,20 @@ export async function crearCurso(input: {
     module: "Capacitaciones",
   });
   revalidatePath(REVALIDATE);
+  return { id: nuevoCursoId };
 }
 
 export async function editarCurso(
   id: string,
-  data: { nombreCurso: string; descripcion?: string; idResponsable: string }
+  data: {
+    nombreCurso: string;
+    descripcion?: string;
+    idResponsable: string;
+    inscripcion_desde?: string | null;
+    inscripcion_hasta?: string | null;
+    realizacion_desde?: string | null;
+    realizacion_hasta?: string | null;
+  }
 ): Promise<void | { message: string }> {
   const session = await verifySession();
 
@@ -725,6 +904,10 @@ export async function editarCurso(
         nombreCurso: data.nombreCurso.trim(),
         descripcion: texto(data.descripcion) || null,
         idUsuarioResponsableGRD: data.idResponsable,
+        inscripcion_desde: data.inscripcion_desde ? new Date(data.inscripcion_desde) : null,
+        inscripcion_hasta: data.inscripcion_hasta ? new Date(data.inscripcion_hasta) : null,
+        realizacion_desde: data.realizacion_desde ? new Date(data.realizacion_desde) : null,
+        realizacion_hasta: data.realizacion_hasta ? new Date(data.realizacion_hasta) : null,
       },
     });
     await logGRDAction({
@@ -747,6 +930,16 @@ export async function cambiarEstadoCurso(id: string, accion: "PUBLICAR" | "CERRA
     where: { idCursoCapacitacion: id },
     select: { nombreCurso: true },
   });
+  if (accion === "PUBLICAR") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const cuestionarioActivo = await (prisma as any).cuestionarioCurso.findFirst({
+      where: { idCursoCapacitacion: id, estado: "ACTIVO" },
+      select: { idCuestionarioCurso: true },
+    }).catch(() => null);
+    if (!cuestionarioActivo) {
+      return { message: "No puedes publicar un curso sin al menos una evaluación activa. Crea y activa un cuestionario primero." };
+    }
+  }
   try {
     await makeCursoUseCases().cambiarEstado.execute(id, accion);
   } catch (err) {
@@ -776,7 +969,7 @@ export async function cambiarEstadoCurso(id: string, accion: "PUBLICAR" | "CERRA
 
 export async function crearSesion(
   idCurso: string,
-  data: { tituloUnidad: string }
+  data: { tituloUnidad: string; descripcion?: string }
 ): Promise<void | { message: string }> {
   const session = await verifySession();
 
@@ -803,6 +996,7 @@ export async function crearSesion(
         idCursoCapacitacion: idCurso,
         numeroOrden: count + 1,
         tituloUnidad: data.tituloUnidad.trim(),
+        descripcion: data.descripcion?.trim() || null,
         estado: "ACTIVO",
       },
     });
@@ -875,14 +1069,17 @@ export async function agregarMaterial(
 
 export async function editarSesion(
   idUnidad: string,
-  data: { tituloUnidad: string }
+  data: { tituloUnidad: string; descripcion?: string }
 ): Promise<void | { message: string }> {
   await verifySession();
   if (!data.tituloUnidad.trim()) return { message: "El título es obligatorio." };
   try {
     await prisma.unidadContenido.update({
       where: { idUnidadContenido: idUnidad },
-      data: { tituloUnidad: data.tituloUnidad.trim() },
+      data: {
+        tituloUnidad: data.tituloUnidad.trim(),
+        ...(data.descripcion !== undefined ? { descripcion: data.descripcion.trim() || null } : {}),
+      },
     });
   } catch (err) {
     return fail(err, "No se pudo editar la unidad.");
@@ -1106,7 +1303,7 @@ export async function registrarEvaluacion(
       field: "Nota",
       newValue: nota.toString(),
     });
-    if (r.resultado === "APROBADO") {
+    if (r.resultado === "APROBADO" && opts?.tipoEvaluacion !== "INICIAL") {
       try {
         const constanciaUrl = `/capacitaciones/constancia/${idInscripcion}`;
         await makeCursoUseCases().certificar.execute(idInscripcion, constanciaUrl);

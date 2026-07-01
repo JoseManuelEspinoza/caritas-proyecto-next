@@ -42,6 +42,17 @@ export default async function SimulacrosPage() {
   const [actividades, parroquias, brigadistasDisp, evidencias] = await Promise.all([
     prisma.actividadPreventiva.findMany({
       orderBy: { updatedAt: "desc" },
+      // Brigadistas solo ven sus simulacros asignados
+      where: role === "brigadista" && brigadistaPerfil
+        ? {
+            simulacroBrigadistas: {
+              some: {
+                idBrigadistaParroquial: brigadistaPerfil.idBrigadistaParroquial,
+                estadoAsignacion: "ASIGNADA",
+              },
+            },
+          }
+        : undefined,
       include: {
         simulacroBrigadistas: {
           where: { estadoAsignacion: "ASIGNADA" },
