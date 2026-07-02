@@ -19,8 +19,9 @@ export type ParroquiaFormData = {
 function parseLatLng(latStr?: string, lngStr?: string): { message: string } | { lat: number | null; lng: number | null } {
   const lat = latStr?.trim() ? parseFloat(latStr) : null;
   const lng = lngStr?.trim() ? parseFloat(lngStr) : null;
-  if (lat !== null && (isNaN(lat) || lat < -90 || lat > 90)) return { message: "Latitud inválida (debe estar entre -90 y 90)." };
-  if (lng !== null && (isNaN(lng) || lng < -180 || lng > 180)) return { message: "Longitud inválida (debe estar entre -180 y 180)." };
+  if (lat === null || lng === null) return { message: "La latitud y la longitud son obligatorias." };
+  if (isNaN(lat) || lat < -90 || lat > 90) return { message: "Latitud inválida (debe estar entre -90 y 90)." };
+  if (isNaN(lng) || lng < -180 || lng > 180) return { message: "Longitud inválida (debe estar entre -180 y 180)." };
   return { lat, lng };
 }
 
@@ -37,6 +38,8 @@ export async function createParroquia(data: ParroquiaFormData) {
 
   const nombre = data.nombre.trim();
   if (!nombre) return { message: "El nombre es obligatorio." };
+  if (!data.direccion.trim()) return { message: "La dirección es obligatoria." };
+  if (!data.telefono.trim()) return { message: "El teléfono es obligatorio." };
 
   const existe = await prisma.parroquia.findFirst({ where: { nombre: { equals: nombre, mode: "insensitive" } } });
   if (existe) return { message: "Ya existe una parroquia con ese nombre." };
@@ -84,6 +87,8 @@ export async function updateParroquia(id: string, data: ParroquiaFormData) {
 
   const nombre = data.nombre.trim();
   if (!nombre) return { message: "El nombre es obligatorio." };
+  if (!data.direccion.trim()) return { message: "La dirección es obligatoria." };
+  if (!data.telefono.trim()) return { message: "El teléfono es obligatorio." };
 
   const existe = await prisma.parroquia.findFirst({
     where: { nombre: { equals: nombre, mode: "insensitive" }, NOT: { idParroquia: id } },
@@ -317,6 +322,12 @@ export async function importParroquias(
       const nombre = (row.nombre ?? "").trim();
       if (!nombre) throw new Error("El nombre de la parroquia es obligatorio.");
 
+      const direccion = (row.direccion ?? "").trim();
+      if (!direccion) throw new Error("La dirección es obligatoria.");
+
+      const telefonoRaw = (row.telefono ?? "").toString().replace(/\D/g, "").slice(0, 9);
+      if (!telefonoRaw) throw new Error("El teléfono es obligatorio.");
+
       const correo = (row.correo ?? "").trim() || undefined;
       if (correo && !EMAIL_RE.test(correo)) throw new Error("Correo no tiene formato válido.");
 
@@ -335,21 +346,22 @@ export async function importParroquias(
 
       const latRaw = row.latitud != null ? String(row.latitud).trim() : "";
       const lngRaw = row.longitud != null ? String(row.longitud).trim() : "";
-      const latitud = latRaw ? parseFloat(latRaw) : null;
-      const longitud = lngRaw ? parseFloat(lngRaw) : null;
+      if (!latRaw || !lngRaw) throw new Error("La latitud y la longitud son obligatorias.");
+      const latitud = parseFloat(latRaw);
+      const longitud = parseFloat(lngRaw);
 
-      if (latRaw && isNaN(latitud!)) throw new Error("Latitud no es un número válido.");
-      if (lngRaw && isNaN(longitud!)) throw new Error("Longitud no es un número válido.");
+      if (isNaN(latitud) || latitud < -90 || latitud > 90) throw new Error("Latitud inválida (debe estar entre -90 y 90).");
+      if (isNaN(longitud) || longitud < -180 || longitud > 180) throw new Error("Longitud inválida (debe estar entre -180 y 180).");
 
       await prisma.parroquia.create({
         data: {
           nombre,
-          direccion: (row.direccion ?? "").trim() || null,
+          direccion,
           referencia: (row.referencia ?? "").trim() || null,
-          telefono: (row.telefono ?? "").toString().replace(/\D/g, "").slice(0, 9) || null,
+          telefono: telefonoRaw,
           correo: correo ?? null,
-          latitud: latitud ?? undefined,
-          longitud: longitud ?? undefined,
+          latitud,
+          longitud,
           estado: "ACTIVO",
         },
       });

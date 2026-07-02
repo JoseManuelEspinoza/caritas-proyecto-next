@@ -165,6 +165,16 @@ function UnidadLectura({ sesion }: { sesion: CursoInscrito["sesiones"][number] }
   );
 }
 
+function PlazoRealizacion({ diasRestantes }: { diasRestantes: number }) {
+  const vencido = diasRestantes < 0;
+  return (
+    <span className={`flex items-center gap-1 font-medium ${vencido ? "text-red-500" : diasRestantes <= 3 ? "text-amber-600" : "text-gray-400"}`}>
+      <Clock className="w-3.5 h-3.5" />
+      {vencido ? "Plazo vencido" : `${diasRestantes} día(s) para completar el curso`}
+    </span>
+  );
+}
+
 function DetalleInscrito({ curso, onVolver }: { curso: CursoInscrito; onVolver: () => void }) {
   const [showExamen, setShowExamen] = useState(false);
   const [showExamenInicial, setShowExamenInicial] = useState(false);
@@ -199,6 +209,9 @@ function DetalleInscrito({ curso, onVolver }: { curso: CursoInscrito; onVolver: 
                 <div className="flex flex-wrap items-center gap-4 mt-3 text-xs text-gray-400">
                   <span className="flex items-center gap-1"><BookOpen className="w-3.5 h-3.5" />{curso.sesiones.length} unidades</span>
                   {curso.fechaPublicacion && <span>Publicado {fmtDate(curso.fechaPublicacion)}</span>}
+                  {curso.diasRestantesRealizacion != null && !aprobado && (
+                    <PlazoRealizacion diasRestantes={curso.diasRestantesRealizacion} />
+                  )}
                 </div>
               </div>
               {/* Notas */}

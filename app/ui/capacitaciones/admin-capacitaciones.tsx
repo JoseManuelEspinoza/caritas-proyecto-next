@@ -413,8 +413,7 @@ export function AdminCapacitaciones({
     idResponsable: especialistas[0]?.id ?? "",
     inscripcion_desde: "",
     inscripcion_hasta: "",
-    realizacion_desde: "",
-    realizacion_hasta: "",
+    duracionRealizacionDias: "",
   });
   const [editarForm, setEditarForm] = useState({
     nombreCurso: "",
@@ -422,8 +421,7 @@ export function AdminCapacitaciones({
     idResponsable: "",
     inscripcion_desde: "",
     inscripcion_hasta: "",
-    realizacion_desde: "",
-    realizacion_hasta: "",
+    duracionRealizacionDias: "",
   });
   const [sesionTitulo, setSesionTitulo] = useState("");
   const [sesionDescripcion, setSesionDescripcion] = useState("");
@@ -529,8 +527,7 @@ export function AdminCapacitaciones({
         idResponsable: crearForm.idResponsable,
         inscripcion_desde: crearForm.inscripcion_desde || undefined,
         inscripcion_hasta: crearForm.inscripcion_hasta || undefined,
-        realizacion_desde: crearForm.realizacion_desde || undefined,
-        realizacion_hasta: crearForm.realizacion_hasta || undefined,
+        duracionRealizacionDias: crearForm.duracionRealizacionDias ? Number(crearForm.duracionRealizacionDias) : undefined,
       });
 
       if (res && "message" in res) {
@@ -540,7 +537,7 @@ export function AdminCapacitaciones({
 
       toast.success("Curso creado.");
       setShowCrear(false);
-      setCrearForm({ nombreCurso: "", descripcion: "", idResponsable: especialistas[0]?.id ?? "", inscripcion_desde: "", inscripcion_hasta: "", realizacion_desde: "", realizacion_hasta: "" });
+      setCrearForm({ nombreCurso: "", descripcion: "", idResponsable: especialistas[0]?.id ?? "", inscripcion_desde: "", inscripcion_hasta: "", duracionRealizacionDias: "" });
       setFiltroEstado("BORRADOR");
       setShowBorradores(true);
       router.refresh();
@@ -575,8 +572,7 @@ export function AdminCapacitaciones({
           idResponsable: editarForm.idResponsable,
           inscripcion_desde: editarForm.inscripcion_desde || null,
           inscripcion_hasta: editarForm.inscripcion_hasta || null,
-          realizacion_desde: editarForm.realizacion_desde || null,
-          realizacion_hasta: editarForm.realizacion_hasta || null,
+          duracionRealizacionDias: editarForm.duracionRealizacionDias ? Number(editarForm.duracionRealizacionDias) : null,
         }),
       "Curso actualizado.",
       () => {
@@ -622,8 +618,7 @@ export function AdminCapacitaciones({
       idResponsable: responsableValido ? current.idResponsable : (especialistas[0]?.id ?? ""),
       inscripcion_desde: current.inscripcion_desde ? current.inscripcion_desde.slice(0, 10) : "",
       inscripcion_hasta: current.inscripcion_hasta ? current.inscripcion_hasta.slice(0, 10) : "",
-      realizacion_desde: current.realizacion_desde ? current.realizacion_desde.slice(0, 10) : "",
-      realizacion_hasta: current.realizacion_hasta ? current.realizacion_hasta.slice(0, 10) : "",
+      duracionRealizacionDias: current.duracionRealizacionDias != null ? String(current.duracionRealizacionDias) : "",
     });
     setShowEditar(true);
   };
@@ -1049,34 +1044,27 @@ export function AdminCapacitaciones({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">Desde</label>
-                  <input type="date" value={crearForm.inscripcion_desde}
+                  <input type="date" value={crearForm.inscripcion_desde} min={new Date().toISOString().slice(0, 10)}
                     onChange={(e) => setCrearForm({ ...crearForm, inscripcion_desde: e.target.value })}
                     className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]" />
                 </div>
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">Hasta</label>
-                  <input type="date" value={crearForm.inscripcion_hasta}
+                  <input type="date" value={crearForm.inscripcion_hasta} min={crearForm.inscripcion_desde || new Date().toISOString().slice(0, 10)}
                     onChange={(e) => setCrearForm({ ...crearForm, inscripcion_hasta: e.target.value })}
                     className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]" />
                 </div>
               </div>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-2">Rango de realización del curso</label>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1">Desde</label>
-                  <input type="date" value={crearForm.realizacion_desde}
-                    onChange={(e) => setCrearForm({ ...crearForm, realizacion_desde: e.target.value })}
-                    className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1">Hasta</label>
-                  <input type="date" value={crearForm.realizacion_hasta}
-                    onChange={(e) => setCrearForm({ ...crearForm, realizacion_hasta: e.target.value })}
-                    className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]" />
-                </div>
-              </div>
+              <label className="block text-xs font-medium text-gray-600 mb-2">
+                Plazo para completar el curso
+                <span className="ml-1 text-gray-400 font-normal">(días desde que el brigadista se matricula)</span>
+              </label>
+              <input type="number" min={1} placeholder="Ej: 30 (déjalo vacío para sin límite)"
+                value={crearForm.duracionRealizacionDias}
+                onChange={(e) => setCrearForm({ ...crearForm, duracionRealizacionDias: e.target.value })}
+                className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]" />
             </div>
             <div className="flex justify-end gap-2 pt-1">
               <button
@@ -1148,34 +1136,27 @@ export function AdminCapacitaciones({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">Desde</label>
-                  <input type="date" value={editarForm.inscripcion_desde}
+                  <input type="date" value={editarForm.inscripcion_desde} min={new Date().toISOString().slice(0, 10)}
                     onChange={(e) => setEditarForm({ ...editarForm, inscripcion_desde: e.target.value })}
                     className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]" />
                 </div>
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">Hasta</label>
-                  <input type="date" value={editarForm.inscripcion_hasta}
+                  <input type="date" value={editarForm.inscripcion_hasta} min={editarForm.inscripcion_desde || new Date().toISOString().slice(0, 10)}
                     onChange={(e) => setEditarForm({ ...editarForm, inscripcion_hasta: e.target.value })}
                     className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]" />
                 </div>
               </div>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-2">Rango de realización del curso</label>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1">Desde</label>
-                  <input type="date" value={editarForm.realizacion_desde}
-                    onChange={(e) => setEditarForm({ ...editarForm, realizacion_desde: e.target.value })}
-                    className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1">Hasta</label>
-                  <input type="date" value={editarForm.realizacion_hasta}
-                    onChange={(e) => setEditarForm({ ...editarForm, realizacion_hasta: e.target.value })}
-                    className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]" />
-                </div>
-              </div>
+              <label className="block text-xs font-medium text-gray-600 mb-2">
+                Plazo para completar el curso
+                <span className="ml-1 text-gray-400 font-normal">(días desde que el brigadista se matricula)</span>
+              </label>
+              <input type="number" min={1} placeholder="Ej: 30 (déjalo vacío para sin límite)"
+                value={editarForm.duracionRealizacionDias}
+                onChange={(e) => setEditarForm({ ...editarForm, duracionRealizacionDias: e.target.value })}
+                className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]" />
             </div>
             <div className="flex justify-end gap-2 pt-1">
               <button

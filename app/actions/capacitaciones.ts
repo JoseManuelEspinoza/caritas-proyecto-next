@@ -152,8 +152,7 @@ export type CursoDetalle = {
   fechaCierre: string | null;
   inscripcion_desde: string | null;
   inscripcion_hasta: string | null;
-  realizacion_desde: string | null;
-  realizacion_hasta: string | null;
+  duracionRealizacionDias: number | null;
   responsable: string;
   idResponsable: string;
   totalInscritos: number;
@@ -202,6 +201,10 @@ export type CursoInscrito = {
   responsable: string;
   idInscripcion: string;
   estadoInscripcion: string;
+  fechaInscripcion: string;
+  duracionRealizacionDias: number | null;
+  fechaLimiteRealizacion: string | null;
+  diasRestantesRealizacion: number | null;
   evalInicial: number | null;
   evalFinal: number | null;
   resultado: string | null;
@@ -225,6 +228,7 @@ export type CursoInscrito = {
     titulo: string;
     notaAprobatoria: number;
     maxIntentos: number;
+    tiempoLimiteMinutos: number | null;
     totalPreguntas: number;
     intentosUsados: number;
   } | null;
@@ -234,6 +238,7 @@ export type CursoInscrito = {
     titulo: string;
     notaAprobatoria: number;
     maxIntentos: number;
+    tiempoLimiteMinutos: number | null;
     totalPreguntas: number;
     intentosUsados: number;
   } | null;
@@ -331,8 +336,8 @@ export async function reiniciarIntentos(
   try {
     const ultimo = await prisma.evaluacionCurso.findFirst({
       where: tipo === "INICIAL"
-        ? { idInscripcionCurso: idInscripcion, tipoEvaluacion: "INICIAL" }
-        : { idInscripcionCurso: idInscripcion, OR: [{ tipoEvaluacion: "FINAL" }, { tipoEvaluacion: null }] },
+        ? { idInscripcionCurso: idInscripcion, tipoEvaluacion: "INICIAL", resultado: { not: null } }
+        : { idInscripcionCurso: idInscripcion, OR: [{ tipoEvaluacion: "FINAL" }, { tipoEvaluacion: null }], resultado: { not: null } },
       orderBy: { fechaEvaluacion: "desc" },
       select: { idEvaluacionCurso: true },
     });
@@ -543,8 +548,7 @@ export async function listarCursosConSesiones(idResponsable?: string): Promise<C
     fechaCierre: r.fechaCierre?.toISOString() ?? null,
     inscripcion_desde: r.inscripcion_desde?.toISOString() ?? null,
     inscripcion_hasta: r.inscripcion_hasta?.toISOString() ?? null,
-    realizacion_desde: r.realizacion_desde?.toISOString() ?? null,
-    realizacion_hasta: r.realizacion_hasta?.toISOString() ?? null,
+    duracionRealizacionDias: r.duracionRealizacionDias ?? null,
     responsable: `${r.usuarioResponsable.nombres} ${r.usuarioResponsable.apellidos}`.trim(),
     idResponsable: r.idUsuarioResponsableGRD,
     totalInscritos: r._count.inscripciones,
@@ -627,7 +631,7 @@ export async function listarMisCursos(): Promise<CursoInscrito[]> {
   });
 
   // Cuestionarios en tabla separada — puede no existir aún en AWS
-  type CuestionarioRow = { idCursoCapacitacion: string; idCuestionarioCurso: string; titulo: string; notaAprobatoria: unknown; maxIntentos: number; tipoCuestionario: string; estado: string; _count: { preguntas: number } };
+  type CuestionarioRow = { idCursoCapacitacion: string; idCuestionarioCurso: string; titulo: string; notaAprobatoria: unknown; maxIntentos: number; tiempoLimiteMinutos: number | null; tipoCuestionario: string; estado: string; _count: { preguntas: number } };
   let inicialesPorCurso: Record<string, CuestionarioRow> = {};
   let finalesPorCurso: Record<string, CuestionarioRow> = {};
   try {
@@ -697,6 +701,16 @@ export async function listarMisCursos(): Promise<CursoInscrito[]> {
       responsable: `${i.curso.usuarioResponsable.nombres} ${i.curso.usuarioResponsable.apellidos}`.trim(),
       idInscripcion: i.idInscripcionCurso,
       estadoInscripcion: i.estadoInscripcion,
+      fechaInscripcion: i.fechaInscripcion.toISOString(),
+      duracionRealizacionDias: i.curso.duracionRealizacionDias ?? null,
+      fechaLimiteRealizacion: i.curso.duracionRealizacionDias
+        ? new Date(i.fechaInscripcion.getTime() + i.curso.duracionRealizacionDias * 86_400_000).toISOString()
+        : null,
+      diasRestantesRealizacion: i.curso.duracionRealizacionDias
+        ? Math.ceil(
+            (i.fechaInscripcion.getTime() + i.curso.duracionRealizacionDias * 86_400_000 - Date.now()) / 86_400_000
+          )
+        : null,
       evalInicial: evalsInicial.length > 0 && evalsInicial[evalsInicial.length - 1].nota != null
         ? Number(evalsInicial[evalsInicial.length - 1].nota)
         : null,
@@ -711,6 +725,7 @@ export async function listarMisCursos(): Promise<CursoInscrito[]> {
         titulo: cInicial.titulo,
         notaAprobatoria: Number(cInicial.notaAprobatoria),
         maxIntentos: cInicial.maxIntentos,
+        tiempoLimiteMinutos: cInicial.tiempoLimiteMinutos ?? null,
         totalPreguntas: cInicial._count.preguntas,
         intentosUsados: evalsInicial.length,
       } : null,
@@ -719,6 +734,7 @@ export async function listarMisCursos(): Promise<CursoInscrito[]> {
         titulo: cFinal.titulo,
         notaAprobatoria: Number(cFinal.notaAprobatoria),
         maxIntentos: cFinal.maxIntentos,
+        tiempoLimiteMinutos: cFinal.tiempoLimiteMinutos ?? null,
         totalPreguntas: cFinal._count.preguntas,
         intentosUsados: evalsFinal.length,
       } : null,
@@ -798,6 +814,26 @@ export async function listarCursosDisponiblesBrigadista(): Promise<CursoDisponib
 
 // ── Mutation actions ──────────────────────────────────────────────────────────
 
+/** Valida el rango de inscripción: no puede iniciar en el pasado ni terminar antes de empezar. */
+function validarRangoInscripcion(desde?: string | null, hasta?: string | null): { message: string } | null {
+  if (!desde && !hasta) return null;
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  if (desde) {
+    const fDesde = new Date(desde);
+    if (isNaN(fDesde.getTime())) return { message: "La fecha de inicio de inscripción no es válida." };
+    if (fDesde < hoy) return { message: "La fecha de inicio de inscripción no puede ser anterior a hoy." };
+  }
+  if (hasta) {
+    const fHasta = new Date(hasta);
+    if (isNaN(fHasta.getTime())) return { message: "La fecha de fin de inscripción no es válida." };
+    if (fHasta < hoy) return { message: "La fecha de fin de inscripción no puede ser anterior a hoy." };
+    if (desde && fHasta < new Date(desde))
+      return { message: "La fecha de fin de inscripción no puede ser anterior a la fecha de inicio." };
+  }
+  return null;
+}
+
 export async function crearCurso(input: {
   nombreCurso: string;
   descripcion?: string;
@@ -806,8 +842,7 @@ export async function crearCurso(input: {
   idResponsable?: string;
   inscripcion_desde?: string;
   inscripcion_hasta?: string;
-  realizacion_desde?: string;
-  realizacion_hasta?: string;
+  duracionRealizacionDias?: number;
 }) {
   const session = await verifySession();
   const errorNombre = validarTextoMinimo(input.nombreCurso, "El nombre del curso", 3);
@@ -821,13 +856,19 @@ export async function crearCurso(input: {
   );
   if (errorDescripcion) return errorDescripcion;
 
+  const errorInscripcion = validarRangoInscripcion(input.inscripcion_desde, input.inscripcion_hasta);
+  if (errorInscripcion) return errorInscripcion;
+
+  if (input.duracionRealizacionDias != null && (!Number.isInteger(input.duracionRealizacionDias) || input.duracionRealizacionDias < 1))
+    return { message: "Los días para completar el curso deben ser un número entero mayor a 0." };
+
   const duracionRecibida = input.duracionEstimadaHoras;
   const duracionNormalizada =
     duracionRecibida == null || duracionRecibida === 0 ? undefined : duracionRecibida;
 
   const errorDuracion = validarEnteroPositivo(duracionNormalizada, "La duración estimada");
-  if (errorDuracion) return errorDuracion;  
-  const { idResponsable, ...rest } = input;
+  if (errorDuracion) return errorDuracion;
+  const { idResponsable, inscripcion_desde, inscripcion_hasta, duracionRealizacionDias, ...rest } = input;
   const idUsuarioResponsableGRD = idResponsable ?? (await getUsuarioGRDId());
   if (!idUsuarioResponsableGRD) return { message: "Tu usuario no tiene perfil GRD asociado." };
   let nuevoCursoId: string;
@@ -840,14 +881,13 @@ export async function crearCurso(input: {
       idUsuarioResponsableGRD,
     });
     nuevoCursoId = creado.id;
-    if (input.inscripcion_desde || input.inscripcion_hasta || input.realizacion_desde || input.realizacion_hasta) {
+    if (inscripcion_desde || inscripcion_hasta || duracionRealizacionDias) {
       await prisma.cursoCapacitacion.update({
         where: { idCursoCapacitacion: nuevoCursoId },
         data: {
-          inscripcion_desde: input.inscripcion_desde ? new Date(input.inscripcion_desde) : undefined,
-          inscripcion_hasta: input.inscripcion_hasta ? new Date(input.inscripcion_hasta) : undefined,
-          realizacion_desde: input.realizacion_desde ? new Date(input.realizacion_desde) : undefined,
-          realizacion_hasta: input.realizacion_hasta ? new Date(input.realizacion_hasta) : undefined,
+          inscripcion_desde: inscripcion_desde ? new Date(inscripcion_desde) : undefined,
+          inscripcion_hasta: inscripcion_hasta ? new Date(inscripcion_hasta) : undefined,
+          duracionRealizacionDias: duracionRealizacionDias ?? undefined,
         },
       });
     }
@@ -874,8 +914,7 @@ export async function editarCurso(
     idResponsable: string;
     inscripcion_desde?: string | null;
     inscripcion_hasta?: string | null;
-    realizacion_desde?: string | null;
-    realizacion_hasta?: string | null;
+    duracionRealizacionDias?: number | null;
   }
 ): Promise<void | { message: string }> {
   const session = await verifySession();
@@ -897,6 +936,12 @@ export async function editarCurso(
   );
   if (errorDescripcion) return errorDescripcion;
 
+  const errorInscripcion = validarRangoInscripcion(data.inscripcion_desde, data.inscripcion_hasta);
+  if (errorInscripcion) return errorInscripcion;
+
+  if (data.duracionRealizacionDias != null && (!Number.isInteger(data.duracionRealizacionDias) || data.duracionRealizacionDias < 1))
+    return { message: "Los días para completar el curso deben ser un número entero mayor a 0." };
+
   try {
     await prisma.cursoCapacitacion.update({
       where: { idCursoCapacitacion: id },
@@ -906,8 +951,7 @@ export async function editarCurso(
         idUsuarioResponsableGRD: data.idResponsable,
         inscripcion_desde: data.inscripcion_desde ? new Date(data.inscripcion_desde) : null,
         inscripcion_hasta: data.inscripcion_hasta ? new Date(data.inscripcion_hasta) : null,
-        realizacion_desde: data.realizacion_desde ? new Date(data.realizacion_desde) : null,
-        realizacion_hasta: data.realizacion_hasta ? new Date(data.realizacion_hasta) : null,
+        duracionRealizacionDias: data.duracionRealizacionDias ?? null,
       },
     });
     await logGRDAction({
@@ -1337,6 +1381,7 @@ export type CuestionarioDetalle = {
   tipoCuestionario: string;
   notaAprobatoria: number;
   maxIntentos: number;
+  tiempoLimiteMinutos: number | null;
   estado: string;
   preguntas: {
     id: string;
@@ -1372,6 +1417,7 @@ export async function obtenerCuestionarioPorId(
     tipoCuestionario: c.tipoCuestionario,
     notaAprobatoria: Number(c.notaAprobatoria),
     maxIntentos: c.maxIntentos,
+    tiempoLimiteMinutos: c.tiempoLimiteMinutos ?? null,
     estado: c.estado,
     preguntas: c.preguntas.map((p) => ({
       id: p.idPreguntaCuestionario,
@@ -1413,6 +1459,7 @@ export async function obtenerCuestionarioCurso(
     tipoCuestionario: c.tipoCuestionario,
     notaAprobatoria: Number(c.notaAprobatoria),
     maxIntentos: c.maxIntentos,
+    tiempoLimiteMinutos: c.tiempoLimiteMinutos ?? null,
     estado: c.estado,
     preguntas: c.preguntas.map((p) => ({
       id: p.idPreguntaCuestionario,
@@ -1438,12 +1485,15 @@ export async function crearCuestionario(
     tipoCuestionario: "INICIAL" | "FINAL";
     notaAprobatoria: number;
     maxIntentos: number;
+    tiempoLimiteMinutos?: number | null;
     preguntas: PreguntaInput[];
   }
 ): Promise<void | { message: string }> {
   const session = await verifySession();
   if (!data.titulo.trim()) return { message: "El título del cuestionario es obligatorio." };
   if (data.preguntas.length === 0) return { message: "Agrega al menos una pregunta." };
+  if (data.tiempoLimiteMinutos != null && (!Number.isInteger(data.tiempoLimiteMinutos) || data.tiempoLimiteMinutos < 1))
+    return { message: "El tiempo límite debe ser un número entero de minutos mayor a 0." };
   for (const p of data.preguntas) {
     if (!p.enunciado.trim()) return { message: "Todas las preguntas deben tener enunciado." };
     if (p.opciones.length < 2) return { message: "Cada pregunta debe tener al menos 2 opciones." };
@@ -1469,6 +1519,7 @@ export async function crearCuestionario(
         tipoCuestionario: data.tipoCuestionario,
         notaAprobatoria: data.notaAprobatoria,
         maxIntentos: data.maxIntentos,
+        tiempoLimiteMinutos: data.tiempoLimiteMinutos ?? null,
         preguntas: {
           create: data.preguntas.map((p, pi) => ({
             enunciado: p.enunciado.trim(),
@@ -1501,7 +1552,128 @@ export async function crearCuestionario(
   revalidatePath(REVALIDATE);
 }
 
+// ─── Anti-plagio: inicio de examen con bloqueo de intento y tiempo límite ──────
+
+export type PreguntaParaRendir = {
+  id: string;
+  enunciado: string;
+  tipoPregunta: string;
+  puntaje: number;
+  orden: number;
+  opciones: { id: string; textoOpcion: string; orden: number }[];
+};
+
+export type ExamenParaRendir = {
+  idEvaluacion: string;
+  idCuestionario: string;
+  titulo: string;
+  tiempoLimiteMinutos: number | null;
+  fechaInicio: string;
+  preguntas: PreguntaParaRendir[];
+};
+
+/**
+ * Inicia (o retoma) un intento de examen. Si ya hay un intento sin enviar,
+ * lo retoma en vez de crear uno nuevo (bloquea intentos duplicados en paralelo).
+ * Las opciones devueltas nunca incluyen `esCorrecta`, para que el examen no
+ * pueda leerse desde la respuesta de red antes de enviarlo.
+ */
+export async function iniciarExamen(
+  idInscripcion: string,
+  idCuestionario: string
+): Promise<ExamenParaRendir | { message: string }> {
+  await verifySession();
+  const cuestionario = await prisma.cuestionarioCurso.findUnique({
+    where: { idCuestionarioCurso: idCuestionario },
+    include: {
+      preguntas: {
+        where: { estado: "ACTIVO" },
+        orderBy: { orden: "asc" },
+        include: { opciones: { where: { estado: "ACTIVO" }, orderBy: { orden: "asc" } } },
+      },
+    },
+  });
+  if (!cuestionario) return { message: "Cuestionario no encontrado." };
+
+  const intentosFinalizados = await prisma.evaluacionCurso.count({
+    where: { idInscripcionCurso: idInscripcion, idCuestionarioCurso: idCuestionario, resultado: { not: null } },
+  });
+
+  let evaluacion = await prisma.evaluacionCurso.findFirst({
+    where: { idInscripcionCurso: idInscripcion, idCuestionarioCurso: idCuestionario, resultado: null },
+    orderBy: { fechaInicio: "desc" },
+  });
+
+  const limiteMs = cuestionario.tiempoLimiteMinutos ? cuestionario.tiempoLimiteMinutos * 60_000 : null;
+  const GRACIA_MS = 60_000;
+
+  if (evaluacion && limiteMs != null && evaluacion.fechaInicio &&
+      Date.now() - evaluacion.fechaInicio.getTime() > limiteMs + GRACIA_MS) {
+    // El intento anterior venció sin enviarse: se cierra como desaprobado por tiempo.
+    const puntajeTotal = cuestionario.preguntas.reduce((s, p) => s + Number(p.puntaje), 0);
+    await prisma.evaluacionCurso.update({
+      where: { idEvaluacionCurso: evaluacion.idEvaluacionCurso },
+      data: {
+        resultado: "DESAPROBADO",
+        nota: 0,
+        puntajeObtenido: 0,
+        puntajeTotal,
+        porcentajeObtenido: 0,
+        fechaEvaluacion: new Date(),
+        observacion: "Tiempo agotado: el intento no fue enviado a tiempo.",
+      },
+    });
+    evaluacion = null;
+    if (intentosFinalizados + 1 >= cuestionario.maxIntentos)
+      return { message: "Se agotó el tiempo de tu intento anterior y no te quedan intentos disponibles." };
+  }
+
+  if (!evaluacion) {
+    if (intentosFinalizados >= cuestionario.maxIntentos)
+      return { message: "Has agotado todos tus intentos." };
+    evaluacion = await prisma.evaluacionCurso.create({
+      data: {
+        idInscripcionCurso: idInscripcion,
+        idCuestionarioCurso: idCuestionario,
+        tipoEvaluacion: cuestionario.tipoCuestionario,
+        numeroIntento: intentosFinalizados + 1,
+        fechaInicio: new Date(),
+      },
+    });
+  }
+
+  return {
+    idEvaluacion: evaluacion.idEvaluacionCurso,
+    idCuestionario: cuestionario.idCuestionarioCurso,
+    titulo: cuestionario.titulo,
+    tiempoLimiteMinutos: cuestionario.tiempoLimiteMinutos ?? null,
+    fechaInicio: evaluacion.fechaInicio!.toISOString(),
+    preguntas: cuestionario.preguntas.map((p) => ({
+      id: p.idPreguntaCuestionario,
+      enunciado: p.enunciado,
+      tipoPregunta: p.tipoPregunta,
+      puntaje: Number(p.puntaje),
+      orden: p.orden,
+      opciones: p.opciones.map((o) => ({ id: o.idOpcionPregunta, textoOpcion: o.textoOpcion, orden: o.orden })),
+    })),
+  };
+}
+
+/** Registra un cambio de pestaña/pérdida de foco durante un examen en curso. */
+export async function registrarPerdidaFoco(idEvaluacion: string): Promise<void> {
+  await verifySession();
+  try {
+    await prisma.evaluacionCurso.update({
+      where: { idEvaluacionCurso: idEvaluacion },
+      data: { cambiosFoco: { increment: 1 } },
+    });
+  } catch {
+    // Best-effort: si el intento ya no existe (fue enviado o venció), se ignora.
+  }
+}
+
 export async function enviarRespuestasExamen(
+  idEvaluacion: string,
   idInscripcion: string,
   idCuestionario: string,
   respuestas: Record<string, string | string[]> // { idPregunta: idOpcion } | { idPregunta: [idOpcion, ...] }
@@ -1511,7 +1683,12 @@ export async function enviarRespuestasExamen(
 > {
   await verifySession();
   try {
-    // Verificar intentos
+    const evaluacionEnCurso = await prisma.evaluacionCurso.findUnique({ where: { idEvaluacionCurso: idEvaluacion } });
+    if (!evaluacionEnCurso || evaluacionEnCurso.idInscripcionCurso !== idInscripcion || evaluacionEnCurso.idCuestionarioCurso !== idCuestionario)
+      return { message: "El intento de examen no es válido. Vuelve a iniciar el examen." };
+    if (evaluacionEnCurso.resultado !== null)
+      return { message: "Este intento ya fue enviado." };
+
     const cuestionario = await prisma.cuestionarioCurso.findUnique({
       where: { idCuestionarioCurso: idCuestionario },
       include: {
@@ -1522,12 +1699,6 @@ export async function enviarRespuestasExamen(
       },
     });
     if (!cuestionario) return { message: "Cuestionario no encontrado." };
-
-    const intentosUsados = await prisma.evaluacionCurso.count({
-      where: { idInscripcionCurso: idInscripcion, idCuestionarioCurso: idCuestionario },
-    });
-    if (intentosUsados >= cuestionario.maxIntentos)
-      return { message: "Has agotado todos tus intentos." };
 
     // Calcular puntaje
     let puntajeObtenido = 0;
@@ -1568,13 +1739,10 @@ export async function enviarRespuestasExamen(
     const aprobado = nota >= Number(cuestionario.notaAprobatoria);
     const resultado = aprobado ? "APROBADO" : "DESAPROBADO";
 
-    // Guardar evaluación + respuestas
-    await prisma.evaluacionCurso.create({
+    // Guardar el resultado en el intento ya iniciado + sus respuestas
+    await prisma.evaluacionCurso.update({
+      where: { idEvaluacionCurso: idEvaluacion },
       data: {
-        idInscripcionCurso: idInscripcion,
-        idCuestionarioCurso: idCuestionario,
-        tipoEvaluacion: cuestionario.tipoCuestionario,
-        numeroIntento: intentosUsados + 1,
         nota,
         puntajeObtenido,
         puntajeTotal,
@@ -1625,12 +1793,15 @@ export async function editarCuestionario(
     descripcion?: string;
     notaAprobatoria: number;
     maxIntentos: number;
+    tiempoLimiteMinutos?: number | null;
     preguntas: PreguntaInput[];
   }
 ): Promise<void | { message: string }> {
   const session = await verifySession();
   if (!data.titulo.trim()) return { message: "El título del cuestionario es obligatorio." };
   if (data.preguntas.length === 0) return { message: "Agrega al menos una pregunta." };
+  if (data.tiempoLimiteMinutos != null && (!Number.isInteger(data.tiempoLimiteMinutos) || data.tiempoLimiteMinutos < 1))
+    return { message: "El tiempo límite debe ser un número entero de minutos mayor a 0." };
   for (const p of data.preguntas) {
     if (!p.enunciado.trim()) return { message: "Todas las preguntas deben tener enunciado." };
     if (p.opciones.length < 2) return { message: "Cada pregunta debe tener al menos 2 opciones." };
@@ -1669,6 +1840,7 @@ export async function editarCuestionario(
           descripcion: data.descripcion?.trim() || null,
           notaAprobatoria: data.notaAprobatoria,
           maxIntentos: data.maxIntentos,
+          tiempoLimiteMinutos: data.tiempoLimiteMinutos ?? null,
           preguntas: {
             create: data.preguntas.map((p, pi) => ({
               enunciado: p.enunciado.trim(),

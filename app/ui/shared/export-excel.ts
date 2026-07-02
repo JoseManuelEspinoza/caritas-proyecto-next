@@ -14,6 +14,8 @@ export type ExcelSheetInput = {
   columns?: ExcelColumn[];
   /** Color opcional por celda (bg/fg en ARGB) según el encabezado y el valor. */
   cellColor?: (header: string, value: unknown) => CellColor | undefined;
+  /** Convierte una columna en un desplegable (dropdown) de Excel con las opciones dadas. */
+  listValidations?: { column: string; values: string[] }[];
 };
 
 const GREEN = "FF009850";
@@ -118,6 +120,27 @@ export async function exportarExcel(opts: {
         }
       });
     });
+
+    for (const v of sh.listValidations ?? []) {
+      const colIdx = cols.findIndex((c) => c.header === v.column);
+      if (colIdx === -1 || v.values.length === 0) continue;
+
+      const helper = wb.addWorksheet(`_lista_${colIdx}_${ws.id}`.slice(0, 31), { state: "veryHidden" });
+      v.values.forEach((val, i) => { helper.getCell(i + 1, 1).value = val; });
+      const formula = `'${helper.name}'!$A$1:$A$${v.values.length}`;
+
+      const maxDataRow = headerIdx + 500;
+      for (let r = headerIdx + 1; r <= maxDataRow; r++) {
+        ws.getCell(r, colIdx + 1).dataValidation = {
+          type: "list",
+          allowBlank: true,
+          formulae: [formula],
+          showErrorMessage: true,
+          errorStyle: "warning",
+          error: `Selecciona un valor válido de la lista (columna "${v.column}").`,
+        };
+      }
+    }
 
     ws.autoFilter = { from: { row: headerIdx, column: 1 }, to: { row: headerIdx, column: nCols } };
 

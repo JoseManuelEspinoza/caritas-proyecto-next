@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { X, ClipboardList, CheckCircle, AlertCircle, Send, ShieldCheck } from "lucide-react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { X, ClipboardList, CheckCircle, AlertCircle, Send, ShieldCheck, Timer, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { obtenerCuestionarioPorId, enviarRespuestasExamen } from "@/app/actions/capacitaciones";
-import type { CuestionarioDetalle } from "@/app/actions/capacitaciones";
+import { iniciarExamen, registrarPerdidaFoco, enviarRespuestasExamen } from "@/app/actions/capacitaciones";
+import type { ExamenParaRendir } from "@/app/actions/capacitaciones";
 
 type Props = {
   idInscripcion: string;
@@ -28,14 +28,23 @@ type Resultado = {
   aprobado: boolean;
 };
 
+function formatTiempo(segundos: number): string {
+  const m = Math.floor(segundos / 60);
+  const s = segundos % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
 export function RendirExamenModal({ idInscripcion, cuestionario, onClose }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [detalle, setDetalle] = useState<CuestionarioDetalle | null>(null);
+  const [examen, setExamen] = useState<ExamenParaRendir | null>(null);
   const [cargando, setCargando] = useState(false);
   const [respuestas, setRespuestas] = useState<Record<string, string | string[]>>({});
   const [resultado, setResultado] = useState<Resultado | null>(null);
   const [comprometido, setComprometido] = useState(false);
+  const [segundosRestantes, setSegundosRestantes] = useState<number | null>(null);
+  const [perdidasFoco, setPerdidasFoco] = useState(0);
+  const enviandoRef = useRef(false);
 
   const intentosRestantes = cuestionario.maxIntentos - cuestionario.intentosUsados;
   const agotado = intentosRestantes <= 0;
@@ -43,10 +52,17 @@ export function RendirExamenModal({ idInscripcion, cuestionario, onClose }: Prop
   const iniciar = async () => {
     setCargando(true);
     try {
-      const d = await obtenerCuestionarioPorId(cuestionario.id);
-      if (!d) { toast.error("No se pudo cargar el examen."); return; }
-      setDetalle(d);
+      const d = await iniciarExamen(idInscripcion, cuestionario.id);
+      if ("message" in d) { toast.error(d.message); return; }
+      setExamen(d);
       setRespuestas({});
+      setPerdidasFoco(0);
+      if (d.tiempoLimiteMinutos) {
+        const deadline = new Date(d.fechaInicio).getTime() + d.tiempoLimiteMinutos * 60_000;
+        setSegundosRestantes(Math.max(0, Math.floor((deadline - Date.now()) / 1000)));
+      } else {
+        setSegundosRestantes(null);
+      }
     } catch {
       toast.error("No se pudo cargar el examen.");
     } finally {
@@ -64,25 +80,29 @@ export function RendirExamenModal({ idInscripcion, cuestionario, onClose }: Prop
     });
   };
 
-  const respuestasRespondidas = detalle
+  const respuestasRespondidas = examen
     ? Object.keys(respuestas).filter((pid) => {
         const r = respuestas[pid];
         return Array.isArray(r) ? r.length > 0 : Boolean(r);
       }).length
     : 0;
 
-  const enviar = () => {
-    if (!detalle) return;
-    const sinResponder = detalle.preguntas.filter((p) => {
-      const r = respuestas[p.id];
-      return Array.isArray(r) ? r.length === 0 : !r;
-    });
-    if (sinResponder.length > 0) {
-      toast.error(`Faltan ${sinResponder.length} pregunta(s) por responder.`);
-      return;
+  const enviar = (opts?: { silencioso?: boolean }) => {
+    if (!examen || enviandoRef.current) return;
+    if (!opts?.silencioso) {
+      const sinResponder = examen.preguntas.filter((p) => {
+        const r = respuestas[p.id];
+        return Array.isArray(r) ? r.length === 0 : !r;
+      });
+      if (sinResponder.length > 0) {
+        toast.error(`Faltan ${sinResponder.length} pregunta(s) por responder.`);
+        return;
+      }
     }
+    enviandoRef.current = true;
     startTransition(async () => {
-      const res = await enviarRespuestasExamen(idInscripcion, cuestionario.id, respuestas);
+      const res = await enviarRespuestasExamen(examen.idEvaluacion, idInscripcion, examen.idCuestionario, respuestas);
+      enviandoRef.current = false;
       if ("message" in res) {
         toast.error(res.message);
       } else {
@@ -91,6 +111,36 @@ export function RendirExamenModal({ idInscripcion, cuestionario, onClose }: Prop
       }
     });
   };
+
+  // Cronómetro: auto-envía las respuestas actuales al agotarse el tiempo.
+  useEffect(() => {
+    if (segundosRestantes == null || resultado) return;
+    if (segundosRestantes <= 0) {
+      toast.error("Se agotó el tiempo. Enviando tus respuestas...");
+      enviar({ silencioso: true });
+      return;
+    }
+    const t = setTimeout(() => setSegundosRestantes((s) => (s != null ? s - 1 : s)), 1000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [segundosRestantes, resultado]);
+
+  // Anti-plagio: detecta cambios de pestaña/pérdida de foco durante el examen.
+  useEffect(() => {
+    if (!examen || resultado) return;
+    const onFocoPerdido = () => {
+      setPerdidasFoco((n) => n + 1);
+      registrarPerdidaFoco(examen.idEvaluacion);
+      toast.warning("Se detectó un cambio de pestaña. Este evento queda registrado.");
+    };
+    const onVisibility = () => { if (document.hidden) onFocoPerdido(); };
+    window.addEventListener("blur", onFocoPerdido);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("blur", onFocoPerdido);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [examen, resultado]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 overflow-y-auto">
@@ -103,9 +153,17 @@ export function RendirExamenModal({ idInscripcion, cuestionario, onClose }: Prop
               {cuestionario.titulo}
             </h2>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-3">
+            {examen && !resultado && segundosRestantes != null && (
+              <span className={`flex items-center gap-1 text-sm font-semibold tabular-nums ${segundosRestantes <= 30 ? "text-red-500" : "text-gray-600"}`}>
+                <Timer className="w-4 h-4" />
+                {formatTiempo(segundosRestantes)}
+              </span>
+            )}
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         <div className="px-6 py-5">
@@ -135,7 +193,7 @@ export function RendirExamenModal({ idInscripcion, cuestionario, onClose }: Prop
               </button>
             </div>
 
-          ) : !detalle ? (
+          ) : !examen ? (
             /* ── Pantalla inicio ────────────────────────────── */
             <div className="text-center">
               <div className="bg-gray-50 rounded-xl p-5 mb-5 text-left space-y-3">
@@ -159,7 +217,7 @@ export function RendirExamenModal({ idInscripcion, cuestionario, onClose }: Prop
               ) : (
                 <>
                   <p className="text-sm text-gray-500 mb-4">
-                    Lee cada pregunta con cuidado. Una vez que envíes no podrás cambiar tus respuestas.
+                    Lee cada pregunta con cuidado. Una vez que envíes no podrás cambiar tus respuestas. Cambiar de pestaña o salir de la ventana durante el examen queda registrado.
                   </p>
                   {/* Compromiso de honor */}
                   <label className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer mb-5 transition-colors ${
@@ -213,14 +271,22 @@ export function RendirExamenModal({ idInscripcion, cuestionario, onClose }: Prop
               {/* Info bar */}
               <div className="flex items-center gap-4 bg-gray-50 border border-[var(--caritas-border)] rounded-lg px-4 py-2 mb-4 text-xs text-gray-500">
                 <span>
-                  {detalle.preguntas.length} pregunta{detalle.preguntas.length !== 1 ? "s" : ""}
+                  {examen.preguntas.length} pregunta{examen.preguntas.length !== 1 ? "s" : ""}
                 </span>
                 <span className="text-gray-300">·</span>
                 <span>Debes responder todas correctamente para aprobar</span>
+                {perdidasFoco > 0 && (
+                  <>
+                    <span className="text-gray-300">·</span>
+                    <span className="flex items-center gap-1 text-amber-600 font-medium">
+                      <Eye className="w-3.5 h-3.5" />{perdidasFoco} cambio(s) de pestaña detectado(s)
+                    </span>
+                  </>
+                )}
               </div>
 
               <div className="space-y-5 max-h-[380px] overflow-y-auto pr-1 mb-4">
-                {detalle.preguntas.map((p, pi) => {
+                {examen.preguntas.map((p, pi) => {
                   const esMultiple = p.tipoPregunta === "OPCION_MULTIPLE";
                   const seleccionadas = esMultiple
                     ? Array.isArray(respuestas[p.id]) ? (respuestas[p.id] as string[]) : []
@@ -289,10 +355,10 @@ export function RendirExamenModal({ idInscripcion, cuestionario, onClose }: Prop
 
               <div className="flex items-center justify-between pt-3 border-t border-[var(--caritas-border)]">
                 <span className="text-xs text-gray-400">
-                  {respuestasRespondidas}/{detalle.preguntas.length} respondidas
+                  {respuestasRespondidas}/{examen.preguntas.length} respondidas
                 </span>
                 <button
-                  onClick={enviar}
+                  onClick={() => enviar()}
                   disabled={pending}
                   className="flex items-center gap-2 px-5 py-2 text-sm bg-[var(--caritas-green)] text-white rounded-lg hover:opacity-90 disabled:opacity-50"
                 >
