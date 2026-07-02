@@ -400,20 +400,24 @@ export async function listarIntentosInscripcion(idInscripcion: string): Promise<
     select: {
       idEvaluacionCurso: true,
       tipoEvaluacion: true,
-      numeroIntento: true,
       nota: true,
       resultado: true,
       fechaEvaluacion: true,
     },
   });
-  return rows.map((r) => ({
-    idEvaluacion: r.idEvaluacionCurso,
-    tipoEvaluacion: r.tipoEvaluacion,
-    numeroIntento: r.numeroIntento,
-    nota: r.nota != null ? Number(r.nota) : null,
-    resultado: r.resultado,
-    fechaEvaluacion: r.fechaEvaluacion ? r.fechaEvaluacion.toISOString() : new Date().toISOString(),
-  }));
+  const contadores: Record<string, number> = {};
+  return rows.map((r) => {
+    const key = r.tipoEvaluacion ?? "FINAL";
+    contadores[key] = (contadores[key] ?? 0) + 1;
+    return {
+      idEvaluacion: r.idEvaluacionCurso,
+      tipoEvaluacion: r.tipoEvaluacion,
+      numeroIntento: contadores[key],
+      nota: r.nota != null ? Number(r.nota) : null,
+      resultado: r.resultado,
+      fechaEvaluacion: r.fechaEvaluacion ? r.fechaEvaluacion.toISOString() : new Date().toISOString(),
+    };
+  });
 }
 
 export async function listarDetalleEvaluacion(idEvaluacion: string): Promise<DetalleEvaluacion | null> {
@@ -769,9 +773,12 @@ export async function listarCursosDisponiblesBrigadista(): Promise<CursoDisponib
       ).map((r) => r.idCursoCapacitacion)
     : [];
 
+  const ahora = new Date();
   const rows = await prisma.cursoCapacitacion.findMany({
     where: {
       estadoCurso: "PUBLICADO",
+      OR: [{ inscripcion_desde: null }, { inscripcion_desde: { lte: ahora } }],
+      AND: [{ OR: [{ inscripcion_hasta: null }, { inscripcion_hasta: { gte: ahora } }] }],
       ...(enrolledIds.length > 0 ? { idCursoCapacitacion: { notIn: enrolledIds } } : {}),
     },
     orderBy: { fechaCreacion: "desc" },
@@ -1227,11 +1234,16 @@ export async function inscribirme(idCurso: string): Promise<void | { message: st
   try {
     const curso = await prisma.cursoCapacitacion.findUnique({
       where: { idCursoCapacitacion: idCurso },
-      select: { estadoCurso: true, nombreCurso: true, idUsuarioResponsableGRD: true },
+      select: { estadoCurso: true, nombreCurso: true, idUsuarioResponsableGRD: true, inscripcion_desde: true, inscripcion_hasta: true },
     });
     if (!curso) return { message: "Curso no encontrado." };
     if (curso.estadoCurso !== "PUBLICADO")
       return { message: "El curso no está disponible para inscripción." };
+    const hoy = new Date();
+    if (curso.inscripcion_desde && hoy < curso.inscripcion_desde)
+      return { message: "Las inscripciones aún no han comenzado." };
+    if (curso.inscripcion_hasta && hoy > curso.inscripcion_hasta)
+      return { message: "El período de inscripción ha finalizado." };
 
     let participante = await prisma.participante.findFirst({
       where: { correo: session.email },
@@ -1593,59 +1605,90 @@ export async function iniciarExamen(
   });
   if (!cuestionario) return { message: "Cuestionario no encontrado." };
 
-  const intentosFinalizados = await prisma.evaluacionCurso.count({
-    where: { idInscripcionCurso: idInscripcion, idCuestionarioCurso: idCuestionario, resultado: { not: null } },
-  });
-
-  let evaluacion = await prisma.evaluacionCurso.findFirst({
-    where: { idInscripcionCurso: idInscripcion, idCuestionarioCurso: idCuestionario, resultado: null },
-    orderBy: { fechaInicio: "desc" },
-  });
-
   const limiteMs = cuestionario.tiempoLimiteMinutos ? cuestionario.tiempoLimiteMinutos * 60_000 : null;
   const GRACIA_MS = 60_000;
+  const puntajeTotal = cuestionario.preguntas.reduce((s, p) => s + Number(p.puntaje), 0);
 
-  if (evaluacion && limiteMs != null && evaluacion.fechaInicio &&
-      Date.now() - evaluacion.fechaInicio.getTime() > limiteMs + GRACIA_MS) {
-    // El intento anterior venció sin enviarse: se cierra como desaprobado por tiempo.
-    const puntajeTotal = cuestionario.preguntas.reduce((s, p) => s + Number(p.puntaje), 0);
-    await prisma.evaluacionCurso.update({
-      where: { idEvaluacionCurso: evaluacion.idEvaluacionCurso },
-      data: {
-        resultado: "DESAPROBADO",
-        nota: 0,
-        puntajeObtenido: 0,
-        puntajeTotal,
-        porcentajeObtenido: 0,
-        fechaEvaluacion: new Date(),
-        observacion: "Tiempo agotado: el intento no fue enviado a tiempo.",
-      },
-    });
-    evaluacion = null;
-    if (intentosFinalizados + 1 >= cuestionario.maxIntentos)
-      return { message: "Se agotó el tiempo de tu intento anterior y no te quedan intentos disponibles." };
+  // Transacción serializable: garantiza que si dos peticiones llegan a la vez
+  // solo una crea el intento; la otra retoma el ya creado.
+  type TxResult =
+    | { ok: true; idEvaluacionCurso: string; fechaInicio: Date | null }
+    | { ok: false; message: string };
+
+  let txResult: TxResult;
+  try {
+    txResult = await prisma.$transaction<TxResult>(async (tx) => {
+      const enCurso = await tx.evaluacionCurso.findFirst({
+        where: { idInscripcionCurso: idInscripcion, idCuestionarioCurso: idCuestionario, resultado: null },
+        orderBy: { fechaInicio: "desc" },
+        select: { idEvaluacionCurso: true, fechaInicio: true },
+      });
+
+      let cerradoPorTiempo = false;
+      if (enCurso) {
+        if (limiteMs != null && enCurso.fechaInicio &&
+            Date.now() - enCurso.fechaInicio.getTime() > limiteMs + GRACIA_MS) {
+          await tx.evaluacionCurso.update({
+            where: { idEvaluacionCurso: enCurso.idEvaluacionCurso },
+            data: {
+              resultado: "DESAPROBADO",
+              nota: 0,
+              puntajeObtenido: 0,
+              puntajeTotal,
+              porcentajeObtenido: 0,
+              fechaEvaluacion: new Date(),
+              observacion: "Tiempo agotado: el intento no fue enviado a tiempo.",
+            },
+          });
+          cerradoPorTiempo = true;
+        } else {
+          // Retomar el intento en curso (reconexión o doble clic)
+          return { ok: true, ...enCurso };
+        }
+      }
+
+      const finalizados = await tx.evaluacionCurso.count({
+        where: { idInscripcionCurso: idInscripcion, idCuestionarioCurso: idCuestionario, resultado: { not: null } },
+      });
+
+      if (finalizados >= cuestionario.maxIntentos) {
+        return {
+          ok: false,
+          message: cerradoPorTiempo
+            ? "Se agotó el tiempo de tu intento anterior y no te quedan intentos disponibles."
+            : "Has agotado todos tus intentos.",
+        };
+      }
+
+      const nueva = await tx.evaluacionCurso.create({
+        data: {
+          idInscripcionCurso: idInscripcion,
+          idCuestionarioCurso: idCuestionario,
+          tipoEvaluacion: cuestionario.tipoCuestionario,
+          numeroIntento: finalizados + 1,
+          fechaInicio: new Date(),
+        },
+        select: { idEvaluacionCurso: true, fechaInicio: true },
+      });
+
+      return { ok: true, ...nueva };
+    }, { isolationLevel: "Serializable" });
+  } catch (err: unknown) {
+    // P2034: fallo de serialización por concurrencia — pedir reintento al usuario
+    if (typeof err === "object" && err !== null && "code" in err && (err as { code: string }).code === "P2034") {
+      return { message: "El servidor estaba procesando otra solicitud. Por favor, intenta nuevamente." };
+    }
+    throw err;
   }
 
-  if (!evaluacion) {
-    if (intentosFinalizados >= cuestionario.maxIntentos)
-      return { message: "Has agotado todos tus intentos." };
-    evaluacion = await prisma.evaluacionCurso.create({
-      data: {
-        idInscripcionCurso: idInscripcion,
-        idCuestionarioCurso: idCuestionario,
-        tipoEvaluacion: cuestionario.tipoCuestionario,
-        numeroIntento: intentosFinalizados + 1,
-        fechaInicio: new Date(),
-      },
-    });
-  }
+  if (!txResult.ok) return { message: txResult.message };
 
   return {
-    idEvaluacion: evaluacion.idEvaluacionCurso,
+    idEvaluacion: txResult.idEvaluacionCurso,
     idCuestionario: cuestionario.idCuestionarioCurso,
     titulo: cuestionario.titulo,
     tiempoLimiteMinutos: cuestionario.tiempoLimiteMinutos ?? null,
-    fechaInicio: evaluacion.fechaInicio!.toISOString(),
+    fechaInicio: txResult.fechaInicio!.toISOString(),
     preguntas: cuestionario.preguntas.map((p) => ({
       id: p.idPreguntaCuestionario,
       enunciado: p.enunciado,

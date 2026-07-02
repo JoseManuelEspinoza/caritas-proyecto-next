@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition, useEffect } from "react";
-import { ChevronDown, ChevronLeft, RefreshCw, X, CheckCircle2, XCircle, MinusCircle } from "lucide-react";
+import { ChevronDown, RefreshCw, X, CheckCircle2, XCircle, MinusCircle } from "lucide-react";
 import { toast } from "sonner";
 import type { ParticipanteCurso, IntentoEvaluacion, DetalleEvaluacion } from "@/app/actions/capacitaciones";
 import { reiniciarIntentos, listarIntentosInscripcion, listarDetalleEvaluacion } from "@/app/actions/capacitaciones";
@@ -146,7 +146,7 @@ function DetalleIntento({
             onClick={onBack}
             className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 cursor-pointer transition-colors"
           >
-            <ChevronLeft className="w-3.5 h-3.5" /> Volver a intentos
+            <X className="w-3.5 h-3.5" /> Cerrar
           </button>
           <div className="flex items-center gap-3">
             {isLast && (
@@ -267,7 +267,7 @@ function DetalleIntento({
   );
 }
 
-// ── Fila de intento individual (clickeable) ────────────────────────────────────
+// ── Fila de intento individual (abre modal) ────────────────────────────────────
 
 function IntentoRow({
   intento,
@@ -286,27 +286,34 @@ function IntentoRow({
 }) {
   const [detalle, setDetalle] = useState<DetalleEvaluacion | null>(null);
   const [loading, setLoading] = useState(false);
-  const [abierto, setAbierto] = useState(false);
+  const [showModal, setShowModal] = useState(false);
 
   const handleClick = async () => {
-    if (abierto) { setAbierto(false); return; }
+    setShowModal(true);
     if (!detalle) {
       setLoading(true);
       const data = await listarDetalleEvaluacion(intento.idEvaluacion);
       setDetalle(data);
       setLoading(false);
     }
-    setAbierto(true);
   };
 
+  const badge =
+    intento.resultado === "APROBADO" ? (
+      <span className="text-[10px] bg-green-100 text-green-700 border border-green-200 px-1.5 py-0.5 rounded-full font-medium">Aprobado</span>
+    ) : intento.resultado === "DESAPROBADO" ? (
+      <span className="text-[10px] bg-red-100 text-red-700 border border-red-200 px-1.5 py-0.5 rounded-full font-medium">Desaprobado</span>
+    ) : (
+      <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full font-medium">En curso</span>
+    );
+
   return (
-    <div className="rounded-lg border border-gray-100 overflow-hidden">
+    <>
       {/* Fila clickeable */}
       <button
         onClick={handleClick}
-        className="w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-50 transition-colors cursor-pointer text-left"
+        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg border border-gray-100 hover:bg-gray-50 hover:border-gray-200 transition-colors cursor-pointer text-left"
       >
-        <ChevronDown className={`w-3.5 h-3.5 text-gray-300 transition-transform shrink-0 ${abierto ? "rotate-180" : ""}`} />
         <span className="text-[11px] text-gray-400 w-14 shrink-0">
           Intento {intento.numeroIntento ?? "—"}
         </span>
@@ -314,47 +321,55 @@ function IntentoRow({
         <span className="text-xs font-semibold text-gray-700 w-12 text-right">
           {intento.nota != null ? `${intento.nota}/20` : "—"}
         </span>
-        <span className="w-24 text-right">
-          {intento.resultado === "APROBADO" ? (
-            <span className="text-[10px] bg-green-100 text-green-700 border border-green-200 px-1.5 py-0.5 rounded-full font-medium">
-              Aprobado
-            </span>
-          ) : intento.resultado === "DESAPROBADO" ? (
-            <span className="text-[10px] bg-red-100 text-red-700 border border-red-200 px-1.5 py-0.5 rounded-full font-medium">
-              Desaprobado
-            </span>
-          ) : (
-            <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full font-medium">
-              En curso
-            </span>
-          )}
-        </span>
+        <span className="w-24 text-right">{badge}</span>
+        <span className="text-[10px] text-[var(--caritas-green)] font-medium shrink-0">Ver detalle →</span>
       </button>
 
-      {/* Detalle expandido */}
-      {abierto && (
-        <div className="px-4 pb-3 border-t border-gray-100 bg-white">
-          {loading ? (
-            <div className="flex items-center gap-2 py-4 text-xs text-gray-400">
-              <div className="w-3.5 h-3.5 border-2 border-gray-200 border-t-[var(--caritas-green)] rounded-full animate-spin" />
-              Cargando respuestas…
+      {/* Modal de detalle */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 overflow-y-auto">
+          <div className="bg-white rounded-xl w-full max-w-2xl shadow-xl my-4">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--caritas-border)]">
+              <div>
+                <h2 className="text-sm font-semibold text-[var(--caritas-text)]">
+                  Intento {intento.numeroIntento ?? "—"} — Evaluación {tipo === "INICIAL" ? "Inicial" : "Final"}
+                </h2>
+                <p className="text-xs text-gray-400 mt-0.5">{nombreParticipante} · {fmtDateTime(intento.fechaEvaluacion)}</p>
+              </div>
+              <div className="flex items-center gap-3">
+                {badge}
+                <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600 transition-colors cursor-pointer">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
-          ) : detalle ? (
-            <DetalleIntento
-              detalle={detalle}
-              isLast={isLast}
-              nombreParticipante={nombreParticipante}
-              idInscripcion={idInscripcion}
-              tipo={tipo}
-              onBack={() => setAbierto(false)}
-              onRefresh={onRefresh}
-            />
-          ) : (
-            <p className="text-xs text-gray-400 py-3 italic">No se pudo cargar el detalle.</p>
-          )}
+
+            {/* Body */}
+            <div className="px-6 py-5 max-h-[70vh] overflow-y-auto">
+              {loading ? (
+                <div className="flex items-center justify-center gap-2 py-10 text-xs text-gray-400">
+                  <div className="w-4 h-4 border-2 border-gray-200 border-t-[var(--caritas-green)] rounded-full animate-spin" />
+                  Cargando respuestas…
+                </div>
+              ) : detalle ? (
+                <DetalleIntento
+                  detalle={detalle}
+                  isLast={isLast}
+                  nombreParticipante={nombreParticipante}
+                  idInscripcion={idInscripcion}
+                  tipo={tipo}
+                  onBack={() => setShowModal(false)}
+                  onRefresh={async () => { setShowModal(false); await onRefresh(); }}
+                />
+              ) : (
+                <p className="text-xs text-gray-400 py-6 text-center italic">No se pudo cargar el detalle.</p>
+              )}
+            </div>
+          </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 

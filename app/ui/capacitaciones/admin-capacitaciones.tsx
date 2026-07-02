@@ -443,6 +443,8 @@ export function AdminCapacitaciones({
     duracionRealizacionDias: "",
     tipoPlazo: "dias" as "dias" | "meses",
   });
+  const [crearHastaAuto, setCrearHastaAuto] = useState(false);
+  const [crearDuracionAuto, setCrearDuracionAuto] = useState(false);
   const [editarForm, setEditarForm] = useState({
     nombreCurso: "",
     descripcion: "",
@@ -453,6 +455,8 @@ export function AdminCapacitaciones({
     duracionRealizacionDias: "",
     tipoPlazo: "dias" as "dias" | "meses",
   });
+  const [editarHastaAuto, setEditarHastaAuto] = useState(false);
+  const [editarDuracionAuto, setEditarDuracionAuto] = useState(false);
   const [sesionTitulo, setSesionTitulo] = useState("");
   const [sesionDescripcion, setSesionDescripcion] = useState("");
   const [sesionCantidad, setSesionCantidad] = useState(1);
@@ -1098,7 +1102,16 @@ export function AdminCapacitaciones({
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-2">Rango de inscripciones</label>
+              <label className="block text-xs font-medium text-gray-600 mb-2">Rango de inscripciones <span className="text-red-500">*</span></label>
+              {crearForm.inscripcion_hasta && crearForm.inscripcion_desde && crearForm.inscripcion_hasta <= crearForm.inscripcion_desde && (
+                <p className="text-xs text-red-500 mb-2">La fecha &quot;Hasta&quot; debe ser posterior a &quot;Desde&quot;.</p>
+              )}
+              {crearForm.inscripcion_desde && !crearForm.inscripcion_hasta && (
+                <p className="text-xs text-amber-600 mb-2">Ingresa la Duración (meses) para calcular la fecha &quot;Hasta&quot; automáticamente, o selecciónala manualmente.</p>
+              )}
+              {crearForm.inscripcion_hasta && !crearForm.inscripcion_desde && (
+                <p className="text-xs text-red-500 mb-2">Debes completar la fecha &quot;Desde&quot;.</p>
+              )}
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">Desde</label>
@@ -1106,30 +1119,56 @@ export function AdminCapacitaciones({
                     onChange={(e) => {
                       const desde = e.target.value;
                       const hasta = crearForm.meses && desde ? addMonths(desde, Number(crearForm.meses)) : crearForm.inscripcion_hasta;
+                      const autoCalc = !!(crearForm.meses && desde);
                       setCrearForm({ ...crearForm, inscripcion_desde: desde, inscripcion_hasta: hasta });
+                      setCrearHastaAuto(autoCalc);
                     }}
-                    className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]" />
+                    className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)] ${crearForm.inscripcion_hasta && !crearForm.inscripcion_desde ? "border-amber-400 bg-amber-50" : "border-[var(--caritas-border)]"}`} />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">Duración (meses)</label>
-                  <input type="number" min={1} placeholder="Ej: 3"
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs text-gray-400">Duración (meses)</label>
+                    {crearDuracionAuto && !!crearForm.meses && (
+                      <span className="text-[10px] text-[var(--caritas-green)] font-medium bg-green-50 px-1.5 py-0.5 rounded">calculado</span>
+                    )}
+                  </div>
+                  <input type="number" min={1} max={12} step={1} placeholder="Ej: 3"
                     value={crearForm.meses}
+                    onKeyDown={(e) => { if (['.', ',', 'e', 'E', '-', '+'].includes(e.key)) e.preventDefault(); }}
                     onChange={(e) => {
-                      const meses = e.target.value;
+                      const raw = Math.min(12, parseInt(e.target.value, 10));
+                      const meses = !isNaN(raw) && raw > 0 ? String(raw) : "";
                       const hasta = meses && crearForm.inscripcion_desde ? addMonths(crearForm.inscripcion_desde, Number(meses)) : crearForm.inscripcion_hasta;
                       setCrearForm({ ...crearForm, meses, inscripcion_hasta: hasta });
+                      setCrearHastaAuto(!!(meses && crearForm.inscripcion_desde));
+                      setCrearDuracionAuto(false);
                     }}
-                    className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]" />
+                    className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)] transition-colors ${crearDuracionAuto && !!crearForm.meses ? "border-green-300 bg-green-50" : "border-[var(--caritas-border)]"}`} />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">Hasta</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs text-gray-400">Hasta</label>
+                    {crearHastaAuto && (
+                      <span className="text-[10px] text-[var(--caritas-green)] font-medium bg-green-50 px-1.5 py-0.5 rounded">calculado</span>
+                    )}
+                  </div>
                   <input type="date" value={crearForm.inscripcion_hasta} min={crearForm.inscripcion_desde || localTomorrow()}
                     onChange={(e) => {
                       const hasta = e.target.value;
                       const meses = crearForm.inscripcion_desde && hasta ? diffMonths(crearForm.inscripcion_desde, hasta) : "";
                       setCrearForm({ ...crearForm, inscripcion_hasta: hasta, meses });
+                      setCrearHastaAuto(false);
+                      setCrearDuracionAuto(!!(crearForm.inscripcion_desde && hasta));
                     }}
-                    className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]" />
+                    className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)] transition-colors ${
+                      crearForm.inscripcion_hasta && crearForm.inscripcion_desde && crearForm.inscripcion_hasta <= crearForm.inscripcion_desde
+                        ? "border-red-400 bg-red-50"
+                        : crearForm.inscripcion_hasta && !crearForm.inscripcion_desde
+                        ? "border-amber-400 bg-amber-50"
+                        : crearHastaAuto
+                        ? "border-green-300 bg-green-50 text-green-800"
+                        : "border-[var(--caritas-border)]"
+                    }`} />
                 </div>
               </div>
             </div>
@@ -1139,9 +1178,14 @@ export function AdminCapacitaciones({
                 <span className="ml-1 text-gray-400 font-normal">(desde que el brigadista se matricula)</span>
               </label>
               <div className="flex gap-2">
-                <input type="number" min={1} placeholder="Ej: 3 (vacío = sin límite)"
+                <input type="number" min={1} max={crearForm.tipoPlazo === "dias" ? 365 : 12} step={1} placeholder="Ej: 3 (vacío = sin límite)"
                   value={crearForm.duracionRealizacionDias}
-                  onChange={(e) => setCrearForm({ ...crearForm, duracionRealizacionDias: e.target.value })}
+                  onKeyDown={(e) => { if (['.', ',', 'e', 'E', '-', '+'].includes(e.key)) e.preventDefault(); }}
+                  onChange={(e) => {
+                    const maxVal = crearForm.tipoPlazo === "dias" ? 365 : 12;
+                    const raw = Math.min(maxVal, parseInt(e.target.value, 10));
+                    setCrearForm({ ...crearForm, duracionRealizacionDias: !isNaN(raw) && raw > 0 ? String(raw) : "" });
+                  }}
                   className="flex-1 px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]" />
                 <select
                   value={crearForm.tipoPlazo}
@@ -1165,7 +1209,10 @@ export function AdminCapacitaciones({
                   pending ||
                   crearForm.nombreCurso.trim().length < 3 ||
                   !crearForm.idResponsable.trim() ||
-                  (!!crearForm.descripcion.trim() && crearForm.descripcion.trim().length < 3)
+                  (!!crearForm.descripcion.trim() && crearForm.descripcion.trim().length < 3) ||
+                  !crearForm.inscripcion_desde ||
+                  !crearForm.inscripcion_hasta ||
+                  crearForm.inscripcion_hasta <= crearForm.inscripcion_desde
                 }
                 onClick={handleCrearCurso}
                 className="px-4 py-2 text-sm bg-[var(--caritas-green)] text-white rounded-lg disabled:opacity-50 hover:opacity-90 transition-opacity"
@@ -1219,7 +1266,16 @@ export function AdminCapacitaciones({
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-2">Rango de inscripciones</label>
+              <label className="block text-xs font-medium text-gray-600 mb-2">Rango de inscripciones <span className="text-red-500">*</span></label>
+              {editarForm.inscripcion_hasta && editarForm.inscripcion_desde && editarForm.inscripcion_hasta <= editarForm.inscripcion_desde && (
+                <p className="text-xs text-red-500 mb-2">La fecha &quot;Hasta&quot; debe ser posterior a &quot;Desde&quot;.</p>
+              )}
+              {editarForm.inscripcion_desde && !editarForm.inscripcion_hasta && (
+                <p className="text-xs text-amber-600 mb-2">Ingresa la Duración (meses) para calcular la fecha &quot;Hasta&quot; automáticamente, o selecciónala manualmente.</p>
+              )}
+              {editarForm.inscripcion_hasta && !editarForm.inscripcion_desde && (
+                <p className="text-xs text-red-500 mb-2">Debes completar la fecha &quot;Desde&quot;.</p>
+              )}
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">Desde</label>
@@ -1227,30 +1283,48 @@ export function AdminCapacitaciones({
                     onChange={(e) => {
                       const desde = e.target.value;
                       const hasta = editarForm.meses && desde ? addMonths(desde, Number(editarForm.meses)) : editarForm.inscripcion_hasta;
+                      const autoCalc = !!(editarForm.meses && desde);
                       setEditarForm({ ...editarForm, inscripcion_desde: desde, inscripcion_hasta: hasta });
+                      setEditarHastaAuto(autoCalc);
                     }}
                     className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]" />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">Duración (meses)</label>
-                  <input type="number" min={1} placeholder="Ej: 3"
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs text-gray-400">Duración (meses)</label>
+                    {editarDuracionAuto && !!editarForm.meses && (
+                      <span className="text-[10px] text-[var(--caritas-green)] font-medium bg-green-50 px-1.5 py-0.5 rounded">calculado</span>
+                    )}
+                  </div>
+                  <input type="number" min={1} max={12} step={1} placeholder="Ej: 3"
                     value={editarForm.meses}
+                    onKeyDown={(e) => { if (['.', ',', 'e', 'E', '-', '+'].includes(e.key)) e.preventDefault(); }}
                     onChange={(e) => {
-                      const meses = e.target.value;
+                      const raw = Math.min(12, parseInt(e.target.value, 10));
+                      const meses = !isNaN(raw) && raw > 0 ? String(raw) : "";
                       const hasta = meses && editarForm.inscripcion_desde ? addMonths(editarForm.inscripcion_desde, Number(meses)) : editarForm.inscripcion_hasta;
                       setEditarForm({ ...editarForm, meses, inscripcion_hasta: hasta });
+                      setEditarHastaAuto(!!(meses && editarForm.inscripcion_desde));
+                      setEditarDuracionAuto(false);
                     }}
-                    className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]" />
+                    className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)] transition-colors ${editarDuracionAuto && !!editarForm.meses ? "border-green-300 bg-green-50" : "border-[var(--caritas-border)]"}`} />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">Hasta</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs text-gray-400">Hasta</label>
+                    {editarHastaAuto && (
+                      <span className="text-[10px] text-[var(--caritas-green)] font-medium bg-green-50 px-1.5 py-0.5 rounded">calculado</span>
+                    )}
+                  </div>
                   <input type="date" value={editarForm.inscripcion_hasta} min={editarForm.inscripcion_desde || localTomorrow()}
                     onChange={(e) => {
                       const hasta = e.target.value;
                       const meses = editarForm.inscripcion_desde && hasta ? diffMonths(editarForm.inscripcion_desde, hasta) : "";
                       setEditarForm({ ...editarForm, inscripcion_hasta: hasta, meses });
+                      setEditarHastaAuto(false);
+                      setEditarDuracionAuto(!!(editarForm.inscripcion_desde && hasta));
                     }}
-                    className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]" />
+                    className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)] transition-colors ${editarHastaAuto ? "border-green-300 bg-green-50 text-green-800" : "border-[var(--caritas-border)]"}`} />
                 </div>
               </div>
             </div>
@@ -1260,9 +1334,14 @@ export function AdminCapacitaciones({
                 <span className="ml-1 text-gray-400 font-normal">(desde que el brigadista se matricula)</span>
               </label>
               <div className="flex gap-2">
-                <input type="number" min={1} placeholder="Ej: 3 (vacío = sin límite)"
+                <input type="number" min={1} max={editarForm.tipoPlazo === "dias" ? 365 : 12} step={1} placeholder="Ej: 3 (vacío = sin límite)"
                   value={editarForm.duracionRealizacionDias}
-                  onChange={(e) => setEditarForm({ ...editarForm, duracionRealizacionDias: e.target.value })}
+                  onKeyDown={(e) => { if (['.', ',', 'e', 'E', '-', '+'].includes(e.key)) e.preventDefault(); }}
+                  onChange={(e) => {
+                    const maxVal = editarForm.tipoPlazo === "dias" ? 365 : 12;
+                    const raw = Math.min(maxVal, parseInt(e.target.value, 10));
+                    setEditarForm({ ...editarForm, duracionRealizacionDias: !isNaN(raw) && raw > 0 ? String(raw) : "" });
+                  }}
                   className="flex-1 px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]" />
                 <select
                   value={editarForm.tipoPlazo}
@@ -1286,7 +1365,10 @@ export function AdminCapacitaciones({
                   pending ||
                   editarForm.nombreCurso.trim().length < 3 ||
                   !editarForm.idResponsable ||
-                  (!!editarForm.descripcion.trim() && editarForm.descripcion.trim().length < 3)
+                  (!!editarForm.descripcion.trim() && editarForm.descripcion.trim().length < 3) ||
+                  !editarForm.inscripcion_desde ||
+                  !editarForm.inscripcion_hasta ||
+                  editarForm.inscripcion_hasta <= editarForm.inscripcion_desde
                 }
                 onClick={handleEditarCurso}
                 className="px-4 py-2 text-sm bg-[var(--caritas-green)] text-white rounded-lg disabled:opacity-50 hover:opacity-90 transition-opacity"

@@ -179,6 +179,7 @@ function DetalleInscrito({ curso, onVolver }: { curso: CursoInscrito; onVolver: 
   const [showExamen, setShowExamen] = useState(false);
   const [showExamenInicial, setShowExamenInicial] = useState(false);
   const aprobado = curso.certificado || curso.resultado === "APROBADO";
+  const plazoVencido = !curso.certificado && curso.diasRestantesRealizacion != null && curso.diasRestantesRealizacion < 0;
 
   return (
     <>
@@ -286,7 +287,7 @@ function DetalleInscrito({ curso, onVolver }: { curso: CursoInscrito; onVolver: 
               </div>
               <button
                 onClick={() => setShowExamenInicial(true)}
-                disabled={curso.cuestionarioInicial.intentosUsados >= curso.cuestionarioInicial.maxIntentos}
+                disabled={curso.cuestionarioInicial.intentosUsados >= curso.cuestionarioInicial.maxIntentos || plazoVencido}
                 className="flex items-center gap-2 px-4 py-2.5 text-sm bg-amber-500 text-white rounded-xl hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shrink-0 font-medium"
               >
                 <PlayCircle className="w-4 h-4" />
@@ -345,7 +346,7 @@ function DetalleInscrito({ curso, onVolver }: { curso: CursoInscrito; onVolver: 
                   </div>
                   <button
                     onClick={() => setShowExamen(true)}
-                    disabled={sinIntentos}
+                    disabled={sinIntentos || curso.certificado || plazoVencido}
                     className="flex items-center gap-2 px-4 py-2.5 text-sm bg-[var(--caritas-green)] text-white rounded-xl hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shrink-0 font-medium"
                   >
                     <PlayCircle className="w-4 h-4" />
