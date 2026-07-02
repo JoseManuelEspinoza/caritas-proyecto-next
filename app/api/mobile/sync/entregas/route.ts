@@ -25,6 +25,7 @@ type EntregaMovilPayload = {
   idGrupoFamiliarRemoto?: string;
   uuidGrupoFamiliar?: string;
   uuidGrupoFamiliarMovil?: string;
+  refIdFamilia?: string;
 
   idPersonaAfectada?: string;
   idPersonaAfectadaRemota?: string;
@@ -49,7 +50,25 @@ type EntregaMovilPayload = {
   entregaParcial?: boolean | string | null;
   observaciones?: string | null;
 
-  
+  evidencias?: EvidenciaEntregaMovilPayload[] | null;
+};
+
+type EvidenciaEntregaMovilPayload = {
+  uuidEvidencia?: string | null;
+  nombreArchivo?: string | null;
+  contentType?: string | null;
+  formatoArchivo?: string | null;
+  formato?: string | null;
+  tamanoArchivo?: number | string | null;
+  tamano?: number | string | null;
+  descripcion?: string | null;
+  urlArchivo?: string | null;
+  urlS3?: string | null;
+  key?: string | null;
+  latitud?: number | string | null;
+  longitud?: number | string | null;
+  lat?: number | string | null;
+  lng?: number | string | null;
 };
 
 class MobileSyncError extends Error {
@@ -118,6 +137,22 @@ function parseCantidad(value?: number | string | null): number | null {
   return cantidad;
 }
 
+function parseNumeroDecimal(value?: number | string | null): number | null {
+  if (value === null || value === undefined || value === "") return null;
+
+  const parsed = Number(value);
+
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseTamano(value?: number | string | null): number | null {
+  if (value === null || value === undefined || value === "") return null;
+
+  const parsed = Number(value);
+
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.trunc(parsed) : null;
+}
+
 function parseBooleanOpcional(value?: boolean | string | null): boolean | null {
   if (value === null || value === undefined || value === "") return null;
 
@@ -165,6 +200,85 @@ function puedeRegistrarEntregaKits(estadoActual: string | null | undefined): boo
   return ["APROBADO", "ATENDIDO", "SEGUIMIENTO ABIERTO", "CERRADO"].includes(
     estadoActual ?? ""
   );
+}
+
+function parseInformeJson(raw: string | null | undefined): Record<string, unknown> | null {
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function refsFamiliasAprobadas(contenido: string | null | undefined): string[] {
+  const parsed = parseInformeJson(contenido);
+  const asignaciones = Array.isArray(parsed?.asignacionFamilias)
+    ? parsed.asignacionFamilias
+    : [];
+
+  return [
+    ...new Set(
+      asignaciones
+        .map((item) => {
+          const row = item as Record<string, unknown>;
+          return typeof row.refId === "string" ? row.refId.trim() : "";
+        })
+        .filter(Boolean)
+    ),
+  ];
+}
+
+function camposReferenciaRecibidos(body: EntregaMovilPayload): string[] {
+  const entries: [string, string][] = [
+    ["idGrupoFamiliar", texto(body.idGrupoFamiliar)],
+    ["uuidGrupoFamiliar", texto(body.uuidGrupoFamiliar)],
+    ["uuidGrupoFamiliarMovil", texto(body.uuidGrupoFamiliarMovil)],
+    ["refIdFamilia", texto(body.refIdFamilia)],
+    ["uuidAfectadoMovil", texto(body.uuidAfectadoMovil)],
+    ["idPersonaAfectada", texto(body.idPersonaAfectada)],
+    ["uuidPersonaAfectada", texto(body.uuidPersonaAfectada)],
+  ];
+
+  return entries.filter(([, value]) => Boolean(value)).map(([key]) => key);
+}
+
+function errorReferenciaNoResuelta(body: EntregaMovilPayload): MobileSyncError {
+  const campos = camposReferenciaRecibidos(body);
+  const detalle = campos.length ? campos.join(", ") : "ninguno";
+  return new MobileSyncError(
+    `No se pudo resolver el grupo familiar para esta incidencia. Campos recibidos: ${detalle}.`
+  );
+}
+
+function normalizarEvidenciasEntrega(body: EntregaMovilPayload) {
+  const evidencias = Array.isArray(body.evidencias) ? body.evidencias : [];
+
+  return evidencias
+    .map((ev) => {
+      const urlArchivo = texto(ev.key) || texto(ev.urlArchivo) || texto(ev.urlS3);
+      if (!urlArchivo) return null;
+
+      return {
+        uuidMovil: texto(ev.uuidEvidencia) || null,
+        nombreArchivo: texto(ev.nombreArchivo) || "evidencia-entrega",
+        urlArchivo,
+        formatoArchivo:
+          texto(ev.contentType) ||
+          texto(ev.formatoArchivo) ||
+          texto(ev.formato) ||
+          "application/octet-stream",
+        descripcion: texto(ev.descripcion) || "Evidencia de entrega",
+        tamanoArchivo: parseTamano(ev.tamanoArchivo) ?? parseTamano(ev.tamano),
+        latitud: parseNumeroDecimal(ev.latitud) ?? parseNumeroDecimal(ev.lat),
+        longitud: parseNumeroDecimal(ev.longitud) ?? parseNumeroDecimal(ev.lng),
+      };
+    })
+    .filter((ev): ev is NonNullable<typeof ev> => ev !== null);
 }
 
 async function resolveIncidencia(body: EntregaMovilPayload): Promise<{
@@ -302,6 +416,7 @@ function getUuidAfectadoMovil(body: EntregaMovilPayload): string | null {
     texto(body.uuidAfectadoMovil) ||
     texto(body.uuidPersonaAfectadaMovil) ||
     texto(body.uuidPersonaAfectada) ||
+    texto(body.refIdFamilia) ||
     texto(body.uuidGrupoFamiliarMovil) ||
     texto(body.uuidGrupoFamiliar) ||
     null
@@ -358,6 +473,45 @@ async function resolveGrupoFamiliarId(
     }
 
     return grupo.idGrupoFamiliar;
+  }
+
+  return null;
+}
+
+async function resolveGrupoFamiliarIdRobusto(
+  body: EntregaMovilPayload,
+  idIncidencia: string
+): Promise<string | null> {
+  const idsGrupoFamiliar = [
+    texto(body.idGrupoFamiliarRemoto),
+    texto(body.idGrupoFamiliar),
+    texto(body.refIdFamilia),
+  ].filter(Boolean);
+
+  for (const idGrupoFamiliar of idsGrupoFamiliar) {
+    const grupo = await prisma.grupoFamiliarAfectado.findUnique({
+      where: { idGrupoFamiliar },
+      select: { idGrupoFamiliar: true, idIncidencia: true },
+    });
+
+    if (grupo?.idIncidencia === idIncidencia) {
+      return grupo.idGrupoFamiliar;
+    }
+  }
+
+  const uuidsGrupoFamiliar = [
+    texto(body.uuidGrupoFamiliarMovil),
+    texto(body.uuidGrupoFamiliar),
+    texto(body.refIdFamilia),
+  ].filter(Boolean);
+
+  for (const uuidGrupoFamiliar of uuidsGrupoFamiliar) {
+    const grupo = await prisma.grupoFamiliarAfectado.findFirst({
+      where: { uuidMovil: uuidGrupoFamiliar, idIncidencia, deletedAt: null },
+      select: { idGrupoFamiliar: true },
+    });
+
+    if (grupo) return grupo.idGrupoFamiliar;
   }
 
   return null;
@@ -425,7 +579,9 @@ async function resolvePersonaAfectada(
   }
 
   const uuidPersonaAfectada =
-    texto(body.uuidPersonaAfectadaMovil) || texto(body.uuidPersonaAfectada);
+    texto(body.uuidAfectadoMovil) ||
+    texto(body.uuidPersonaAfectadaMovil) ||
+    texto(body.uuidPersonaAfectada);
 
   if (uuidPersonaAfectada) {
     const persona = await prisma.personaAfectada.findFirst({
@@ -459,6 +615,84 @@ async function resolvePersonaAfectada(
   }
 
   return null;
+}
+
+async function getTipoReferenciaEntrega(tx: Pick<typeof prisma, "tipoReferencia">) {
+  return tx.tipoReferencia.upsert({
+    where: { codigoEntidad: "ENTREGA_AYUDA_HUMANITARIA" },
+    update: { estado: "ACTIVO" },
+    create: {
+      codigoEntidad: "ENTREGA_AYUDA_HUMANITARIA",
+      nombreEntidad: "Entrega de ayuda humanitaria",
+      descripcion: "Evidencias vinculadas a una entrega de ayuda humanitaria",
+      estado: "ACTIVO",
+    },
+  });
+}
+
+async function revisarYAtenderSiCompleto(
+  tx: Pick<
+    typeof prisma,
+    "informe" | "entregaAyudaHumanitaria" | "incidencia" | "historialEstadoIncidencia"
+  >,
+  idIncidencia: string,
+  estadoActual: string
+): Promise<{ estadoIncidencia: string; incidenciaAtendida: boolean }> {
+  const informe = await tx.informe.findFirst({
+    where: { idIncidencia, tipoInforme: "EVALUACION" },
+    orderBy: { fechaElaboracion: "desc" },
+    select: { contenido: true },
+  });
+  const refsAprobadas = refsFamiliasAprobadas(informe?.contenido);
+
+  if (refsAprobadas.length === 0) {
+    return {
+      estadoIncidencia: estadoActual,
+      incidenciaAtendida: estadoActual === "ATENDIDO",
+    };
+  }
+
+  const entregas = await tx.entregaAyudaHumanitaria.findMany({
+    where: {
+      idIncidencia,
+      idGrupoFamiliar: { in: refsAprobadas },
+      deletedAt: null,
+    },
+    select: { idGrupoFamiliar: true },
+  });
+  const entregadas = new Set(entregas.map((e) => e.idGrupoFamiliar).filter(Boolean));
+  const completo = refsAprobadas.every((ref) => entregadas.has(ref));
+
+  if (!completo) {
+    return { estadoIncidencia: estadoActual, incidenciaAtendida: false };
+  }
+
+  if (estadoActual === "ATENDIDO") {
+    return { estadoIncidencia: "ATENDIDO", incidenciaAtendida: true };
+  }
+
+  if (estadoActual !== "APROBADO") {
+    return { estadoIncidencia: estadoActual, incidenciaAtendida: false };
+  }
+
+  if (estadoActual === "APROBADO") {
+    await tx.incidencia.update({
+      where: { idIncidencia },
+      data: { estadoActual: "ATENDIDO" },
+    });
+    await tx.historialEstadoIncidencia.create({
+      data: {
+        idIncidencia,
+        estadoAnterior: estadoActual,
+        estadoNuevo: "ATENDIDO",
+        motivoCambio: "Kits entregados a todas las familias aprobadas desde sincronizacion movil",
+        syncEstado: "SINCRONIZADO",
+        fechaSincronizacion: new Date(),
+      },
+    });
+  }
+
+  return { estadoIncidencia: "ATENDIDO", incidenciaAtendida: true };
 }
 
 export async function GET(request: Request) {
@@ -497,6 +731,14 @@ export async function POST(request: Request) {
   }
 
   try {
+    const incidencia = await resolveIncidencia(body);
+    if (!puedeRegistrarEntregaKits(incidencia.estadoActual)) {
+      throw new MobileSyncError(
+        "La entrega de kits solo estÃ¡ permitida cuando la incidencia estÃ¡ aprobada por el ComitÃ©.",
+        409
+      );
+    }
+
     const existente = await prisma.entregaAyudaHumanitaria.findUnique({
       where: { uuidMovil },
       select: {
@@ -520,6 +762,11 @@ export async function POST(request: Request) {
     });
 
     if (existente) {
+      const estadoEntregaExistente = await revisarYAtenderSiCompleto(
+        prisma,
+        incidencia.idIncidencia,
+        incidencia.estadoActual
+      );
       const movimientoExistente = await prisma.movimientoKit.findUnique({
         where: {
           uuidMovil: `mov-kit-${uuidMovil}`,
@@ -556,6 +803,8 @@ export async function POST(request: Request) {
         idGrupoFamiliar: existente.idGrupoFamiliar,
         idPersonaAfectada: existente.idPersonaAfectada,
         uuidAfectadoMovil: existente.uuidAfectadoMovil,  
+        estadoIncidencia: estadoEntregaExistente.estadoIncidencia,
+        incidenciaAtendida: estadoEntregaExistente.incidenciaAtendida,
         movimientoKit: movimientoExistente
           ? {
               idMovimientoKit: movimientoExistente.idMovimientoKit,
@@ -565,14 +814,6 @@ export async function POST(request: Request) {
             }
           : null,      
       });
-    }
-
-    const incidencia = await resolveIncidencia(body);
-    if (!puedeRegistrarEntregaKits(incidencia.estadoActual)) {
-      throw new MobileSyncError(
-        "La entrega de kits solo está permitida cuando la incidencia está aprobada por el Comité.",
-        409
-      );
     }
 
     const idSolicitud = await resolveSolicitudId(body);
@@ -588,7 +829,7 @@ export async function POST(request: Request) {
 
   const cantidadEntregada = parseCantidad(body.cantidadEntregada) ?? 1;
 
-    const idGrupoFamiliarInicial = await resolveGrupoFamiliarId(
+    const idGrupoFamiliarInicial = await resolveGrupoFamiliarIdRobusto(
       body,
       incidencia.idIncidencia
     );
@@ -603,7 +844,17 @@ export async function POST(request: Request) {
       idGrupoFamiliarInicial ?? personaAfectada?.idGrupoFamiliar ?? null;
 
     const idPersonaAfectada = personaAfectada?.idPersonaAfectada ?? null;
+    if (!idGrupoFamiliar && (kit || camposReferenciaRecibidos(body).length > 0)) {
+      throw errorReferenciaNoResuelta(body);
+    }
+
     const uuidAfectadoMovil = getUuidAfectadoMovil(body);
+    const evidenciasEntrega = normalizarEvidenciasEntrega(body);
+    if (evidenciasEntrega.length > 0 && !idUsuarioResponsableGRD) {
+      throw new MobileSyncError(
+        "idUsuarioGRD es obligatorio para registrar evidencias de entrega."
+      );
+    }
 
     const fechaSincronizacion = new Date();
 
@@ -652,6 +903,28 @@ const resultado = await prisma.$transaction(async (tx) => {
       fechaSincronizacion: true,
     },
   });
+
+  if (evidenciasEntrega.length > 0) {
+    const tipoReferenciaEntrega = await getTipoReferenciaEntrega(tx);
+    await tx.evidenciaGRD.createMany({
+      data: evidenciasEntrega.map((ev) => ({
+        idTipoReferencia: tipoReferenciaEntrega.idTipoReferencia,
+        idReferencia: entrega.idEntrega,
+        idUsuarioCargaGRD: idUsuarioResponsableGRD!,
+        nombreArchivo: ev.nombreArchivo,
+        urlArchivo: ev.urlArchivo,
+        formatoArchivo: ev.formatoArchivo,
+        descripcion: ev.descripcion,
+        tamanoArchivo: ev.tamanoArchivo,
+        latitud: ev.latitud,
+        longitud: ev.longitud,
+        estado: "ACTIVO",
+        uuidMovil: ev.uuidMovil,
+        syncEstado: "SINCRONIZADO",
+        fechaSincronizacion,
+      })),
+    });
+  }
 
   let movimientoKit: {
     idMovimientoKit: string;
@@ -722,9 +995,16 @@ const resultado = await prisma.$transaction(async (tx) => {
     };
   }
 
+  const estadoEntrega = await revisarYAtenderSiCompleto(
+    tx,
+    incidencia.idIncidencia,
+    incidencia.estadoActual
+  );
+
   return {
     entrega,
     movimientoKit,
+    ...estadoEntrega,
   };
 });
 
@@ -746,6 +1026,8 @@ return NextResponse.json({
   idGrupoFamiliar: resultado.entrega.idGrupoFamiliar,
   idPersonaAfectada: resultado.entrega.idPersonaAfectada,
   uuidAfectadoMovil: resultado.entrega.uuidAfectadoMovil,
+  estadoIncidencia: resultado.estadoIncidencia,
+  incidenciaAtendida: resultado.incidenciaAtendida,
   syncEstado: resultado.entrega.syncEstado,
   fechaSincronizacion: resultado.entrega.fechaSincronizacion,
   movimientoKit: resultado.movimientoKit,
