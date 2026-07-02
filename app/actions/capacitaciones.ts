@@ -817,18 +817,16 @@ export async function listarCursosDisponiblesBrigadista(): Promise<CursoDisponib
 /** Valida el rango de inscripción: no puede iniciar en el pasado ni terminar antes de empezar. */
 function validarRangoInscripcion(desde?: string | null, hasta?: string | null): { message: string } | null {
   if (!desde && !hasta) return null;
-  const hoy = new Date();
-  hoy.setHours(0, 0, 0, 0);
+  const d = new Date();
+  const hoy = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   if (desde) {
-    const fDesde = new Date(desde);
-    if (isNaN(fDesde.getTime())) return { message: "La fecha de inicio de inscripción no es válida." };
-    if (fDesde < hoy) return { message: "La fecha de inicio de inscripción no puede ser anterior a hoy." };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(desde)) return { message: "La fecha de inicio de inscripción no es válida." };
+    if (desde < hoy) return { message: "La fecha de inicio de inscripción no puede ser anterior a hoy." };
   }
   if (hasta) {
-    const fHasta = new Date(hasta);
-    if (isNaN(fHasta.getTime())) return { message: "La fecha de fin de inscripción no es válida." };
-    if (fHasta < hoy) return { message: "La fecha de fin de inscripción no puede ser anterior a hoy." };
-    if (desde && fHasta < new Date(desde))
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(hasta)) return { message: "La fecha de fin de inscripción no es válida." };
+    if (hasta < hoy) return { message: "La fecha de fin de inscripción no puede ser anterior a hoy." };
+    if (desde && hasta < desde)
       return { message: "La fecha de fin de inscripción no puede ser anterior a la fecha de inicio." };
   }
   return null;

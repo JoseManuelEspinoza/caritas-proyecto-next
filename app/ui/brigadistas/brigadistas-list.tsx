@@ -381,6 +381,7 @@ function ImportBrigadistaModal({
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file) handleFile(file);
+    e.target.value = "";
   }
 
   async function downloadTemplate() {
@@ -580,6 +581,7 @@ export function BrigadistasList({ brigadistas, parroquias, canEdit = true }: Pro
   const [search, setSearch] = useState("");
   const [filterParroquia, setFilterParroquia] = useState("all");
   const [filterEstado, setFilterEstado] = useState("all");
+  const [sortBy, setSortBy] = useState("fecha_desc");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(7);
 
@@ -594,6 +596,13 @@ export function BrigadistasList({ brigadistas, parroquias, canEdit = true }: Pro
       if (!nombre.includes(q) && !(b.dni ?? "").includes(q)) return false;
     }
     return true;
+  }).sort((a, b) => {
+    const nombreA = `${a.nombres} ${a.apellidos ?? ""}`.toLowerCase();
+    const nombreB = `${b.nombres} ${b.apellidos ?? ""}`.toLowerCase();
+    if (sortBy === "az") return nombreA.localeCompare(nombreB);
+    if (sortBy === "za") return nombreB.localeCompare(nombreA);
+    if (sortBy === "fecha_asc") return new Date(a.fechaRegistro).getTime() - new Date(b.fechaRegistro).getTime();
+    return new Date(b.fechaRegistro).getTime() - new Date(a.fechaRegistro).getTime(); // fecha_desc
   });
 
   // Stats dinámicos según filtros activos
@@ -775,7 +784,7 @@ export function BrigadistasList({ brigadistas, parroquias, canEdit = true }: Pro
             className="w-full pl-9 pr-3 py-2 text-sm bg-[#F5F5F5] border border-[#DDDDDD] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#009850]/20 focus:border-[#009850]"
           />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-1">
           <Filter className="w-4 h-4 text-gray-400 shrink-0" />
           <select
             value={filterParroquia}
@@ -796,12 +805,22 @@ export function BrigadistasList({ brigadistas, parroquias, canEdit = true }: Pro
             <option value="ACTIVO">Activos</option>
             <option value="INACTIVO">Inactivos</option>
           </select>
+          <select
+            value={sortBy}
+            onChange={(e) => { setSortBy(e.target.value); setCurrentPage(1); }}
+            className="flex-1 px-3 py-2 text-sm bg-[#F5F5F5] border border-[#DDDDDD] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#009850]/20 focus:border-[#009850]"
+          >
+            <option value="fecha_desc">Más recientes</option>
+            <option value="fecha_asc">Más antiguos</option>
+            <option value="az">Nombre A → Z</option>
+            <option value="za">Nombre Z → A</option>
+          </select>
           <button
             onClick={handleExportExcel}
-            className="hidden md:flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 bg-[#F5F5F5] border border-[#DDDDDD] rounded-lg hover:bg-gray-200 transition-colors"
+            className="hidden md:flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-[#DDDDDD] rounded-lg hover:bg-gray-50 transition-colors ml-auto shrink-0"
           >
-            <FileSpreadsheet className="w-4 h-4" />
-            Excel
+            <Download className="w-4 h-4" />
+            Exportar Excel
           </button>
         </div>
       </div>

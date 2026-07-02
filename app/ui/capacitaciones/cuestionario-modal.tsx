@@ -240,6 +240,7 @@ export function CuestionarioModal({
               onChange={(e) => setTiempoLimiteMinutos(e.target.value)}
               className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]"
             />
+            <p className="text-[11px] text-gray-400 mt-1">Vacío = sin límite de tiempo</p>
           </div>
           <div className="sm:col-span-2">
             <label className="block text-xs text-gray-500 mb-1">Descripción (opcional)</label>

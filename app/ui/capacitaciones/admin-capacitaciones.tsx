@@ -117,9 +117,14 @@ function CursoCard({
     >
       <div className="flex items-start justify-between gap-2 mb-1">
         <h2 className="text-sm font-semibold text-[var(--caritas-text)] leading-snug line-clamp-2">{c.nombreCurso}</h2>
-        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0 ${ESTADO_BADGE[c.estadoCurso] ?? "bg-gray-100 text-gray-600"}`}>
-          {c.estadoCurso}
-        </span>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {c.estadoCurso === "BORRADOR" && !c.cuestionarioFinal && !c.cuestionarioInicial && (
+            <span className="w-2 h-2 rounded-full bg-red-500" title="Falta evaluación" />
+          )}
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${ESTADO_BADGE[c.estadoCurso] ?? "bg-gray-100 text-gray-600"}`}>
+            {c.estadoCurso}
+          </span>
+        </div>
       </div>
       {c.codigoCurso && (
         <p className="text-[11px] font-mono text-gray-400 mb-2">{c.codigoCurso}</p>
@@ -395,6 +400,27 @@ export function AdminCapacitaciones({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+
+  function localToday() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+  function localTomorrow() {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+  function addMonths(dateStr: string, months: number): string {
+    const d = new Date(dateStr + "T00:00:00");
+    d.setMonth(d.getMonth() + months);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+  function diffMonths(desde: string, hasta: string): string {
+    const d1 = new Date(desde + "T00:00:00");
+    const d2 = new Date(hasta + "T00:00:00");
+    const diff = (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth());
+    return diff > 0 ? String(diff) : "";
+  }
   const [selectedId, setSelectedId] = useState<string | null>(
     cursos.find((c) => c.estadoCurso === "PUBLICADO")?.id ?? cursos[0]?.id ?? null
   );
@@ -413,7 +439,9 @@ export function AdminCapacitaciones({
     idResponsable: especialistas[0]?.id ?? "",
     inscripcion_desde: "",
     inscripcion_hasta: "",
+    meses: "",
     duracionRealizacionDias: "",
+    tipoPlazo: "dias" as "dias" | "meses",
   });
   const [editarForm, setEditarForm] = useState({
     nombreCurso: "",
@@ -421,7 +449,9 @@ export function AdminCapacitaciones({
     idResponsable: "",
     inscripcion_desde: "",
     inscripcion_hasta: "",
+    meses: "",
     duracionRealizacionDias: "",
+    tipoPlazo: "dias" as "dias" | "meses",
   });
   const [sesionTitulo, setSesionTitulo] = useState("");
   const [sesionDescripcion, setSesionDescripcion] = useState("");
@@ -527,7 +557,11 @@ export function AdminCapacitaciones({
         idResponsable: crearForm.idResponsable,
         inscripcion_desde: crearForm.inscripcion_desde || undefined,
         inscripcion_hasta: crearForm.inscripcion_hasta || undefined,
-        duracionRealizacionDias: crearForm.duracionRealizacionDias ? Number(crearForm.duracionRealizacionDias) : undefined,
+        duracionRealizacionDias: crearForm.duracionRealizacionDias
+          ? crearForm.tipoPlazo === "meses"
+            ? Number(crearForm.duracionRealizacionDias) * 30
+            : Number(crearForm.duracionRealizacionDias)
+          : undefined,
       });
 
       if (res && "message" in res) {
@@ -537,7 +571,7 @@ export function AdminCapacitaciones({
 
       toast.success("Curso creado.");
       setShowCrear(false);
-      setCrearForm({ nombreCurso: "", descripcion: "", idResponsable: especialistas[0]?.id ?? "", inscripcion_desde: "", inscripcion_hasta: "", duracionRealizacionDias: "" });
+      setCrearForm({ nombreCurso: "", descripcion: "", idResponsable: especialistas[0]?.id ?? "", inscripcion_desde: "", inscripcion_hasta: "", meses: "", duracionRealizacionDias: "", tipoPlazo: "dias" });
       setFiltroEstado("BORRADOR");
       setShowBorradores(true);
       router.refresh();
@@ -572,7 +606,11 @@ export function AdminCapacitaciones({
           idResponsable: editarForm.idResponsable,
           inscripcion_desde: editarForm.inscripcion_desde || null,
           inscripcion_hasta: editarForm.inscripcion_hasta || null,
-          duracionRealizacionDias: editarForm.duracionRealizacionDias ? Number(editarForm.duracionRealizacionDias) : null,
+          duracionRealizacionDias: editarForm.duracionRealizacionDias
+            ? editarForm.tipoPlazo === "meses"
+              ? Number(editarForm.duracionRealizacionDias) * 30
+              : Number(editarForm.duracionRealizacionDias)
+            : null,
         }),
       "Curso actualizado.",
       () => {
@@ -612,13 +650,21 @@ export function AdminCapacitaciones({
   const abrirEditar = () => {
     if (!current) return;
     const responsableValido = especialistas.some((e) => e.id === current.idResponsable);
+    const desdeEdit = current.inscripcion_desde ? current.inscripcion_desde.slice(0, 10) : "";
+    const hastaEdit = current.inscripcion_hasta ? current.inscripcion_hasta.slice(0, 10) : "";
     setEditarForm({
       nombreCurso: current.nombreCurso,
       descripcion: current.descripcion ?? "",
       idResponsable: responsableValido ? current.idResponsable : (especialistas[0]?.id ?? ""),
-      inscripcion_desde: current.inscripcion_desde ? current.inscripcion_desde.slice(0, 10) : "",
-      inscripcion_hasta: current.inscripcion_hasta ? current.inscripcion_hasta.slice(0, 10) : "",
-      duracionRealizacionDias: current.duracionRealizacionDias != null ? String(current.duracionRealizacionDias) : "",
+      inscripcion_desde: desdeEdit,
+      inscripcion_hasta: hastaEdit,
+      meses: desdeEdit && hastaEdit ? diffMonths(desdeEdit, hastaEdit) : "",
+      duracionRealizacionDias: current.duracionRealizacionDias != null
+        ? current.duracionRealizacionDias % 30 === 0
+          ? String(current.duracionRealizacionDias / 30)
+          : String(current.duracionRealizacionDias)
+        : "",
+      tipoPlazo: current.duracionRealizacionDias != null && current.duracionRealizacionDias % 30 === 0 ? "meses" : "dias",
     });
     setShowEditar(true);
   };
@@ -718,7 +764,10 @@ export function AdminCapacitaciones({
                       No publicados ({borradores.length})
                     </p>
                   </div>
-                  <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${showBorradores ? "rotate-180" : ""}`} />
+                  <span className="flex items-center gap-1 text-xs font-medium text-amber-600">
+                    {showBorradores ? "Ocultar" : "Ver"}
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showBorradores ? "rotate-180" : ""}`} />
+                  </span>
                 </button>
                 {showBorradores && borradores.map((c) => (
                   <CursoCard key={c.id} c={c} selectedId={selectedId} onSelect={handleSelectCurso} />
@@ -739,7 +788,10 @@ export function AdminCapacitaciones({
                       Cerrados ({cerrados.length})
                     </p>
                   </div>
-                  <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${showCerrados ? "rotate-180" : ""}`} />
+                  <span className="flex items-center gap-1 text-xs font-medium text-gray-500">
+                    {showCerrados ? "Ocultar" : "Ver"}
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showCerrados ? "rotate-180" : ""}`} />
+                  </span>
                 </button>
                 {showCerrados && cerrados.map((c) => (
                   <CursoCard key={c.id} c={c} selectedId={selectedId} onSelect={handleSelectCurso} />
@@ -794,10 +846,13 @@ export function AdminCapacitaciones({
                       </button>
                       {current.estadoCurso === "BORRADOR" && (
                         !current.cuestionarioFinal && !current.cuestionarioInicial ? (
-                          <div className="flex items-center gap-1.5 px-3 py-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg">
-                            <Send className="w-3.5 h-3.5 opacity-50" />
-                            <span>Agrega una evaluación para publicar</span>
-                          </div>
+                          <button
+                            onClick={() => setActiveTab("evaluaciones")}
+                            className="flex items-center gap-1.5 px-3 py-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors cursor-pointer"
+                          >
+                            <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
+                            <span>Falta evaluación para publicar</span>
+                          </button>
                         ) : (
                           <button
                             onClick={() => run(() => cambiarEstadoCurso(current.id, "PUBLICAR"), "Curso publicado.")}
@@ -857,6 +912,9 @@ export function AdminCapacitaciones({
                 >
                   <ClipboardList className="w-4 h-4" />
                   Evaluaciones
+                  {current.estadoCurso === "BORRADOR" && !current.cuestionarioFinal && !current.cuestionarioInicial && (
+                    <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
+                  )}
                 </button>
                 <button
                   onClick={async () => {
@@ -1041,17 +1099,36 @@ export function AdminCapacitaciones({
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-2">Rango de inscripciones</label>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">Desde</label>
-                  <input type="date" value={crearForm.inscripcion_desde} min={new Date().toISOString().slice(0, 10)}
-                    onChange={(e) => setCrearForm({ ...crearForm, inscripcion_desde: e.target.value })}
+                  <input type="date" value={crearForm.inscripcion_desde} min={localToday()}
+                    onChange={(e) => {
+                      const desde = e.target.value;
+                      const hasta = crearForm.meses && desde ? addMonths(desde, Number(crearForm.meses)) : crearForm.inscripcion_hasta;
+                      setCrearForm({ ...crearForm, inscripcion_desde: desde, inscripcion_hasta: hasta });
+                    }}
+                    className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Duración (meses)</label>
+                  <input type="number" min={1} placeholder="Ej: 3"
+                    value={crearForm.meses}
+                    onChange={(e) => {
+                      const meses = e.target.value;
+                      const hasta = meses && crearForm.inscripcion_desde ? addMonths(crearForm.inscripcion_desde, Number(meses)) : crearForm.inscripcion_hasta;
+                      setCrearForm({ ...crearForm, meses, inscripcion_hasta: hasta });
+                    }}
                     className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]" />
                 </div>
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">Hasta</label>
-                  <input type="date" value={crearForm.inscripcion_hasta} min={crearForm.inscripcion_desde || new Date().toISOString().slice(0, 10)}
-                    onChange={(e) => setCrearForm({ ...crearForm, inscripcion_hasta: e.target.value })}
+                  <input type="date" value={crearForm.inscripcion_hasta} min={crearForm.inscripcion_desde || localTomorrow()}
+                    onChange={(e) => {
+                      const hasta = e.target.value;
+                      const meses = crearForm.inscripcion_desde && hasta ? diffMonths(crearForm.inscripcion_desde, hasta) : "";
+                      setCrearForm({ ...crearForm, inscripcion_hasta: hasta, meses });
+                    }}
                     className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]" />
                 </div>
               </div>
@@ -1059,12 +1136,22 @@ export function AdminCapacitaciones({
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-2">
                 Plazo para completar el curso
-                <span className="ml-1 text-gray-400 font-normal">(días desde que el brigadista se matricula)</span>
+                <span className="ml-1 text-gray-400 font-normal">(desde que el brigadista se matricula)</span>
               </label>
-              <input type="number" min={1} placeholder="Ej: 30 (déjalo vacío para sin límite)"
-                value={crearForm.duracionRealizacionDias}
-                onChange={(e) => setCrearForm({ ...crearForm, duracionRealizacionDias: e.target.value })}
-                className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]" />
+              <div className="flex gap-2">
+                <input type="number" min={1} placeholder="Ej: 3 (vacío = sin límite)"
+                  value={crearForm.duracionRealizacionDias}
+                  onChange={(e) => setCrearForm({ ...crearForm, duracionRealizacionDias: e.target.value })}
+                  className="flex-1 px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]" />
+                <select
+                  value={crearForm.tipoPlazo}
+                  onChange={(e) => setCrearForm({ ...crearForm, tipoPlazo: e.target.value as "dias" | "meses" })}
+                  className="px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)] bg-white"
+                >
+                  <option value="dias">Días</option>
+                  <option value="meses">Meses</option>
+                </select>
+              </div>
             </div>
             <div className="flex justify-end gap-2 pt-1">
               <button
@@ -1078,7 +1165,7 @@ export function AdminCapacitaciones({
                   pending ||
                   crearForm.nombreCurso.trim().length < 3 ||
                   !crearForm.idResponsable.trim() ||
-                  (!!crearForm.descripcion.trim() && crearForm.descripcion.trim().length < 5)
+                  (!!crearForm.descripcion.trim() && crearForm.descripcion.trim().length < 3)
                 }
                 onClick={handleCrearCurso}
                 className="px-4 py-2 text-sm bg-[var(--caritas-green)] text-white rounded-lg disabled:opacity-50 hover:opacity-90 transition-opacity"
@@ -1133,17 +1220,36 @@ export function AdminCapacitaciones({
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-2">Rango de inscripciones</label>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">Desde</label>
-                  <input type="date" value={editarForm.inscripcion_desde} min={new Date().toISOString().slice(0, 10)}
-                    onChange={(e) => setEditarForm({ ...editarForm, inscripcion_desde: e.target.value })}
+                  <input type="date" value={editarForm.inscripcion_desde} min={localToday()}
+                    onChange={(e) => {
+                      const desde = e.target.value;
+                      const hasta = editarForm.meses && desde ? addMonths(desde, Number(editarForm.meses)) : editarForm.inscripcion_hasta;
+                      setEditarForm({ ...editarForm, inscripcion_desde: desde, inscripcion_hasta: hasta });
+                    }}
+                    className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Duración (meses)</label>
+                  <input type="number" min={1} placeholder="Ej: 3"
+                    value={editarForm.meses}
+                    onChange={(e) => {
+                      const meses = e.target.value;
+                      const hasta = meses && editarForm.inscripcion_desde ? addMonths(editarForm.inscripcion_desde, Number(meses)) : editarForm.inscripcion_hasta;
+                      setEditarForm({ ...editarForm, meses, inscripcion_hasta: hasta });
+                    }}
                     className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]" />
                 </div>
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">Hasta</label>
-                  <input type="date" value={editarForm.inscripcion_hasta} min={editarForm.inscripcion_desde || new Date().toISOString().slice(0, 10)}
-                    onChange={(e) => setEditarForm({ ...editarForm, inscripcion_hasta: e.target.value })}
+                  <input type="date" value={editarForm.inscripcion_hasta} min={editarForm.inscripcion_desde || localTomorrow()}
+                    onChange={(e) => {
+                      const hasta = e.target.value;
+                      const meses = editarForm.inscripcion_desde && hasta ? diffMonths(editarForm.inscripcion_desde, hasta) : "";
+                      setEditarForm({ ...editarForm, inscripcion_hasta: hasta, meses });
+                    }}
                     className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]" />
                 </div>
               </div>
@@ -1151,12 +1257,22 @@ export function AdminCapacitaciones({
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-2">
                 Plazo para completar el curso
-                <span className="ml-1 text-gray-400 font-normal">(días desde que el brigadista se matricula)</span>
+                <span className="ml-1 text-gray-400 font-normal">(desde que el brigadista se matricula)</span>
               </label>
-              <input type="number" min={1} placeholder="Ej: 30 (déjalo vacío para sin límite)"
-                value={editarForm.duracionRealizacionDias}
-                onChange={(e) => setEditarForm({ ...editarForm, duracionRealizacionDias: e.target.value })}
-                className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]" />
+              <div className="flex gap-2">
+                <input type="number" min={1} placeholder="Ej: 3 (vacío = sin límite)"
+                  value={editarForm.duracionRealizacionDias}
+                  onChange={(e) => setEditarForm({ ...editarForm, duracionRealizacionDias: e.target.value })}
+                  className="flex-1 px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]" />
+                <select
+                  value={editarForm.tipoPlazo}
+                  onChange={(e) => setEditarForm({ ...editarForm, tipoPlazo: e.target.value as "dias" | "meses" })}
+                  className="px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)] bg-white"
+                >
+                  <option value="dias">Días</option>
+                  <option value="meses">Meses</option>
+                </select>
+              </div>
             </div>
             <div className="flex justify-end gap-2 pt-1">
               <button
@@ -1170,7 +1286,7 @@ export function AdminCapacitaciones({
                   pending ||
                   editarForm.nombreCurso.trim().length < 3 ||
                   !editarForm.idResponsable ||
-                  (!!editarForm.descripcion.trim() && editarForm.descripcion.trim().length < 5)
+                  (!!editarForm.descripcion.trim() && editarForm.descripcion.trim().length < 3)
                 }
                 onClick={handleEditarCurso}
                 className="px-4 py-2 text-sm bg-[var(--caritas-green)] text-white rounded-lg disabled:opacity-50 hover:opacity-90 transition-opacity"

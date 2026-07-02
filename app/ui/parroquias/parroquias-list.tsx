@@ -64,6 +64,7 @@ export type ParroquiaDetalle = {
   telefono: string | null;
   correo: string | null;
   estado: string;
+  createdAt: string;
   _count: {
     brigadistas: number;
     incidencias: number;
@@ -430,7 +431,7 @@ function ImportParroquiaModal({ onClose }: { onClose: () => void }) {
               {fileName ? "Cambiar archivo" : "Seleccionar archivo Excel"}
             </button>
             <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv"
-              className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+              className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ""; }} />
           </div>
 
           {fileName && (
@@ -531,6 +532,7 @@ export function ParroquiasList({ parroquias, canEdit = false }: Props) {
   const [filterEstado, setFilterEstado] = useState("all");
   const [filterTelefono, setFilterTelefono] = useState("all");
   const [filterCorreo, setFilterCorreo] = useState("all");
+  const [sortBy, setSortBy] = useState("fecha_desc");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(6);
   const [exportando, setExportando] = useState(false);
@@ -559,6 +561,11 @@ export function ParroquiasList({ parroquias, canEdit = false }: Props) {
         return false;
     }
     return true;
+  }).sort((a, b) => {
+    if (sortBy === "az") return a.nombre.localeCompare(b.nombre);
+    if (sortBy === "za") return b.nombre.localeCompare(a.nombre);
+    if (sortBy === "fecha_asc") return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
 
   async function handleExport() {
@@ -768,6 +775,17 @@ export function ParroquiasList({ parroquias, canEdit = false }: Props) {
             <option value="ACTIVO">Activas</option>
             <option value="INACTIVO">Inactivas</option>
           </select>
+          <select
+            value={sortBy}
+            onChange={(e) => { setSortBy(e.target.value); setCurrentPage(1); }}
+            className="px-3 py-2 text-sm bg-[#F5F5F5] border border-[#DDDDDD] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#009850]/20 focus:border-[#009850]"
+            suppressHydrationWarning
+          >
+            <option value="fecha_desc">Más recientes</option>
+            <option value="fecha_asc">Más antiguas</option>
+            <option value="az">Nombre A → Z</option>
+            <option value="za">Nombre Z → A</option>
+          </select>
         </div>
         <div className="flex items-center gap-2">
           <Phone className="w-4 h-4 text-gray-400 shrink-0" />
@@ -808,10 +826,10 @@ export function ParroquiasList({ parroquias, canEdit = false }: Props) {
           onClick={handleExport}
           disabled={exportando || filtered.length === 0}
           suppressHydrationWarning
-          className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 bg-[#F5F5F5] border border-[#DDDDDD] rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+          className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-[#DDDDDD] rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 ml-auto shrink-0"
         >
-          {exportando ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
-          Excel
+          {exportando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+          Exportar Excel
         </button>
       </div>
 

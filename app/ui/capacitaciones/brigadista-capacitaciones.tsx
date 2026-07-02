@@ -420,7 +420,7 @@ function CursoDisponibleCard({
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl overflow-hidden flex flex-col">
-      <CursoPortada nombre={curso.nombreCurso} altura="h-20" />
+      <CursoPortada nombre={curso.nombreCurso} altura="h-16" />
 
       <div className="p-5 flex flex-col flex-1 gap-3">
         {/* Badges */}
@@ -672,7 +672,7 @@ export function BrigadistaCapacitaciones({
               <p className="text-sm">No tienes cursos en este estado.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
               {cursosFiltrados.map((c) => {
                 return (
                   <button
@@ -680,7 +680,7 @@ export function BrigadistaCapacitaciones({
                     onClick={() => setDetalleId(c.id)}
                     className="p-0 flex flex-col text-left bg-white border border-gray-200 rounded-xl hover:shadow-md transition-all group overflow-hidden w-full"
                   >
-                    <CursoPortada nombre={c.nombreCurso} altura="h-28" />
+                    <CursoPortada nombre={c.nombreCurso} altura="h-16" />
                     <div className="p-4 w-full">
                       <div className="flex items-center gap-2 mb-2">
                         <EstadoBadge resultado={c.resultado} certificado={c.certificado} />
@@ -764,7 +764,7 @@ export function BrigadistaCapacitaciones({
               <p className="text-sm">No hay cursos disponibles por el momento.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
               {disponiblesCursos.map((c) => (
                 <CursoDisponibleCard
                   key={c.id}

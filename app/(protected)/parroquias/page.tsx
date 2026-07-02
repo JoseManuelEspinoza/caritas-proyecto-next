@@ -22,6 +22,7 @@ export default async function ParroquiasPage() {
       telefono: true,
       correo: true,
       estado: true,
+      createdAt: true,
       _count: {
         select: {
           brigadistas: true,
@@ -45,6 +46,7 @@ export default async function ParroquiasPage() {
         telefono: p.telefono,
         correo: p.correo,
         estado: p.estado,
+        createdAt: p.createdAt.toISOString(),
         _count: p._count,
       }))}
     />

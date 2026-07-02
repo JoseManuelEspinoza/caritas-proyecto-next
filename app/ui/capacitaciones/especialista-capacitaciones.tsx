@@ -141,9 +141,14 @@ function CursoCard({
     >
       <div className="flex items-start justify-between gap-2 mb-1">
         <h2 className="text-sm font-semibold text-[var(--caritas-text)] leading-snug line-clamp-2">{c.nombreCurso}</h2>
-        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0 ${ESTADO_BADGE[c.estadoCurso] ?? "bg-gray-100 text-gray-600"}`}>
-          {c.estadoCurso}
-        </span>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {c.estadoCurso === "BORRADOR" && !c.cuestionarioFinal && !c.cuestionarioInicial && (
+            <span className="w-2 h-2 rounded-full bg-red-500" title="Falta evaluación" />
+          )}
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${ESTADO_BADGE[c.estadoCurso] ?? "bg-gray-100 text-gray-600"}`}>
+            {c.estadoCurso}
+          </span>
+        </div>
       </div>
       {c.codigoCurso && (
         <p className="text-[11px] font-mono text-gray-400 mb-2">{c.codigoCurso}</p>
@@ -517,7 +522,10 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
                           No publicados ({borradores.length})
                         </p>
                       </div>
-                      <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${showBorradores ? "rotate-180" : ""}`} />
+                      <span className="flex items-center gap-1 text-xs font-medium text-amber-600">
+                        {showBorradores ? "Ocultar" : "Ver"}
+                        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showBorradores ? "rotate-180" : ""}`} />
+                      </span>
                     </button>
                     {showBorradores && borradores.map((c) => (
                       <CursoCard key={c.id} c={c} selectedId={selectedId} onSelect={handleSelectCurso} />
@@ -538,7 +546,10 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
                           Cerrados ({cerrados.length})
                         </p>
                       </div>
-                      <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${showCerrados ? "rotate-180" : ""}`} />
+                      <span className="flex items-center gap-1 text-xs font-medium text-gray-500">
+                        {showCerrados ? "Ocultar" : "Ver"}
+                        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showCerrados ? "rotate-180" : ""}`} />
+                      </span>
                     </button>
                     {showCerrados && cerrados.map((c) => (
                       <CursoCard key={c.id} c={c} selectedId={selectedId} onSelect={handleSelectCurso} />
@@ -618,10 +629,13 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
                     <div className="flex flex-col gap-2 shrink-0">
                       {current.estadoCurso === "BORRADOR" && (
                         !current.cuestionarioFinal && !current.cuestionarioInicial ? (
-                          <div className="flex items-center gap-1.5 px-3 py-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg">
-                            <Send className="w-3.5 h-3.5 opacity-50" />
-                            <span>Agrega una evaluación para publicar</span>
-                          </div>
+                          <button
+                            onClick={() => setActiveTab("evaluaciones")}
+                            className="flex items-center gap-1.5 px-3 py-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors cursor-pointer"
+                          >
+                            <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
+                            <span>Falta evaluación para publicar</span>
+                          </button>
                         ) : (
                           <button
                             onClick={() => run(() => cambiarEstadoCurso(current.id, "PUBLICAR"), "Curso publicado.")}
@@ -661,6 +675,9 @@ export function EspecialistaCapacitaciones({ cursos }: { cursos: CursoDetalle[] 
                   >
                     <ClipboardList className="w-4 h-4" />
                     Evaluaciones
+                    {current.estadoCurso === "BORRADOR" && !current.cuestionarioFinal && !current.cuestionarioInicial && (
+                      <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
+                    )}
                   </button>
                   <button
                     onClick={async () => {
