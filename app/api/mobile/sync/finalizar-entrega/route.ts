@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 
@@ -22,6 +23,18 @@ type KitEntregadoPayload = {
   tipoKit?: string | null;
   estadoEntrega?: string | null;
   articulos?: ArticuloEntregadoPayload[] | null;
+};
+
+type KitNormalizado = {
+  uuidKitAsignado: string;
+  refsFamilia: string[];
+  idPersonaAfectadaRemota: string | null;
+  uuidAfectadoMovil: string | null;
+  tipoKit: string;
+  estadoEntrega: string;
+  articulos: ArticuloEntregadoPayload[];
+  cantidadEntregada: number;
+  esCompleto: boolean;
 };
 
 type FinalizarEntregaPayload = {
@@ -129,34 +142,104 @@ function refsFamiliasAprobadas(contenido: string | null | undefined): string[] {
   ];
 }
 
-function validarKitsEntregados(body: FinalizarEntregaPayload): void {
-  if (!("kitsEntregados" in body)) return;
-
+function normalizarKitsEntregados(body: FinalizarEntregaPayload): KitNormalizado[] {
   const kits = Array.isArray(body.kitsEntregados) ? body.kitsEntregados : [];
+
+  return kits
+    .map((kit, index) => {
+      const articulos = Array.isArray(kit.articulos) ? kit.articulos : [];
+      const estadoEntrega = texto(kit.estadoEntrega).toUpperCase();
+      const articulosCompletos =
+        articulos.length > 0 &&
+        articulos.every((art) => parseBoolean(art.confirmado) && parseCantidad(art.cantidadEntregada) > 0);
+      const esCompleto = estadoEntrega === "ENTREGADO" || (estadoEntrega === "PARCIAL" && articulosCompletos);
+
+      const refsFamilia = [
+        texto(kit.idGrupoFamiliar),
+        texto(kit.refIdFamilia),
+        texto(kit.uuidGrupoFamiliar),
+      ].filter(Boolean);
+
+      return {
+        uuidKitAsignado: texto(kit.uuidKitAsignado) || `kit-${index + 1}`,
+        refsFamilia: [...new Set(refsFamilia)],
+        idPersonaAfectadaRemota: texto(kit.idPersonaAfectadaRemota),
+        uuidAfectadoMovil: texto(kit.uuidAfectadoMovil),
+        tipoKit: texto(kit.tipoKit) || "KIT_EMERGENCIA",
+        estadoEntrega,
+        articulos,
+        cantidadEntregada: articulos.reduce((sum, art) => sum + parseCantidad(art.cantidadEntregada), 0),
+        esCompleto,
+      };
+    })
+    .filter((kit) => kit.uuidKitAsignado.length > 0);
+}
+
+function validarKitsEntregados(kits: KitNormalizado[]): void {
   if (kits.length === 0) {
     throw new MobileSyncError("kitsEntregados no puede estar vacio.", 409);
   }
 
   const incompletos = kits
-    .map((kit, index) => {
-      const estado = texto(kit.estadoEntrega).toUpperCase();
-      const articulos = Array.isArray(kit.articulos) ? kit.articulos : [];
-      const articulosCompletos =
-        articulos.length > 0 &&
-        articulos.every((art) => parseBoolean(art.confirmado) && parseCantidad(art.cantidadEntregada) > 0);
-
-      const valido = estado === "ENTREGADO" || (estado === "PARCIAL" && articulosCompletos);
-      if (valido) return null;
-
-      return texto(kit.uuidKitAsignado) || texto(kit.tipoKit) || `kit-${index + 1}`;
-    })
-    .filter((kit): kit is string => kit !== null);
+    .filter((kit) => !kit.esCompleto)
+    .map((kit) => kit.uuidKitAsignado || kit.tipoKit)
+    .filter(Boolean);
 
   if (incompletos.length > 0) {
     throw new MobileSyncError("Hay kits sin entrega completa.", 409, {
       kitsIncompletos: incompletos,
     });
   }
+}
+
+function kitAplicaARef(kit: KitNormalizado, ref: string): boolean {
+  return kit.refsFamilia.includes(ref);
+}
+
+function observacionesEntregaReconcilida(
+  ref: string,
+  kits: KitNormalizado[],
+  fechaFinalizacion: Date
+) {
+  return JSON.stringify({
+    version: 1,
+    tipo: "ENTREGA_KITS_FAMILIA_RECONCILIADA_MOVIL",
+    estadoEntrega: "ENTREGADO",
+    origen: "finalizar-entrega",
+    refIdFamilia: ref,
+    fechaFinalizacion: fechaFinalizacion.toISOString(),
+    kits: kits.map((kit) => ({
+      uuidKitAsignado: kit.uuidKitAsignado,
+      tipoKit: kit.tipoKit,
+      estadoEntrega: kit.estadoEntrega,
+      articulos: kit.articulos,
+      cantidadEntregada: kit.cantidadEntregada,
+    })),
+  });
+}
+
+function kitCompletoParaRef(kits: KitNormalizado[], ref: string): KitNormalizado[] {
+  return kits.filter((kit) => kitAplicaARef(kit, ref) && kit.esCompleto);
+}
+
+async function resolverPersonaOpcional(
+  tx: Pick<typeof prisma, "personaAfectada">,
+  kit: KitEntregadoPayload,
+  ref: string
+): Promise<string | null> {
+  const idPersonaAfectada = texto(kit.idPersonaAfectadaRemota);
+  if (!idPersonaAfectada) return null;
+
+  const persona = await tx.personaAfectada.findUnique({
+    where: { idPersonaAfectada },
+    select: {
+      idPersonaAfectada: true,
+      idGrupoFamiliar: true,
+    },
+  });
+
+  if (!persona || persona.idGrupoFamiliar !== ref) return null;
+  return persona.idPersonaAfectada;
 }
 
 async function resolveIncidencia(body: FinalizarEntregaPayload) {
@@ -217,6 +300,92 @@ async function resolveIncidencia(body: FinalizarEntregaPayload) {
   throw new MobileSyncError("No se pudo resolver la incidencia indicada.", 404);
 }
 
+async function reconciliarEntregasFaltantes(
+  tx: Pick<
+    typeof prisma,
+    "entregaAyudaHumanitaria" | "personaAfectada"
+  >,
+  incidenciaId: string,
+  refsAprobadas: string[],
+  kitsNormalizados: KitNormalizado[],
+  fechaFinalizacion: Date
+): Promise<string[]> {
+  const entregasExistentes = await tx.entregaAyudaHumanitaria.findMany({
+    where: {
+      idIncidencia: incidenciaId,
+      idGrupoFamiliar: { in: refsAprobadas },
+      deletedAt: null,
+    },
+    select: { idGrupoFamiliar: true },
+  });
+
+  const entregadas = new Set(entregasExistentes.map((e) => e.idGrupoFamiliar).filter(Boolean));
+  const faltantes = refsAprobadas.filter((ref) => !entregadas.has(ref));
+
+  for (const ref of faltantes) {
+    const kitsParaRef = kitCompletoParaRef(kitsNormalizados, ref);
+    if (kitsParaRef.length === 0) {
+      continue;
+    }
+
+    const kitPrincipal = kitsParaRef[0];
+    const cantidadEntregada = kitsParaRef.reduce((sum, kit) => sum + Math.max(kit.cantidadEntregada, 1), 0);
+    const idPersonaAfectada = await resolverPersonaOpcional(
+      tx,
+      {
+        idPersonaAfectadaRemota: kitPrincipal.idPersonaAfectadaRemota ?? undefined,
+      },
+      ref
+    );
+
+    const existeParaRef = await tx.entregaAyudaHumanitaria.findFirst({
+      where: {
+        idIncidencia: incidenciaId,
+        idGrupoFamiliar: ref,
+        deletedAt: null,
+      },
+      select: { idEntrega: true },
+    });
+
+    if (existeParaRef) {
+      entregadas.add(ref);
+      continue;
+    }
+
+    await tx.entregaAyudaHumanitaria.create({
+      data: {
+        idIncidencia: incidenciaId,
+        idGrupoFamiliar: ref,
+        idPersonaAfectada: idPersonaAfectada ?? null,
+        tipoAyuda: kitPrincipal.tipoKit || "KIT_EMERGENCIA",
+        descripcionAyuda: "Entrega registrada desde finalizacion movil.",
+        cantidadEntregada,
+        fechaEntrega: fechaFinalizacion,
+        observaciones: observacionesEntregaReconcilida(ref, kitsParaRef, fechaFinalizacion),
+        syncEstado: "SINCRONIZADO",
+        fechaSincronizacion: fechaFinalizacion,
+        uuidMovil: `finalizar-entrega-${incidenciaId}-${ref}-${randomUUID()}`,
+        conformidadRecepcion: true,
+        entregaParcial: false,
+      },
+    });
+
+    entregadas.add(ref);
+  }
+
+  const verificadas = await tx.entregaAyudaHumanitaria.findMany({
+    where: {
+      idIncidencia: incidenciaId,
+      idGrupoFamiliar: { in: refsAprobadas },
+      deletedAt: null,
+    },
+    select: { idGrupoFamiliar: true },
+  });
+
+  const entregadasFinal = new Set(verificadas.map((e) => e.idGrupoFamiliar).filter(Boolean));
+  return refsAprobadas.filter((ref) => !entregadasFinal.has(ref));
+}
+
 export async function POST(request: Request) {
   const unauthorized = requireMobileSyncKey(request);
   if (unauthorized) return unauthorized;
@@ -245,7 +414,8 @@ export async function POST(request: Request) {
       );
     }
 
-    validarKitsEntregados(body);
+    const kitsNormalizados = normalizarKitsEntregados(body);
+    validarKitsEntregados(kitsNormalizados);
 
     const informe = await prisma.informe.findFirst({
       where: {
@@ -268,29 +438,25 @@ export async function POST(request: Request) {
       );
     }
 
-    const entregas = await prisma.entregaAyudaHumanitaria.findMany({
-      where: {
-        idIncidencia: incidencia.idIncidencia,
-        idGrupoFamiliar: { in: refsAprobadas },
-        deletedAt: null,
-      },
-      select: { idGrupoFamiliar: true },
-    });
-
-    const entregadas = new Set(entregas.map((e) => e.idGrupoFamiliar).filter(Boolean));
-    const entregasFaltantes = refsAprobadas.filter((ref) => !entregadas.has(ref));
-
-    if (entregasFaltantes.length > 0) {
-      return jsonError("Aun hay familias/kits sin entrega confirmada.", 409, {
-        estadoIncidencia: "APROBADO",
-        incidenciaAtendida: false,
-        entregasFaltantes,
-      });
-    }
-
     const fechaFinalizacion = parseFechaFinalizacion(body.fechaFinalizacion);
 
     await prisma.$transaction(async (tx) => {
+      const entregasFaltantes = await reconciliarEntregasFaltantes(
+        tx,
+        incidencia.idIncidencia,
+        refsAprobadas,
+        kitsNormalizados,
+        fechaFinalizacion
+      );
+
+      if (entregasFaltantes.length > 0) {
+        throw new MobileSyncError("Aun hay familias/kits sin entrega confirmada.", 409, {
+          estadoIncidencia: "APROBADO",
+          incidenciaAtendida: false,
+          entregasFaltantes,
+        });
+      }
+
       await tx.incidencia.update({
         where: { idIncidencia: incidencia.idIncidencia },
         data: {

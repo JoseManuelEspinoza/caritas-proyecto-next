@@ -5,6 +5,7 @@ vi.mock("@/app/lib/prisma", () => ({
     incidencia: { findUnique: vi.fn() },
     informe: { findFirst: vi.fn() },
     entregaAyudaHumanitaria: { findMany: vi.fn() },
+    personaAfectada: { findUnique: vi.fn() },
     historialEstadoIncidencia: { create: vi.fn() },
     $transaction: vi.fn(),
   },
@@ -69,9 +70,40 @@ const PAYLOAD_BASE = {
   ],
 };
 
+let lastTx: any = null;
+
+function mockTransaction(options?: {
+  entregasIniciales?: { idGrupoFamiliar: string | null }[];
+  entregasFinales?: { idGrupoFamiliar: string | null }[];
+}) {
+  const entregasIniciales = options?.entregasIniciales ?? [
+    { idGrupoFamiliar: "fam-1" },
+    { idGrupoFamiliar: "fam-2" },
+  ];
+  const entregasFinales = options?.entregasFinales ?? entregasIniciales;
+
+  vi.mocked((prisma as any).$transaction).mockImplementation(async (fn: (tx: any) => Promise<any>) => {
+    const tx = lastTx = {
+      incidencia: { update: vi.fn() },
+      entregaAyudaHumanitaria: {
+        findMany: vi.fn()
+          .mockResolvedValueOnce(entregasIniciales)
+          .mockResolvedValue(entregasFinales),
+        findFirst: vi.fn().mockResolvedValue(null),
+        create: vi.fn().mockResolvedValue({ idEntrega: "ent-1" }),
+      },
+      personaAfectada: { findUnique: vi.fn().mockResolvedValue(null) },
+      historialEstadoIncidencia: { create: vi.fn() },
+    };
+
+    return fn(tx);
+  });
+}
+
 describe("POST /api/mobile/sync/finalizar-entrega", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    lastTx = null;
     process.env.MOBILE_SYNC_API_KEY = API_KEY;
     vi.mocked(prisma.incidencia.findUnique).mockResolvedValue(INCIDENCIA_APROBADA as any);
     vi.mocked(prisma.informe.findFirst).mockResolvedValue(INFORME_EVALUACION as any);
@@ -79,13 +111,7 @@ describe("POST /api/mobile/sync/finalizar-entrega", () => {
       { idGrupoFamiliar: "fam-1" },
       { idGrupoFamiliar: "fam-2" },
     ] as any);
-    vi.mocked((prisma as any).$transaction).mockImplementation(async (fn: (tx: any) => Promise<any>) => {
-      const tx = {
-        incidencia: { update: vi.fn() },
-        historialEstadoIncidencia: { create: vi.fn() },
-      };
-      return fn(tx);
-    });
+    mockTransaction();
   });
 
   afterEach(() => vi.unstubAllEnvs());
@@ -127,7 +153,7 @@ describe("POST /api/mobile/sync/finalizar-entrega", () => {
   });
 
   it("[negativo] si falta una familia con entrega → 409 y no cambia estado", async () => {
-    vi.mocked(prisma.entregaAyudaHumanitaria.findMany).mockResolvedValue([{ idGrupoFamiliar: "fam-1" }] as any);
+    mockTransaction({ entregasIniciales: [{ idGrupoFamiliar: "fam-1" }], entregasFinales: [{ idGrupoFamiliar: "fam-1" }] });
 
     const res = await POST(makeRequest(PAYLOAD_BASE));
 
@@ -137,7 +163,50 @@ describe("POST /api/mobile/sync/finalizar-entrega", () => {
     expect(body.incidenciaAtendida).toBe(false);
     expect(body.message).toContain("familias/kits");
     expect(body.entregasFaltantes).toEqual(["fam-2"]);
-    expect(vi.mocked(prisma.$transaction)).not.toHaveBeenCalled();
+    expect(lastTx.incidencia.update).not.toHaveBeenCalled();
+    expect(lastTx.historialEstadoIncidencia.create).not.toHaveBeenCalled();
+  });
+
+  it("[positivo] si faltan entregas en BD pero kitsEntregados trae todas las familias completas, crea entregas faltantes y pasa a ATENDIDO", async () => {
+    mockTransaction({
+      entregasIniciales: [{ idGrupoFamiliar: "fam-1" }],
+      entregasFinales: [{ idGrupoFamiliar: "fam-1" }, { idGrupoFamiliar: "fam-2" }],
+    });
+
+    const res = await POST(
+      makeRequest({
+        ...PAYLOAD_BASE,
+        kitsEntregados: [
+          {
+            uuidKitAsignado: "kit-1",
+            idGrupoFamiliar: "fam-2",
+            refIdFamilia: "fam-2",
+            tipoKit: "ALIMENTOS",
+            estadoEntrega: "ENTREGADO",
+            articulos: [
+              {
+                uuidArticuloAsignado: "art-2",
+                codigo: "ALM-002",
+                descripcion: "Aceite 1L",
+                cantidadAsignada: 1,
+                cantidadEntregada: 1,
+                confirmado: true,
+              },
+            ],
+          },
+        ],
+      })
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.estadoIncidencia).toBe("ATENDIDO");
+    expect(body.incidenciaAtendida).toBe(true);
+    expect(body.message).toBe("Entrega finalizada.");
+    expect(lastTx.entregaAyudaHumanitaria.create).toHaveBeenCalledOnce();
+    expect(lastTx.incidencia.update).toHaveBeenCalledOnce();
+    expect(lastTx.historialEstadoIncidencia.create).toHaveBeenCalledOnce();
   });
 
   it("[positivo] ya ATENDIDO responde idempotente y no duplica historial", async () => {
