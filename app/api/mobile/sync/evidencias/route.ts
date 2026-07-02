@@ -14,6 +14,9 @@ type EvidenciaMovilPayload = {
   uuidReferencia?: string | null;
   idReferenciaRemota?: string | null;
   idIncidenciaRemota?: string | null;
+  uuidEntrega?: string | null;
+  idEntrega?: string | null;
+  idEntregaRemota?: string | null;
 
   tipoReferencia?: string | null;
 
@@ -82,23 +85,69 @@ function normalizeTipoReferencia(value?: string | null): string {
 }
 
 async function resolveTipoReferencia(codigoEntidad: string) {
-  if (codigoEntidad !== "INCIDENCIA") {
-    throw new Error("Por ahora solo se soportan evidencias de INCIDENCIA desde móvil.");
+  if (codigoEntidad === "INCIDENCIA") {
+    return prisma.tipoReferencia.upsert({
+      where: { codigoEntidad },
+      update: {},
+      create: {
+        codigoEntidad,
+        nombreEntidad: "Incidencia",
+        descripcion: "Referencia transversal para Incidencia",
+        estado: "ACTIVO",
+      },
+    });
   }
 
-  return prisma.tipoReferencia.upsert({
-    where: { codigoEntidad },
-    update: {},
-    create: {
-      codigoEntidad,
-      nombreEntidad: "Incidencia",
-      descripcion: "Referencia transversal para Incidencia",
-      estado: "ACTIVO",
-    },
-  });
+  if (codigoEntidad === "ENTREGA_AYUDA_HUMANITARIA") {
+    return prisma.tipoReferencia.upsert({
+      where: { codigoEntidad },
+      update: {},
+      create: {
+        codigoEntidad,
+        nombreEntidad: "Entrega de ayuda humanitaria",
+        descripcion: "Referencia transversal para entrega de ayuda humanitaria",
+        estado: "ACTIVO",
+      },
+    });
+  }
+
+  throw new Error("Tipo de referencia no soportado desde móvil.");
 }
 
-async function resolveIdReferencia(body: EvidenciaMovilPayload): Promise<string> {
+async function resolveIdReferencia(body: EvidenciaMovilPayload, tipoCodigo: string): Promise<string> {
+  if (tipoCodigo === "ENTREGA_AYUDA_HUMANITARIA") {
+    const entregaCandidates = [
+      body.idReferenciaRemota,
+      body.idEntregaRemota,
+      body.idEntrega,
+      body.uuidEntrega,
+      body.uuidReferencia,
+    ]
+      .map((value) => value?.trim())
+      .filter((value): value is string => Boolean(value));
+
+    for (const candidate of entregaCandidates) {
+      const entrega =
+        candidate === body.uuidEntrega?.trim() || candidate === body.uuidReferencia?.trim()
+          ? await prisma.entregaAyudaHumanitaria.findUnique({
+              where: { uuidMovil: candidate },
+              select: { idEntrega: true },
+            })
+          : await prisma.entregaAyudaHumanitaria.findUnique({
+              where: { idEntrega: candidate },
+              select: { idEntrega: true },
+            });
+
+      if (entrega) {
+        return entrega.idEntrega;
+      }
+    }
+
+    throw new Error(
+      "No se pudo resolver la entrega asociada. Envía idReferenciaRemota, idEntregaRemota, idEntrega, uuidEntrega o uuidReferencia."
+    );
+  }
+
   const idRemoto = body.idReferenciaRemota?.trim() || body.idIncidenciaRemota?.trim();
 
   if (idRemoto) {
@@ -337,7 +386,7 @@ export async function POST(request: Request) {
 
     const tipoCodigo = normalizeTipoReferencia(body.tipoReferencia);
     const tipoReferencia = await resolveTipoReferencia(tipoCodigo);
-    const idReferencia = await resolveIdReferencia(body);
+    const idReferencia = await resolveIdReferencia(body, tipoCodigo);
     const idUsuarioCargaGRD = await resolveUsuarioCarga(body);
 
     const subidaS3 = await uploadBase64ToS3(body, idReferencia);
