@@ -392,7 +392,15 @@ function ImportBrigadistaModal({
     // Sin título: los encabezados quedan en la fila 1 para que la importación los lea.
     await exportarExcel({
       fileName: "plantilla_brigadistas",
-      sheets: [{ name: "Brigadistas", columns: headers.map((h) => ({ header: h })), rows: [row] }],
+      sheets: [{
+        name: "Brigadistas",
+        columns: headers.map((h) => ({ header: h })),
+        rows: [row],
+        listValidations: [
+          { column: "parroquia", values: parroquias.map((p) => p.nombre) },
+          { column: "disponibilidad", values: ["DISPONIBLE", "EN CAMPO", "NO DISPONIBLE"] },
+        ],
+      }],
     });
   }
 

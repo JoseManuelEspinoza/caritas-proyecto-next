@@ -204,7 +204,7 @@ function MultiSelect({
   return (
     <div ref={ref} className="relative flex-1 min-w-0">
       <Icon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none z-10" />
-      <button type="button" onClick={() => setOpen(v => !v)}
+      <button type="button" onClick={() => setOpen(v => !v)} suppressHydrationWarning
         className={`w-full flex items-center justify-between pl-9 pr-3 py-2 border rounded-lg text-sm bg-white cursor-pointer transition-colors focus:outline-none
           ${open ? "border-[var(--caritas-green)] ring-2 ring-[var(--caritas-green)]/20" : "border-[#DDDDDD] hover:border-gray-300 bg-[#F5F5F5]"}`}>
         <span className={`truncate ${value.length === 0 ? "text-gray-400" : "text-gray-700 font-medium"}`}>{label}</span>

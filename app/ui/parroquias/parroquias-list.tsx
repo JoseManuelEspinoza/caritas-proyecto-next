@@ -117,6 +117,10 @@ function ParroquiaModal({
 
   function validate(): string | null {
     if (!form.nombre.trim()) return "El nombre de la parroquia es obligatorio.";
+    if (!form.direccion.trim()) return "La dirección es obligatoria.";
+    if (!form.telefono.trim()) return "El teléfono es obligatorio.";
+    if (!form.latitud?.trim() || !form.longitud?.trim())
+      return "Debes marcar la ubicación en el mapa (latitud y longitud son obligatorias).";
     if (form.correo.trim() && !EMAIL_RE.test(form.correo.trim()))
       return "El correo no tiene un formato válido.";
     return null;
@@ -158,7 +162,7 @@ function ParroquiaModal({
               placeholder="Ej: Parroquia San Juan Bautista" className={inputCls} />
           </div>
           <div>
-            <label className={labelCls}>Dirección</label>
+            <label className={labelCls}>Dirección <span className="text-red-500">*</span></label>
             <input type="text" value={form.direccion} onChange={(e) => set("direccion", e.target.value)}
               placeholder="Ej: Av. Principal 123, Lima" className={inputCls} />
           </div>
@@ -169,7 +173,7 @@ function ParroquiaModal({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={labelCls}>Teléfono</label>
+              <label className={labelCls}>Teléfono <span className="text-red-500">*</span></label>
               <input type="tel" value={form.telefono}
                 onChange={(e) => set("telefono", e.target.value.replace(/\D/g, "").slice(0, 9))}
                 placeholder="Ej: 987654321" maxLength={9} className={inputCls} />
@@ -182,8 +186,8 @@ function ParroquiaModal({
           </div>
           <div>
             <label className={labelCls}>
-              Ubicación en el mapa
-              <span className="ml-1 text-gray-400 font-normal">(opcional — busca la dirección o haz clic para marcar)</span>
+              Ubicación en el mapa <span className="text-red-500">*</span>
+              <span className="ml-1 text-gray-400 font-normal">(busca la dirección o haz clic para marcar)</span>
             </label>
             <LocationPicker lat={initialLat} lng={initialLng} onLocationChange={handleLocationChange} />
           </div>
@@ -408,9 +412,9 @@ function ImportParroquiaModal({ onClose }: { onClose: () => void }) {
 
         <div className="p-5 space-y-4 overflow-y-auto flex-1">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800">
-            <p className="font-medium mb-1">Columna requerida:</p>
-            <p className="font-mono">nombre</p>
-            <p className="mt-1 text-blue-600">Opcionales: direccion · referencia · telefono · correo · latitud · longitud</p>
+            <p className="font-medium mb-1">Columnas requeridas:</p>
+            <p className="font-mono">nombre · direccion · telefono · latitud · longitud</p>
+            <p className="mt-1 text-blue-600">Opcionales: referencia · correo</p>
           </div>
 
           <div className="flex gap-2">

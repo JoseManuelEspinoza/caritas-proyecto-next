@@ -83,6 +83,9 @@ export function CuestionarioModal({
   const [descripcion, setDescripcion] = useState(inicial?.descripcion ?? "");
   const [notaAprobatoria, setNotaAprobatoria] = useState(inicial?.notaAprobatoria ?? 20);
   const [maxIntentos, setMaxIntentos] = useState(inicial?.maxIntentos ?? 3);
+  const [tiempoLimiteMinutos, setTiempoLimiteMinutos] = useState(
+    inicial?.tiempoLimiteMinutos != null ? String(inicial.tiempoLimiteMinutos) : ""
+  );
   const [preguntas, setPreguntas] = useState<PreguntaInput[]>(
     inicial ? fromDetalle(inicial) : [PREGUNTA_VACIA()]
   );
@@ -150,7 +153,11 @@ export function CuestionarioModal({
     }
     startTransition(async () => {
       const preguntasNormalizadas = preguntas.map((p) => ({ ...p, puntaje: Math.floor(p.puntaje) }));
-      const payload = { tipoCuestionario: tipo, titulo, descripcion: descripcion || undefined, notaAprobatoria, maxIntentos, preguntas: preguntasNormalizadas };
+      const payload = {
+        tipoCuestionario: tipo, titulo, descripcion: descripcion || undefined, notaAprobatoria, maxIntentos,
+        tiempoLimiteMinutos: tiempoLimiteMinutos.trim() ? Number(tiempoLimiteMinutos) : null,
+        preguntas: preguntasNormalizadas,
+      };
       const res = esEdicion
         ? await editarCuestionario(idCuestionario!, payload)
         : await crearCuestionario(idCurso, payload);
@@ -222,6 +229,15 @@ export function CuestionarioModal({
               type="number" min={1} max={10}
               value={maxIntentos}
               onChange={(e) => setMaxIntentos(Number(e.target.value))}
+              className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Tiempo límite (minutos)</label>
+            <input
+              type="number" min={1} placeholder="Sin límite"
+              value={tiempoLimiteMinutos}
+              onChange={(e) => setTiempoLimiteMinutos(e.target.value)}
               className="w-full px-3 py-2 border border-[var(--caritas-border)] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[var(--caritas-green)]"
             />
           </div>

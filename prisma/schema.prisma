@@ -968,8 +968,7 @@ model CursoCapacitacion {
   fechaCreacion           DateTime               @default(now())
   inscripcion_desde       DateTime?              @db.Timestamp(6)
   inscripcion_hasta       DateTime?              @db.Timestamp(6)
-  realizacion_desde       DateTime?              @db.Timestamp(6)
-  realizacion_hasta       DateTime?              @db.Timestamp(6)
+  duracionRealizacionDias Int?
   cuestionarios           CuestionarioCurso[]
   institucionAliada       InstitucionAliada?     @relation(fields: [idInstitucionAliada], references: [idInstitucionAliada])
   usuarioResponsable      UsuarioGRD             @relation(fields: [idUsuarioResponsableGRD], references: [idUsuarioGRD])
@@ -1082,6 +1081,8 @@ model EvaluacionCurso {
   porcentajeObtenido  Decimal?              @db.Decimal(5, 2)
   puntajeObtenido     Decimal?              @db.Decimal(5, 2)
   puntajeTotal        Decimal?              @db.Decimal(5, 2)
+  fechaInicio         DateTime?
+  cambiosFoco         Int                   @default(0)
   cuestionario        CuestionarioCurso?    @relation(fields: [idCuestionarioCurso], references: [idCuestionarioCurso])
   inscripcion         InscripcionCurso      @relation(fields: [idInscripcionCurso], references: [idInscripcionCurso])
   respuestas          RespuestaEvaluacion[]
@@ -1113,6 +1114,7 @@ model CuestionarioCurso {
   tipoCuestionario    String                 @default("FINAL")
   notaAprobatoria     Decimal                @default(11.00) @db.Decimal(5, 2)
   maxIntentos         Int                    @default(3)
+  tiempoLimiteMinutos Int?
   estado              String                 @default("ACTIVO")
   fechaCreacion       DateTime               @default(now())
   curso               CursoCapacitacion      @relation(fields: [idCursoCapacitacion], references: [idCursoCapacitacion])
