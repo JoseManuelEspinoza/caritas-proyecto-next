@@ -119,8 +119,11 @@ export async function cargarDetalleIncidencia(
         orderBy: { fechaEntrega: "desc" },
         select: {
           idEntrega: true,
+          idGrupoFamiliar: true,
+          idPersonaAfectada: true,
           tipoAyuda: true,
           descripcionAyuda: true,
+          cantidadEntregada: true,
           lugarEntrega: true,
           fechaEntrega: true,
           observaciones: true,
@@ -177,11 +180,13 @@ export async function cargarDetalleIncidencia(
 
   // Registro de TODAS las evidencias capturadas para esta incidencia
   // (EvidenciaGRD es polimórfica: idReferencia = idIncidencia).
+  const entregaIds = inc.entregasAyuda.map((e) => e.idEntrega);
   const evidenciasInc = await prisma.evidenciaGRD.findMany({
-    where: { idReferencia: id, estado: "ACTIVO", deletedAt: null },
+    where: { idReferencia: { in: [id, ...entregaIds] }, estado: "ACTIVO", deletedAt: null },
     orderBy: { fechaCarga: "desc" },
     select: {
       idEvidenciaGRD: true,
+      idReferencia: true,
       nombreArchivo: true,
       urlArchivo: true,
       formatoArchivo: true,
@@ -190,6 +195,7 @@ export async function cargarDetalleIncidencia(
       tamanoArchivo: true,
       latitud: true,
       longitud: true,
+      tipoReferencia: { select: { codigoEntidad: true } },
       usuarioCarga: { select: { nombres: true, apellidos: true } },
     },
   });
@@ -209,6 +215,8 @@ export async function cargarDetalleIncidencia(
       }
       return {
         id: e.idEvidenciaGRD,
+        idReferencia: e.idReferencia,
+        tipoReferencia: e.tipoReferencia?.codigoEntidad ?? null,
         nombreArchivo: e.nombreArchivo,
         urlArchivo: url,
         formato: e.formatoArchivo,
@@ -355,8 +363,11 @@ export async function cargarDetalleIncidencia(
 
     entregas: inc.entregasAyuda.map((e) => ({
       id: e.idEntrega,
+      idGrupoFamiliar: e.idGrupoFamiliar,
+      idPersonaAfectada: e.idPersonaAfectada,
       tipoAyuda: e.tipoAyuda,
       descripcionAyuda: e.descripcionAyuda,
+      cantidadEntregada: e.cantidadEntregada,
       lugarEntrega: e.lugarEntrega,
       fecha: e.fechaEntrega?.toISOString() ?? null,
       observaciones: e.observaciones,

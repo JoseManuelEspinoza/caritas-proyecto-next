@@ -68,8 +68,11 @@ export type SeguimientoDetalle = {
 
 export type EntregaDetalle = {
   id: string;
+  idGrupoFamiliar: string | null;
+  idPersonaAfectada: string | null;
   tipoAyuda: string | null;
   descripcionAyuda: string | null;
+  cantidadEntregada: number | null;
   lugarEntrega: string | null;
   fecha: string | null;
   observaciones: string | null;
@@ -101,6 +104,8 @@ export type BrigadistaDisponible = {
 
 export type EvidenciaDetalle = {
   id: string;
+  idReferencia: string;
+  tipoReferencia: string | null;
   nombreArchivo: string;
   urlArchivo: string;
   formato: string | null;

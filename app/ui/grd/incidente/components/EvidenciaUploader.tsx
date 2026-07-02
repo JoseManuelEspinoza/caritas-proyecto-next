@@ -20,7 +20,7 @@ interface Props {
 
 export function EvidenciaUploader({
   onFiles,
-  accept = "image/*,video/*,.pdf",
+  accept = "image/*,video/*,.pdf,application/pdf",
   loading = false,
   loadingCount,
   disabled = false,

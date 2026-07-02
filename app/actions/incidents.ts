@@ -505,6 +505,240 @@ export async function notificarDecisionComite(
 
 // ─── Atención, seguimiento y cierre ─────────────────────────────────────────
 
+type ArticuloEntregaConfirmado = {
+  codigo: string;
+  descripcion: string;
+  cantidadAsignada: number;
+  cantidadEntregada: number;
+};
+
+type KitEntregaConfirmado = {
+  tipoKit: string;
+  articulos: ArticuloEntregaConfirmado[];
+};
+
+type EvidenciaEntregaInput = {
+  key: string;
+  nombreArchivo: string;
+  formato: string | null;
+  tamano: number | null;
+};
+
+const CODIGO_TIPO_ENTREGA = "ENTREGA_AYUDA_HUMANITARIA";
+
+function parseInformeJson(raw: string | null | undefined): Record<string, unknown> | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function refsFamiliasAprobadas(contenido: string | null | undefined): string[] {
+  const parsed = parseInformeJson(contenido);
+  const asignaciones = Array.isArray(parsed?.asignacionFamilias)
+    ? parsed.asignacionFamilias
+    : [];
+  return asignaciones
+    .map((item) => {
+      const row = item as Record<string, unknown>;
+      return typeof row.refId === "string" ? row.refId.trim() : "";
+    })
+    .filter(Boolean);
+}
+
+async function getTipoReferenciaEntrega(tx: Pick<typeof prisma, "tipoReferencia">) {
+  return tx.tipoReferencia.upsert({
+    where: { codigoEntidad: CODIGO_TIPO_ENTREGA },
+    update: { estado: "ACTIVO" },
+    create: {
+      codigoEntidad: CODIGO_TIPO_ENTREGA,
+      nombreEntidad: "Entrega de ayuda humanitaria",
+      descripcion: "Evidencias vinculadas a una entrega de ayuda humanitaria",
+      estado: "ACTIVO",
+    },
+  });
+}
+
+export async function confirmarEntregaFamilia(
+  incidenciaId: string,
+  data: {
+    idGrupoFamiliar: string;
+    nombreFamilia: string;
+    fechaEntrega: string;
+    lugarEntrega?: string | null;
+    descripcionEntrega: string;
+    kits: KitEntregaConfirmado[];
+    evidencias: EvidenciaEntregaInput[];
+  }
+) {
+  await verifySession();
+  const idUsuarioGRD = await getUsuarioGRDId();
+  if (!idUsuarioGRD) return { message: "No se encontró tu perfil GRD para confirmar la entrega." };
+
+  const descripcion = data.descripcionEntrega.trim();
+  if (!descripcion) return { message: "La descripción de entrega es obligatoria." };
+  if (!data.evidencias.length) return { message: "Adjunta al menos una evidencia de entrega." };
+
+  const kits = data.kits
+    .map((kit) => ({
+      tipoKit: kit.tipoKit.trim(),
+      articulos: kit.articulos.filter((a) => a.cantidadEntregada > 0),
+    }))
+    .filter((kit) => kit.tipoKit && kit.articulos.length > 0);
+  const totalArticulos = kits.reduce(
+    (total, kit) => total + kit.articulos.reduce((sum, art) => sum + art.cantidadEntregada, 0),
+    0
+  );
+  if (totalArticulos <= 0) return { message: "Marca al menos un artículo entregado." };
+
+  const fechaEntrega =
+    data.fechaEntrega && !Number.isNaN(new Date(data.fechaEntrega).getTime())
+      ? new Date(data.fechaEntrega)
+      : new Date();
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const grupo = await tx.grupoFamiliarAfectado.findUnique({
+        where: { idGrupoFamiliar: data.idGrupoFamiliar },
+        select: { idIncidencia: true },
+      });
+      if (!grupo || grupo.idIncidencia !== incidenciaId) {
+        throw new Error("El grupo familiar no pertenece a la incidencia.");
+      }
+
+      const existente = await tx.entregaAyudaHumanitaria.findFirst({
+        where: {
+          idIncidencia: incidenciaId,
+          idGrupoFamiliar: data.idGrupoFamiliar,
+          deletedAt: null,
+        },
+        select: { idEntrega: true },
+      });
+      if (existente) {
+        throw new Error("Esta familia ya tiene una entrega confirmada.");
+      }
+
+      const entrega = await tx.entregaAyudaHumanitaria.create({
+        data: {
+          idIncidencia: incidenciaId,
+          idUsuarioResponsableGRD: idUsuarioGRD,
+          idGrupoFamiliar: data.idGrupoFamiliar,
+          fechaEntrega,
+          lugarEntrega: data.lugarEntrega?.trim() || null,
+          tipoAyuda: "Donación en especie",
+          descripcionAyuda: descripcion,
+          cantidadEntregada: totalArticulos,
+          conformidadRecepcion: true,
+          entregaParcial: false,
+          observaciones: JSON.stringify({
+            version: 1,
+            tipo: "ENTREGA_KITS_FAMILIA",
+            estadoEntrega: "ENTREGADO",
+            nombreFamilia: data.nombreFamilia,
+            descripcionEntrega: descripcion,
+            kits,
+          }),
+          syncEstado: "SINCRONIZADO",
+          fechaSincronizacion: new Date(),
+        },
+        select: { idEntrega: true },
+      });
+
+      const tipoReferencia = await getTipoReferenciaEntrega(tx);
+      await tx.evidenciaGRD.createMany({
+        data: data.evidencias.map((ev) => ({
+          idTipoReferencia: tipoReferencia.idTipoReferencia,
+          idReferencia: entrega.idEntrega,
+          idUsuarioCargaGRD: idUsuarioGRD,
+          nombreArchivo: ev.nombreArchivo,
+          urlArchivo: ev.key,
+          formatoArchivo: ev.formato,
+          descripcion: "Evidencia de entrega",
+          tamanoArchivo: ev.tamano,
+          estado: "ACTIVO",
+          syncEstado: "SINCRONIZADO",
+          fechaSincronizacion: new Date(),
+        })),
+      });
+    });
+  } catch (err) {
+    return { message: err instanceof Error ? err.message : "No se pudo confirmar la entrega." };
+  }
+
+  revalidar(incidenciaId);
+}
+
+export async function marcarIncidenciaAtendidaSiEntregasCompletas(incidenciaId: string) {
+  await verifySession();
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const inc = await tx.incidencia.findUnique({
+        where: { idIncidencia: incidenciaId },
+        select: { estadoActual: true },
+      });
+      if (!inc) throw new Error("Incidencia no encontrada.");
+      if (inc.estadoActual === "ATENDIDO") return;
+      if (inc.estadoActual !== "APROBADO") {
+        throw new Error("Solo se puede marcar como Atendido una incidencia APROBADA.");
+      }
+
+      const informe = await tx.informe.findFirst({
+        where: { idIncidencia: incidenciaId, tipoInforme: "EVALUACION" },
+        orderBy: { fechaElaboracion: "desc" },
+        select: { contenido: true },
+      });
+      const refsAprobadas = refsFamiliasAprobadas(informe?.contenido);
+      if (refsAprobadas.length === 0) {
+        throw new Error("El informe aprobado no registra familias/kits para entregar.");
+      }
+
+      const entregas = await tx.entregaAyudaHumanitaria.findMany({
+        where: { idIncidencia: incidenciaId, idGrupoFamiliar: { in: refsAprobadas }, deletedAt: null },
+        select: { idGrupoFamiliar: true },
+      });
+      const entregadas = new Set(entregas.map((e) => e.idGrupoFamiliar).filter(Boolean));
+      const faltantes = refsAprobadas.filter((ref) => !entregadas.has(ref));
+      if (faltantes.length > 0) {
+        throw new Error("Aún hay familias/kits sin confirmar. Confirma todas las entregas antes de marcar Atendido.");
+      }
+
+      await tx.incidencia.update({
+        where: { idIncidencia: incidenciaId },
+        data: { estadoActual: "ATENDIDO" },
+      });
+      await tx.historialEstadoIncidencia.create({
+        data: {
+          idIncidencia: incidenciaId,
+          estadoAnterior: "APROBADO",
+          estadoNuevo: "ATENDIDO",
+          motivoCambio: "Kits entregados a todas las familias aprobadas",
+        },
+      });
+
+      const asignaciones = await tx.asignacionBrigadistaIncidencia.findMany({
+        where: { idIncidencia: incidenciaId, estadoAsignacion: "ASIGNADA" },
+        select: { idBrigadistaParroquial: true },
+      });
+      if (asignaciones.length) {
+        await tx.brigadistaParroquial.updateMany({
+          where: { idBrigadistaParroquial: { in: asignaciones.map((a) => a.idBrigadistaParroquial) } },
+          data: { disponibilidad: "DISPONIBLE" },
+        });
+      }
+    });
+  } catch (err) {
+    return { message: err instanceof Error ? err.message : "No se pudo marcar como Atendido." };
+  }
+
+  revalidar(incidenciaId);
+}
+
 export async function registrarAtencion(incidenciaId: string, data: AtencionData) {
   await verifySession();
   try {
